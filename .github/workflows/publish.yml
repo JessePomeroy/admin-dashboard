@@ -1,7 +1,8 @@
 name: Publish Package
+
 on:
   push:
-    tags: ["v*"]
+    branches: [main]
 
 jobs:
   publish:
@@ -11,14 +12,44 @@ jobs:
       packages: write
     steps:
       - uses: actions/checkout@v4
+
       - uses: pnpm/action-setup@v4
+
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
           registry-url: "https://npm.pkg.github.com"
           cache: "pnpm"
+
       - run: pnpm install --frozen-lockfile
-      - run: pnpm build
-      - run: pnpm publish --no-git-checks
+
+      - name: Check if version already published
+        id: version-check
+        run: |
+          PACKAGE_NAME=$(jq -r .name package.json)
+          PACKAGE_VERSION=$(jq -r .version package.json)
+          echo "version=$PACKAGE_VERSION" >> "$GITHUB_OUTPUT"
+
+          if npm view "${PACKAGE_NAME}@${PACKAGE_VERSION}" version 2>/dev/null; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+            echo "Version ${PACKAGE_VERSION} already published, skipping."
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+            echo "Version ${PACKAGE_VERSION} not found, will publish."
+          fi
         env:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build
+        if: steps.version-check.outputs.exists == 'false'
+        run: pnpm build
+
+      - name: Publish to GitHub Packages
+        if: steps.version-check.outputs.exists == 'false'
+        run: pnpm publish --no-git-checks
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Trigger Vercel rebuild
+        if: steps.version-check.outputs.exists == 'false'
+        run: curl -s -X POST "${{ secrets.VERCEL_DEPLOY_HOOK }}"
