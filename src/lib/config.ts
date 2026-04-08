@@ -30,28 +30,25 @@ export interface AdminAuthClient {
 		email: (opts: {
 			email: string;
 			password: string;
-		}) => Promise<{ error?: { message: string } }>;
+		}) => Promise<{ error: { message: string } | null }>;
 		social: (opts: {
 			provider: "google";
 			callbackURL?: string;
-		}) => Promise<void>;
+		}) => Promise<any>;
 	};
 	signUp: {
 		email: (opts: {
 			email: string;
 			password: string;
 			name: string;
-		}) => Promise<{ error?: { message: string } }>;
+		}) => Promise<{ error: { message: string } | null }>;
 	};
-	signOut: () => Promise<void>;
+	signOut: () => Promise<any>;
 	changePassword: (opts: {
 		currentPassword: string;
 		newPassword: string;
-	}) => Promise<{ error?: { message: string } }>;
-	useSession: () => {
-		data: AdminAuthSession | null;
-		isPending: boolean;
-	};
+	}) => Promise<{ error: { message: string } | null }>;
+	useSession: () => any;
 }
 
 export interface AdminConfig {
