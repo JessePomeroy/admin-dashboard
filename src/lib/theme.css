@@ -1,0 +1,50 @@
+/* Admin Theme
+ *
+ * Dark mode is the default (matches .dark class on <html>).
+ * Light mode activates when <html> does NOT have the .dark class.
+ * The public site's ThemeSwitcher toggles this class.
+ */
+
+/* Dark (default) */
+[data-admin] {
+	--admin-bg: #1e293b;
+	--admin-surface: rgba(255, 255, 255, 0.03);
+	--admin-surface-raised: rgba(255, 255, 255, 0.05);
+	--admin-border: rgba(255, 255, 255, 0.06);
+	--admin-border-strong: rgba(255, 255, 255, 0.1);
+	--admin-heading: rgba(255, 255, 255, 0.92);
+	--admin-text: rgba(255, 255, 255, 0.72);
+	--admin-text-muted: rgba(255, 255, 255, 0.45);
+	--admin-text-subtle: rgba(255, 255, 255, 0.28);
+	--admin-accent: #818cf8;
+	--admin-accent-hover: #a5b4fc;
+	--admin-active: rgba(129, 140, 248, 0.08);
+	--status-slate: #94a3b8;
+	--status-amber: #d4a053;
+	--status-lavender: #a78bfa;
+	--status-peach: #c48b6a;
+	--status-sage: #6ee7b7;
+	--status-rose: #f87171;
+}
+
+/* Light */
+html:not(.dark) [data-admin] {
+	--admin-bg: #f8fafc;
+	--admin-surface: rgba(0, 0, 0, 0.02);
+	--admin-surface-raised: rgba(0, 0, 0, 0.04);
+	--admin-border: rgba(0, 0, 0, 0.08);
+	--admin-border-strong: rgba(0, 0, 0, 0.13);
+	--admin-heading: rgba(0, 0, 0, 0.88);
+	--admin-text: rgba(0, 0, 0, 0.65);
+	--admin-text-muted: rgba(0, 0, 0, 0.42);
+	--admin-text-subtle: rgba(0, 0, 0, 0.25);
+	--admin-accent: #6366f1;
+	--admin-accent-hover: #4f46e5;
+	--admin-active: rgba(99, 102, 241, 0.08);
+	--status-slate: #64748b;
+	--status-amber: #b8860b;
+	--status-lavender: #7c3aed;
+	--status-peach: #b45309;
+	--status-sage: #059669;
+	--status-rose: #dc2626;
+}
