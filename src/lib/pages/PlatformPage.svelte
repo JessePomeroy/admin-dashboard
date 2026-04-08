@@ -20,6 +20,12 @@ let saving = $state(false);
 // Search
 let searchQuery = $state("");
 
+// Credentials modal (shown after creating a client with auth account)
+let showCredentials = $state(false);
+let credentialsEmail = $state("");
+let credentialsPassword = $state("");
+let credentialsCopied = $state(false);
+
 // Form state
 let formName = $state("");
 let formEmail = $state("");
@@ -132,6 +138,17 @@ function formatDate(timestamp: number) {
 	});
 }
 
+function generatePassword(): string {
+	const chars = "abcdefghijkmnpqrstuvwxyz23456789";
+	let password = "";
+	const array = new Uint8Array(12);
+	crypto.getRandomValues(array);
+	for (const byte of array) {
+		password += chars[byte % chars.length];
+	}
+	return password;
+}
+
 async function saveNewClient() {
 	if (!formName || !formEmail || !formSiteUrl) return;
 	saving = true;
@@ -150,6 +167,25 @@ async function saveNewClient() {
 			adminEmails,
 			notes: formNotes || undefined,
 		});
+
+		// Create a Better Auth account for the first admin email
+		const authClient = config.authClient;
+		const primaryEmail = adminEmails[0] || formEmail;
+		if (authClient) {
+			const password = generatePassword();
+			const result = await authClient.signUp.email({
+				email: primaryEmail,
+				password,
+				name: formName,
+			});
+			if (!result?.error) {
+				credentialsEmail = primaryEmail;
+				credentialsPassword = password;
+				credentialsCopied = false;
+				showCredentials = true;
+			}
+		}
+
 		closeAddModal();
 	} catch (err) {
 		console.error("Failed to create platform client:", err);
@@ -162,15 +198,23 @@ async function saveEdit() {
 	if (!selectedClient || !formName || !formEmail || !formSiteUrl) return;
 	saving = true;
 	try {
-		await convexClient.mutation(api.platform.updateSubscription, {
-			siteUrl: selectedClient.siteUrl,
+		await convexClient.mutation(api.platform.updateClient, {
+			clientId: selectedClient._id,
+			name: formName,
+			email: formEmail,
+			siteUrl: formSiteUrl,
 			tier: formTier,
 			subscriptionStatus: formSubscriptionStatus,
+			notes: formNotes || undefined,
 		});
 		selectedClient = {
 			...selectedClient,
+			name: formName,
+			email: formEmail,
+			siteUrl: formSiteUrl,
 			tier: formTier,
 			subscriptionStatus: formSubscriptionStatus,
+			notes: formNotes,
 		};
 		editMode = false;
 	} catch (err) {
@@ -327,7 +371,7 @@ async function quickStatusUpdate(
 				</div>
 				<div class="form-group">
 					<label class="form-label" for="add-site">site url <span class="required">*</span></label>
-					<input id="add-site" class="form-input" type="url" placeholder="https://" bind:value={formSiteUrl} required />
+					<input id="add-site" class="form-input" type="text" placeholder="example.com" bind:value={formSiteUrl} required />
 				</div>
 				<div class="form-group">
 					<label class="form-label" for="add-sanity">sanity project id</label>
@@ -393,7 +437,7 @@ async function quickStatusUpdate(
 					</div>
 					<div class="form-group">
 						<label class="form-label" for="edit-site">site url <span class="required">*</span></label>
-						<input id="edit-site" class="form-input" type="url" bind:value={formSiteUrl} required />
+						<input id="edit-site" class="form-input" type="text" placeholder="example.com" bind:value={formSiteUrl} required />
 					</div>
 					<div class="form-group">
 						<label class="form-label" for="edit-sanity">sanity project id</label>
@@ -524,6 +568,42 @@ async function quickStatusUpdate(
 		</div>
 	</div>
 {/if}
+{/if}
+
+<!-- Credentials Modal -->
+{#if showCredentials}
+	<div class="modal-overlay" role="dialog" tabindex="-1" aria-modal="true" aria-label="Client credentials">
+		<div class="modal-content" role="presentation" onclick={(e) => e.stopPropagation()} onkeydown={(e) => e.stopPropagation()}>
+			<div class="modal-header">
+				<h2 class="modal-title">admin account created</h2>
+			</div>
+			<div class="credentials-body">
+				<p class="credentials-note">save these credentials — the password won't be shown again.</p>
+				<div class="credentials-fields">
+					<div class="credential-row">
+						<span class="credential-label">email</span>
+						<code class="credential-value">{credentialsEmail}</code>
+					</div>
+					<div class="credential-row">
+						<span class="credential-label">password</span>
+						<code class="credential-value">{credentialsPassword}</code>
+					</div>
+				</div>
+				<button
+					class="btn-copy"
+					onclick={() => {
+						navigator.clipboard.writeText(`email: ${credentialsEmail}\npassword: ${credentialsPassword}`);
+						credentialsCopied = true;
+					}}
+				>
+					{credentialsCopied ? "copied" : "copy credentials"}
+				</button>
+			</div>
+			<div class="modal-actions">
+				<button class="btn-save" onclick={() => { showCredentials = false; }}>done</button>
+			</div>
+		</div>
+	</div>
 {/if}
 
 <style>
@@ -1053,5 +1133,64 @@ async function quickStatusUpdate(
 		.detail-body {
 			padding: 0 20px 20px;
 		}
+	}
+
+	/* Credentials modal */
+	.credentials-body {
+		padding: 0 28px 24px;
+	}
+
+	.credentials-note {
+		color: var(--admin-text-muted);
+		font-size: 0.84rem;
+		margin: 0 0 16px;
+	}
+
+	.credentials-fields {
+		display: flex;
+		flex-direction: column;
+		gap: 10px;
+		margin-bottom: 16px;
+	}
+
+	.credential-row {
+		display: flex;
+		align-items: center;
+		gap: 12px;
+	}
+
+	.credential-label {
+		font-size: 0.82rem;
+		color: var(--admin-text-muted);
+		width: 70px;
+		flex-shrink: 0;
+	}
+
+	.credential-value {
+		font-size: 0.9rem;
+		color: var(--admin-heading);
+		background: var(--admin-surface);
+		padding: 6px 10px;
+		border-radius: 4px;
+		border: 1px solid var(--admin-border);
+		font-family: monospace;
+		flex: 1;
+	}
+
+	.btn-copy {
+		background: var(--admin-surface);
+		border: 1px solid var(--admin-border);
+		color: var(--admin-text);
+		padding: 8px 16px;
+		border-radius: 6px;
+		font-size: 0.84rem;
+		font-family: "Synonym", system-ui, sans-serif;
+		cursor: pointer;
+		transition: border-color 0.15s;
+		width: 100%;
+	}
+
+	.btn-copy:hover {
+		border-color: var(--admin-border-strong);
 	}
 </style>

@@ -13,6 +13,16 @@ let { data, children } = $props();
 
 let dark = $state(true);
 
+// Build CSS override string from custom theme
+let themeStyle = $derived(() => {
+	const overrides = dark ? config.theme?.dark : config.theme?.light;
+	if (!overrides) return "";
+	return Object.entries(overrides)
+		.filter(([, v]) => v)
+		.map(([k, v]) => `--${k}: ${v}`)
+		.join("; ");
+});
+
 // Sync theme with public site preference
 onMount(() => {
 	const unsub = isDark.subscribe((val) => {
@@ -47,6 +57,53 @@ $effect(() => {
 
 let tier: Tier = $derived(data.tier);
 let mobileMenuOpen = $state(false);
+
+// Auth session state (subscribe to nanostore)
+let authUserEmail = $state<string | undefined>(undefined);
+if (config.authClient) {
+	const sessionStore = config.authClient.useSession();
+	if (sessionStore && typeof sessionStore.subscribe === "function") {
+		sessionStore.subscribe((val: any) => {
+			authUserEmail = val?.data?.user?.email;
+		});
+	}
+}
+
+// Change password state
+let showPasswordForm = $state(false);
+let currentPassword = $state("");
+let newPassword = $state("");
+let passwordError = $state("");
+let passwordSuccess = $state(false);
+let passwordSaving = $state(false);
+
+async function handleChangePassword(e: Event) {
+	e.preventDefault();
+	if (!config.authClient) return;
+	passwordError = "";
+	passwordSaving = true;
+	try {
+		const result = await config.authClient.changePassword({
+			currentPassword,
+			newPassword,
+		});
+		if (result?.error) {
+			passwordError = result.error.message;
+		} else {
+			passwordSuccess = true;
+			currentPassword = "";
+			newPassword = "";
+			setTimeout(() => {
+				showPasswordForm = false;
+				passwordSuccess = false;
+			}, 1500);
+		}
+	} catch (err: any) {
+		passwordError = err?.message || "Failed to change password";
+	} finally {
+		passwordSaving = false;
+	}
+}
 
 const navItems: {
 	href: string;
@@ -119,7 +176,7 @@ function closeMobileMenu() {
 }
 </script>
 
-<div class="admin-layout" data-admin>
+<div class="admin-layout" data-admin style={themeStyle()}>
 	<!-- Mobile header -->
 	<header class="mobile-header">
 		<button class="hamburger" onclick={() => (mobileMenuOpen = !mobileMenuOpen)} aria-label="Toggle menu">
@@ -197,6 +254,52 @@ function closeMobileMenu() {
 		</nav>
 
 		<div class="sidebar-footer">
+			{#if config.authClient && authUserEmail}
+					<div class="user-info">
+						<span class="user-email">{authUserEmail}</span>
+					</div>
+					<button class="theme-toggle" onclick={() => { showPasswordForm = !showPasswordForm; passwordError = ""; passwordSuccess = false; currentPassword = ""; newPassword = ""; }}>
+						<svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+							<rect x="3" y="11" width="18" height="11" rx="2" ry="2" /><path d="M7 11V7a5 5 0 0110 0v4" />
+						</svg>
+						<span>change password</span>
+					</button>
+					{#if showPasswordForm}
+						<form class="pw-form" onsubmit={handleChangePassword}>
+							{#if passwordError}
+								<p class="pw-error">{passwordError}</p>
+							{/if}
+							{#if passwordSuccess}
+								<p class="pw-success">password updated</p>
+							{:else}
+								<input
+									type="password"
+									class="pw-input"
+									placeholder="current password"
+									bind:value={currentPassword}
+									required
+								/>
+								<input
+									type="password"
+									class="pw-input"
+									placeholder="new password (8+ chars)"
+									bind:value={newPassword}
+									required
+									minlength="8"
+								/>
+								<button type="submit" class="pw-submit" disabled={passwordSaving}>
+									{passwordSaving ? "..." : "update"}
+								</button>
+							{/if}
+						</form>
+					{/if}
+					<button class="theme-toggle" onclick={() => config.authClient?.signOut()}>
+						<svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+							<path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>
+						</svg>
+						<span>sign out</span>
+					</button>
+			{/if}
 			<button class="theme-toggle" onclick={toggleTheme}>
 				<svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
 					{#if dark}
@@ -390,6 +493,75 @@ function closeMobileMenu() {
 	.sidebar-footer {
 		padding: 16px 12px;
 		flex-shrink: 0;
+	}
+
+	.user-info {
+		padding: 0 12px 8px;
+		border-bottom: 1px solid var(--admin-border);
+		margin-bottom: 8px;
+	}
+
+	.user-email {
+		font-size: 0.78rem;
+		color: var(--admin-text-subtle);
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		display: block;
+	}
+
+	.pw-form {
+		display: flex;
+		flex-direction: column;
+		gap: 6px;
+		padding: 8px 12px;
+	}
+
+	.pw-input {
+		background: var(--admin-surface);
+		border: 1px solid var(--admin-border);
+		border-radius: 4px;
+		padding: 7px 10px;
+		font-size: 0.8rem;
+		color: var(--admin-heading);
+		font-family: "Synonym", system-ui, sans-serif;
+		outline: none;
+	}
+
+	.pw-input:focus {
+		border-color: var(--admin-accent);
+	}
+
+	.pw-input::placeholder {
+		color: var(--admin-text-subtle);
+	}
+
+	.pw-submit {
+		background: var(--admin-accent);
+		color: var(--admin-bg);
+		border: none;
+		border-radius: 4px;
+		padding: 7px 12px;
+		font-size: 0.8rem;
+		font-family: "Synonym", system-ui, sans-serif;
+		cursor: pointer;
+		margin-top: 2px;
+	}
+
+	.pw-submit:disabled {
+		opacity: 0.5;
+	}
+
+	.pw-error {
+		color: rgb(248, 113, 113);
+		font-size: 0.78rem;
+		margin: 0;
+	}
+
+	.pw-success {
+		color: rgb(74, 222, 128);
+		font-size: 0.78rem;
+		margin: 0;
 	}
 
 	.theme-toggle {

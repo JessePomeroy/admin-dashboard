@@ -6,10 +6,15 @@ export {
 	getServerConfig,
 	type AdminConfig,
 	type AdminServerConfig,
+	type AdminTheme,
+	type AdminAuthClient,
+	type AdminAuthSession,
 } from "./config";
 
-// Layout
+// Layout & Auth
 export { default as AdminLayout } from "./components/AdminLayout.svelte";
+export { default as AuthGuard } from "./components/AuthGuard.svelte";
+export { default as LoginPage } from "./components/LoginPage.svelte";
 
 // Components
 export { default as AdminModal } from "./components/AdminModal.svelte";
