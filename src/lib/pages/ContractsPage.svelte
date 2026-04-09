@@ -175,7 +175,7 @@ async function handleShareLink(id: string, clientId: string) {
 	if (res.ok) {
 		const { token } = await res.json();
 		await navigator.clipboard.writeText(
-			`https://angelsrest.online/portal/${token}`,
+			`https://${config.siteUrl}/portal/${token}`,
 		);
 	}
 }

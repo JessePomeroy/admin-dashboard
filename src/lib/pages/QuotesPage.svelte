@@ -360,7 +360,7 @@ async function copyShareLink() {
 		if (res.ok) {
 			const { token } = await res.json();
 			await navigator.clipboard.writeText(
-				`https://angelsrest.online/portal/${token}`,
+				`https://${config.siteUrl}/portal/${token}`,
 			);
 			shareLinkCopied = true;
 			setTimeout(() => {
