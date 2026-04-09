@@ -83,14 +83,20 @@ let unreadFlags = $state<Record<string, boolean>>({
 	contracts: false,
 });
 
-// Subscribe to notifications if the API supports it
-if (api.notifications?.getUnreadFlags) {
-	const notificationsQuery = useQuery(api.notifications.getUnreadFlags, { siteUrl: config.siteUrl });
+// Subscribe to notifications
+console.log("[AdminLayout] api.notifications:", api.notifications);
+console.log("[AdminLayout] getUnreadFlags:", api.notifications?.getUnreadFlags);
+const notificationsRef = api.notifications?.getUnreadFlags;
+if (notificationsRef) {
+	const notificationsQuery = useQuery(notificationsRef, { siteUrl: config.siteUrl });
 	$effect(() => {
+		console.log("[AdminLayout] notificationsQuery:", notificationsQuery.data, notificationsQuery.error);
 		if (notificationsQuery.data) {
 			unreadFlags = notificationsQuery.data as Record<string, boolean>;
 		}
 	});
+} else {
+	console.log("[AdminLayout] notifications API not available");
 }
 
 const hrefToFlagKey: Record<string, string> = {
