@@ -118,7 +118,11 @@ async function handleShare() {
 				{:else if liveGallery.status === "archived"}
 					<button class="status-action-btn" onclick={() => handleStatusChange("draft")}>restore</button>
 				{/if}
-				<button class="share-btn" onclick={handleShare}>{copyText}</button>
+				{#if liveGallery.status === "published"}
+					<button class="share-btn" onclick={handleShare}>{copyText}</button>
+				{:else}
+					<span class="share-hint">publish to share</span>
+				{/if}
 			</div>
 		</div>
 
@@ -229,6 +233,12 @@ async function handleShare() {
 	.share-btn:hover {
 		background: var(--admin-accent);
 		color: var(--admin-bg);
+	}
+
+	.share-hint {
+		font-size: 0.72rem;
+		color: var(--admin-text-subtle);
+		font-style: italic;
 	}
 
 	.tabs {

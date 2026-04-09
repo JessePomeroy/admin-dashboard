@@ -9,8 +9,8 @@ importers:
   .:
     dependencies:
       '@jessepomeroy/admin':
-        specifier: 0.7.2
-        version: 0.7.2(@sveltejs/kit@2.57.0(@sveltejs/vite-plugin-svelte@6.2.4(svelte@5.55.2)(vite@7.3.2))(svelte@5.55.2)(typescript@5.9.3)(vite@7.3.2))(convex-svelte@0.0.10(convex@1.34.1)(svelte@5.55.2))(convex@1.34.1)(isomorphic-dompurify@3.7.1)(resend@6.10.0)(svelte-dnd-action@0.9.69(svelte@5.55.2))(svelte@5.55.2)
+        specifier: 0.8.1
+        version: 0.8.1(@sveltejs/kit@2.57.0(@sveltejs/vite-plugin-svelte@6.2.4(svelte@5.55.2)(vite@7.3.2))(svelte@5.55.2)(typescript@5.9.3)(vite@7.3.2))(convex-svelte@0.0.10(convex@1.34.1)(svelte@5.55.2))(convex@1.34.1)(isomorphic-dompurify@3.8.0)(resend@6.10.0)(svelte-dnd-action@0.9.69(svelte@5.55.2))(svelte@5.55.2)
       convex:
         specifier: ^1.30.0
         version: 1.34.1
@@ -19,7 +19,7 @@ importers:
         version: 0.0.10(convex@1.34.1)(svelte@5.55.2)
       isomorphic-dompurify:
         specifier: ^3.0.0
-        version: 3.7.1
+        version: 3.8.0
       resend:
         specifier: ^6.0.0
         version: 6.10.0
@@ -442,6 +442,17 @@ packages:
       svelte: ^5.0.0
       svelte-dnd-action: ^0.9.0
 
+  '@jessepomeroy/admin@0.8.1':
+    resolution: {integrity: sha512-EkwFyNL1R40G0GiIq4Nuehb/hZv9o8XxoLdHezhRKyGW7WFWsKawkjCYFr1w5vzG3ueE/1e9cwlGWDnCq3VgzA==, tarball: https://npm.pkg.github.com/download/@jessepomeroy/admin/0.8.1/b21e007978b9ab008513828156cbec4fa65dfabb}
+    peerDependencies:
+      '@sveltejs/kit': ^2.0.0
+      convex: ^1.30.0
+      convex-svelte: ^0.0.10
+      isomorphic-dompurify: ^3.0.0
+      resend: ^6.0.0
+      svelte: ^5.0.0
+      svelte-dnd-action: ^0.9.0
+
   '@jridgewell/gen-mapping@0.3.13':
     resolution: {integrity: sha512-2kkt/7niJ6MgEPxF0bYdQ6etZaA+fQvDcLKckhy1yIQOzaoKjBBjSj63/aLVjYE3qhRt5dvM+uUyfCg6UKCBbA==}
 
@@ -716,8 +727,8 @@ packages:
     resolution: {integrity: sha512-3sUqbMEc77XqpdNO7FRyRog+eW3ph+GYCbj+rK+uYyRMuwsVy0rMiVtPn+QJlKFvWP/1PYpapqYn0Me2knFn+A==}
     engines: {node: '>=0.10.0'}
 
-  devalue@5.7.0:
-    resolution: {integrity: sha512-qCvc8m7cImp1QDCsiY+C2EdSBWSj7Ucfoq87scSdYboDiIKdvMtFbH1U2VReBls6WMhMaUOoK3ZJEDNG/7zm3w==}
+  devalue@5.7.1:
+    resolution: {integrity: sha512-MUbZ586EgQqdRnC4yDrlod3BEdyvE4TapGYHMW2CiaW+KkkFmWEFqBUaLltEZCGi0iFXCEjRF0OjF0DV2QHjOA==}
 
   dompurify@3.3.3:
     resolution: {integrity: sha512-Oj6pzI2+RqBfFG+qOaOLbFXLQ90ARpcGG6UePL82bJLtdsa6CYJD7nmiU8MW9nQNOtCHV3lZ/Bzq1X0QYbBZCA==}
@@ -769,8 +780,8 @@ packages:
   is-reference@3.0.3:
     resolution: {integrity: sha512-ixkJoqQvAP88E6wLydLGGqCJsrFUnqoH6HnaczB8XmDH1oaWU+xxdptvikTgaEhtZ53Ky6YXiBuUI2WXLMCwjw==}
 
-  isomorphic-dompurify@3.7.1:
-    resolution: {integrity: sha512-ChhzwwCm7k8h8ANiq1Vc7geCWeHGaAPusgXU5N4mu7Y2wChgn2JHvbUe6aH/XQOUG3+KV+GmqSq95MntW/V1ng==}
+  isomorphic-dompurify@3.8.0:
+    resolution: {integrity: sha512-W2u6DS4nsbEU2m+Pb8xuLBJIDHTA30DRD+d9TczkXyLbea0Whmqn3g+pq8iNkUYdFP2qxp/PeqTXC0gIkfCTKA==}
     engines: {node: ^20.19.0 || ^22.13.0 || >=24.0.0}
 
   jsdom@29.0.2:
@@ -789,8 +800,8 @@ packages:
   locate-character@3.0.0:
     resolution: {integrity: sha512-SW13ws7BjaeJ6p7Q6CO2nchbYEc3X3J6WrmTTDto7yMPqVSZTUyY5Tjbid+Ab8gLnATtygYtiDIJGQRRn2ZOiA==}
 
-  lru-cache@11.3.2:
-    resolution: {integrity: sha512-wgWa6FWQ3QRRJbIjbsldRJZxdxYngT/dO0I5Ynmlnin8qy7tC6xYzbcJjtN4wHLXtkbVwHzk0C+OejVw1XM+DQ==}
+  lru-cache@11.3.3:
+    resolution: {integrity: sha512-JvNw9Y81y33E+BEYPr0U7omo+U9AySnsMsEiXgwT6yqd31VQWTLNQqmT4ou5eqPFUrTfIDFta2wKhB1hyohtAQ==}
     engines: {node: 20 || >=22}
 
   magic-string@0.30.21:
@@ -1240,23 +1251,34 @@ snapshots:
 
   '@exodus/bytes@1.15.0': {}
 
-  '@jessepomeroy/admin@0.7.1(@sveltejs/kit@2.57.0(@sveltejs/vite-plugin-svelte@6.2.4(svelte@5.55.2)(vite@7.3.2))(svelte@5.55.2)(typescript@5.9.3)(vite@7.3.2))(convex-svelte@0.0.10(convex@1.34.1)(svelte@5.55.2))(convex@1.34.1)(isomorphic-dompurify@3.7.1)(resend@6.10.0)(svelte-dnd-action@0.9.69(svelte@5.55.2))(svelte@5.55.2)':
+  '@jessepomeroy/admin@0.7.1(@sveltejs/kit@2.57.0(@sveltejs/vite-plugin-svelte@6.2.4(svelte@5.55.2)(vite@7.3.2))(svelte@5.55.2)(typescript@5.9.3)(vite@7.3.2))(convex-svelte@0.0.10(convex@1.34.1)(svelte@5.55.2))(convex@1.34.1)(isomorphic-dompurify@3.8.0)(resend@6.10.0)(svelte-dnd-action@0.9.69(svelte@5.55.2))(svelte@5.55.2)':
     dependencies:
       '@sveltejs/kit': 2.57.0(@sveltejs/vite-plugin-svelte@6.2.4(svelte@5.55.2)(vite@7.3.2))(svelte@5.55.2)(typescript@5.9.3)(vite@7.3.2)
       convex: 1.34.1
       convex-svelte: 0.0.10(convex@1.34.1)(svelte@5.55.2)
-      isomorphic-dompurify: 3.7.1
+      isomorphic-dompurify: 3.8.0
       resend: 6.10.0
       svelte: 5.55.2
       svelte-dnd-action: 0.9.69(svelte@5.55.2)
 
-  '@jessepomeroy/admin@0.7.2(@sveltejs/kit@2.57.0(@sveltejs/vite-plugin-svelte@6.2.4(svelte@5.55.2)(vite@7.3.2))(svelte@5.55.2)(typescript@5.9.3)(vite@7.3.2))(convex-svelte@0.0.10(convex@1.34.1)(svelte@5.55.2))(convex@1.34.1)(isomorphic-dompurify@3.7.1)(resend@6.10.0)(svelte-dnd-action@0.9.69(svelte@5.55.2))(svelte@5.55.2)':
+  '@jessepomeroy/admin@0.7.2(@sveltejs/kit@2.57.0(@sveltejs/vite-plugin-svelte@6.2.4(svelte@5.55.2)(vite@7.3.2))(svelte@5.55.2)(typescript@5.9.3)(vite@7.3.2))(convex-svelte@0.0.10(convex@1.34.1)(svelte@5.55.2))(convex@1.34.1)(isomorphic-dompurify@3.8.0)(resend@6.10.0)(svelte-dnd-action@0.9.69(svelte@5.55.2))(svelte@5.55.2)':
     dependencies:
-      '@jessepomeroy/admin': 0.7.1(@sveltejs/kit@2.57.0(@sveltejs/vite-plugin-svelte@6.2.4(svelte@5.55.2)(vite@7.3.2))(svelte@5.55.2)(typescript@5.9.3)(vite@7.3.2))(convex-svelte@0.0.10(convex@1.34.1)(svelte@5.55.2))(convex@1.34.1)(isomorphic-dompurify@3.7.1)(resend@6.10.0)(svelte-dnd-action@0.9.69(svelte@5.55.2))(svelte@5.55.2)
+      '@jessepomeroy/admin': 0.7.1(@sveltejs/kit@2.57.0(@sveltejs/vite-plugin-svelte@6.2.4(svelte@5.55.2)(vite@7.3.2))(svelte@5.55.2)(typescript@5.9.3)(vite@7.3.2))(convex-svelte@0.0.10(convex@1.34.1)(svelte@5.55.2))(convex@1.34.1)(isomorphic-dompurify@3.8.0)(resend@6.10.0)(svelte-dnd-action@0.9.69(svelte@5.55.2))(svelte@5.55.2)
       '@sveltejs/kit': 2.57.0(@sveltejs/vite-plugin-svelte@6.2.4(svelte@5.55.2)(vite@7.3.2))(svelte@5.55.2)(typescript@5.9.3)(vite@7.3.2)
       convex: 1.34.1
       convex-svelte: 0.0.10(convex@1.34.1)(svelte@5.55.2)
-      isomorphic-dompurify: 3.7.1
+      isomorphic-dompurify: 3.8.0
+      resend: 6.10.0
+      svelte: 5.55.2
+      svelte-dnd-action: 0.9.69(svelte@5.55.2)
+
+  '@jessepomeroy/admin@0.8.1(@sveltejs/kit@2.57.0(@sveltejs/vite-plugin-svelte@6.2.4(svelte@5.55.2)(vite@7.3.2))(svelte@5.55.2)(typescript@5.9.3)(vite@7.3.2))(convex-svelte@0.0.10(convex@1.34.1)(svelte@5.55.2))(convex@1.34.1)(isomorphic-dompurify@3.8.0)(resend@6.10.0)(svelte-dnd-action@0.9.69(svelte@5.55.2))(svelte@5.55.2)':
+    dependencies:
+      '@jessepomeroy/admin': 0.7.2(@sveltejs/kit@2.57.0(@sveltejs/vite-plugin-svelte@6.2.4(svelte@5.55.2)(vite@7.3.2))(svelte@5.55.2)(typescript@5.9.3)(vite@7.3.2))(convex-svelte@0.0.10(convex@1.34.1)(svelte@5.55.2))(convex@1.34.1)(isomorphic-dompurify@3.8.0)(resend@6.10.0)(svelte-dnd-action@0.9.69(svelte@5.55.2))(svelte@5.55.2)
+      '@sveltejs/kit': 2.57.0(@sveltejs/vite-plugin-svelte@6.2.4(svelte@5.55.2)(vite@7.3.2))(svelte@5.55.2)(typescript@5.9.3)(vite@7.3.2)
+      convex: 1.34.1
+      convex-svelte: 0.0.10(convex@1.34.1)(svelte@5.55.2)
+      isomorphic-dompurify: 3.8.0
       resend: 6.10.0
       svelte: 5.55.2
       svelte-dnd-action: 0.9.69(svelte@5.55.2)
@@ -1373,7 +1395,7 @@ snapshots:
       '@types/cookie': 0.6.0
       acorn: 8.16.0
       cookie: 0.6.0
-      devalue: 5.7.0
+      devalue: 5.7.1
       esm-env: 1.2.2
       kleur: 4.1.5
       magic-string: 0.30.21
@@ -1471,7 +1493,7 @@ snapshots:
 
   deepmerge@4.3.1: {}
 
-  devalue@5.7.0: {}
+  devalue@5.7.1: {}
 
   dompurify@3.3.3:
     optionalDependencies:
@@ -1565,7 +1587,7 @@ snapshots:
     dependencies:
       '@types/estree': 1.0.8
 
-  isomorphic-dompurify@3.7.1:
+  isomorphic-dompurify@3.8.0:
     dependencies:
       dompurify: 3.3.3
       jsdom: 29.0.2
@@ -1585,7 +1607,7 @@ snapshots:
       decimal.js: 10.6.0
       html-encoding-sniffer: 6.0.0
       is-potential-custom-element-name: 1.0.1
-      lru-cache: 11.3.2
+      lru-cache: 11.3.3
       parse5: 8.0.0
       saxes: 6.0.0
       symbol-tree: 3.2.4
@@ -1603,7 +1625,7 @@ snapshots:
 
   locate-character@3.0.0: {}
 
-  lru-cache@11.3.2: {}
+  lru-cache@11.3.3: {}
 
   magic-string@0.30.21:
     dependencies:
@@ -1728,7 +1750,7 @@ snapshots:
       aria-query: 5.3.1
       axobject-query: 4.1.0
       clsx: 2.1.1
-      devalue: 5.7.0
+      devalue: 5.7.1
       esm-env: 1.2.2
       esrap: 2.2.4
       is-reference: 3.0.3
