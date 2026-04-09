@@ -58,7 +58,7 @@ async function handleCreate() {
 </script>
 
 <AdminModal title="new gallery" {onclose}>
-	<form onsubmit={(e) => { e.preventDefault(); handleCreate(); }} class="form">
+	<form onsubmit={(e) => { e.preventDefault(); handleCreate(); }} class="form" style="padding: 0 28px 28px;">
 		<div class="field">
 			<label for="name">gallery name</label>
 			<input id="name" type="text" bind:value={name} placeholder="Johnson Wedding" />

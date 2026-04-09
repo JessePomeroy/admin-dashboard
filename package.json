@@ -1,6 +1,6 @@
 {
   "name": "@jessepomeroy/admin",
-  "version": "0.8.2",
+  "version": "0.9.0",
   "type": "module",
   "svelte": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -16,6 +16,7 @@
   ],
   "scripts": {
     "build": "svelte-package -o dist",
+    "dev": "svelte-package -o dist --watch",
     "prepublishOnly": "npm run build"
   },
   "peerDependencies": {
