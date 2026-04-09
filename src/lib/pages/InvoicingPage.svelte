@@ -174,17 +174,13 @@ async function handleDelete() {
 async function handleShareLink() {
 	if (!selectedInvoice) return;
 	shareLinkCopied = false;
-	const res = await fetch("/api/admin/portal", {
-		method: "POST",
-		headers: { "Content-Type": "application/json" },
-		body: JSON.stringify({
-			type: "invoice",
-			documentId: selectedInvoice._id,
-			clientId: selectedInvoice.clientId,
-		}),
-	});
-	if (res.ok) {
-		const { token } = await res.json();
+	try {
+		const token = await client.mutation(api.portal.createToken, {
+			siteUrl: config.siteUrl,
+			type: "invoice" as any,
+			documentId: selectedInvoice._id as string,
+			clientId: selectedInvoice.clientId as any,
+		});
 		await navigator.clipboard.writeText(
 			`https://${config.siteUrl}/portal/${token}`,
 		);
@@ -192,6 +188,8 @@ async function handleShareLink() {
 		setTimeout(() => {
 			shareLinkCopied = false;
 		}, 3000);
+	} catch (err) {
+		console.error("Failed to create share link:", err);
 	}
 }
 </script>

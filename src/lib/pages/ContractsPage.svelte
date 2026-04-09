@@ -163,20 +163,18 @@ async function handleDeleteContract(id: string) {
 }
 
 async function handleShareLink(id: string, clientId: string) {
-	const res = await fetch("/api/admin/portal", {
-		method: "POST",
-		headers: { "Content-Type": "application/json" },
-		body: JSON.stringify({
-			type: "contract",
+	try {
+		const token = await client.mutation(api.portal.createToken, {
+			siteUrl: config.siteUrl,
+			type: "contract" as any,
 			documentId: id,
-			clientId,
-		}),
-	});
-	if (res.ok) {
-		const { token } = await res.json();
+			clientId: clientId as any,
+		});
 		await navigator.clipboard.writeText(
 			`https://${config.siteUrl}/portal/${token}`,
 		);
+	} catch (err) {
+		console.error("Failed to create share link:", err);
 	}
 }
 

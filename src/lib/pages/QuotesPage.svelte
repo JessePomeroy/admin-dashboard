@@ -348,25 +348,19 @@ async function copyShareLink() {
 	if (!selectedQuote) return;
 	shareLinkCopied = false;
 	try {
-		const res = await fetch("/api/admin/portal", {
-			method: "POST",
-			headers: { "Content-Type": "application/json" },
-			body: JSON.stringify({
-				type: "quote",
-				documentId: selectedQuote._id,
-				clientId: selectedQuote.clientId,
-			}),
+		const token = await client.mutation(api.portal.createToken, {
+			siteUrl: config.siteUrl,
+			type: "quote" as any,
+			documentId: selectedQuote._id as string,
+			clientId: selectedQuote.clientId as any,
 		});
-		if (res.ok) {
-			const { token } = await res.json();
-			await navigator.clipboard.writeText(
-				`https://${config.siteUrl}/portal/${token}`,
-			);
-			shareLinkCopied = true;
-			setTimeout(() => {
-				shareLinkCopied = false;
-			}, 3000);
-		}
+		await navigator.clipboard.writeText(
+			`https://${config.siteUrl}/portal/${token}`,
+		);
+		shareLinkCopied = true;
+		setTimeout(() => {
+			shareLinkCopied = false;
+		}, 3000);
 	} catch (err) {
 		console.error("Failed to create share link:", err);
 	}
