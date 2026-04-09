@@ -40,7 +40,5 @@
   "publishConfig": {
     "registry": "https://npm.pkg.github.com"
   },
-  "dependencies": {
-    "@jessepomeroy/admin": "0.8.1"
-  }
+  "dependencies": {}
 }

@@ -22,6 +22,8 @@ jobs:
           cache: "pnpm"
 
       - run: pnpm install --frozen-lockfile
+        env:
+          NPM_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Check if version already published
         id: version-check
