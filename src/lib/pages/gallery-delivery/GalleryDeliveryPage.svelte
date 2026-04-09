@@ -1,0 +1,241 @@
+<script lang="ts">
+import { useQuery, useConvexClient } from "convex-svelte";
+import { getAdminConfig } from "../../config";
+import LoadingState from "../../components/LoadingState.svelte";
+import PageHeader from "../../components/PageHeader.svelte";
+import type { Gallery } from "../../types";
+import GalleryCreateModal from "./GalleryCreateModal.svelte";
+import GalleryDetailModal from "./GalleryDetailModal.svelte";
+
+const config = getAdminConfig();
+const { api } = config;
+const client = useConvexClient();
+
+const galleriesQuery = useQuery(api.galleries.listBySite, { siteUrl: config.siteUrl });
+
+let galleries = $derived(galleriesQuery.data ?? []);
+let isLoading = $derived(galleriesQuery.isLoading);
+
+let showCreateModal = $state(false);
+let selectedGallery = $state<(Gallery & { clientName: string }) | null>(null);
+let statusFilter = $state("all");
+
+let filteredGalleries = $derived(
+	galleries.filter((g: Gallery & { clientName: string }) => {
+		if (statusFilter !== "all" && g.status !== statusFilter) return false;
+		return true;
+	}),
+);
+
+function formatBytes(bytes: number): string {
+	if (bytes < 1024) return `${bytes} B`;
+	if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
+	if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+	return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)} GB`;
+}
+
+function formatDate(ts: number): string {
+	return new Date(ts).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+}
+
+const statusLabels: Record<string, string> = {
+	draft: "draft",
+	uploading: "uploading",
+	published: "published",
+	archived: "archived",
+};
+</script>
+
+<div class="delivery-page">
+	<PageHeader title="client galleries">
+		<button class="create-btn" onclick={() => (showCreateModal = true)}>+ new gallery</button>
+	</PageHeader>
+
+	<div class="filter-row">
+		{#each ["all", "draft", "published", "archived"] as s}
+			<button
+				class="filter-chip"
+				class:active={statusFilter === s}
+				onclick={() => (statusFilter = s)}
+			>
+				{s}
+			</button>
+		{/each}
+	</div>
+
+	{#if isLoading}
+		<LoadingState />
+	{:else if filteredGalleries.length === 0}
+		<div class="empty-state">
+			{#if statusFilter !== "all"}
+				no {statusFilter} galleries
+			{:else}
+				no client galleries yet — create one to start delivering photos
+			{/if}
+		</div>
+	{:else}
+		<div class="gallery-list">
+			{#each filteredGalleries as gallery (gallery._id)}
+				<button class="gallery-row" onclick={() => (selectedGallery = gallery)}>
+					<div class="gallery-info">
+						<span class="gallery-name">{gallery.name}</span>
+						<span class="gallery-client">{gallery.clientName}</span>
+					</div>
+					<div class="gallery-meta">
+						<span class="meta-item">{gallery.imageCount} image{gallery.imageCount !== 1 ? "s" : ""}</span>
+						<span class="meta-item">{formatBytes(gallery.totalSizeBytes)}</span>
+						<span class="status-badge status-{gallery.status}">{statusLabels[gallery.status]}</span>
+					</div>
+					<span class="gallery-date">{formatDate(gallery._creationTime)}</span>
+				</button>
+			{/each}
+		</div>
+	{/if}
+</div>
+
+{#if showCreateModal}
+	<GalleryCreateModal onclose={() => (showCreateModal = false)} />
+{/if}
+
+{#if selectedGallery}
+	<GalleryDetailModal
+		gallery={selectedGallery}
+		onclose={() => (selectedGallery = null)}
+	/>
+{/if}
+
+<style>
+	.delivery-page {
+		padding: 48px 40px;
+		max-width: 1000px;
+	}
+
+	.filter-row {
+		display: flex;
+		gap: 8px;
+		margin-bottom: 24px;
+	}
+
+	.filter-chip {
+		padding: 5px 14px;
+		border: 1px solid var(--admin-border);
+		border-radius: 20px;
+		background: transparent;
+		color: var(--admin-text-muted);
+		font-size: 0.78rem;
+		cursor: pointer;
+		transition: all 0.15s;
+	}
+
+	.filter-chip.active {
+		border-color: var(--admin-accent);
+		color: var(--admin-accent);
+	}
+
+	.create-btn {
+		padding: 7px 18px;
+		background: var(--admin-accent);
+		color: var(--admin-bg);
+		border: none;
+		border-radius: 6px;
+		font-size: 0.8rem;
+		font-family: "Synonym", system-ui, sans-serif;
+		cursor: pointer;
+		transition: background 0.15s;
+	}
+
+	.create-btn:hover {
+		background: var(--admin-accent-hover);
+	}
+
+	.gallery-list {
+		display: flex;
+		flex-direction: column;
+	}
+
+	.gallery-row {
+		display: flex;
+		align-items: center;
+		gap: 24px;
+		padding: 18px 0;
+		border-bottom: 1px solid var(--admin-border);
+		cursor: pointer;
+		background: none;
+		border-left: none;
+		border-right: none;
+		border-top: none;
+		width: 100%;
+		text-align: left;
+		font-family: inherit;
+		transition: opacity 0.12s;
+	}
+
+	.gallery-row:first-child {
+		border-top: 1px solid var(--admin-border);
+	}
+
+	.gallery-row:hover {
+		opacity: 0.8;
+	}
+
+	.gallery-info {
+		flex: 1;
+		display: flex;
+		flex-direction: column;
+		gap: 3px;
+		min-width: 0;
+	}
+
+	.gallery-name {
+		font-size: 0.95rem;
+		font-weight: 500;
+		color: var(--admin-heading);
+	}
+
+	.gallery-client {
+		font-size: 0.78rem;
+		color: var(--admin-text-subtle);
+	}
+
+	.gallery-meta {
+		display: flex;
+		align-items: center;
+		gap: 16px;
+		flex-shrink: 0;
+	}
+
+	.meta-item {
+		font-size: 0.8rem;
+		color: var(--admin-text-muted);
+	}
+
+	.status-badge {
+		font-size: 0.72rem;
+		padding: 2px 10px;
+		border-radius: 10px;
+		font-weight: 500;
+	}
+
+	.status-draft { background: var(--admin-surface-raised); color: var(--admin-text-muted); }
+	.status-uploading { background: var(--status-amber); color: #000; }
+	.status-published { background: var(--status-sage); color: #000; }
+	.status-archived { background: var(--admin-border); color: var(--admin-text-subtle); }
+
+	.gallery-date {
+		font-size: 0.76rem;
+		color: var(--admin-text-subtle);
+		flex-shrink: 0;
+	}
+
+	.empty-state {
+		padding: 48px 0;
+		color: var(--admin-text-subtle);
+		font-size: 0.88rem;
+	}
+
+	@media (max-width: 768px) {
+		.delivery-page { padding: 20px 16px; }
+		.gallery-row { flex-direction: column; align-items: flex-start; gap: 10px; }
+		.gallery-meta { flex-wrap: wrap; gap: 12px; }
+	}
+</style>

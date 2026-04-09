@@ -1,9 +1,19 @@
 <script lang="ts">
-let { data } = $props();
+import { getAdminConfig } from "../config";
+import GalleryDeliveryPage from "./gallery-delivery/GalleryDeliveryPage.svelte";
+
+let { data, activeTab = "portfolio" }: {
+	data: { galleries: any[] };
+	activeTab?: "portfolio" | "delivery";
+} = $props();
+
+const config = getAdminConfig();
+const showDelivery = !!config.galleryWorkerUrl;
 
 const galleries = $derived(data.galleries);
 
-const studioBaseUrl = "https://angelsrest.sanity.studio";
+let tab = $state(activeTab);
+const studioBaseUrl = config.sanityStudioUrl ?? "https://angelsrest.sanity.studio";
 </script>
 
 <div class="galleries-page">
@@ -11,55 +21,66 @@ const studioBaseUrl = "https://angelsrest.sanity.studio";
 		<h1>galleries</h1>
 	</header>
 
-	{#if galleries.length === 0}
-		<div class="empty-state">no galleries found</div>
-	{:else}
-		<div class="gallery-list">
-			{#each galleries as gallery (gallery._id)}
-				<div class="gallery-row">
-					<div class="gallery-info">
-						<span class="gallery-title">{gallery.title}</span>
-						<span class="gallery-slug">/{gallery.slug}</span>
-					</div>
-
-					<div class="gallery-meta">
-						<span class="meta-count">
-							{gallery.imageCount || 0} image{(gallery.imageCount || 0) !== 1 ? "s" : ""}
-						</span>
-
-						{#if gallery.isVisible !== false}
-							<span class="visibility-indicator visible">
-								<span class="vis-dot"></span>
-								visible
-							</span>
-						{:else}
-							<span class="visibility-indicator hidden">
-								<span class="vis-dot"></span>
-								hidden
-							</span>
-						{/if}
-
-						{#if gallery.featured}
-							<span class="featured-indicator">featured</span>
-						{/if}
-					</div>
-
-					<div class="gallery-actions">
-						<a href="/gallery/{gallery.slug}" class="action-link" target="_blank" rel="noopener">
-							view
-						</a>
-						<a
-							href="{studioBaseUrl}/structure/gallery;{gallery._id}"
-							class="action-link"
-							target="_blank"
-							rel="noopener"
-						>
-							edit in studio
-						</a>
-					</div>
-				</div>
-			{/each}
+	{#if showDelivery}
+		<div class="tab-bar">
+			<button class="tab" class:active={tab === "portfolio"} onclick={() => (tab = "portfolio")}>portfolio</button>
+			<button class="tab" class:active={tab === "delivery"} onclick={() => (tab = "delivery")}>delivery</button>
 		</div>
+	{/if}
+
+	{#if tab === "delivery" && showDelivery}
+		<GalleryDeliveryPage />
+	{:else}
+		{#if galleries.length === 0}
+			<div class="empty-state">no galleries found</div>
+		{:else}
+			<div class="gallery-list">
+				{#each galleries as gallery (gallery._id)}
+					<div class="gallery-row">
+						<div class="gallery-info">
+							<span class="gallery-title">{gallery.title}</span>
+							<span class="gallery-slug">/{gallery.slug}</span>
+						</div>
+
+						<div class="gallery-meta">
+							<span class="meta-count">
+								{gallery.imageCount || 0} image{(gallery.imageCount || 0) !== 1 ? "s" : ""}
+							</span>
+
+							{#if gallery.isVisible !== false}
+								<span class="visibility-indicator visible">
+									<span class="vis-dot"></span>
+									visible
+								</span>
+							{:else}
+								<span class="visibility-indicator hidden">
+									<span class="vis-dot"></span>
+									hidden
+								</span>
+							{/if}
+
+							{#if gallery.featured}
+								<span class="featured-indicator">featured</span>
+							{/if}
+						</div>
+
+						<div class="gallery-actions">
+							<a href="/gallery/{gallery.slug}" class="action-link" target="_blank" rel="noopener">
+								view
+							</a>
+							<a
+								href="{studioBaseUrl}/structure/gallery;{gallery._id}"
+								class="action-link"
+								target="_blank"
+								rel="noopener"
+							>
+								edit in studio
+							</a>
+						</div>
+					</div>
+				{/each}
+			</div>
+		{/if}
 	{/if}
 </div>
 
@@ -70,7 +91,7 @@ const studioBaseUrl = "https://angelsrest.sanity.studio";
 	}
 
 	.page-header {
-		margin-bottom: 32px;
+		margin-bottom: 24px;
 	}
 
 	.page-header h1 {
@@ -80,6 +101,30 @@ const studioBaseUrl = "https://angelsrest.sanity.studio";
 		color: var(--admin-heading);
 		margin: 0;
 		letter-spacing: -0.01em;
+	}
+
+	.tab-bar {
+		display: flex;
+		gap: 0;
+		border-bottom: 1px solid var(--admin-border);
+		margin-bottom: 24px;
+	}
+
+	.tab {
+		padding: 8px 20px;
+		border: none;
+		background: transparent;
+		color: var(--admin-text-muted);
+		font-size: 0.82rem;
+		cursor: pointer;
+		border-bottom: 2px solid transparent;
+		margin-bottom: -1px;
+		font-family: inherit;
+	}
+
+	.tab.active {
+		color: var(--admin-accent);
+		border-bottom-color: var(--admin-accent);
 	}
 
 	.gallery-list {

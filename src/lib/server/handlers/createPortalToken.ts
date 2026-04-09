@@ -15,7 +15,7 @@ export function createPortalTokenHandler() {
 			throw error(400, "type, documentId, and clientId are required");
 		}
 
-		const validTypes = ["invoice", "quote", "contract"];
+		const validTypes = ["invoice", "quote", "contract", "gallery"];
 		if (!validTypes.includes(data.type)) {
 			throw error(400, "Invalid type");
 		}
