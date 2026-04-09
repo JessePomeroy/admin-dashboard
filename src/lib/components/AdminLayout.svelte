@@ -297,8 +297,7 @@ function closeMobileMenu() {
 						{/if}
 					</svg>
 					<span>{item.label}</span>
-					{@const flagKey = hrefToFlagKey[item.href]}
-					{#if flagKey && (unreadFlags as Record<string, boolean>)[flagKey] && !isActive(item.href, $page.url.pathname)}
+					{#if hrefToFlagKey[item.href] && unreadFlags[hrefToFlagKey[item.href]] && !isActive(item.href, $page.url.pathname)}
 						<span class="nav-dot" aria-label="new content"></span>
 					{/if}
 					{#if locked}
