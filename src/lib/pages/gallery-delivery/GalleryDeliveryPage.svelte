@@ -10,11 +10,15 @@ import GalleryDetailModal from "./GalleryDetailModal.svelte";
 const config = getAdminConfig();
 const { api } = config;
 const client = useConvexClient();
-
 const galleriesQuery = useQuery(api.galleries.listBySite, { siteUrl: config.siteUrl });
 
 let galleries = $derived(galleriesQuery.data ?? []);
 let isLoading = $derived(galleriesQuery.isLoading);
+
+async function handleQuickAction(e: Event, galleryId: string, status: string) {
+	e.stopPropagation();
+	await client.mutation(api.galleries.update, { id: galleryId as any, status: status as any });
+}
 
 let showCreateModal = $state(false);
 let selectedGallery = $state<(Gallery & { clientName: string }) | null>(null);
@@ -78,18 +82,29 @@ const statusLabels: Record<string, string> = {
 	{:else}
 		<div class="gallery-list">
 			{#each filteredGalleries as gallery (gallery._id)}
-				<button class="gallery-row" onclick={() => (selectedGallery = gallery)}>
-					<div class="gallery-info">
-						<span class="gallery-name">{gallery.name}</span>
-						<span class="gallery-client">{gallery.clientName}</span>
+				<div class="gallery-row">
+					<button class="row-main" onclick={() => (selectedGallery = gallery)}>
+						<div class="gallery-info">
+							<span class="gallery-name">{gallery.name}</span>
+							<span class="gallery-client">{gallery.clientName}</span>
+						</div>
+						<div class="gallery-meta">
+							<span class="meta-item">{gallery.imageCount} image{gallery.imageCount !== 1 ? "s" : ""}</span>
+							<span class="meta-item">{formatBytes(gallery.totalSizeBytes)}</span>
+							<span class="status-badge status-{gallery.status}">{statusLabels[gallery.status]}</span>
+						</div>
+						<span class="gallery-date">{formatDate(gallery._creationTime)}</span>
+					</button>
+					<div class="row-actions">
+						{#if gallery.status === "draft"}
+							<button class="action-btn publish" onclick={(e) => handleQuickAction(e, gallery._id, "published")}>publish</button>
+						{:else if gallery.status === "published"}
+							<button class="action-btn" onclick={(e) => handleQuickAction(e, gallery._id, "archived")}>archive</button>
+						{:else if gallery.status === "archived"}
+							<button class="action-btn" onclick={(e) => handleQuickAction(e, gallery._id, "draft")}>restore</button>
+						{/if}
 					</div>
-					<div class="gallery-meta">
-						<span class="meta-item">{gallery.imageCount} image{gallery.imageCount !== 1 ? "s" : ""}</span>
-						<span class="meta-item">{formatBytes(gallery.totalSizeBytes)}</span>
-						<span class="status-badge status-{gallery.status}">{statusLabels[gallery.status]}</span>
-					</div>
-					<span class="gallery-date">{formatDate(gallery._creationTime)}</span>
-				</button>
+				</div>
 			{/each}
 		</div>
 	{/if}
@@ -158,26 +173,63 @@ const statusLabels: Record<string, string> = {
 	.gallery-row {
 		display: flex;
 		align-items: center;
-		gap: 24px;
+		gap: 12px;
 		padding: 18px 0;
 		border-bottom: 1px solid var(--admin-border);
-		cursor: pointer;
-		background: none;
-		border-left: none;
-		border-right: none;
-		border-top: none;
-		width: 100%;
-		text-align: left;
-		font-family: inherit;
-		transition: opacity 0.12s;
 	}
 
 	.gallery-row:first-child {
 		border-top: 1px solid var(--admin-border);
 	}
 
-	.gallery-row:hover {
+	.row-main {
+		flex: 1;
+		display: flex;
+		align-items: center;
+		gap: 24px;
+		background: none;
+		border: none;
+		cursor: pointer;
+		text-align: left;
+		font-family: inherit;
+		padding: 0;
+		min-width: 0;
+		transition: opacity 0.12s;
+	}
+
+	.row-main:hover {
 		opacity: 0.8;
+	}
+
+	.row-actions {
+		flex-shrink: 0;
+	}
+
+	.action-btn {
+		padding: 4px 14px;
+		border: 1px solid var(--admin-border-strong);
+		border-radius: 5px;
+		background: transparent;
+		color: var(--admin-text-muted);
+		font-size: 0.74rem;
+		font-family: inherit;
+		cursor: pointer;
+		transition: color 0.15s, border-color 0.15s;
+	}
+
+	.action-btn:hover {
+		color: var(--admin-accent);
+		border-color: var(--admin-accent);
+	}
+
+	.action-btn.publish {
+		border-color: var(--admin-accent);
+		color: var(--admin-accent);
+	}
+
+	.action-btn.publish:hover {
+		background: var(--admin-accent);
+		color: var(--admin-bg);
 	}
 
 	.gallery-info {

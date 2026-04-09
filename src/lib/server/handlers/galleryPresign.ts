@@ -3,13 +3,28 @@ import { getServerConfig } from "../../config";
 
 export function createGalleryPresignHandler() {
 	return async ({ request }: { request: Request }) => {
-		const config = getServerConfig();
+		let config;
+		try {
+			config = getServerConfig();
+		} catch (err) {
+			console.error("Gallery presign: config error:", err);
+			throw error(500, "Server config not initialized");
+		}
 
 		if (!config.galleryWorkerUrl || !config.galleryAdminSecret) {
+			console.error("Gallery presign: missing config", {
+				hasWorkerUrl: !!config.galleryWorkerUrl,
+				hasSecret: !!config.galleryAdminSecret,
+			});
 			throw error(500, "Gallery worker not configured");
 		}
 
-		const data = await request.json();
+		let data;
+		try {
+			data = await request.json();
+		} catch {
+			throw error(400, "Invalid JSON body");
+		}
 
 		if (!data.siteUrl || !data.galleryId || !data.filename || !data.contentType) {
 			throw error(400, "siteUrl, galleryId, filename, and contentType are required");
@@ -26,7 +41,9 @@ export function createGalleryPresignHandler() {
 			});
 
 			if (!res.ok) {
-				throw error(res.status, await res.text());
+				const text = await res.text();
+				console.error("Gallery presign: worker error", res.status, text);
+				throw error(res.status, text);
 			}
 
 			const result = await res.json();
