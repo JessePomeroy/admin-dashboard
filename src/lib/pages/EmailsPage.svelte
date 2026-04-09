@@ -2,6 +2,7 @@
 import DOMPurify from "isomorphic-dompurify";
 import { useQuery, useConvexClient } from "convex-svelte";
 import { getAdminConfig } from "../config";
+import { getCategoryColor } from "../utils";
 import FeatureGate from "../components/FeatureGate.svelte";
 import LoadingState from "../components/LoadingState.svelte";
 
@@ -77,19 +78,6 @@ let filteredTemplates = $derived(
 		return true;
 	}),
 );
-
-function getCategoryColor(category: string): string {
-	const colors: Record<string, string> = {
-		"inquiry-reply": "var(--status-lavender)",
-		"booking-confirmation": "var(--status-sage)",
-		reminder: "var(--status-amber)",
-		"gallery-delivery": "var(--status-peach)",
-		"follow-up": "var(--status-slate)",
-		"thank-you": "var(--status-sage)",
-		custom: "var(--admin-text-subtle)",
-	};
-	return colors[category] || "var(--admin-text-subtle)";
-}
 
 function countVariables(body: string): number {
 	const matches = body.match(/\{\{[^}]+\}\}/g);

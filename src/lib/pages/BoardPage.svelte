@@ -2,6 +2,7 @@
 import { dndzone } from "svelte-dnd-action";
 import { useQuery, useConvexClient } from "convex-svelte";
 import { getAdminConfig } from "../config";
+import { getCategoryColor } from "../utils";
 import FeatureGate from "../components/FeatureGate.svelte";
 import LoadingState from "../components/LoadingState.svelte";
 import BoardCardModal from "./board/BoardCardModal.svelte";
@@ -223,11 +224,6 @@ function openDetail(card: CardItem) {
 	selectedClient = card;
 }
 
-function getCategoryColor(category: string): string {
-	return category === "photography"
-		? "var(--status-peach)"
-		: "var(--status-lavender)";
-}
 </script>
 
 <FeatureGate feature="board" tier={data.tier}>

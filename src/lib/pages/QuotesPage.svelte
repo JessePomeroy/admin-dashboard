@@ -4,7 +4,7 @@ import { getAdminConfig } from "../config";
 import FeatureGate from "../components/FeatureGate.svelte";
 import LoadingState from "../components/LoadingState.svelte";
 import type { Quote, QuotePreset } from "../types";
-import { dollarsToCents } from "../utils";
+import { copyPortalLink, dollarsToCents } from "../utils";
 import PresetManager from "./quotes/PresetManager.svelte";
 import QuoteCreateModal from "./quotes/QuoteCreateModal.svelte";
 import QuoteDetailModal from "./quotes/QuoteDetailModal.svelte";
@@ -348,19 +348,9 @@ async function copyShareLink() {
 	if (!selectedQuote) return;
 	shareLinkCopied = false;
 	try {
-		const token = await client.mutation(api.portal.createToken, {
-			siteUrl: config.siteUrl,
-			type: "quote" as any,
-			documentId: selectedQuote._id as string,
-			clientId: selectedQuote.clientId as any,
-		});
-		await navigator.clipboard.writeText(
-			`https://${config.siteUrl}/portal/${token}`,
-		);
+		await copyPortalLink(client, api, config.siteUrl, "quote", selectedQuote._id as string, selectedQuote.clientId as string);
 		shareLinkCopied = true;
-		setTimeout(() => {
-			shareLinkCopied = false;
-		}, 3000);
+		setTimeout(() => { shareLinkCopied = false; }, 3000);
 	} catch (err) {
 		console.error("Failed to create share link:", err);
 	}

@@ -125,3 +125,42 @@ export const SUBSCRIPTION_STATUS_COLORS: StatusColorMap = {
 	past_due: "var(--status-amber)",
 	none: "var(--status-slate)",
 };
+
+export function getCategoryColor(category: string): string {
+	return getStatusColor(CATEGORY_COLORS, category);
+}
+
+export async function copyPortalLink(
+	client: { mutation: (ref: any, args: any) => Promise<any> },
+	api: any,
+	siteUrl: string,
+	type: "invoice" | "quote" | "contract" | "gallery",
+	documentId: string,
+	clientId: string,
+): Promise<string> {
+	const token = await client.mutation(api.portal.createToken, {
+		siteUrl,
+		type: type as any,
+		documentId,
+		clientId: clientId as any,
+	});
+	const url = `https://${siteUrl}/portal/${token}`;
+	await navigator.clipboard.writeText(url);
+	return url;
+}
+
+export function getActivityStatusColor(type: string, status: string): string {
+	if (type === "order") return getStatusColor(ORDER_STATUS_COLORS, status);
+	const combined: StatusColorMap = {
+		draft: "var(--status-slate)",
+		sent: "var(--status-lavender)",
+		paid: "var(--status-sage)",
+		overdue: "var(--status-rose)",
+		partial: "var(--status-amber)",
+		canceled: "var(--status-rose)",
+		accepted: "var(--status-sage)",
+		declined: "var(--status-rose)",
+		expired: "var(--status-slate)",
+	};
+	return getStatusColor(combined, status);
+}

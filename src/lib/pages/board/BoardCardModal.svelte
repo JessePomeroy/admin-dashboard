@@ -1,5 +1,6 @@
 <script lang="ts">
 import AdminModal from "../../components/AdminModal.svelte";
+import { getCategoryColor } from "../../utils";
 
 interface CardItem {
 	id: string;
@@ -22,12 +23,6 @@ interface Props {
 }
 
 let { client, onclose }: Props = $props();
-
-function getCategoryColor(category: string): string {
-	return category === "photography"
-		? "var(--status-peach)"
-		: "var(--status-lavender)";
-}
 </script>
 
 <AdminModal title={client.name} {onclose}>

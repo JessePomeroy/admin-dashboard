@@ -8,6 +8,7 @@
 
 import { useQuery, useConvexClient } from "convex-svelte";
 import { getAdminConfig } from "../config";
+import { getStatusColor, ORDER_STATUS_COLORS } from "../utils";
 import LoadingState from "../components/LoadingState.svelte";
 import OrderDetailModal from "./orders/OrderDetailModal.svelte";
 import OrderTable from "./orders/OrderTable.svelte";
@@ -163,18 +164,6 @@ function formatDate(dateStr: string) {
 		hour: "numeric",
 		minute: "2-digit",
 	});
-}
-
-function getStatusColor(status: string): string {
-	const colors: Record<string, string> = {
-		new: "var(--status-slate)",
-		printing: "var(--status-amber)",
-		ready: "var(--status-lavender)",
-		shipped: "var(--status-peach)",
-		delivered: "var(--status-sage)",
-		refunded: "var(--status-rose)",
-	};
-	return colors[status] || "var(--status-slate)";
 }
 
 async function updateStatus(orderId: string, newStatus: string) {

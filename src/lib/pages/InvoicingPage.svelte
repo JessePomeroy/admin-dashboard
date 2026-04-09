@@ -6,6 +6,7 @@ import FilterBar from "../components/FilterBar.svelte";
 import LoadingState from "../components/LoadingState.svelte";
 import PageHeader from "../components/PageHeader.svelte";
 import type { Invoice, InvoiceStatus } from "../types";
+import { copyPortalLink } from "../utils";
 import InvoiceCreateModal from "./invoicing/InvoiceCreateModal.svelte";
 import InvoiceDetailModal from "./invoicing/InvoiceDetailModal.svelte";
 import InvoiceTable from "./invoicing/InvoiceTable.svelte";
@@ -175,19 +176,9 @@ async function handleShareLink() {
 	if (!selectedInvoice) return;
 	shareLinkCopied = false;
 	try {
-		const token = await client.mutation(api.portal.createToken, {
-			siteUrl: config.siteUrl,
-			type: "invoice" as any,
-			documentId: selectedInvoice._id as string,
-			clientId: selectedInvoice.clientId as any,
-		});
-		await navigator.clipboard.writeText(
-			`https://${config.siteUrl}/portal/${token}`,
-		);
+		await copyPortalLink(client, api, config.siteUrl, "invoice", selectedInvoice._id as string, selectedInvoice.clientId as string);
 		shareLinkCopied = true;
-		setTimeout(() => {
-			shareLinkCopied = false;
-		}, 3000);
+		setTimeout(() => { shareLinkCopied = false; }, 3000);
 	} catch (err) {
 		console.error("Failed to create share link:", err);
 	}

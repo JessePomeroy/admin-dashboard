@@ -3,11 +3,13 @@ import { useQuery } from "convex-svelte";
 import { getAdminConfig } from "../config";
 import LoadingState from "../components/LoadingState.svelte";
 import {
-	formatCurrency,
+	formatCents,
 	formatDate,
 	formatStatus,
+	getActivityStatusColor,
 	getStatusColor,
-} from "../page-utils";
+	ORDER_STATUS_COLORS,
+} from "../utils";
 
 const config = getAdminConfig();
 const { api } = config;
@@ -117,22 +119,6 @@ let sparklinePath = $derived(() => {
 	return `M${points.join(" L")}`;
 });
 
-function getActivityStatusColor(type: string, status: string): string {
-	if (type === "order") return getStatusColor(status);
-	const colors: Record<string, string> = {
-		draft: "var(--status-slate)",
-		sent: "var(--status-lavender)",
-		paid: "var(--status-sage)",
-		overdue: "var(--status-rose)",
-		partial: "var(--status-amber)",
-		canceled: "var(--status-rose)",
-		accepted: "var(--status-sage)",
-		declined: "var(--status-rose)",
-		expired: "var(--status-slate)",
-	};
-	return colors[status] || "var(--status-slate)";
-}
-
 let chartPoints = $derived(
 	dailyRevenue.map((d: { amount: number; date: string }, i: number) => {
 		const x = dailyRevenue.length > 1 ? (i / (dailyRevenue.length - 1)) * chartWidth : chartWidth / 2;
@@ -163,22 +149,22 @@ let sparklineArea = $derived(() => {
 	<div class="stats-line">
 		<span class="stat-item">
 			<span class="stat-label">today</span>
-			<span class="stat-value">{formatCurrency(stats.todayRevenue)}</span>
+			<span class="stat-value">{formatCents(stats.todayRevenue)}</span>
 		</span>
 		<span class="stat-sep">&middot;</span>
 		<span class="stat-item">
 			<span class="stat-label">this week</span>
-			<span class="stat-value">{formatCurrency(stats.weekRevenue)}</span>
+			<span class="stat-value">{formatCents(stats.weekRevenue)}</span>
 		</span>
 		<span class="stat-sep">&middot;</span>
 		<span class="stat-item">
 			<span class="stat-label">this month</span>
-			<span class="stat-value">{formatCurrency(stats.monthRevenue)}</span>
+			<span class="stat-value">{formatCents(stats.monthRevenue)}</span>
 		</span>
 		<span class="stat-sep">&middot;</span>
 		<span class="stat-item">
 			<span class="stat-label">all time</span>
-			<span class="stat-value">{formatCurrency(stats.allTimeRevenue)}</span>
+			<span class="stat-value">{formatCents(stats.allTimeRevenue)}</span>
 			<span class="stat-sub">{stats.totalOrders} orders</span>
 		</span>
 	</div>
@@ -210,7 +196,7 @@ let sparklineArea = $derived(() => {
 			{#if hoveredIndex !== null && chartPoints[hoveredIndex]}
 				{@const point = chartPoints[hoveredIndex]}
 				<div class="chart-tooltip" style="left: {(point.x / chartWidth) * 100}%">
-					<span class="tooltip-amount">{formatCurrency(point.amount)}</span>
+					<span class="tooltip-amount">{formatCents(point.amount)}</span>
 					<span class="tooltip-date">{formatDate(point.date)}</span>
 				</div>
 			{/if}
@@ -232,7 +218,7 @@ let sparklineArea = $derived(() => {
 		<p class="summary-line">
 			<span class="summary-value">{invoiceStats.draft + invoiceStats.sent}</span> invoices outstanding
 			<span class="summary-sep">&middot;</span>
-			<span class="summary-value">{formatCurrency(pendingInvoiceAmount)}</span> pending
+			<span class="summary-value">{formatCents(pendingInvoiceAmount)}</span> pending
 		</p>
 		<p class="summary-line">
 			<span class="summary-value">{quoteStats.sent}</span> quotes awaiting response
@@ -296,10 +282,10 @@ let sparklineArea = $derived(() => {
 										<span class="email">{order.customerEmail || ""}</span>
 									</div>
 								</td>
-								<td class="bold">{formatCurrency(order.total)}</td>
+								<td class="bold">{formatCents(order.total)}</td>
 								<td>
 									<span class="status-indicator">
-										<span class="status-dot" style="background: {getStatusColor(order.status)}"></span>
+										<span class="status-dot" style="background: {getStatusColor(ORDER_STATUS_COLORS, order.status)}"></span>
 										{formatStatus(order.status)}
 									</span>
 								</td>

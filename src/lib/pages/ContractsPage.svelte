@@ -4,6 +4,7 @@ import { getAdminConfig } from "../config";
 import FeatureGate from "../components/FeatureGate.svelte";
 import LoadingState from "../components/LoadingState.svelte";
 import type { Contract, ContractStatus } from "../types";
+import { copyPortalLink } from "../utils";
 import ContractCreateModal from "./contracts/ContractCreateModal.svelte";
 import ContractDetailModal from "./contracts/ContractDetailModal.svelte";
 import ContractTable from "./contracts/ContractTable.svelte";
@@ -164,15 +165,7 @@ async function handleDeleteContract(id: string) {
 
 async function handleShareLink(id: string, clientId: string) {
 	try {
-		const token = await client.mutation(api.portal.createToken, {
-			siteUrl: config.siteUrl,
-			type: "contract" as any,
-			documentId: id,
-			clientId: clientId as any,
-		});
-		await navigator.clipboard.writeText(
-			`https://${config.siteUrl}/portal/${token}`,
-		);
+		await copyPortalLink(client, api, config.siteUrl, "contract", id, clientId);
 	} catch (err) {
 		console.error("Failed to create share link:", err);
 	}

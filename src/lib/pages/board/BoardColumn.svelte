@@ -1,5 +1,6 @@
 <script lang="ts">
 import { dndzone } from "svelte-dnd-action";
+import { getCategoryColor } from "../../utils";
 
 export interface CardItem {
 	id: string;
@@ -56,12 +57,6 @@ let {
 	onupdateeditname,
 	oncardclick,
 }: Props = $props();
-
-function getCategoryColor(category: string): string {
-	return category === "photography"
-		? "var(--status-peach)"
-		: "var(--status-lavender)";
-}
 </script>
 
 <div class="board-column">
