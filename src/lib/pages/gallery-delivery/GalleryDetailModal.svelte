@@ -101,7 +101,7 @@ function handleGridChange() {
 			</div>
 		</div>
 	{:else}
-		<form onsubmit|preventDefault={handleSaveSettings} class="settings-form">
+		<form onsubmit={(e) => { e.preventDefault(); handleSaveSettings(); }} class="settings-form">
 			<div class="field">
 				<label for="edit-name">name</label>
 				<input id="edit-name" type="text" bind:value={editName} />

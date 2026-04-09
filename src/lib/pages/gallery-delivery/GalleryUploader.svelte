@@ -158,7 +158,7 @@ function clearCompleted() {
 	class="uploader"
 	class:dragging
 	role="region"
-	ondragover|preventDefault={() => (dragging = true)}
+	ondragover={(e) => { e.preventDefault(); dragging = true; }}
 	ondragleave={() => (dragging = false)}
 	ondrop={handleDrop}
 >
