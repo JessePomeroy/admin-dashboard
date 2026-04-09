@@ -82,21 +82,18 @@ let unreadFlags = $state<Record<string, boolean>>({
 	invoices: false,
 	contracts: false,
 });
+let notificationsReady = $state(false);
 
 // Subscribe to notifications
-console.log("[AdminLayout] api.notifications:", api.notifications);
-console.log("[AdminLayout] getUnreadFlags:", api.notifications?.getUnreadFlags);
 const notificationsRef = api.notifications?.getUnreadFlags;
 if (notificationsRef) {
 	const notificationsQuery = useQuery(notificationsRef, { siteUrl: config.siteUrl });
 	$effect(() => {
-		console.log("[AdminLayout] notificationsQuery:", notificationsQuery.data, notificationsQuery.error);
 		if (notificationsQuery.data) {
 			unreadFlags = notificationsQuery.data as Record<string, boolean>;
+			notificationsReady = true;
 		}
 	});
-} else {
-	console.log("[AdminLayout] notifications API not available");
 }
 
 const hrefToFlagKey: Record<string, string> = {
@@ -109,12 +106,12 @@ const hrefToFlagKey: Record<string, string> = {
 	"/admin/contracts": "contracts",
 };
 
-// Mark page as seen when navigating
+// Mark page as seen when navigating (only after notifications query has returned)
 let lastMarkedPath = $state("");
 $effect(() => {
 	const pathname = $page.url.pathname;
 	const pageKey = hrefToFlagKey[pathname];
-	if (pageKey && pageKey !== lastMarkedPath && api.notifications?.markSeen) {
+	if (pageKey && pageKey !== lastMarkedPath && api.notifications?.markSeen && notificationsReady) {
 		lastMarkedPath = pageKey;
 		convexClient.mutation(api.notifications.markSeen, {
 			siteUrl: config.siteUrl,
