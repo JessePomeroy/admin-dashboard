@@ -6,7 +6,7 @@
  * Demonstrates Svelte 5 runes ($state, $derived) for reactive UI.
  */
 
-import { useQuery, useConvexClient } from "convex-svelte";
+import { useQuery, useConvexClient } from "@mmailaender/convex-svelte";
 import { getAdminConfig } from "../config";
 import { getStatusColor, ORDER_STATUS_COLORS, toId } from "../utils";
 import LoadingState from "../components/LoadingState.svelte";

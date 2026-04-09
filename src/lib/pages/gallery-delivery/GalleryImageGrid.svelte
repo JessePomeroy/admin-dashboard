@@ -1,5 +1,5 @@
 <script lang="ts">
-import { useConvexClient } from "convex-svelte";
+import { useConvexClient } from "@mmailaender/convex-svelte";
 import { getAdminConfig } from "../../config";
 import { toId } from "../../utils";
 import { dndzone } from "svelte-dnd-action";

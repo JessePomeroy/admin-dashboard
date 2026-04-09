@@ -1,6 +1,6 @@
 <script lang="ts">
 import { dndzone } from "svelte-dnd-action";
-import { useQuery, useConvexClient } from "convex-svelte";
+import { useQuery, useConvexClient } from "@mmailaender/convex-svelte";
 import { getAdminConfig } from "../config";
 import { getCategoryColor, toId } from "../utils";
 import FeatureGate from "../components/FeatureGate.svelte";

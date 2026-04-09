@@ -23,7 +23,7 @@
   "peerDependencies": {
     "@sveltejs/kit": "^2.0.0",
     "convex": "^1.30.0",
-    "convex-svelte": "^0.0.10",
+    "@mmailaender/convex-svelte": "^0.18.0",
     "isomorphic-dompurify": "^3.0.0",
     "resend": "^6.0.0",
     "svelte": "^5.0.0",

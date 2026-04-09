@@ -2,7 +2,7 @@
 import { onMount } from "svelte";
 import { browser } from "$app/environment";
 import { page } from "$app/stores";
-import { useQuery, useConvexClient } from "convex-svelte";
+import { useQuery, useConvexClient } from "@mmailaender/convex-svelte";
 import { type Feature, hasFeature, type Tier } from "../features";
 import { isDark } from "../theme";
 import { getAdminConfig } from "../config";

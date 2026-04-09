@@ -1,6 +1,6 @@
 <script lang="ts">
 import type { Snippet } from "svelte";
-import { useQuery } from "convex-svelte";
+import { useQuery } from "@mmailaender/convex-svelte";
 import { getAdminConfig } from "../config";
 import LoginPage from "./LoginPage.svelte";
 import LoadingState from "./LoadingState.svelte";

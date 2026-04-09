@@ -1,5 +1,5 @@
 <script lang="ts">
-import { useQuery, useConvexClient } from "convex-svelte";
+import { useQuery, useConvexClient } from "@mmailaender/convex-svelte";
 import { getAdminConfig } from "../config";
 import { getCategoryColor } from "../utils";
 import FeatureGate from "../components/FeatureGate.svelte";

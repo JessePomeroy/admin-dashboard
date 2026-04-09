@@ -1,5 +1,5 @@
 <script lang="ts">
-import { useQuery } from "convex-svelte";
+import { useQuery } from "@mmailaender/convex-svelte";
 import { getAdminConfig } from "../config";
 import LoadingState from "../components/LoadingState.svelte";
 import {
