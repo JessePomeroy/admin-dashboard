@@ -58,11 +58,19 @@ async function handleDelete() {
 	if (!confirm("Delete this gallery and all its images? This cannot be undone.")) return;
 	deleting = true;
 	try {
-		// Delete all images first
+		// Clean up R2 files
 		for (const image of images) {
-			await client.mutation(api.galleries.removeImage, { id: image._id as any });
+			try {
+				await fetch("/api/admin/galleries/delete", {
+					method: "POST",
+					headers: { "Content-Type": "application/json" },
+					body: JSON.stringify({ r2Key: image.r2Key }),
+				});
+			} catch {
+				// Non-fatal — R2 cleanup best-effort
+			}
 		}
-		// Then archive the gallery (soft delete)
+		// Hard delete gallery + images + downloads from Convex
 		await client.mutation(api.galleries.remove, { id: gallery._id as any });
 		onclose();
 	} catch {
@@ -85,7 +93,7 @@ async function handleShare() {
 			documentId: gallery._id as string,
 			clientId: gallery.clientId as any,
 		});
-		const url = `${window.location.origin}/gallery/${token}`;
+		const url = `${window.location.origin}/delivery/${token}`;
 		await navigator.clipboard.writeText(url);
 		copyText = "copied!";
 		setTimeout(() => (copyText = "copy link"), 2000);
