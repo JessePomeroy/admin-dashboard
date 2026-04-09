@@ -238,7 +238,7 @@ async function saveQuoteEdit(editData: {
 	}
 }
 
-async function sendQuoteEmail(templateId?: string) {
+async function sendQuoteEmail(templateId?: string, changeNote?: string) {
 	if (!selectedQuote) return;
 	sending = true;
 	sendResult = null;
@@ -246,7 +246,7 @@ async function sendQuoteEmail(templateId?: string) {
 		const res = await fetch(`/api/admin/quotes/${selectedQuote._id}/send`, {
 			method: "POST",
 			headers: { "Content-Type": "application/json" },
-			body: JSON.stringify({ templateId }),
+			body: JSON.stringify({ templateId, changeNote }),
 		});
 		if (res.ok) {
 			sendResult = "success";

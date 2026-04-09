@@ -13,7 +13,7 @@ function buildDefaultQuoteHtml(
 ): string {
 	return `<div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 24px;">
 <p>hi ${vars.clientName},</p>
-<p>here is your quote for review.</p>
+${vars.changeNote ? `<p>your quote has been updated (${vars.changeNote}).</p>` : "<p>here is your quote for review.</p>"}
 <table style="width: 100%; border-collapse: collapse; margin: 16px 0;">
 <tr><td style="padding: 8px 0; color: #666;">quote</td><td style="padding: 8px 0; text-align: right;">${vars.quoteNumber}</td></tr>
 </table>
@@ -54,7 +54,7 @@ export function createQuoteSendHandler() {
 
 		const { id } = params;
 		const body = await request.json().catch(() => ({}));
-		const { templateId, customSubject, customBody } = body;
+		const { templateId, customSubject, customBody, changeNote } = body;
 
 		try {
 			const quote = await convex.query(api.quotes.get, {
@@ -81,6 +81,7 @@ export function createQuoteSendHandler() {
 					quoteNumber: quote.quoteNumber,
 					packages: formatPackages(quote.packages),
 					validUntil: quote.validUntil ?? "",
+					changeNote: changeNote || "",
 				};
 
 				const template = templateId

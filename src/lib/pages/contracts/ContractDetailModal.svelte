@@ -24,7 +24,7 @@ interface Props {
 	onclose: () => void;
 	onsave: (id: string, payload: Record<string, unknown>) => Promise<void>;
 	onaction: (id: string, action: string) => Promise<void>;
-	onsend: (id: string, templateId?: string) => Promise<boolean>;
+	onsend: (id: string, templateId?: string, changeNote?: string) => Promise<boolean>;
 	ondelete: (id: string) => Promise<void>;
 	onsharelink: (id: string, clientId: string) => Promise<void>;
 }
@@ -42,6 +42,8 @@ let {
 
 let editMode = $state(false);
 let confirmDelete = $state(false);
+let confirmResend = $state(false);
+let lastChangeNote = $state("");
 let saving = $state(false);
 let sending = $state(false);
 let sendResult = $state<"success" | "error" | null>(null);
@@ -69,10 +71,24 @@ function cancelEdit() {
 	editMode = false;
 }
 
+function buildChangeNote(): string {
+	const changes: string[] = [];
+	if (editTitle !== contract.title) changes.push("title updated");
+	if (editBody !== contract.body) changes.push("body updated");
+	if ((editEventDate || "") !== (contract.eventDate || "")) changes.push("event date updated");
+	if ((editEventLocation || "") !== (contract.eventLocation || "")) changes.push("location updated");
+	const oldTotal = contract.totalPrice ? contract.totalPrice / 100 : 0;
+	const oldDeposit = contract.depositAmount ? contract.depositAmount / 100 : 0;
+	if (editTotalPrice !== oldTotal) changes.push("total price updated");
+	if (editDepositAmount !== oldDeposit) changes.push("deposit amount updated");
+	return changes.join(", ");
+}
+
 async function handleSaveEdit() {
 	if (!editTitle || !editBody) return;
 	saving = true;
 	try {
+		lastChangeNote = buildChangeNote();
 		const payload: Record<string, unknown> = {
 			title: editTitle,
 			body: editBody,
@@ -85,16 +101,28 @@ async function handleSaveEdit() {
 		};
 		await onsave(contract._id, payload);
 		editMode = false;
+		if (contract.status !== "draft") {
+			confirmResend = true;
+		}
 	} finally {
 		saving = false;
 	}
 }
 
-async function handleSendEmail() {
+async function handleResend() {
+	confirmResend = false;
+	await handleSendEmail(selectedTemplateId || undefined, lastChangeNote);
+}
+
+function dismissResend() {
+	confirmResend = false;
+}
+
+async function handleSendEmail(templateId?: string, changeNote?: string) {
 	sending = true;
 	sendResult = null;
 	try {
-		const ok = await onsend(contract._id, selectedTemplateId || undefined);
+		const ok = await onsend(contract._id, templateId, changeNote);
 		sendResult = ok ? "success" : "error";
 	} catch {
 		sendResult = "error";
@@ -338,7 +366,20 @@ async function handleShareLink() {
 			{/if}
 
 			<div class="modal-actions detail-actions">
-				{#if confirmDelete}
+				{#if confirmResend}
+					<span class="confirm-text">resend updated contract to client?</span>
+					<button
+						class="btn-save"
+						onclick={handleResend}
+						disabled={sending}
+					>
+						{sending ? "sending..." : "yes, resend"}
+					</button>
+					<button
+						class="btn-cancel"
+						onclick={dismissResend}>no</button
+					>
+				{:else if confirmDelete}
 					<span class="confirm-text">delete this contract?</span>
 					<button
 						class="btn-danger"
@@ -375,7 +416,7 @@ async function handleShareLink() {
 					>
 					<button
 						class="btn-send"
-						onclick={handleSendEmail}
+						onclick={() => handleSendEmail()}
 						disabled={sending}
 					>
 						{sending ? "sending..." : "send email"}
@@ -388,6 +429,7 @@ async function handleShareLink() {
 						{saving ? "..." : "mark as sent"}
 					</button>
 				{:else if contract.status === "sent"}
+					<button class="btn-cancel" onclick={startEdit}>edit</button>
 					<button
 						class="btn-save"
 						onclick={() => handleAction("sign")}

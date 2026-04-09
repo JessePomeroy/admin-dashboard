@@ -152,12 +152,12 @@ async function handleAction(action: string) {
 	}
 }
 
-async function handleSendEmail(templateId?: string) {
+async function handleSendEmail(templateId?: string, changeNote?: string) {
 	if (!selectedInvoice) return;
 	const res = await fetch(`/api/admin/invoicing/${selectedInvoice._id}/send`, {
 		method: "POST",
 		headers: { "Content-Type": "application/json" },
-		body: JSON.stringify({ templateId }),
+		body: JSON.stringify({ templateId, changeNote }),
 	});
 	if (!res.ok) throw new Error("Failed to send");
 	selectedInvoice = { ...selectedInvoice, status: "sent" } as Invoice;

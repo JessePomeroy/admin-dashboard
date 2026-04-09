@@ -3,6 +3,7 @@ import AdminModal from "../../components/AdminModal.svelte";
 import StatusDot from "../../components/StatusDot.svelte";
 import type { Quote, QuotePackage } from "../../types";
 import {
+	dollarsToCents,
 	formatCents,
 	formatDollars,
 	formatDate,
@@ -39,7 +40,7 @@ interface Props {
 		validUntil: string;
 		notes: string;
 	}) => Promise<void>;
-	onsendquoteemail: (templateId?: string) => Promise<void>;
+	onsendquoteemail: (templateId?: string, changeNote?: string) => Promise<void>;
 	onquoteaction: (action: string) => Promise<void>;
 	ondeletequote: () => Promise<void>;
 	oncopysharelink: () => Promise<void>;
@@ -79,6 +80,8 @@ let {
 let editMode = $state(false);
 let selectedTemplateId = $state<string>("");
 let confirmDelete = $state(false);
+let confirmResend = $state(false);
+let lastChangeNote = $state("");
 let showConvertForm = $state(false);
 
 // Edit form state
@@ -118,8 +121,29 @@ function cancelEdit() {
 	editMode = false;
 }
 
+function buildChangeNote(): string {
+	const changes: string[] = [];
+	const oldPkgs = quote.packages;
+	const newPkgs = editPackages;
+	if (oldPkgs.length !== newPkgs.length) {
+		changes.push("packages updated");
+	} else {
+		const pkgsChanged = newPkgs.some((pkg, i) => {
+			const old = oldPkgs[i];
+			return pkg.name !== (old.name || "")
+				|| pkg.description !== (old.description || "")
+				|| dollarsToCents(pkg.price) !== old.price;
+		});
+		if (pkgsChanged) changes.push("packages updated");
+	}
+	if ((editValidUntil || "") !== (quote.validUntil || "")) changes.push("valid until updated");
+	if ((editNotes || "") !== (quote.notes || "")) changes.push("notes updated");
+	return changes.join(", ");
+}
+
 async function handleSaveEdit() {
 	if (editPackages.length === 0) return;
+	lastChangeNote = buildChangeNote();
 	await onsaveedit({
 		packages: editPackages,
 		category: editCategory,
@@ -127,6 +151,22 @@ async function handleSaveEdit() {
 		notes: editNotes,
 	});
 	editMode = false;
+	if (quote.status !== "draft") {
+		confirmResend = true;
+	}
+}
+
+async function handleResend() {
+	confirmResend = false;
+	await handleSendEmail(selectedTemplateId || undefined, lastChangeNote);
+}
+
+function dismissResend() {
+	confirmResend = false;
+}
+
+async function handleSendEmail(templateId?: string, changeNote?: string) {
+	await onsendquoteemail(templateId, changeNote);
 }
 
 async function handleConvert() {
@@ -268,7 +308,13 @@ async function handleConvert() {
 			{/if}
 
 			<div class="modal-actions detail-actions">
-				{#if confirmDelete}
+				{#if confirmResend}
+					<span class="confirm-text">resend updated quote to client?</span>
+					<button class="btn-save" onclick={handleResend} disabled={sending}>
+						{sending ? "sending..." : "yes, resend"}
+					</button>
+					<button class="btn-cancel" onclick={dismissResend}>no</button>
+				{:else if confirmDelete}
 					<span class="confirm-text">delete this quote?</span>
 					<button class="btn-danger" onclick={ondeletequote} disabled={saving}>
 						{saving ? "deleting..." : "yes, delete"}
@@ -282,13 +328,14 @@ async function handleConvert() {
 				{:else if quote.status === "draft"}
 					<button class="btn-danger-outline" onclick={() => { confirmDelete = true; }}>delete</button>
 					<button class="btn-cancel" onclick={startEdit}>edit</button>
-					<button class="btn-send" onclick={() => onsendquoteemail(selectedTemplateId || undefined)} disabled={sending}>
+					<button class="btn-send" onclick={() => handleSendEmail(selectedTemplateId || undefined)} disabled={sending}>
 						{sending ? "sending..." : "send email"}
 					</button>
 					<button class="btn-save" onclick={() => onquoteaction("send")} disabled={saving}>
 						{saving ? "..." : "mark as sent"}
 					</button>
 				{:else if quote.status === "sent"}
+					<button class="btn-cancel" onclick={startEdit}>edit</button>
 					<button class="btn-danger-outline" onclick={() => onquoteaction("decline")} disabled={saving}>decline</button>
 					<button class="btn-save" onclick={() => onquoteaction("accept")} disabled={saving}>
 						{saving ? "..." : "mark accepted"}

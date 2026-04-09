@@ -25,7 +25,7 @@ interface Props {
 	templates: EmailTemplate[];
 	onsave: (body: Record<string, unknown>) => Promise<void>;
 	onaction: (action: string) => Promise<void>;
-	onsend: (templateId?: string) => Promise<void>;
+	onsend: (templateId?: string, changeNote?: string) => Promise<void>;
 	ondelete: () => Promise<void>;
 	onshare: () => Promise<void>;
 	shareLinkCopied: boolean;
@@ -46,6 +46,8 @@ let {
 
 let editMode = $state(false);
 let confirmDelete = $state(false);
+let confirmResend = $state(false);
+let lastChangeNote = $state("");
 let saving = $state(false);
 let sending = $state(false);
 let sendResult = $state<"success" | "error" | null>(null);
@@ -88,6 +90,27 @@ function cancelEdit() {
 	editMode = false;
 }
 
+function buildChangeNote(): string {
+	const changes: string[] = [];
+	const oldItems = invoice.items;
+	const newItems = editItems;
+	if (oldItems.length !== newItems.length) {
+		changes.push("line items updated");
+	} else {
+		const itemsChanged = newItems.some((item, i) => {
+			const old = oldItems[i];
+			return item.description !== old.description
+				|| item.quantity !== old.quantity
+				|| dollarsToCents(item.unitPrice) !== old.unitPrice;
+		});
+		if (itemsChanged) changes.push("line items updated");
+	}
+	if ((editTaxPercent || 0) !== (invoice.taxPercent || 0)) changes.push("tax updated");
+	if ((editDueDate || "") !== (invoice.dueDate || "")) changes.push("due date updated");
+	if ((editNotes || "") !== (invoice.notes || "")) changes.push("notes updated");
+	return changes.join(", ");
+}
+
 async function handleSaveEdit() {
 	if (editItems.length === 0) return;
 	saving = true;
@@ -97,12 +120,17 @@ async function handleSaveEdit() {
 			quantity: item.quantity,
 			unitPrice: dollarsToCents(item.unitPrice),
 		}));
+		// Capture changes before saving
+		lastChangeNote = buildChangeNote();
 		const body: Record<string, unknown> = { items };
 		if (editTaxPercent > 0) body.taxPercent = editTaxPercent;
 		body.dueDate = editDueDate || undefined;
 		body.notes = editNotes || undefined;
 		await onsave(body);
 		editMode = false;
+		if (invoice.status !== "draft") {
+			confirmResend = true;
+		}
 	} catch (err) {
 		console.error("Failed to update invoice:", err);
 	} finally {
@@ -110,11 +138,20 @@ async function handleSaveEdit() {
 	}
 }
 
-async function handleSendEmail() {
+async function handleResend() {
+	confirmResend = false;
+	await handleSendEmail(selectedTemplateId || undefined, lastChangeNote);
+}
+
+function dismissResend() {
+	confirmResend = false;
+}
+
+async function handleSendEmail(templateId?: string, changeNote?: string) {
 	sending = true;
 	sendResult = null;
 	try {
-		await onsend(selectedTemplateId || undefined);
+		await onsend(templateId, changeNote);
 		sendResult = "success";
 	} catch {
 		sendResult = "error";
@@ -421,7 +458,20 @@ async function handleDelete() {
 			{/if}
 
 			<div class="modal-actions detail-actions">
-				{#if confirmDelete}
+				{#if confirmResend}
+					<span class="confirm-text">resend updated invoice to client?</span>
+					<button
+						class="btn-save"
+						onclick={handleResend}
+						disabled={sending}
+					>
+						{sending ? "sending..." : "yes, resend"}
+					</button>
+					<button
+						class="btn-cancel"
+						onclick={dismissResend}>no</button
+					>
+				{:else if confirmDelete}
 					<span class="confirm-text">delete this invoice?</span>
 					<button
 						class="btn-danger"
@@ -471,6 +521,7 @@ async function handleDelete() {
 						{saving ? "..." : "mark as sent"}
 					</button>
 				{:else if invoice.status === "sent"}
+					<button class="btn-cancel" onclick={startEdit}>edit</button>
 					<button
 						class="btn-action"
 						onclick={() => handleAction("overdue")}
@@ -484,6 +535,7 @@ async function handleDelete() {
 						{saving ? "..." : "mark as paid"}
 					</button>
 				{:else if invoice.status === "overdue"}
+					<button class="btn-cancel" onclick={startEdit}>edit</button>
 					<button
 						class="btn-save"
 						onclick={() => handleAction("pay")}

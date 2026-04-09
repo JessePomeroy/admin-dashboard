@@ -135,12 +135,12 @@ async function handleContractAction(id: string, action: string) {
 	}
 }
 
-async function handleSendEmail(id: string, templateId?: string): Promise<boolean> {
+async function handleSendEmail(id: string, templateId?: string, changeNote?: string): Promise<boolean> {
 	try {
 		const res = await fetch(`/api/admin/contracts/${id}/send`, {
 			method: "POST",
 			headers: { "Content-Type": "application/json" },
-			body: JSON.stringify({ templateId }),
+			body: JSON.stringify({ templateId, changeNote }),
 		});
 		if (res.ok) {
 			await client.mutation(api.contracts.markSent, {

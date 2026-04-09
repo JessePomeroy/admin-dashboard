@@ -13,7 +13,7 @@ function buildDefaultContractHtml(
 ): string {
 	return `<div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 24px;">
 <p>hi ${vars.clientName},</p>
-<p>a contract has been prepared for your review.</p>
+${vars.changeNote ? `<p>your contract has been updated (${vars.changeNote}).</p>` : "<p>a contract has been prepared for your review.</p>"}
 <table style="width: 100%; border-collapse: collapse; margin: 16px 0;">
 <tr><td style="padding: 8px 0; color: #666;">contract</td><td style="padding: 8px 0; text-align: right;">${vars.title}</td></tr>
 ${vars.eventDate ? `<tr><td style="padding: 8px 0; color: #666;">event date</td><td style="padding: 8px 0; text-align: right;">${vars.eventDate}</td></tr>` : ""}
@@ -41,7 +41,7 @@ export function createContractSendHandler() {
 
 		const { id } = params;
 		const body = await request.json().catch(() => ({}));
-		const { templateId, customSubject, customBody } = body;
+		const { templateId, customSubject, customBody, changeNote } = body;
 
 		try {
 			const contract = await convex.query(api.contracts.get, {
@@ -73,6 +73,7 @@ export function createContractSendHandler() {
 					depositAmount: contract.depositAmount
 						? formatCurrency(contract.depositAmount)
 						: "",
+					changeNote: changeNote || "",
 				};
 
 				const template = templateId
