@@ -23,7 +23,7 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
         env:
-          NPM_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NPM_TOKEN: ${{ secrets.PUBLISH_TOKEN }}
 
       - name: Check if version already published
         id: version-check
@@ -40,7 +40,7 @@ jobs:
             echo "Version ${PACKAGE_VERSION} not found, will publish."
           fi
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NPM_TOKEN: ${{ secrets.PUBLISH_TOKEN }}
 
       - name: Build
         if: steps.version-check.outputs.exists == 'false'
@@ -50,8 +50,7 @@ jobs:
         if: steps.version-check.outputs.exists == 'false'
         run: pnpm publish --no-git-checks
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          NPM_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NPM_TOKEN: ${{ secrets.PUBLISH_TOKEN }}
 
       - name: Trigger Vercel rebuild
         if: steps.version-check.outputs.exists == 'false'
