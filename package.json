@@ -1,6 +1,6 @@
 {
   "name": "@jessepomeroy/admin",
-  "version": "0.7.1",
+  "version": "0.7.2",
   "type": "module",
   "svelte": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -11,19 +11,21 @@
       "default": "./dist/index.js"
     }
   },
-  "files": ["dist"],
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "build": "svelte-package -o dist",
     "prepublishOnly": "npm run build"
   },
   "peerDependencies": {
-    "svelte": "^5.0.0",
+    "@sveltejs/kit": "^2.0.0",
     "convex": "^1.30.0",
     "convex-svelte": "^0.0.10",
-    "resend": "^6.0.0",
     "isomorphic-dompurify": "^3.0.0",
-    "svelte-dnd-action": "^0.9.0",
-    "@sveltejs/kit": "^2.0.0"
+    "resend": "^6.0.0",
+    "svelte": "^5.0.0",
+    "svelte-dnd-action": "^0.9.0"
   },
   "devDependencies": {
     "@sveltejs/kit": "^2.53.0",
@@ -35,5 +37,8 @@
   },
   "publishConfig": {
     "registry": "https://npm.pkg.github.com"
+  },
+  "dependencies": {
+    "@jessepomeroy/admin": "0.7.1"
   }
 }
