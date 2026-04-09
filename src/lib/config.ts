@@ -1,5 +1,125 @@
 import { getContext, setContext } from "svelte";
 
+// biome-ignore lint/suspicious/noExplicitAny: Convex FunctionReference is generic, simplified here
+type FnRef = any;
+
+export interface AdminAPI {
+	activityLog: {
+		getClientActivity: FnRef;
+	};
+	adminAuth: {
+		checkAdminAccess: FnRef;
+	};
+	contracts: {
+		create: FnRef;
+		update: FnRef;
+		remove: FnRef;
+		get: FnRef;
+		list: FnRef;
+		markSent: FnRef;
+		markSigned: FnRef;
+		listTemplates: FnRef;
+		createTemplate: FnRef;
+		updateTemplate: FnRef;
+		removeTemplate: FnRef;
+	};
+	crm: {
+		createClient: FnRef;
+		updateClient: FnRef;
+		deleteClient: FnRef;
+		listClients: FnRef;
+		getStats: FnRef;
+	};
+	emailLog: {
+		create: FnRef;
+	};
+	emailTemplates: {
+		create: FnRef;
+		update: FnRef;
+		remove: FnRef;
+		get: FnRef;
+		getByCategory: FnRef;
+		list: FnRef;
+	};
+	galleries: {
+		create: FnRef;
+		update: FnRef;
+		remove: FnRef;
+		get: FnRef;
+		addImage: FnRef;
+		removeImage: FnRef;
+		reorderImages: FnRef;
+		getImages: FnRef;
+		listBySite: FnRef;
+	};
+	invoices: {
+		create: FnRef;
+		update: FnRef;
+		remove: FnRef;
+		get: FnRef;
+		list: FnRef;
+		markSent: FnRef;
+		markPaid: FnRef;
+		getNextNumber: FnRef;
+	};
+	kanban: {
+		initializeBoard: FnRef;
+		moveCard: FnRef;
+		addColumn: FnRef;
+		renameColumn: FnRef;
+		deleteColumn: FnRef;
+		listBoardConfigs: FnRef;
+	};
+	messages: {
+		send: FnRef;
+		markRead: FnRef;
+		list: FnRef;
+		allThreads: FnRef;
+	};
+	notifications?: {
+		getUnreadFlags: FnRef;
+		markSeen: FnRef;
+	};
+	orders: {
+		list: FnRef;
+		updateStatus: FnRef;
+		getStats: FnRef;
+	};
+	platform: {
+		createClient: FnRef;
+		updateClient: FnRef;
+		updateSubscription: FnRef;
+		listAll: FnRef;
+	};
+	portal: {
+		createToken: FnRef;
+	};
+	quotes: {
+		create: FnRef;
+		update: FnRef;
+		remove: FnRef;
+		get: FnRef;
+		list: FnRef;
+		markSent: FnRef;
+		markAccepted: FnRef;
+		markDeclined: FnRef;
+		convertToInvoice: FnRef;
+		getNextNumber: FnRef;
+		listPresets: FnRef;
+		createPreset: FnRef;
+		updatePreset: FnRef;
+		removePreset: FnRef;
+	};
+	tags: {
+		createTag: FnRef;
+		deleteTag: FnRef;
+		assignTag: FnRef;
+		removeTag: FnRef;
+		listTags: FnRef;
+		getClientTags: FnRef;
+	};
+}
+
 export interface AdminTheme {
 	"admin-bg"?: string;
 	"admin-surface"?: string;
@@ -34,7 +154,7 @@ export interface AdminAuthClient {
 		social: (opts: {
 			provider: "google";
 			callbackURL?: string;
-		}) => Promise<any>;
+		}) => Promise<{ error: { message: string } | null }>;
 	};
 	signUp: {
 		email: (opts: {
@@ -43,12 +163,12 @@ export interface AdminAuthClient {
 			name: string;
 		}) => Promise<{ error: { message: string } | null }>;
 	};
-	signOut: () => Promise<any>;
+	signOut: () => Promise<void>;
 	changePassword: (opts: {
 		currentPassword: string;
 		newPassword: string;
 	}) => Promise<{ error: { message: string } | null }>;
-	useSession: () => any;
+	useSession: () => { data: AdminAuthSession | null; isPending: boolean };
 }
 
 export interface AdminConfig {
@@ -57,7 +177,7 @@ export interface AdminConfig {
 	fromEmail: string;
 	isCreator: boolean;
 	sanityStudioUrl?: string;
-	api: any;
+	api: AdminAPI;
 	authClient?: AdminAuthClient;
 	galleryWorkerUrl?: string;
 	theme?: {

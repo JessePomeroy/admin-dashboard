@@ -449,84 +449,15 @@ async function handleShareLink() {
 </AdminModal>
 
 <style>
-	.modal-form {
-		padding: 0 28px 28px;
-		display: flex;
-		flex-direction: column;
-		gap: 14px;
-	}
-
-	.form-row {
-		display: grid;
-		grid-template-columns: 1fr 1fr;
-		gap: 14px;
-	}
-
-	.form-group {
-		display: flex;
-		flex-direction: column;
-		gap: 4px;
-	}
-
-	.form-label {
-		font-size: 0.76rem;
-		color: var(--admin-text-muted);
-		font-weight: 400;
-		letter-spacing: 0.02em;
-	}
+	@import "../../styles/detail-modal.css";
 
 	.required {
 		color: var(--status-rose);
 	}
 
-	.form-input {
-		padding: 8px 10px;
-		background: rgba(255, 255, 255, 0.03);
-		color: var(--admin-text);
-		border: 1px solid var(--admin-border-strong);
-		border-radius: 6px;
-		font-size: 0.85rem;
-		font-family: "Synonym", system-ui, sans-serif;
-		outline: none;
-		transition: border-color 0.15s;
-	}
-
-	.form-input:focus {
-		border-color: var(--admin-accent);
-	}
-
-	.form-textarea {
-		resize: vertical;
-		min-height: 60px;
-		font-family: inherit;
-	}
-
 	.form-textarea-large {
 		min-height: 180px;
 		line-height: 1.6;
-	}
-
-	.detail-body {
-		padding: 0 28px 28px;
-		display: flex;
-		flex-direction: column;
-		gap: 20px;
-	}
-
-	.detail-meta-line {
-		display: flex;
-		align-items: center;
-		gap: 8px;
-		font-size: 0.85rem;
-		flex-wrap: wrap;
-	}
-
-	.meta-sep {
-		color: var(--admin-text-subtle);
-	}
-
-	.detail-client {
-		color: var(--admin-text);
 	}
 
 	.detail-category {
@@ -546,36 +477,6 @@ async function handleShareLink() {
 		color: var(--admin-text-muted);
 	}
 
-	.stat-sep {
-		color: var(--admin-text-subtle);
-	}
-
-	.detail-fields {
-		display: flex;
-		flex-direction: column;
-		gap: 16px;
-		border-top: 1px solid var(--admin-border);
-		padding-top: 16px;
-	}
-
-	.detail-field {
-		display: flex;
-		flex-direction: column;
-		gap: 2px;
-	}
-
-	.detail-label {
-		font-size: 0.72rem;
-		color: var(--admin-text-subtle);
-		letter-spacing: 0.04em;
-		font-weight: 400;
-	}
-
-	.detail-value {
-		font-size: 0.88rem;
-		color: var(--admin-heading);
-	}
-
 	.detail-body-text {
 		white-space: pre-wrap;
 		line-height: 1.6;
@@ -586,179 +487,9 @@ async function handleShareLink() {
 		padding: 12px 0;
 	}
 
-	.modal-actions {
-		display: flex;
-		justify-content: flex-end;
-		gap: 10px;
-		padding-top: 6px;
-	}
-
-	.share-link-row {
-		display: flex;
-		justify-content: flex-end;
-		padding: 12px 0 0;
-	}
-
-	.btn-share {
-		padding: 5px 14px;
-		border-radius: 6px;
-		font-size: 0.78rem;
-		font-family: "Synonym", system-ui, sans-serif;
-		cursor: pointer;
-		background: transparent;
-		color: var(--admin-text-muted);
-		border: 1px solid var(--admin-border);
-		transition: color 0.15s, border-color 0.15s;
-	}
-
-	.btn-share:hover {
-		color: var(--admin-accent);
-		border-color: var(--admin-accent);
-	}
-
-	.email-template-picker {
-		display: flex;
-		flex-direction: column;
-		gap: 4px;
-		padding-top: 12px;
-		border-top: 1px solid var(--admin-border);
-	}
-
-	.template-select {
-		padding: 8px 10px;
-		background: rgba(255, 255, 255, 0.03);
-		color: var(--admin-text);
-		border: 1px solid var(--admin-border-strong);
-		border-radius: 6px;
-		font-size: 0.85rem;
-		font-family: "Synonym", system-ui, sans-serif;
-		outline: none;
-	}
-
-	.template-select:focus {
-		border-color: var(--admin-accent);
-	}
-
-	.btn-cancel,
-	.btn-save,
-	.btn-danger,
-	.btn-danger-outline,
-	.btn-send {
-		padding: 7px 16px;
-		border-radius: 6px;
-		font-size: 0.82rem;
-		font-family: "Synonym", system-ui, sans-serif;
-		cursor: pointer;
-		transition: background 0.15s, border-color 0.15s, opacity 0.15s;
-		border: 1px solid transparent;
-	}
-
-	.btn-cancel {
-		background: transparent;
-		color: var(--admin-text-muted);
-		border-color: var(--admin-border-strong);
-	}
-
-	.btn-cancel:hover {
-		color: var(--admin-text);
-	}
-
-	.btn-save {
-		background: rgba(129, 140, 248, 0.15);
-		border-color: rgba(129, 140, 248, 0.25);
-		color: var(--admin-accent-hover);
-		font-weight: 500;
-	}
-
-	.btn-save:hover {
-		background: rgba(129, 140, 248, 0.22);
-	}
-
-	.btn-save:disabled {
-		opacity: 0.4;
-		cursor: not-allowed;
-	}
-
-	.btn-send {
-		background: rgba(74, 222, 128, 0.12);
-		border-color: rgba(74, 222, 128, 0.25);
-		color: #4ade80;
-		font-weight: 500;
-	}
-
-	.btn-send:hover {
-		background: rgba(74, 222, 128, 0.2);
-	}
-
-	.btn-send:disabled {
-		opacity: 0.4;
-		cursor: not-allowed;
-	}
-
-	.send-success {
-		font-size: 0.82rem;
-		color: #4ade80;
-		margin-right: auto;
-		align-self: center;
-	}
-
-	.send-error {
-		font-size: 0.82rem;
-		color: var(--status-rose);
-		margin-right: auto;
-		align-self: center;
-	}
-
-	.btn-danger {
-		background: rgba(248, 113, 113, 0.15);
-		border-color: rgba(248, 113, 113, 0.3);
-		color: var(--status-rose);
-	}
-
-	.btn-danger:disabled {
-		opacity: 0.4;
-		cursor: not-allowed;
-	}
-
-	.btn-danger-outline {
-		background: transparent;
-		color: var(--status-rose);
-		border-color: rgba(248, 113, 113, 0.25);
-	}
-
-	.btn-danger-outline:hover {
-		background: rgba(248, 113, 113, 0.08);
-	}
-
-	.detail-actions {
-		border-top: 1px solid var(--admin-border);
-		padding-top: 16px;
-	}
-
-	.confirm-text {
-		font-size: 0.82rem;
-		color: var(--status-rose);
-		margin-right: auto;
-		align-self: center;
-	}
-
 	.signed-note {
 		font-size: 0.82rem;
 		color: var(--status-sage);
 		margin-left: auto;
-	}
-
-	@media (max-width: 768px) {
-		.form-row {
-			grid-template-columns: 1fr;
-		}
-
-		.modal-form {
-			padding: 0 20px 20px;
-		}
-
-		.detail-body {
-			padding: 0 20px 20px;
-		}
 	}
 </style>
