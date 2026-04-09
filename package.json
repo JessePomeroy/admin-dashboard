@@ -1,6 +1,6 @@
 {
   "name": "@jessepomeroy/admin",
-  "version": "0.7.2",
+  "version": "0.7.3",
   "type": "module",
   "svelte": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -39,6 +39,6 @@
     "registry": "https://npm.pkg.github.com"
   },
   "dependencies": {
-    "@jessepomeroy/admin": "0.7.1"
+    "@jessepomeroy/admin": "0.7.2"
   }
 }

@@ -48,7 +48,9 @@ const statusLabels: Record<string, string> = {
 
 <div class="delivery-page">
 	<PageHeader title="client galleries">
-		<button class="create-btn" onclick={() => (showCreateModal = true)}>+ new gallery</button>
+		{#snippet actions()}
+			<button class="create-btn" onclick={() => (showCreateModal = true)}>+ new gallery</button>
+		{/snippet}
 	</PageHeader>
 
 	<div class="filter-row">
