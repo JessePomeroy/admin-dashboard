@@ -51,6 +51,7 @@ jobs:
         run: pnpm publish --no-git-checks
         env:
           NPM_TOKEN: ${{ secrets.PUBLISH_TOKEN }}
+          NODE_AUTH_TOKEN: ${{ secrets.PUBLISH_TOKEN }}
 
       - name: Trigger Vercel rebuild
         if: steps.version-check.outputs.exists == 'false'
