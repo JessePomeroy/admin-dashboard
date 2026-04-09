@@ -59,6 +59,7 @@ export interface AdminConfig {
 	sanityStudioUrl?: string;
 	api: any;
 	authClient?: AdminAuthClient;
+	galleryWorkerUrl?: string;
 	theme?: {
 		dark?: AdminTheme;
 		light?: AdminTheme;
@@ -68,6 +69,7 @@ export interface AdminConfig {
 export interface AdminServerConfig extends AdminConfig {
 	convexUrl: string;
 	resendApiKey: string;
+	galleryAdminSecret?: string;
 }
 
 const CONFIG_KEY = Symbol("admin-config");

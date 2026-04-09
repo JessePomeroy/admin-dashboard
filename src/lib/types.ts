@@ -269,9 +269,50 @@ export type InquiryStatus = "new" | "read" | "replied";
 export interface PortalToken extends ConvexDocument<"portalTokens"> {
 	token: string;
 	siteUrl: string;
-	type: "invoice" | "quote" | "contract";
+	type: "invoice" | "quote" | "contract" | "gallery";
 	documentId: string;
 	clientId: GenericId<"photographyClients">;
 	expiresAt?: number;
 	used: boolean;
+}
+
+// Gallery delivery types
+export interface Gallery extends ConvexDocument<"galleries"> {
+	siteUrl: string;
+	clientId: GenericId<"photographyClients">;
+	name: string;
+	slug: string;
+	status: GalleryStatus;
+	coverImageKey?: string;
+	imageCount: number;
+	totalSizeBytes: number;
+	password?: string;
+	expiresAt?: number;
+	downloadEnabled: boolean;
+	favoritesEnabled: boolean;
+}
+export type GalleryId = GenericId<"galleries">;
+export type GalleryStatus = "draft" | "uploading" | "published" | "archived";
+
+export interface GalleryImage extends ConvexDocument<"galleryImages"> {
+	siteUrl: string;
+	galleryId: GenericId<"galleries">;
+	r2Key: string;
+	filename: string;
+	sizeBytes: number;
+	width: number;
+	height: number;
+	order: number;
+	isFavorite: boolean;
+	downloadCount: number;
+}
+export type GalleryImageId = GenericId<"galleryImages">;
+
+export interface GalleryDownload extends ConvexDocument<"galleryDownloads"> {
+	siteUrl: string;
+	galleryId: GenericId<"galleries">;
+	imageId?: GenericId<"galleryImages">;
+	downloadedAt: number;
+	ipHash: string;
+	type: "single" | "zip" | "favorites";
 }
