@@ -2,12 +2,14 @@
 import { onMount } from "svelte";
 import { browser } from "$app/environment";
 import { page } from "$app/stores";
+import { useQuery, useConvexClient } from "convex-svelte";
 import { type Feature, hasFeature, type Tier } from "../features";
 import { isDark } from "../theme";
 import { getAdminConfig } from "../config";
 import "../theme.css";
 
 const config = getAdminConfig();
+const { api } = config;
 
 let { data, children } = $props();
 
@@ -68,6 +70,48 @@ if (config.authClient) {
 		});
 	}
 }
+
+// Notification dots
+const convexClient = useConvexClient();
+const notificationsQuery = useQuery(api.notifications?.getUnreadFlags, () =>
+	api.notifications ? { siteUrl: config.siteUrl } : "skip",
+);
+
+let unreadFlags = $derived(
+	notificationsQuery.data ?? {
+		orders: false,
+		inquiries: false,
+		messages: false,
+		crm: false,
+		quotes: false,
+		invoices: false,
+		contracts: false,
+	},
+);
+
+const hrefToFlagKey: Record<string, string> = {
+	"/admin/orders": "orders",
+	"/admin/inquiries": "inquiries",
+	"/admin/messages": "messages",
+	"/admin/crm": "crm",
+	"/admin/quotes": "quotes",
+	"/admin/invoicing": "invoices",
+	"/admin/contracts": "contracts",
+};
+
+// Mark page as seen when navigating
+let lastMarkedPath = $state("");
+$effect(() => {
+	const pathname = $page.url.pathname;
+	const pageKey = hrefToFlagKey[pathname];
+	if (pageKey && pageKey !== lastMarkedPath && api.notifications?.markSeen) {
+		lastMarkedPath = pageKey;
+		convexClient.mutation(api.notifications.markSeen, {
+			siteUrl: config.siteUrl,
+			page: pageKey,
+		}).catch(() => {});
+	}
+});
 
 // Change password state
 let showPasswordForm = $state(false);
@@ -243,6 +287,10 @@ function closeMobileMenu() {
 						{/if}
 					</svg>
 					<span>{item.label}</span>
+					{@const flagKey = hrefToFlagKey[item.href]}
+					{#if flagKey && (unreadFlags as Record<string, boolean>)[flagKey] && !isActive(item.href, $page.url.pathname)}
+						<span class="nav-dot" aria-label="new content"></span>
+					{/if}
 					{#if locked}
 						<svg class="lock-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
 							<rect x="3" y="11" width="18" height="11" rx="2" ry="2" /><path d="M7 11V7a5 5 0 0110 0v4" />
@@ -474,6 +522,21 @@ function closeMobileMenu() {
 
 	.nav-item.locked:hover {
 		color: var(--admin-text-muted);
+	}
+
+	.nav-dot {
+		width: 6px;
+		height: 6px;
+		border-radius: 50%;
+		background: var(--admin-accent);
+		margin-left: auto;
+		flex-shrink: 0;
+		animation: dot-fade-in 0.2s ease;
+	}
+
+	@keyframes dot-fade-in {
+		from { opacity: 0; }
+		to { opacity: 1; }
 	}
 
 	.lock-icon {
