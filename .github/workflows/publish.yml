@@ -51,6 +51,7 @@ jobs:
         run: pnpm publish --no-git-checks
         env:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NPM_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Trigger Vercel rebuild
         if: steps.version-check.outputs.exists == 'false'
