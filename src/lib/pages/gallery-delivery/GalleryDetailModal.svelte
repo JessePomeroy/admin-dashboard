@@ -126,13 +126,13 @@ async function handleShare() {
 			</div>
 		</div>
 
-		<div class="tabs">
-			<button class="tab" class:active={tab === "images"} onclick={() => (tab = "images")}>images</button>
-			<button class="tab" class:active={tab === "settings"} onclick={() => (tab = "settings")}>settings</button>
+		<div class="tabs" role="tablist">
+			<button class="tab" class:active={tab === "images"} role="tab" aria-selected={tab === "images"} onclick={() => (tab = "images")}>images</button>
+			<button class="tab" class:active={tab === "settings"} role="tab" aria-selected={tab === "settings"} onclick={() => (tab = "settings")}>settings</button>
 		</div>
 
 		{#if tab === "images"}
-			<div class="images-section">
+			<div class="images-section" role="tabpanel">
 				<GalleryUploader galleryId={gallery._id as string} onupload={() => {}} />
 				<GalleryImageGrid
 					{images}
@@ -142,7 +142,7 @@ async function handleShare() {
 				/>
 			</div>
 		{:else}
-			<form onsubmit={(e) => { e.preventDefault(); handleSaveSettings(); }} class="settings-form">
+			<form onsubmit={(e) => { e.preventDefault(); handleSaveSettings(); }} class="settings-form" role="tabpanel">
 				<div class="field">
 					<label for="edit-name">name</label>
 					<input id="edit-name" type="text" bind:value={editName} />

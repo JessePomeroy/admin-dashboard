@@ -56,7 +56,7 @@ async function handleUpgrade() {
 
 <div class="upgrade-banner">
 	<div class="upgrade-content">
-		<svg class="upgrade-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+		<svg class="upgrade-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
 			<path d="M12 2L2 7l10 5 10-5-10-5z" />
 			<path d="M2 17l10 5 10-5" />
 			<path d="M2 12l10 5 10-5" />
@@ -66,7 +66,7 @@ async function handleUpgrade() {
 			upgrade to full crm for client management, invoicing, quotes, contracts, and more.
 		</p>
 		{#if error}
-			<p class="upgrade-error">{error}</p>
+			<p class="upgrade-error" role="alert">{error}</p>
 		{/if}
 		<button class="upgrade-button" onclick={handleUpgrade} disabled={loading}>
 			{loading ? "redirecting..." : "upgrade to full crm"}

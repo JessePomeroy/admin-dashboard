@@ -261,10 +261,12 @@ async function handleDeleteTemplate(id: string) {
 			{/if}
 		</div>
 
-		<div class="tab-bar">
+		<div class="tab-bar" role="tablist">
 			<button
 				class="tab-btn"
 				class:tab-active={activeTab === "contracts"}
+				role="tab"
+				aria-selected={activeTab === "contracts"}
 				onclick={() => {
 					activeTab = "contracts";
 				}}>contracts</button
@@ -272,6 +274,8 @@ async function handleDeleteTemplate(id: string) {
 			<button
 				class="tab-btn"
 				class:tab-active={activeTab === "templates"}
+				role="tab"
+				aria-selected={activeTab === "templates"}
 				onclick={() => {
 					activeTab = "templates";
 				}}>templates</button

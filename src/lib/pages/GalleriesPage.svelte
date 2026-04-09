@@ -22,9 +22,9 @@ const studioBaseUrl = config.sanityStudioUrl ?? "https://angelsrest.sanity.studi
 	</header>
 
 	{#if showDelivery}
-		<div class="tab-bar">
-			<button class="tab" class:active={tab === "portfolio"} onclick={() => (tab = "portfolio")}>portfolio</button>
-			<button class="tab" class:active={tab === "delivery"} onclick={() => (tab = "delivery")}>delivery</button>
+		<div class="tab-bar" role="tablist">
+			<button class="tab" class:active={tab === "portfolio"} role="tab" aria-selected={tab === "portfolio"} onclick={() => (tab = "portfolio")}>portfolio</button>
+			<button class="tab" class:active={tab === "delivery"} role="tab" aria-selected={tab === "delivery"} onclick={() => (tab = "delivery")}>delivery</button>
 		</div>
 	{/if}
 

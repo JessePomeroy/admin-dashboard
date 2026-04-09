@@ -161,7 +161,8 @@ async function handleDelete(image: GalleryImage) {
 		transition: opacity 0.15s;
 	}
 
-	.grid-item:hover .overlay {
+	.grid-item:hover .overlay,
+	.grid-item:focus-within .overlay {
 		opacity: 1;
 	}
 

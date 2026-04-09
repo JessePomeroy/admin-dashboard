@@ -93,6 +93,7 @@ function handleKeydown(e: KeyboardEvent) {
 				type="text"
 				class="message-field"
 				placeholder="type a message..."
+				aria-label="Type a message"
 				value={inputValue}
 				oninput={(e) => oninput(e.currentTarget.value)}
 				onkeydown={handleKeydown}

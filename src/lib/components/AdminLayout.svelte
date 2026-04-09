@@ -193,12 +193,12 @@ function closeMobileMenu() {
 	{/if}
 
 	<!-- Sidebar -->
-	<aside class="sidebar" class:sidebar-open={mobileMenuOpen}>
+	<aside class="sidebar" class:sidebar-open={mobileMenuOpen} aria-label="Admin navigation">
 		<div class="sidebar-brand">
 			<span class="brand-text">{config.siteName}</span>
 		</div>
 
-		<nav class="sidebar-nav">
+		<nav class="sidebar-nav" aria-label="Main navigation">
 			{#each navItems as item}
 				{@const locked = item.feature ? !hasFeature(tier, item.feature) : false}
 				{@const hidden = item.creatorOnly && !data.isCreator}
@@ -215,7 +215,7 @@ function closeMobileMenu() {
 					class:locked
 					onclick={(e) => { if (locked) e.preventDefault(); closeMobileMenu(); }}
 				>
-					<svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+					<svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
 						{#if item.icon === "grid"}
 							<rect x="3" y="3" width="7" height="7" /><rect x="14" y="3" width="7" height="7" /><rect x="3" y="14" width="7" height="7" /><rect x="14" y="14" width="7" height="7" />
 						{:else if item.icon === "package"}
@@ -244,7 +244,7 @@ function closeMobileMenu() {
 					</svg>
 					<span>{item.label}</span>
 					{#if locked}
-						<svg class="lock-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+						<svg class="lock-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
 							<rect x="3" y="11" width="18" height="11" rx="2" ry="2" /><path d="M7 11V7a5 5 0 0110 0v4" />
 						</svg>
 					{/if}
@@ -259,7 +259,7 @@ function closeMobileMenu() {
 						<span class="user-email">{authUserEmail}</span>
 					</div>
 					<button class="theme-toggle" onclick={() => { showPasswordForm = !showPasswordForm; passwordError = ""; passwordSuccess = false; currentPassword = ""; newPassword = ""; }}>
-						<svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+						<svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
 							<rect x="3" y="11" width="18" height="11" rx="2" ry="2" /><path d="M7 11V7a5 5 0 0110 0v4" />
 						</svg>
 						<span>change password</span>
@@ -267,15 +267,16 @@ function closeMobileMenu() {
 					{#if showPasswordForm}
 						<form class="pw-form" onsubmit={handleChangePassword}>
 							{#if passwordError}
-								<p class="pw-error">{passwordError}</p>
+								<p class="pw-error" role="alert">{passwordError}</p>
 							{/if}
 							{#if passwordSuccess}
-								<p class="pw-success">password updated</p>
+								<p class="pw-success" role="status">password updated</p>
 							{:else}
 								<input
 									type="password"
 									class="pw-input"
 									placeholder="current password"
+									aria-label="Current password"
 									bind:value={currentPassword}
 									required
 								/>
@@ -283,6 +284,7 @@ function closeMobileMenu() {
 									type="password"
 									class="pw-input"
 									placeholder="new password (8+ chars)"
+									aria-label="New password"
 									bind:value={newPassword}
 									required
 									minlength="8"
@@ -294,14 +296,14 @@ function closeMobileMenu() {
 						</form>
 					{/if}
 					<button class="theme-toggle" onclick={() => config.authClient?.signOut()}>
-						<svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+						<svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
 							<path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>
 						</svg>
 						<span>sign out</span>
 					</button>
 			{/if}
 			<button class="theme-toggle" onclick={toggleTheme}>
-				<svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+				<svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
 					{#if dark}
 						<circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
 					{:else}
@@ -311,7 +313,7 @@ function closeMobileMenu() {
 				<span>{dark ? "light mode" : "dark mode"}</span>
 			</button>
 			<a href="/" class="back-link">
-				<svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+				<svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
 					<line x1="19" y1="12" x2="5" y2="12" /><polyline points="12 19 5 12 12 5" />
 				</svg>
 				<span>back to site</span>

@@ -54,6 +54,7 @@ function autoGrow(e: Event) {
 				<textarea
 					class="form-input item-desc"
 					placeholder="description"
+					aria-label="Item description"
 					bind:value={item.description}
 					oninput={autoGrow}
 					rows="1"
@@ -92,6 +93,7 @@ function autoGrow(e: Event) {
 					min="1"
 					step="1"
 					placeholder="qty"
+					aria-label="Quantity"
 					bind:value={item.quantity}
 					required
 				/>
@@ -101,6 +103,7 @@ function autoGrow(e: Event) {
 					min="0"
 					step="0.01"
 					placeholder={pricePlaceholder}
+					aria-label="Unit price"
 					bind:value={item.unitPrice}
 					required
 				/>

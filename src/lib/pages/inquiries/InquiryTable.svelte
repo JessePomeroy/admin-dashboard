@@ -35,13 +35,13 @@ function truncate(text: string, len = 60): string {
 	<table class="inquiries-table">
 		<thead>
 			<tr>
-				<th>date</th>
-				<th>name</th>
-				<th>email</th>
-				<th>subject</th>
-				<th>preview</th>
-				<th>status</th>
-				<th></th>
+				<th scope="col">date</th>
+				<th scope="col">name</th>
+				<th scope="col">email</th>
+				<th scope="col">subject</th>
+				<th scope="col">preview</th>
+				<th scope="col">status</th>
+				<th scope="col"></th>
 			</tr>
 		</thead>
 		<tbody>

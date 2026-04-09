@@ -437,9 +437,9 @@ async function handleDelete() {
 						}}>no</button
 					>
 				{:else if sendResult === "success"}
-					<span class="send-success">email sent</span>
+					<span class="send-success" role="status">email sent</span>
 				{:else if sendResult === "error"}
-					<span class="send-error">failed to send</span>
+					<span class="send-error" role="alert">failed to send</span>
 					<button
 						class="btn-cancel"
 						onclick={() => {

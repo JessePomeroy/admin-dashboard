@@ -278,11 +278,11 @@ let sparklineArea = $derived(() => {
 				<table class="orders-table">
 					<thead>
 						<tr>
-							<th>order</th>
-							<th>date</th>
-							<th>customer</th>
-							<th>total</th>
-							<th>status</th>
+							<th scope="col">order</th>
+							<th scope="col">date</th>
+							<th scope="col">customer</th>
+							<th scope="col">total</th>
+							<th scope="col">status</th>
 						</tr>
 					</thead>
 					<tbody>

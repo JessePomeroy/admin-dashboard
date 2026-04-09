@@ -103,6 +103,10 @@ function goBackToThreads() {
 function handleMessageInput(value: string) {
 	messageInput = value;
 }
+
+function handleNewMessageKeydown(e: KeyboardEvent) {
+	if (e.key === "Escape") showNewMessage = false;
+}
 </script>
 
 <FeatureGate feature="messages" tier={data.tier}>
@@ -114,7 +118,7 @@ function handleMessageInput(value: string) {
 		<h1>messages</h1>
 		{#if clientsWithoutThreads.length > 0}
 			<div class="new-message-wrapper">
-				<button class="btn-new" onclick={() => { showNewMessage = !showNewMessage; }}>
+				<button class="btn-new" aria-expanded={showNewMessage} onclick={() => { showNewMessage = !showNewMessage; }} onkeydown={handleNewMessageKeydown}>
 					<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
 					new message
 				</button>

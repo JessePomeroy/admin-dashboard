@@ -37,6 +37,7 @@ let {
 				class="filter-select"
 				value={filter.value}
 				onchange={(e) => filter.onchange(e.currentTarget.value)}
+			aria-label={filter.allLabel}
 			>
 				<option value="all">{filter.allLabel}</option>
 				{#each filter.options as opt}
@@ -49,6 +50,7 @@ let {
 			type="text"
 			class="filter-search"
 			placeholder={searchPlaceholder}
+			aria-label={searchPlaceholder}
 			value={searchQuery}
 			oninput={(e) => onsearch(e.currentTarget.value)}
 		/>

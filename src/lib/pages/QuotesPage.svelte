@@ -510,9 +510,9 @@ function closePresetModal() {
 		{/if}
 	</div>
 
-	<div class="tab-bar">
-		<button class="tab-btn" class:tab-active={activeTab === "quotes"} onclick={() => { activeTab = "quotes"; }}>quotes</button>
-		<button class="tab-btn" class:tab-active={activeTab === "presets"} onclick={() => { activeTab = "presets"; }}>presets</button>
+	<div class="tab-bar" role="tablist">
+		<button class="tab-btn" class:tab-active={activeTab === "quotes"} role="tab" aria-selected={activeTab === "quotes"} onclick={() => { activeTab = "quotes"; }}>quotes</button>
+		<button class="tab-btn" class:tab-active={activeTab === "presets"} role="tab" aria-selected={activeTab === "presets"} onclick={() => { activeTab = "presets"; }}>presets</button>
 	</div>
 
 	{#if activeTab === "quotes"}

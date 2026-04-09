@@ -158,6 +158,7 @@ function clearCompleted() {
 	class="uploader"
 	class:dragging
 	role="region"
+	aria-label="File upload area"
 	ondragover={(e) => { e.preventDefault(); dragging = true; }}
 	ondragleave={() => (dragging = false)}
 	ondrop={handleDrop}
@@ -173,7 +174,7 @@ function clearCompleted() {
 			<p class="drop-limits">jpg, png, webp, tiff — max 50MB per file</p>
 		</div>
 	{:else}
-		<div class="upload-list">
+		<div class="upload-list" aria-live="polite">
 			<div class="upload-header">
 				<span class="upload-progress-text">
 					{completedCount}/{totalCount} uploaded

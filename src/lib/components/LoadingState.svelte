@@ -6,7 +6,8 @@
 	let { lines = 5 }: Props = $props();
 </script>
 
-<div class="loading-state">
+<div class="loading-state" role="status" aria-live="polite">
+	<span style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0)">Loading</span>
 	{#each Array(lines) as _, i}
 		<div class="loading-line" style="width: {70 + Math.random() * 30}%; animation-delay: {i * 0.1}s"></div>
 	{/each}

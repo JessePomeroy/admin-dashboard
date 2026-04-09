@@ -303,21 +303,22 @@ function exportCSV() {
 			type="text"
 			bind:value={searchQuery}
 			placeholder="search by email, order #, or name..."
+			aria-label="Search orders"
 			class="filter-search"
 		/>
-		<select bind:value={periodFilter} class="filter-select">
+		<select bind:value={periodFilter} class="filter-select" aria-label="Filter by time period">
 			<option value="all">all time</option>
 			<option value="today">today</option>
 			<option value="week">this week</option>
 			<option value="month">this month</option>
 		</select>
-		<select bind:value={yearFilter} class="filter-select">
+		<select bind:value={yearFilter} class="filter-select" aria-label="Filter by year">
 			<option value="all">all years</option>
 			{#each availableYears as year}
 				<option value={year}>{year}</option>
 			{/each}
 		</select>
-		<select bind:value={statusFilter} class="filter-select">
+		<select bind:value={statusFilter} class="filter-select" aria-label="Filter by status">
 			{#each statuses as status}
 				<option value={status}>
 					{status === 'all' ? 'all statuses' : status}

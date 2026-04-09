@@ -23,12 +23,12 @@ let { contracts, onselect }: Props = $props();
 		<table class="ct-table">
 			<thead>
 				<tr>
-					<th>title</th>
-					<th>client</th>
-					<th>category</th>
-					<th>event date</th>
-					<th>total price</th>
-					<th>status</th>
+					<th scope="col">title</th>
+					<th scope="col">client</th>
+					<th scope="col">category</th>
+					<th scope="col">event date</th>
+					<th scope="col">total price</th>
+					<th scope="col">status</th>
 				</tr>
 			</thead>
 			<tbody>

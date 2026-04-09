@@ -10,26 +10,64 @@ interface Props {
 
 let { title, onclose, size = "default", children }: Props = $props();
 
+let contentEl = $state<HTMLDivElement | null>(null);
+let previouslyFocused: HTMLElement | null = null;
+
+$effect(() => {
+	if (contentEl) {
+		previouslyFocused = document.activeElement as HTMLElement;
+		const closeBtn = contentEl.querySelector<HTMLElement>(".modal-close");
+		closeBtn?.focus();
+	}
+	return () => {
+		previouslyFocused?.focus();
+	};
+});
+
 function handleKeydown(e: KeyboardEvent) {
-	if (e.key === "Escape") onclose();
+	if (e.key === "Escape") {
+		onclose();
+		return;
+	}
+	if (e.key === "Tab" && contentEl) {
+		const focusable = contentEl.querySelectorAll<HTMLElement>(
+			'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+		);
+		if (focusable.length === 0) return;
+		const first = focusable[0];
+		const last = focusable[focusable.length - 1];
+		if (e.shiftKey && document.activeElement === first) {
+			e.preventDefault();
+			last.focus();
+		} else if (!e.shiftKey && document.activeElement === last) {
+			e.preventDefault();
+			first.focus();
+		}
+	}
 }
 </script>
 
-<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
-<div class="modal-overlay" role="dialog" tabindex="-1" aria-modal="true" aria-label={title} onclick={onclose} onkeydown={handleKeydown}>
+<div
+	class="modal-overlay"
+	role="dialog"
+	aria-modal="true"
+	aria-label={title}
+	onclick={onclose}
+	onkeydown={handleKeydown}
+>
 	<div
 		class="modal-content"
 		class:modal-content-wide={size === "wide"}
 		class:modal-content-narrow={size === "narrow"}
 		class:modal-content-full={size === "full"}
-		role="presentation"
+		bind:this={contentEl}
+		role="document"
 		onclick={(e) => e.stopPropagation()}
-		onkeydown={(e) => e.stopPropagation()}
 	>
 		<div class="modal-header">
 			<h2 class="modal-title">{title}</h2>
-			<button class="modal-close" aria-label="Close" onclick={onclose}>
-				<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+			<button class="modal-close" aria-label="Close dialog" onclick={onclose}>
+				<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
 					<line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
 				</svg>
 			</button>

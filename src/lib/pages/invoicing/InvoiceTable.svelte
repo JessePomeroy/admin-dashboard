@@ -31,13 +31,13 @@ function calcTax(subtotal: number, taxPercent: number): number {
 		<table class="inv-table">
 			<thead>
 				<tr>
-					<th>invoice #</th>
-					<th>type</th>
-					<th>client</th>
-					<th>items</th>
-					<th>total</th>
-					<th>due date</th>
-					<th>status</th>
+					<th scope="col">invoice #</th>
+					<th scope="col">type</th>
+					<th scope="col">client</th>
+					<th scope="col">items</th>
+					<th scope="col">total</th>
+					<th scope="col">due date</th>
+					<th scope="col">status</th>
 				</tr>
 			</thead>
 			<tbody>

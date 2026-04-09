@@ -295,7 +295,9 @@ function getCategoryColor(category: string): string {
 								<button
 									class="column-menu-btn"
 									aria-label="Column options"
+									aria-expanded={showColumnMenu === column.id}
 									onclick={() => (showColumnMenu = showColumnMenu === column.id ? null : column.id)}
+									onkeydown={(e) => { if (e.key === "Escape") showColumnMenu = null; }}
 								>
 									<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
 										<circle cx="12" cy="5" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="19" r="1"/>

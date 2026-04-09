@@ -40,13 +40,13 @@ function fmtDate(timestamp: number) {
 		<table class="client-table">
 			<thead>
 				<tr>
-					<th>name</th>
-					<th>email</th>
-					<th>category</th>
-					<th>type</th>
-					<th>status</th>
-					<th>source</th>
-					<th>added</th>
+					<th scope="col">name</th>
+					<th scope="col">email</th>
+					<th scope="col">category</th>
+					<th scope="col">type</th>
+					<th scope="col">status</th>
+					<th scope="col">source</th>
+					<th scope="col">added</th>
 				</tr>
 			</thead>
 			<tbody>

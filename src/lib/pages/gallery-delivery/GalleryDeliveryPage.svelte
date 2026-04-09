@@ -62,6 +62,7 @@ const statusLabels: Record<string, string> = {
 			<button
 				class="filter-chip"
 				class:active={statusFilter === s}
+				aria-pressed={statusFilter === s}
 				onclick={() => (statusFilter = s)}
 			>
 				{s}

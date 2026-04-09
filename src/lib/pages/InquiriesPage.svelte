@@ -67,7 +67,7 @@ async function updateStatus(id: string, newStatus: string) {
 	</header>
 
 	<div class="toolbar">
-		<select class="filter-select" bind:value={statusFilter}>
+		<select class="filter-select" bind:value={statusFilter} aria-label="Filter by status">
 			{#each statusOptions as status}
 				<option value={status}>
 					{status === "all" ? "all statuses" : status}

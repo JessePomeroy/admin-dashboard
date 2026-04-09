@@ -27,13 +27,13 @@ function calcTotal(pkgs: QuotePackage[]): number {
 		<table class="q-table">
 			<thead>
 				<tr>
-					<th>quote #</th>
-					<th>client</th>
-					<th>category</th>
-					<th>packages</th>
-					<th>total</th>
-					<th>valid until</th>
-					<th>status</th>
+					<th scope="col">quote #</th>
+					<th scope="col">client</th>
+					<th scope="col">category</th>
+					<th scope="col">packages</th>
+					<th scope="col">total</th>
+					<th scope="col">valid until</th>
+					<th scope="col">status</th>
 				</tr>
 			</thead>
 			<tbody>
