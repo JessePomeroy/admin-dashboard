@@ -1,6 +1,7 @@
 <script lang="ts">
 import { useConvexClient } from "convex-svelte";
 import { getAdminConfig } from "../../config";
+import { toId } from "../../utils";
 
 let { galleryId, onupload }: {
 	galleryId: string;
@@ -108,7 +109,7 @@ async function processQueue() {
 		// 5. Record in Convex
 		await client.mutation(api.galleries.addImage, {
 			siteUrl: config.siteUrl,
-			galleryId: galleryId as any,
+			galleryId: toId(galleryId),
 			r2Key,
 			filename: next.file.name,
 			sizeBytes: next.file.size,

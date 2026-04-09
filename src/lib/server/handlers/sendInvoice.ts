@@ -1,5 +1,6 @@
 import { error, json } from "@sveltejs/kit";
 import { getServerConfig } from "../../config";
+import { toId } from "../../utils";
 import { getConvex } from "../convexClient";
 import { replaceTemplateVariables, sendEmail } from "../email";
 
@@ -67,7 +68,7 @@ export function createInvoiceSendHandler() {
 
 		try {
 			const invoice = await convex.query(api.invoices.get, {
-				invoiceId: id as any,
+				invoiceId: toId(id),
 			});
 			if (!invoice) throw error(404, "Invoice not found");
 
@@ -161,7 +162,7 @@ export function createInvoiceSendHandler() {
 
 			// mark invoice as sent
 			await convex.mutation(api.invoices.markSent, {
-				invoiceId: id as any,
+				invoiceId: toId(id),
 				siteUrl,
 			});
 

@@ -1,3 +1,14 @@
+/**
+ * Cast a string to a Convex GenericId. Convex IDs are strings at runtime,
+ * but the TypeScript types require GenericId<"tableName">. Since the admin
+ * package doesn't import Convex's generated types (it receives `api: any`),
+ * we use this helper to centralize the cast and document the intent.
+ */
+// biome-ignore lint/suspicious/noExplicitAny: Convex GenericId is structurally a string, cast is safe at runtime
+export function toId(id: string): any {
+	return id;
+}
+
 // Currency formatting
 export function formatCents(amount: number): string {
 	return new Intl.NumberFormat("en-US", {
@@ -140,9 +151,9 @@ export async function copyPortalLink(
 ): Promise<string> {
 	const token = await client.mutation(api.portal.createToken, {
 		siteUrl,
-		type: type as any,
+		type,
 		documentId,
-		clientId: clientId as any,
+		clientId: toId(clientId),
 	});
 	const url = `https://${siteUrl}/portal/${token}`;
 	await navigator.clipboard.writeText(url);

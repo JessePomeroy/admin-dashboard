@@ -2,7 +2,7 @@
 import { dndzone } from "svelte-dnd-action";
 import { useQuery, useConvexClient } from "convex-svelte";
 import { getAdminConfig } from "../config";
-import { getCategoryColor } from "../utils";
+import { getCategoryColor, toId } from "../utils";
 import FeatureGate from "../components/FeatureGate.svelte";
 import LoadingState from "../components/LoadingState.svelte";
 import BoardCardModal from "./board/BoardCardModal.svelte";
@@ -135,7 +135,7 @@ async function handleFinalize(
 		if (card.boardColumnId !== columnId || card.boardPosition !== i) {
 			try {
 				await client.mutation(api.kanban.moveCard, {
-					clientId: card._id as any,
+					clientId: toId(card._id),
 					siteUrl: config.siteUrl,
 					targetColumnId: columnId,
 					targetPosition: i,

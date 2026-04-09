@@ -4,6 +4,7 @@ import { getAdminConfig } from "../config";
 import FeatureGate from "../components/FeatureGate.svelte";
 import LoadingState from "../components/LoadingState.svelte";
 import type { ActivityLogEntry, Client, ClientTag } from "../types";
+import { toId } from "../utils";
 import ClientCreateModal from "./crm/ClientCreateModal.svelte";
 import ClientDetailModal from "./crm/ClientDetailModal.svelte";
 import ClientTable from "./crm/ClientTable.svelte";
@@ -91,7 +92,7 @@ $effect(() => {
 async function loadClientTags(clientId: string) {
 	loadingTags = true;
 	try {
-		const result = await client.query(api.tags.getClientTags, { clientId: clientId as any });
+		const result = await client.query(api.tags.getClientTags, { clientId: toId(clientId) });
 		clientTags = result || [];
 		tagAssignments[clientId] = clientTags;
 		tagAssignments = { ...tagAssignments };
@@ -105,7 +106,7 @@ async function loadClientTags(clientId: string) {
 async function loadClientActivity(clientId: string) {
 	loadingActivity = true;
 	try {
-		const result = await client.query(api.activityLog.getClientActivity, { clientId: clientId as any });
+		const result = await client.query(api.activityLog.getClientActivity, { clientId: toId(clientId) });
 		clientActivity = result || [];
 	} catch (err) {
 		console.error("Failed to load client activity:", err);
@@ -155,7 +156,7 @@ async function saveEdit(body: Record<string, string | undefined>) {
 	saving = true;
 	try {
 		await client.mutation(api.crm.updateClient, {
-			clientId: selectedClient._id as any,
+			clientId: toId(selectedClient._id),
 			siteUrl: config.siteUrl,
 			name: body.name,
 			email: body.email,
@@ -181,7 +182,7 @@ async function deleteClient() {
 	saving = true;
 	try {
 		await client.mutation(api.crm.deleteClient, {
-			clientId: selectedClient._id as any,
+			clientId: toId(selectedClient._id),
 			siteUrl: config.siteUrl,
 		});
 		closeDetailModal();
@@ -196,7 +197,7 @@ async function quickStatusUpdate(newStatus: string) {
 	if (!selectedClient) return;
 	try {
 		await client.mutation(api.crm.updateClient, {
-			clientId: selectedClient._id as any,
+			clientId: toId(selectedClient._id),
 			siteUrl: config.siteUrl,
 			status: newStatus,
 		});
@@ -212,8 +213,8 @@ async function assignTagToClient(tagId: string) {
 	try {
 		await client.mutation(api.tags.assignTag, {
 			siteUrl: config.siteUrl,
-			clientId: selectedClient._id as any,
-			tagId: tagId as any,
+			clientId: toId(selectedClient._id),
+			tagId: toId(tagId),
 		});
 		await loadClientTags(selectedClient._id);
 		await loadClientActivity(selectedClient._id);
@@ -227,8 +228,8 @@ async function removeTagFromClient(tagId: string) {
 	try {
 		await client.mutation(api.tags.removeTag, {
 			siteUrl: config.siteUrl,
-			clientId: selectedClient._id as any,
-			tagId: tagId as any,
+			clientId: toId(selectedClient._id),
+			tagId: toId(tagId),
 		});
 		await loadClientTags(selectedClient._id);
 		await loadClientActivity(selectedClient._id);
@@ -255,7 +256,7 @@ async function createTag(name: string, color: string) {
 async function deleteTag(tagId: string) {
 	try {
 		await client.mutation(api.tags.deleteTag, {
-			tagId: tagId as any,
+			tagId: toId(tagId),
 		});
 		for (const cId of Object.keys(tagAssignments)) {
 			tagAssignments[cId] = tagAssignments[cId].filter(

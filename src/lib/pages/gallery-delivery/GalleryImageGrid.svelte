@@ -1,6 +1,7 @@
 <script lang="ts">
 import { useConvexClient } from "convex-svelte";
 import { getAdminConfig } from "../../config";
+import { toId } from "../../utils";
 import { dndzone } from "svelte-dnd-action";
 import type { GalleryImage } from "../../types";
 
@@ -41,7 +42,7 @@ async function handleDndFinalize(e: CustomEvent<{ items: typeof items }>) {
 
 	// Save new order to Convex
 	const updates = items.map((item, index) => ({
-		id: item._id as any,
+		id: toId(item._id),
 		order: index,
 	}));
 	await client.mutation(api.galleries.reorderImages, { updates });
@@ -50,14 +51,14 @@ async function handleDndFinalize(e: CustomEvent<{ items: typeof items }>) {
 
 async function handleSetCover(image: GalleryImage) {
 	await client.mutation(api.galleries.update, {
-		id: galleryId as any,
+		id: toId(galleryId),
 		coverImageKey: image.r2Key,
 	});
 	onchange();
 }
 
 async function handleDelete(image: GalleryImage) {
-	await client.mutation(api.galleries.removeImage, { id: image._id as any });
+	await client.mutation(api.galleries.removeImage, { id: toId(image._id) });
 
 	try {
 		await fetch("/api/admin/galleries/delete", {

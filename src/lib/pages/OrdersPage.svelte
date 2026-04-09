@@ -8,7 +8,7 @@
 
 import { useQuery, useConvexClient } from "convex-svelte";
 import { getAdminConfig } from "../config";
-import { getStatusColor, ORDER_STATUS_COLORS } from "../utils";
+import { getStatusColor, ORDER_STATUS_COLORS, toId } from "../utils";
 import LoadingState from "../components/LoadingState.svelte";
 import OrderDetailModal from "./orders/OrderDetailModal.svelte";
 import OrderTable from "./orders/OrderTable.svelte";
@@ -169,7 +169,7 @@ function formatDate(dateStr: string) {
 async function updateStatus(orderId: string, newStatus: string) {
 	try {
 		await convexClient.mutation(api.orders.updateStatus, {
-			orderId: orderId as any,
+			orderId: toId(orderId),
 			status: newStatus as any,
 		});
 		if (selectedOrder?._id === orderId) {
@@ -193,7 +193,7 @@ async function saveNotes(orderId: string, notes: string) {
 	notesSaving = true;
 	try {
 		await convexClient.mutation(api.orders.updateStatus, {
-			orderId: orderId as any,
+			orderId: toId(orderId),
 			notes,
 		});
 		if (selectedOrder?._id === orderId) {

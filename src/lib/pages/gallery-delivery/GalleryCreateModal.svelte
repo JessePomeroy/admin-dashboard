@@ -1,6 +1,7 @@
 <script lang="ts">
 import { useQuery, useConvexClient } from "convex-svelte";
 import { getAdminConfig } from "../../config";
+import { toId } from "../../utils";
 import AdminModal from "../../components/AdminModal.svelte";
 
 let { onclose }: { onclose: () => void } = $props();
@@ -39,7 +40,7 @@ async function handleCreate() {
 
 		await client.mutation(api.galleries.create, {
 			siteUrl: config.siteUrl,
-			clientId: selectedClientId as any,
+			clientId: toId(selectedClientId),
 			name: name.trim(),
 			slug,
 			downloadEnabled,

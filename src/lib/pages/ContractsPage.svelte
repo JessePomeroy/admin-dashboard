@@ -4,7 +4,7 @@ import { getAdminConfig } from "../config";
 import FeatureGate from "../components/FeatureGate.svelte";
 import LoadingState from "../components/LoadingState.svelte";
 import type { Contract, ContractStatus } from "../types";
-import { copyPortalLink } from "../utils";
+import { copyPortalLink, toId } from "../utils";
 import ContractCreateModal from "./contracts/ContractCreateModal.svelte";
 import ContractDetailModal from "./contracts/ContractDetailModal.svelte";
 import ContractTable from "./contracts/ContractTable.svelte";
@@ -67,9 +67,9 @@ async function handleCreateContract(payload: Record<string, unknown>) {
 	await client.mutation(api.contracts.create, {
 		siteUrl: config.siteUrl,
 		title: payload.title as string,
-		clientId: payload.clientId as any,
+		clientId: toId(payload.clientId),
 		category: payload.category as "photography" | "web" | undefined,
-		templateId: payload.templateId as any,
+		templateId: toId(payload.templateId),
 		body: payload.body as string,
 		eventDate: payload.eventDate as string | undefined,
 		eventLocation: payload.eventLocation as string | undefined,
@@ -83,9 +83,9 @@ async function saveAndSendContract(payload: Record<string, unknown> & { emailTem
 	const contractId = await client.mutation(api.contracts.create, {
 		siteUrl: config.siteUrl,
 		title: payload.title as string,
-		clientId: payload.clientId as any,
+		clientId: toId(payload.clientId),
 		category: payload.category as "photography" | "web" | undefined,
-		templateId: payload.templateId as any,
+		templateId: toId(payload.templateId),
 		body: payload.body as string,
 		eventDate: payload.eventDate as string | undefined,
 		eventLocation: payload.eventLocation as string | undefined,
@@ -109,7 +109,7 @@ async function handleSaveContract(
 	payload: Record<string, unknown>,
 ) {
 	await client.mutation(api.contracts.update, {
-		contractId: id as any,
+		contractId: toId(id),
 		siteUrl: config.siteUrl,
 		title: payload.title as string | undefined,
 		body: payload.body as string | undefined,
@@ -124,12 +124,12 @@ async function handleSaveContract(
 async function handleContractAction(id: string, action: string) {
 	if (action === "send") {
 		await client.mutation(api.contracts.markSent, {
-			contractId: id as any,
+			contractId: toId(id),
 			siteUrl: config.siteUrl,
 		});
 	} else if (action === "sign") {
 		await client.mutation(api.contracts.markSigned, {
-			contractId: id as any,
+			contractId: toId(id),
 			siteUrl: config.siteUrl,
 		});
 	}
@@ -144,7 +144,7 @@ async function handleSendEmail(id: string, templateId?: string, changeNote?: str
 		});
 		if (res.ok) {
 			await client.mutation(api.contracts.markSent, {
-				contractId: id as any,
+				contractId: toId(id),
 				siteUrl: config.siteUrl,
 			});
 			return true;
@@ -157,7 +157,7 @@ async function handleSendEmail(id: string, templateId?: string, changeNote?: str
 
 async function handleDeleteContract(id: string) {
 	await client.mutation(api.contracts.remove, {
-		contractId: id as any,
+		contractId: toId(id),
 		siteUrl: config.siteUrl,
 	});
 	selectedContract = null;
@@ -178,7 +178,7 @@ async function handleSaveTemplate(
 ) {
 	if (id) {
 		await client.mutation(api.contracts.updateTemplate, {
-			templateId: id as any,
+			templateId: toId(id),
 			siteUrl: config.siteUrl,
 			name: payload.name as string | undefined,
 			body: payload.body as string | undefined,
@@ -196,7 +196,7 @@ async function handleSaveTemplate(
 
 async function handleDeleteTemplate(id: string) {
 	await client.mutation(api.contracts.removeTemplate, {
-		templateId: id as any,
+		templateId: toId(id),
 		siteUrl: config.siteUrl,
 	});
 }

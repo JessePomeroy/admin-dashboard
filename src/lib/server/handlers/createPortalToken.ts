@@ -1,5 +1,6 @@
 import { error, json } from "@sveltejs/kit";
 import { getServerConfig } from "../../config";
+import { toId } from "../../utils";
 import { getConvex } from "../convexClient";
 
 export function createPortalTokenHandler() {
@@ -25,7 +26,7 @@ export function createPortalTokenHandler() {
 				siteUrl,
 				type: data.type,
 				documentId: data.documentId,
-				clientId: data.clientId as any,
+				clientId: toId(data.clientId),
 				expiresAt: data.expiresAt,
 			});
 			return json({ success: true, token });

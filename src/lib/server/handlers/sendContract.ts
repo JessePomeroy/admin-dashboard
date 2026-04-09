@@ -1,5 +1,6 @@
 import { error, json } from "@sveltejs/kit";
 import { getServerConfig } from "../../config";
+import { toId } from "../../utils";
 import { getConvex } from "../convexClient";
 import { replaceTemplateVariables, sendEmail } from "../email";
 
@@ -45,7 +46,7 @@ export function createContractSendHandler() {
 
 		try {
 			const contract = await convex.query(api.contracts.get, {
-				contractId: id as any,
+				contractId: toId(id),
 			});
 			if (!contract) throw error(404, "Contract not found");
 
@@ -116,7 +117,7 @@ export function createContractSendHandler() {
 			});
 
 			await convex.mutation(api.contracts.markSent, {
-				contractId: id as any,
+				contractId: toId(id),
 				siteUrl,
 			});
 

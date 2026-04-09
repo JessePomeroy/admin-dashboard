@@ -1,5 +1,6 @@
 import { error, json } from "@sveltejs/kit";
 import { getServerConfig } from "../../config";
+import { toId } from "../../utils";
 import { getConvex } from "../convexClient";
 import { replaceTemplateVariables, sendEmail } from "../email";
 
@@ -58,7 +59,7 @@ export function createQuoteSendHandler() {
 
 		try {
 			const quote = await convex.query(api.quotes.get, {
-				quoteId: id as any,
+				quoteId: toId(id),
 			});
 			if (!quote) throw error(404, "Quote not found");
 
@@ -124,7 +125,7 @@ export function createQuoteSendHandler() {
 			});
 
 			await convex.mutation(api.quotes.markSent, {
-				quoteId: id as any,
+				quoteId: toId(id),
 				siteUrl,
 			});
 

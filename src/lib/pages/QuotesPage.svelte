@@ -4,7 +4,7 @@ import { getAdminConfig } from "../config";
 import FeatureGate from "../components/FeatureGate.svelte";
 import LoadingState from "../components/LoadingState.svelte";
 import type { Quote, QuotePreset } from "../types";
-import { copyPortalLink, dollarsToCents } from "../utils";
+import { copyPortalLink, dollarsToCents, toId } from "../utils";
 import PresetManager from "./quotes/PresetManager.svelte";
 import QuoteCreateModal from "./quotes/QuoteCreateModal.svelte";
 import QuoteDetailModal from "./quotes/QuoteDetailModal.svelte";
@@ -102,7 +102,7 @@ async function saveNewQuote(formData: {
 		await client.mutation(api.quotes.create, {
 			siteUrl: config.siteUrl,
 			quoteNumber: formData.quoteNumber,
-			clientId: formData.clientId as any,
+			clientId: toId(formData.clientId),
 			category: formData.category as "photography" | "web" | undefined,
 			packages,
 			validUntil: formData.validUntil || undefined,
@@ -143,7 +143,7 @@ async function saveAndSendQuote(formData: {
 		const quoteId = await client.mutation(api.quotes.create, {
 			siteUrl: config.siteUrl,
 			quoteNumber: formData.quoteNumber,
-			clientId: formData.clientId as any,
+			clientId: toId(formData.clientId),
 			category: formData.category as "photography" | "web" | undefined,
 			packages,
 			validUntil: formData.validUntil || undefined,
@@ -218,7 +218,7 @@ async function saveQuoteEdit(editData: {
 			included: pkg.included.length > 0 ? pkg.included : undefined,
 		}));
 		await client.mutation(api.quotes.update, {
-			quoteId: selectedQuote._id as any,
+			quoteId: toId(selectedQuote._id),
 			siteUrl: config.siteUrl,
 			packages,
 			validUntil: editData.validUntil || undefined,
@@ -268,25 +268,25 @@ async function quoteAction(action: string) {
 	try {
 		if (action === "send") {
 			await client.mutation(api.quotes.markSent, {
-				quoteId: selectedQuote._id as any,
+				quoteId: toId(selectedQuote._id),
 				siteUrl: config.siteUrl,
 			});
 			selectedQuote = { ...selectedQuote, status: "sent" } as Quote;
 		} else if (action === "accept") {
 			await client.mutation(api.quotes.markAccepted, {
-				quoteId: selectedQuote._id as any,
+				quoteId: toId(selectedQuote._id),
 				siteUrl: config.siteUrl,
 			});
 			selectedQuote = { ...selectedQuote, status: "accepted" } as Quote;
 		} else if (action === "decline") {
 			await client.mutation(api.quotes.markDeclined, {
-				quoteId: selectedQuote._id as any,
+				quoteId: toId(selectedQuote._id),
 				siteUrl: config.siteUrl,
 			});
 			selectedQuote = { ...selectedQuote, status: "declined" } as Quote;
 		} else if (action === "expire") {
 			await client.mutation(api.quotes.update, {
-				quoteId: selectedQuote._id as any,
+				quoteId: toId(selectedQuote._id),
 				siteUrl: config.siteUrl,
 				status: "expired",
 			});
@@ -304,7 +304,7 @@ async function deleteQuote() {
 	saving = true;
 	try {
 		await client.mutation(api.quotes.remove, {
-			quoteId: selectedQuote._id as any,
+			quoteId: toId(selectedQuote._id),
 			siteUrl: config.siteUrl,
 		});
 		selectedQuote = null;
@@ -325,7 +325,7 @@ async function convertToInvoice(convertData: {
 	converting = true;
 	try {
 		const invoiceId = await client.mutation(api.quotes.convertToInvoice, {
-			quoteId: selectedQuote._id as any,
+			quoteId: toId(selectedQuote._id),
 			siteUrl: config.siteUrl,
 			invoiceNumber: convertData.invoiceNumber,
 			invoiceType: convertData.invoiceType as "one-time" | "recurring" | "deposit" | "package" | "milestone",
@@ -409,7 +409,7 @@ async function savePresetEdit(editData: {
 			included: pkg.included.length > 0 ? pkg.included : undefined,
 		}));
 		await client.mutation(api.quotes.updatePreset, {
-			presetId: editData.presetId as any,
+			presetId: toId(editData.presetId),
 			siteUrl: config.siteUrl,
 			name: editData.name,
 			category: editData.category ? (editData.category as "photography" | "web") : undefined,
@@ -432,7 +432,7 @@ async function deletePreset(presetId: string) {
 	saving = true;
 	try {
 		await client.mutation(api.quotes.removePreset, {
-			presetId: presetId as any,
+			presetId: toId(presetId),
 			siteUrl: config.siteUrl,
 		});
 		showPresetModal = false;

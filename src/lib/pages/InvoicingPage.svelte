@@ -6,7 +6,7 @@ import FilterBar from "../components/FilterBar.svelte";
 import LoadingState from "../components/LoadingState.svelte";
 import PageHeader from "../components/PageHeader.svelte";
 import type { Invoice, InvoiceStatus } from "../types";
-import { copyPortalLink } from "../utils";
+import { copyPortalLink, toId } from "../utils";
 import InvoiceCreateModal from "./invoicing/InvoiceCreateModal.svelte";
 import InvoiceDetailModal from "./invoicing/InvoiceDetailModal.svelte";
 import InvoiceTable from "./invoicing/InvoiceTable.svelte";
@@ -71,7 +71,7 @@ async function handleCreate(body: Record<string, unknown>) {
 	await client.mutation(api.invoices.create, {
 		siteUrl: config.siteUrl,
 		invoiceNumber: body.invoiceNumber as string,
-		clientId: body.clientId as any,
+		clientId: toId(body.clientId),
 		invoiceType: body.invoiceType as "one-time" | "recurring" | "deposit" | "package" | "milestone",
 		items: body.items as { description: string; quantity: number; unitPrice: number }[],
 		taxPercent: body.taxPercent as number | undefined,
@@ -82,7 +82,7 @@ async function handleCreate(body: Record<string, unknown>) {
 		totalProject: body.totalProject as number | undefined,
 		milestoneName: body.milestoneName as string | undefined,
 		milestoneIndex: body.milestoneIndex as number | undefined,
-		parentInvoiceId: body.parentInvoiceId as any,
+		parentInvoiceId: toId(body.parentInvoiceId),
 	});
 	showCreateModal = false;
 }
@@ -92,7 +92,7 @@ async function saveAndSendInvoice(body: Record<string, unknown> & { templateId?:
 	const invoiceId = await client.mutation(api.invoices.create, {
 		siteUrl: config.siteUrl,
 		invoiceNumber: invoiceBody.invoiceNumber as string,
-		clientId: invoiceBody.clientId as any,
+		clientId: toId(invoiceBody.clientId),
 		invoiceType: invoiceBody.invoiceType as "one-time" | "recurring" | "deposit" | "package" | "milestone",
 		items: invoiceBody.items as { description: string; quantity: number; unitPrice: number }[],
 		taxPercent: invoiceBody.taxPercent as number | undefined,
@@ -103,7 +103,7 @@ async function saveAndSendInvoice(body: Record<string, unknown> & { templateId?:
 		totalProject: invoiceBody.totalProject as number | undefined,
 		milestoneName: invoiceBody.milestoneName as string | undefined,
 		milestoneIndex: invoiceBody.milestoneIndex as number | undefined,
-		parentInvoiceId: invoiceBody.parentInvoiceId as any,
+		parentInvoiceId: toId(invoiceBody.parentInvoiceId),
 	});
 	await fetch(`/api/admin/invoicing/${invoiceId}/send`, {
 		method: "POST",
@@ -116,7 +116,7 @@ async function saveAndSendInvoice(body: Record<string, unknown> & { templateId?:
 async function handleSave(body: Record<string, unknown>) {
 	if (!selectedInvoice) return;
 	await client.mutation(api.invoices.update, {
-		invoiceId: selectedInvoice._id as any,
+		invoiceId: toId(selectedInvoice._id),
 		siteUrl: config.siteUrl,
 		items: body.items as { description: string; quantity: number; unitPrice: number }[] | undefined,
 		taxPercent: body.taxPercent as number | undefined,
@@ -131,20 +131,20 @@ async function handleAction(action: string) {
 	if (!selectedInvoice) return;
 	if (action === "send") {
 		await client.mutation(api.invoices.markSent, {
-			invoiceId: selectedInvoice._id as any,
+			invoiceId: toId(selectedInvoice._id),
 			siteUrl: config.siteUrl,
 		});
 		selectedInvoice = { ...selectedInvoice, status: "sent" } as Invoice;
 	} else if (action === "pay") {
 		await client.mutation(api.invoices.markPaid, {
-			invoiceId: selectedInvoice._id as any,
+			invoiceId: toId(selectedInvoice._id),
 			siteUrl: config.siteUrl,
 		});
 		selectedInvoice = { ...selectedInvoice, status: "paid" } as Invoice;
 	} else if (action === "overdue" || action === "cancel") {
 		const newStatus = action === "overdue" ? "overdue" : "canceled";
 		await client.mutation(api.invoices.update, {
-			invoiceId: selectedInvoice._id as any,
+			invoiceId: toId(selectedInvoice._id),
 			siteUrl: config.siteUrl,
 			status: newStatus,
 		});
@@ -166,7 +166,7 @@ async function handleSendEmail(templateId?: string, changeNote?: string) {
 async function handleDelete() {
 	if (!selectedInvoice) return;
 	await client.mutation(api.invoices.remove, {
-		invoiceId: selectedInvoice._id as any,
+		invoiceId: toId(selectedInvoice._id),
 		siteUrl: config.siteUrl,
 	});
 	selectedInvoice = null;

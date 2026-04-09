@@ -1,6 +1,7 @@
 <script lang="ts">
 import { useQuery, useConvexClient } from "convex-svelte";
 import { getAdminConfig } from "../../config";
+import { toId } from "../../utils";
 import AdminModal from "../../components/AdminModal.svelte";
 import type { Gallery, GalleryImage } from "../../types";
 import GalleryUploader from "./GalleryUploader.svelte";
@@ -40,7 +41,7 @@ async function handleSaveSettings() {
 	saving = true;
 	try {
 		await client.mutation(api.galleries.update, {
-			id: gallery._id as any,
+			id: toId(gallery._id),
 			name: editName,
 			downloadEnabled: editDownloadEnabled,
 			favoritesEnabled: editFavoritesEnabled,
@@ -71,7 +72,7 @@ async function handleDelete() {
 			}
 		}
 		// Hard delete gallery + images + downloads from Convex
-		await client.mutation(api.galleries.remove, { id: gallery._id as any });
+		await client.mutation(api.galleries.remove, { id: toId(gallery._id) });
 		onclose();
 	} catch {
 		deleting = false;
@@ -80,7 +81,7 @@ async function handleDelete() {
 
 async function handleStatusChange(newStatus: string) {
 	await client.mutation(api.galleries.update, {
-		id: gallery._id as any,
+		id: toId(gallery._id),
 		status: newStatus as any,
 	});
 }
@@ -91,7 +92,7 @@ async function handleShare() {
 			siteUrl: config.siteUrl,
 			type: "gallery" as any,
 			documentId: gallery._id as string,
-			clientId: gallery.clientId as any,
+			clientId: toId(gallery.clientId),
 		});
 		const url = `${window.location.origin}/delivery/${token}`;
 		await navigator.clipboard.writeText(url);

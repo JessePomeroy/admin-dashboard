@@ -1,6 +1,7 @@
 <script lang="ts">
 import { useQuery, useConvexClient } from "convex-svelte";
 import { getAdminConfig } from "../../config";
+import { toId } from "../../utils";
 import LoadingState from "../../components/LoadingState.svelte";
 import PageHeader from "../../components/PageHeader.svelte";
 import type { Gallery } from "../../types";
@@ -17,7 +18,7 @@ let isLoading = $derived(galleriesQuery.isLoading);
 
 async function handleQuickAction(e: Event, galleryId: string, status: string) {
 	e.stopPropagation();
-	await client.mutation(api.galleries.update, { id: galleryId as any, status: status as any });
+	await client.mutation(api.galleries.update, { id: toId(galleryId), status: status as any });
 }
 
 let showCreateModal = $state(false);
