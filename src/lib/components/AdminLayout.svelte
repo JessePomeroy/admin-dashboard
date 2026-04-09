@@ -73,21 +73,25 @@ if (config.authClient) {
 
 // Notification dots
 const convexClient = useConvexClient();
-const notificationsQuery = useQuery(api.notifications?.getUnreadFlags, () =>
-	api.notifications ? { siteUrl: config.siteUrl } : "skip",
-);
+let unreadFlags = $state<Record<string, boolean>>({
+	orders: false,
+	inquiries: false,
+	messages: false,
+	crm: false,
+	quotes: false,
+	invoices: false,
+	contracts: false,
+});
 
-let unreadFlags = $derived(
-	notificationsQuery.data ?? {
-		orders: false,
-		inquiries: false,
-		messages: false,
-		crm: false,
-		quotes: false,
-		invoices: false,
-		contracts: false,
-	},
-);
+// Subscribe to notifications if the API supports it
+if (api.notifications?.getUnreadFlags) {
+	const notificationsQuery = useQuery(api.notifications.getUnreadFlags, { siteUrl: config.siteUrl });
+	$effect(() => {
+		if (notificationsQuery.data) {
+			unreadFlags = notificationsQuery.data as Record<string, boolean>;
+		}
+	});
+}
 
 const hrefToFlagKey: Record<string, string> = {
 	"/admin/orders": "orders",
