@@ -20,7 +20,7 @@ let { contracts, onselect }: Props = $props();
 	<div class="empty-state">no contracts found</div>
 {:else}
 	<div class="table-wrap">
-		<table class="ct-table">
+		<table class="data-table data-table--clickable data-table--nowrap ct-table">
 			<thead>
 				<tr>
 					<th scope="col">title</th>
@@ -79,42 +79,7 @@ let { contracts, onselect }: Props = $props();
 {/if}
 
 <style>
-	.table-wrap {
-		overflow-x: auto;
-		-webkit-overflow-scrolling: touch;
-	}
-
-	.ct-table {
-		width: 100%;
-		border-collapse: collapse;
-		text-align: left;
-		font-size: 0.85rem;
-	}
-
-	.ct-table th {
-		padding: 0 16px 12px 0;
-		color: var(--admin-text-subtle);
-		font-weight: 400;
-		font-size: 0.75rem;
-		letter-spacing: 0.04em;
-		border-bottom: 1px solid var(--admin-border);
-		white-space: nowrap;
-	}
-
-	.ct-table td {
-		padding: 14px 16px 14px 0;
-		border-bottom: 1px solid var(--admin-border);
-		white-space: nowrap;
-	}
-
-	.ct-row {
-		cursor: pointer;
-		transition: background 0.12s;
-	}
-
-	.ct-row:hover {
-		background: var(--admin-active);
-	}
+	@import "../../styles/data-table.css";
 
 	.td-title {
 		font-weight: 500;
@@ -139,11 +104,5 @@ let { contracts, onselect }: Props = $props();
 		font-weight: 500;
 		color: var(--admin-heading);
 		font-variant-numeric: tabular-nums;
-	}
-
-	.empty-state {
-		padding: 48px 0;
-		color: var(--admin-text-subtle);
-		font-size: 0.88rem;
 	}
 </style>

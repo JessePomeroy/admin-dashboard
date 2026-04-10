@@ -55,7 +55,7 @@ const statuses: OrderStatus[] = [
 	<div class="empty-state">no orders found</div>
 {:else}
 	<div class="table-wrap">
-		<table class="orders-table">
+		<table class="data-table data-table--clickable orders-table">
 			<thead>
 				<tr>
 					<th scope="col">order</th>
@@ -110,40 +110,7 @@ const statuses: OrderStatus[] = [
 {/if}
 
 <style>
-	.table-wrap {
-		overflow-x: auto;
-		-webkit-overflow-scrolling: touch;
-	}
-
-	.orders-table {
-		width: 100%;
-		border-collapse: collapse;
-		text-align: left;
-		font-size: 0.85rem;
-	}
-
-	.orders-table th {
-		padding: 0 16px 12px 0;
-		color: var(--admin-text-subtle);
-		font-weight: 400;
-		font-size: 0.75rem;
-		letter-spacing: 0.04em;
-		border-bottom: 1px solid var(--admin-border);
-	}
-
-	.orders-table td {
-		padding: 14px 16px 14px 0;
-		border-bottom: 1px solid var(--admin-border);
-	}
-
-	.order-row {
-		cursor: pointer;
-		transition: background 0.12s;
-	}
-
-	.order-row:hover {
-		background: var(--admin-active);
-	}
+	@import "../../styles/data-table.css";
 
 	.td-order {
 		font-family: monospace;
@@ -202,11 +169,5 @@ const statuses: OrderStatus[] = [
 		color: var(--admin-text);
 		font-size: 0.78rem;
 		font-family: "Synonym", system-ui, sans-serif;
-	}
-
-	.empty-state {
-		padding: 48px 0;
-		color: var(--admin-text-subtle);
-		font-size: 0.88rem;
 	}
 </style>

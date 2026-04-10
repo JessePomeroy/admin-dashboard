@@ -37,7 +37,7 @@ function fmtDate(timestamp: number) {
 	<div class="empty-state">no clients found</div>
 {:else}
 	<div class="table-wrap">
-		<table class="client-table">
+		<table class="data-table data-table--clickable data-table--nowrap client-table">
 			<thead>
 				<tr>
 					<th scope="col">name</th>
@@ -93,42 +93,7 @@ function fmtDate(timestamp: number) {
 {/if}
 
 <style>
-	.table-wrap {
-		overflow-x: auto;
-		-webkit-overflow-scrolling: touch;
-	}
-
-	.client-table {
-		width: 100%;
-		border-collapse: collapse;
-		text-align: left;
-		font-size: 0.85rem;
-	}
-
-	.client-table th {
-		padding: 0 16px 12px 0;
-		color: var(--admin-text-subtle);
-		font-weight: 400;
-		font-size: 0.75rem;
-		letter-spacing: 0.04em;
-		border-bottom: 1px solid var(--admin-border);
-		white-space: nowrap;
-	}
-
-	.client-table td {
-		padding: 14px 16px 14px 0;
-		border-bottom: 1px solid var(--admin-border);
-		white-space: nowrap;
-	}
-
-	.client-row {
-		cursor: pointer;
-		transition: background 0.12s;
-	}
-
-	.client-row:hover {
-		background: var(--admin-active);
-	}
+	@import "../../styles/data-table.css";
 
 	.td-name {
 		font-weight: 500;
@@ -188,11 +153,5 @@ function fmtDate(timestamp: number) {
 		height: 7px;
 		border-radius: 50%;
 		flex-shrink: 0;
-	}
-
-	.empty-state {
-		padding: 48px 0;
-		color: var(--admin-text-subtle);
-		font-size: 0.88rem;
 	}
 </style>

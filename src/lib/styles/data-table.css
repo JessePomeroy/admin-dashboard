@@ -1,0 +1,58 @@
+/* shared data-table styles — used by Client, Invoice, Quote, Contract, Order, Inquiry tables */
+
+.table-wrap {
+	overflow-x: auto;
+	-webkit-overflow-scrolling: touch;
+}
+
+.data-table {
+	width: 100%;
+	border-collapse: collapse;
+	text-align: left;
+	font-size: 0.85rem;
+}
+
+.data-table th {
+	padding: 0 16px 12px 0;
+	color: var(--admin-text-subtle);
+	font-weight: 400;
+	font-size: 0.75rem;
+	letter-spacing: 0.04em;
+	border-bottom: 1px solid var(--admin-border);
+}
+
+.data-table td {
+	padding: 14px 16px 14px 0;
+	border-bottom: 1px solid var(--admin-border);
+}
+
+/* opt-in: header + body cells don't wrap */
+.data-table--nowrap th,
+.data-table--nowrap td {
+	white-space: nowrap;
+}
+
+/* opt-in: clickable body rows (cursor + transition + hover background) */
+.data-table--clickable tbody tr {
+	cursor: pointer;
+	transition: background 0.12s;
+}
+
+.data-table--clickable tbody tr:hover {
+	background: var(--admin-active);
+}
+
+/* opt-in: hoverable body rows (hover background only, no pointer) */
+.data-table--hoverable tbody tr {
+	transition: background 0.12s;
+}
+
+.data-table--hoverable tbody tr:hover {
+	background: var(--admin-active);
+}
+
+.empty-state {
+	padding: 48px 0;
+	color: var(--admin-text-subtle);
+	font-size: 0.88rem;
+}

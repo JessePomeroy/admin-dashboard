@@ -32,7 +32,7 @@ function truncate(text: string, len = 60): string {
 </script>
 
 <div class="table-wrap">
-	<table class="inquiries-table">
+	<table class="data-table data-table--hoverable inquiries-table">
 		<thead>
 			<tr>
 				<th scope="col">date</th>
@@ -65,35 +65,10 @@ function truncate(text: string, len = 60): string {
 </div>
 
 <style>
-	.table-wrap {
-		overflow-x: auto;
-		-webkit-overflow-scrolling: touch;
-	}
-
-	.inquiries-table {
-		width: 100%;
-		border-collapse: collapse;
-		text-align: left;
-		font-size: 0.85rem;
-	}
-
-	.inquiries-table th {
-		color: var(--admin-text-subtle);
-		font-weight: 400;
-		font-size: 0.75rem;
-		letter-spacing: 0.04em;
-		padding: 0 16px 12px 0;
-		border-bottom: 1px solid var(--admin-border);
-	}
+	@import "../../styles/data-table.css";
 
 	.inquiries-table td {
-		padding: 14px 16px 14px 0;
-		border-bottom: 1px solid var(--admin-border);
 		color: var(--admin-text);
-	}
-
-	.inquiries-table tbody tr:hover {
-		background: var(--admin-active);
 	}
 
 	.inquiries-table tbody tr.unread td {

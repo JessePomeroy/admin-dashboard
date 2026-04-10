@@ -24,7 +24,7 @@ function calcTotal(pkgs: QuotePackage[]): number {
 	<div class="empty-state">no quotes found</div>
 {:else}
 	<div class="table-wrap">
-		<table class="q-table">
+		<table class="data-table data-table--clickable data-table--nowrap q-table">
 			<thead>
 				<tr>
 					<th scope="col">quote #</th>
@@ -63,48 +63,7 @@ function calcTotal(pkgs: QuotePackage[]): number {
 {/if}
 
 <style>
-	.empty-state {
-		padding: 48px 0;
-		color: var(--admin-text-subtle);
-		font-size: 0.88rem;
-	}
-
-	.table-wrap {
-		overflow-x: auto;
-		-webkit-overflow-scrolling: touch;
-	}
-
-	.q-table {
-		width: 100%;
-		border-collapse: collapse;
-		text-align: left;
-		font-size: 0.85rem;
-	}
-
-	.q-table th {
-		padding: 0 16px 12px 0;
-		color: var(--admin-text-subtle);
-		font-weight: 400;
-		font-size: 0.75rem;
-		letter-spacing: 0.04em;
-		border-bottom: 1px solid var(--admin-border);
-		white-space: nowrap;
-	}
-
-	.q-table td {
-		padding: 14px 16px 14px 0;
-		border-bottom: 1px solid var(--admin-border);
-		white-space: nowrap;
-	}
-
-	.q-row {
-		cursor: pointer;
-		transition: background 0.12s;
-	}
-
-	.q-row:hover {
-		background: var(--admin-active);
-	}
+	@import "../../styles/data-table.css";
 
 	.td-number {
 		font-weight: 500;

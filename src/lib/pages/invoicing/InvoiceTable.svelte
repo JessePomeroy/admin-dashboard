@@ -28,7 +28,7 @@ function calcTax(subtotal: number, taxPercent: number): number {
 	<div class="empty-state">no invoices found</div>
 {:else}
 	<div class="table-wrap">
-		<table class="inv-table">
+		<table class="data-table data-table--clickable data-table--nowrap inv-table">
 			<thead>
 				<tr>
 					<th scope="col">invoice #</th>
@@ -90,42 +90,7 @@ function calcTax(subtotal: number, taxPercent: number): number {
 {/if}
 
 <style>
-	.table-wrap {
-		overflow-x: auto;
-		-webkit-overflow-scrolling: touch;
-	}
-
-	.inv-table {
-		width: 100%;
-		border-collapse: collapse;
-		text-align: left;
-		font-size: 0.85rem;
-	}
-
-	.inv-table th {
-		padding: 0 16px 12px 0;
-		color: var(--admin-text-subtle);
-		font-weight: 400;
-		font-size: 0.75rem;
-		letter-spacing: 0.04em;
-		border-bottom: 1px solid var(--admin-border);
-		white-space: nowrap;
-	}
-
-	.inv-table td {
-		padding: 14px 16px 14px 0;
-		border-bottom: 1px solid var(--admin-border);
-		white-space: nowrap;
-	}
-
-	.inv-row {
-		cursor: pointer;
-		transition: background 0.12s;
-	}
-
-	.inv-row:hover {
-		background: var(--admin-active);
-	}
+	@import "../../styles/data-table.css";
 
 	.td-number {
 		font-weight: 500;
@@ -151,11 +116,5 @@ function calcTax(subtotal: number, taxPercent: number): number {
 		font-weight: 500;
 		color: var(--admin-heading);
 		font-variant-numeric: tabular-nums;
-	}
-
-	.empty-state {
-		padding: 48px 0;
-		color: var(--admin-text-subtle);
-		font-size: 0.88rem;
 	}
 </style>
