@@ -1,7 +1,7 @@
 <script lang="ts">
 import { useQuery, useConvexClient } from "@mmailaender/convex-svelte";
 import { getAdminConfig } from "../../config";
-import { toId } from "../../utils";
+import { formatBytes, toId } from "../../utils";
 import AdminModal from "../../components/AdminModal.svelte";
 import type { Gallery, GalleryImage } from "../../types";
 import GalleryUploader from "./GalleryUploader.svelte";
@@ -31,11 +31,6 @@ let editName = $state(gallery.name);
 let editDownloadEnabled = $state(gallery.downloadEnabled);
 let editFavoritesEnabled = $state(gallery.favoritesEnabled);
 let editPassword = $state(gallery.password ?? "");
-
-function formatBytes(bytes: number): string {
-	if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
-	return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-}
 
 async function handleSaveSettings() {
 	saving = true;

@@ -1,12 +1,10 @@
 import { error, json } from "@sveltejs/kit";
 import { getServerConfig } from "../../config";
-import { toId } from "../../utils";
+import { formatCents, toId } from "../../utils";
 import { getConvex } from "../convexClient";
 import { replaceTemplateVariables, sendEmail } from "../email";
 
-export function formatCurrency(cents: number): string {
-	return `$${(cents / 100).toFixed(2)}`;
-}
+export { formatCents as formatCurrency };
 
 function wrapPlainText(text: string): string {
 	if (text.includes("<")) return text;

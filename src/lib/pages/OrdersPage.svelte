@@ -9,7 +9,7 @@
 import { useQuery, useConvexClient } from "@mmailaender/convex-svelte";
 import { getAdminConfig } from "../config";
 import { addToast } from "../toast";
-import { getStatusColor, ORDER_STATUS_COLORS, toId } from "../utils";
+import { formatCents, getStatusColor, ORDER_STATUS_COLORS, toId } from "../utils";
 import LoadingState from "../components/LoadingState.svelte";
 import OrderDetailModal from "./orders/OrderDetailModal.svelte";
 import OrderTable from "./orders/OrderTable.svelte";
@@ -150,23 +150,6 @@ let allTimeRevenue = $derived(
 	orders.reduce((sum: number, order: any) => sum + (order.total || 0), 0),
 );
 
-function formatCurrency(amount: number, currency = "usd") {
-	return new Intl.NumberFormat("en-US", {
-		style: "currency",
-		currency: currency.toUpperCase(),
-	}).format(amount / 100);
-}
-
-function formatDate(dateStr: string) {
-	return new Date(dateStr).toLocaleDateString("en-US", {
-		month: "short",
-		day: "numeric",
-		year: "numeric",
-		hour: "numeric",
-		minute: "2-digit",
-	});
-}
-
 async function updateStatus(orderId: string, newStatus: string) {
 	try {
 		await convexClient.mutation(api.orders.updateStatus, {
@@ -273,19 +256,19 @@ function exportCSV() {
 	<div class="stats-line">
 		<span class="stat-item">
 			<span class="stat-label">filtered</span>
-			<span class="stat-value">{formatCurrency(totalRevenue)}</span>
+			<span class="stat-value">{formatCents(totalRevenue)}</span>
 			<span class="stat-sub">{filteredOrders.length} orders</span>
 		</span>
 		<span class="stat-sep">&middot;</span>
 		<span class="stat-item">
 			<span class="stat-label">all time</span>
-			<span class="stat-value">{formatCurrency(allTimeRevenue)}</span>
+			<span class="stat-value">{formatCents(allTimeRevenue)}</span>
 			<span class="stat-sub">{orders.length} orders</span>
 		</span>
 		<span class="stat-sep">&middot;</span>
 		<span class="stat-item">
 			<span class="stat-label">avg</span>
-			<span class="stat-value">{formatCurrency(orders.length > 0 ? allTimeRevenue / orders.length : 0)}</span>
+			<span class="stat-value">{formatCents(orders.length > 0 ? allTimeRevenue / orders.length : 0)}</span>
 		</span>
 	</div>
 

@@ -1,5 +1,6 @@
 <script lang="ts">
 import AdminModal from "../../components/AdminModal.svelte";
+import { formatCents, formatDateTime } from "../../utils";
 import type { OrderStatus } from "../../types";
 
 interface OrderItem {
@@ -53,23 +54,6 @@ const statuses: OrderStatus[] = [
 let notesValue = $state(order.notes || "");
 let notesSaving = $state(false);
 
-function formatCurrency(amount: number, currency = "usd") {
-	return new Intl.NumberFormat("en-US", {
-		style: "currency",
-		currency: currency.toUpperCase(),
-	}).format(amount / 100);
-}
-
-function formatDate(dateStr: string) {
-	return new Date(dateStr).toLocaleDateString("en-US", {
-		month: "short",
-		day: "numeric",
-		year: "numeric",
-		hour: "numeric",
-		minute: "2-digit",
-	});
-}
-
 async function saveNotes() {
 	notesSaving = true;
 	try {
@@ -82,7 +66,7 @@ async function saveNotes() {
 
 <AdminModal title={order.orderNumber} {onclose} size="wide">
 	<div class="modal-sub-header">
-		<p class="modal-meta">{formatDate(order.createdAt)}</p>
+		<p class="modal-meta">{formatDateTime(order.createdAt)}</p>
 	</div>
 
 	<div class="modal-body">
@@ -121,11 +105,11 @@ async function saveNotes() {
 			<ul class="items-list">
 				{#each order.items || [] as item}
 					<li>
-						{item.productName} x {item.quantity} — {formatCurrency(item.price, order.currency)}
+						{item.productName} x {item.quantity} — {formatCents(item.price, order.currency)}
 					</li>
 				{/each}
 			</ul>
-			<p class="items-total">total: {formatCurrency(order.total, order.currency)}</p>
+			<p class="items-total">total: {formatCents(order.total, order.currency)}</p>
 		</div>
 
 		<div class="modal-field">

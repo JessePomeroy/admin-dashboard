@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { formatTimestampDate } from "../../utils";
+
 	let { client, saving, onclose, onsave, ontiertoggle, onstatusupdate } = $props<{
 		client: any;
 		saving: boolean;
@@ -45,14 +47,6 @@
 			none: "var(--admin-text-subtle)",
 		};
 		return colors[status] || "var(--admin-text-subtle)";
-	}
-
-	function formatDate(timestamp: number) {
-		return new Date(timestamp).toLocaleDateString("en-US", {
-			month: "short",
-			day: "numeric",
-			year: "numeric",
-		});
 	}
 
 	function startEdit() {
@@ -187,7 +181,7 @@
 						{/if}
 						<div class="detail-field">
 							<span class="detail-label">added</span>
-							<span class="detail-value">{formatDate(client._creationTime)}</span>
+							<span class="detail-value">{formatTimestampDate(client._creationTime)}</span>
 						</div>
 						{#if client.notes}
 							<div class="detail-field">

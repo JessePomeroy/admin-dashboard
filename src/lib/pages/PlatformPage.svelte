@@ -2,6 +2,7 @@
 import { useQuery, useConvexClient } from "@mmailaender/convex-svelte";
 import { getAdminConfig } from "../config";
 import LoadingState from "../components/LoadingState.svelte";
+import { formatTimestampDate } from "../utils";
 import { addToast } from "../toast";
 import AddClientModal from "./platform/AddClientModal.svelte";
 import ClientDetailModal from "./platform/ClientDetailModal.svelte";
@@ -79,14 +80,6 @@ function getSubscriptionColor(status: string): string {
 		none: "var(--admin-text-subtle)",
 	};
 	return colors[status] || "var(--admin-text-subtle)";
-}
-
-function formatDate(timestamp: number) {
-	return new Date(timestamp).toLocaleDateString("en-US", {
-		month: "short",
-		day: "numeric",
-		year: "numeric",
-	});
 }
 
 function generatePassword(): string {
@@ -297,7 +290,7 @@ async function quickStatusUpdate(
 										{client.subscriptionStatus}
 									</span>
 								</td>
-								<td class="td-date">{formatDate(client._creationTime)}</td>
+								<td class="td-date">{formatTimestampDate(client._creationTime)}</td>
 							</tr>
 						{/each}
 					</tbody>

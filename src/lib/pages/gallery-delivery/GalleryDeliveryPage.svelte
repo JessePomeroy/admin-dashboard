@@ -1,7 +1,7 @@
 <script lang="ts">
 import { useQuery, useConvexClient } from "@mmailaender/convex-svelte";
 import { getAdminConfig } from "../../config";
-import { toId } from "../../utils";
+import { formatBytes, formatTimestampDate, toId } from "../../utils";
 import LoadingState from "../../components/LoadingState.svelte";
 import PageHeader from "../../components/PageHeader.svelte";
 import type { Gallery } from "../../types";
@@ -31,17 +31,6 @@ let filteredGalleries = $derived(
 		return true;
 	}),
 );
-
-function formatBytes(bytes: number): string {
-	if (bytes < 1024) return `${bytes} B`;
-	if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
-	if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-	return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)} GB`;
-}
-
-function formatDate(ts: number): string {
-	return new Date(ts).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
-}
 
 const statusLabels: Record<string, string> = {
 	draft: "draft",
@@ -95,7 +84,7 @@ const statusLabels: Record<string, string> = {
 							<span class="meta-item">{formatBytes(gallery.totalSizeBytes)}</span>
 							<span class="status-badge status-{gallery.status}">{statusLabels[gallery.status]}</span>
 						</div>
-						<span class="gallery-date">{formatDate(gallery._creationTime)}</span>
+						<span class="gallery-date">{formatTimestampDate(gallery._creationTime)}</span>
 					</button>
 					<div class="row-actions">
 						{#if gallery.status === "draft"}

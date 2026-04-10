@@ -10,10 +10,10 @@ export function toId(id: string): any {
 }
 
 // Currency formatting
-export function formatCents(amount: number): string {
+export function formatCents(amount: number, currency = "USD"): string {
 	return new Intl.NumberFormat("en-US", {
 		style: "currency",
-		currency: "USD",
+		currency: currency.toUpperCase(),
 	}).format(amount / 100);
 }
 
@@ -49,6 +49,18 @@ export function formatDateTime(dateStr: string): string {
 
 export function formatTimestamp(ts: number): string {
 	return formatDateTime(new Date(ts).toISOString());
+}
+
+export function formatTimestampDate(ts: number): string {
+	return formatDate(new Date(ts).toISOString());
+}
+
+export function formatBytes(bytes: number): string {
+	if (bytes === 0) return "0 B";
+	const units = ["B", "KB", "MB", "GB"];
+	const i = Math.floor(Math.log(bytes) / Math.log(1024));
+	const value = bytes / 1024 ** i;
+	return `${value.toFixed(i === 0 ? 0 : 1)} ${units[i]}`;
 }
 
 export function formatStatus(status: string): string {

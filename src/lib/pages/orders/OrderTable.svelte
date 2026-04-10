@@ -1,6 +1,6 @@
 <script lang="ts">
 import type { OrderStatus } from "../../types";
-import { getStatusColor, ORDER_STATUS_COLORS } from "../../utils";
+import { formatCents, formatDateTime, getStatusColor, ORDER_STATUS_COLORS } from "../../utils";
 
 interface OrderItem {
 	productName: string;
@@ -49,22 +49,6 @@ const statuses: OrderStatus[] = [
 	"refunded",
 ];
 
-function formatCurrency(amount: number, currency = "usd") {
-	return new Intl.NumberFormat("en-US", {
-		style: "currency",
-		currency: currency.toUpperCase(),
-	}).format(amount / 100);
-}
-
-function formatDate(dateStr: string) {
-	return new Date(dateStr).toLocaleDateString("en-US", {
-		month: "short",
-		day: "numeric",
-		year: "numeric",
-		hour: "numeric",
-		minute: "2-digit",
-	});
-}
 </script>
 
 {#if orders.length === 0}
@@ -92,7 +76,7 @@ function formatDate(dateStr: string) {
 						onkeydown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onorderclick(order); }}}
 					>
 						<td class="td-order">{order.orderNumber}</td>
-						<td class="td-date">{formatDate(order.createdAt)}</td>
+						<td class="td-date">{formatDateTime(order.createdAt)}</td>
 						<td>
 							<div class="customer-cell">
 								<span class="customer-name">{order.customerName || "\u2014"}</span>
@@ -102,7 +86,7 @@ function formatDate(dateStr: string) {
 						<td class="td-items">
 							{order.items?.length || 0} item{(order.items?.length || 0) !== 1 ? "s" : ""}
 						</td>
-						<td class="td-total">{formatCurrency(order.total, order.currency)}</td>
+						<td class="td-total">{formatCents(order.total, order.currency)}</td>
 						<!-- svelte-ignore a11y_no_static_element_interactions a11y_click_events_have_key_events -->
 						<td onclick={(e) => e.stopPropagation()}>
 							<div class="status-cell">
