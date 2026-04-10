@@ -66,8 +66,8 @@ async function handleDelete(image: GalleryImage) {
 			headers: { "Content-Type": "application/json" },
 			body: JSON.stringify({ r2Key: image.r2Key }),
 		});
-	} catch {
-		// Non-fatal
+	} catch (err) {
+		console.warn("Failed to delete R2 image:", image.r2Key, err);
 	}
 
 	onchange();

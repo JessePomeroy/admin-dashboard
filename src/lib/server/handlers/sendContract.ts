@@ -137,8 +137,8 @@ export function createContractSendHandler() {
 					status: "failed",
 					error: e?.message ?? "Unknown error",
 				});
-			} catch {
-				// best effort logging
+			} catch (logErr) {
+				console.warn("Failed to log contract email failure:", id, logErr);
 			}
 
 			throw error(500, "Failed to send contract email");

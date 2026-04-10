@@ -116,7 +116,7 @@ $effect(() => {
 		convexClient.mutation(api.notifications.markSeen, {
 			siteUrl: config.siteUrl,
 			page: pageKey,
-		}).catch(() => {});
+		}).catch((err: unknown) => console.warn("Failed to mark notifications seen:", pageKey, err));
 	}
 });
 

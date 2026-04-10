@@ -76,8 +76,8 @@ async function loadAllClientTags() {
 		try {
 			const result = await client.query(api.tags.getClientTags, { clientId: c._id });
 			tagAssignments[c._id] = result || [];
-		} catch {
-			// ignore individual failures
+		} catch (err) {
+			console.warn("Failed to load tags for client:", c._id, err);
 		}
 	}
 	tagAssignments = { ...tagAssignments };

@@ -183,8 +183,8 @@ export function createInvoiceSendHandler() {
 					status: "failed",
 					error: e?.message ?? "Unknown error",
 				});
-			} catch {
-				// best effort logging
+			} catch (logErr) {
+				console.warn("Failed to log invoice email failure:", id, logErr);
 			}
 
 			throw error(500, "Failed to send invoice email");
