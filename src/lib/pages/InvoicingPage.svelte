@@ -6,6 +6,7 @@ import FilterBar from "../components/FilterBar.svelte";
 import LoadingState from "../components/LoadingState.svelte";
 import PageHeader from "../components/PageHeader.svelte";
 import type { Invoice, InvoiceStatus } from "../types";
+import { addToast } from "../toast";
 import { copyPortalLink, toId } from "../utils";
 import InvoiceCreateModal from "./invoicing/InvoiceCreateModal.svelte";
 import InvoiceDetailModal from "./invoicing/InvoiceDetailModal.svelte";
@@ -181,6 +182,7 @@ async function handleShareLink() {
 		setTimeout(() => { shareLinkCopied = false; }, 3000);
 	} catch (err) {
 		console.error("Failed to create share link:", err);
+		addToast("Failed to create share link.");
 	}
 }
 </script>

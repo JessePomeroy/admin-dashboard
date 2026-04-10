@@ -1,6 +1,7 @@
 <script lang="ts">
 import { useQuery, useConvexClient } from "@mmailaender/convex-svelte";
 import { getAdminConfig } from "../config";
+import { addToast } from "../toast";
 import FeatureGate from "../components/FeatureGate.svelte";
 import LoadingState from "../components/LoadingState.svelte";
 import ConversationView from "./messages/ConversationView.svelte";
@@ -75,6 +76,7 @@ async function sendMessage() {
 		});
 	} catch (err) {
 		console.error("Failed to send message:", err);
+		addToast("Failed to send message.");
 	} finally {
 		sending = false;
 	}

@@ -1,6 +1,7 @@
 <script lang="ts">
 import AdminModal from "../../components/AdminModal.svelte";
 import EmailPreview from "../../components/EmailPreview.svelte";
+import { addToast } from "../../toast";
 import type {
 	Client,
 	Invoice,
@@ -148,6 +149,7 @@ async function handleSubmit() {
 		await oncreate(body);
 	} catch (err) {
 		console.error("Failed to create invoice:", err);
+		addToast("Failed to create invoice.");
 	} finally {
 		saving = false;
 	}
@@ -199,6 +201,7 @@ async function handleSaveAndSend() {
 		});
 	} catch (err) {
 		console.error("Failed to create and send invoice:", err);
+		addToast("Failed to send invoice.");
 	} finally {
 		saving = false;
 	}

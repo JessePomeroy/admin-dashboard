@@ -1,4 +1,5 @@
 <script lang="ts">
+import { addToast } from "../toast";
 import { formatDateTime } from "../utils";
 import InquiryDetailModal from "./inquiries/InquiryDetailModal.svelte";
 import InquiryTable from "./inquiries/InquiryTable.svelte";
@@ -54,9 +55,11 @@ async function updateStatus(id: string, newStatus: string) {
 				inquiries = [...inquiries];
 			}
 			console.error("Failed to update inquiry status");
+			addToast("Failed to update inquiry status.");
 		}
 	} catch (err) {
 		console.error("Failed to update inquiry status:", err);
+		addToast("Failed to update inquiry status.");
 	}
 }
 </script>

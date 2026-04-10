@@ -4,6 +4,7 @@ import { getAdminConfig } from "../config";
 import FeatureGate from "../components/FeatureGate.svelte";
 import LoadingState from "../components/LoadingState.svelte";
 import type { Contract, ContractStatus } from "../types";
+import { addToast } from "../toast";
 import { copyPortalLink, toId } from "../utils";
 import ContractCreateModal from "./contracts/ContractCreateModal.svelte";
 import ContractDetailModal from "./contracts/ContractDetailModal.svelte";
@@ -168,6 +169,7 @@ async function handleShareLink(id: string, clientId: string) {
 		await copyPortalLink(client, api, config.siteUrl, "contract", id, clientId);
 	} catch (err) {
 		console.error("Failed to create share link:", err);
+		addToast("Failed to create share link.");
 	}
 }
 

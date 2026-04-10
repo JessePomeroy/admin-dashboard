@@ -8,6 +8,7 @@
 
 import { useQuery, useConvexClient } from "@mmailaender/convex-svelte";
 import { getAdminConfig } from "../config";
+import { addToast } from "../toast";
 import { getStatusColor, ORDER_STATUS_COLORS, toId } from "../utils";
 import LoadingState from "../components/LoadingState.svelte";
 import OrderDetailModal from "./orders/OrderDetailModal.svelte";
@@ -177,6 +178,7 @@ async function updateStatus(orderId: string, newStatus: string) {
 		}
 	} catch (err) {
 		console.error("Failed to update status:", err);
+		addToast("Failed to update order status.");
 	}
 }
 
@@ -201,6 +203,7 @@ async function saveNotes(orderId: string, notes: string) {
 		}
 	} catch (err) {
 		console.error("Failed to save notes:", err);
+		addToast("Failed to save notes.");
 	} finally {
 		notesSaving = false;
 	}

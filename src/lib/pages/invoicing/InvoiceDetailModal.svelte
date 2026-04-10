@@ -1,6 +1,7 @@
 <script lang="ts">
 import AdminModal from "../../components/AdminModal.svelte";
 import StatusDot from "../../components/StatusDot.svelte";
+import { addToast } from "../../toast";
 import type { Invoice, InvoiceItem } from "../../types";
 import {
 	dollarsToCents,
@@ -133,6 +134,7 @@ async function handleSaveEdit() {
 		}
 	} catch (err) {
 		console.error("Failed to update invoice:", err);
+		addToast("Failed to save changes.");
 	} finally {
 		saving = false;
 	}
@@ -166,6 +168,7 @@ async function handleAction(action: string) {
 		await onaction(action);
 	} catch (err) {
 		console.error("Failed to update invoice:", err);
+		addToast("Failed to save changes.");
 	} finally {
 		saving = false;
 	}
@@ -177,6 +180,7 @@ async function handleDelete() {
 		await ondelete();
 	} catch (err) {
 		console.error("Failed to delete invoice:", err);
+		addToast("Failed to delete invoice.");
 	} finally {
 		saving = false;
 	}

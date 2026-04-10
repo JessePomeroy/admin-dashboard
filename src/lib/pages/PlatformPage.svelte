@@ -2,6 +2,7 @@
 import { useQuery, useConvexClient } from "@mmailaender/convex-svelte";
 import { getAdminConfig } from "../config";
 import LoadingState from "../components/LoadingState.svelte";
+import { addToast } from "../toast";
 import AddClientModal from "./platform/AddClientModal.svelte";
 import ClientDetailModal from "./platform/ClientDetailModal.svelte";
 import CredentialsModal from "./platform/CredentialsModal.svelte";
@@ -142,6 +143,7 @@ async function handleSaveNewClient(formData: {
 		closeAddModal();
 	} catch (err) {
 		console.error("Failed to create platform client:", err);
+		addToast("Failed to create client.");
 	} finally {
 		saving = false;
 	}
@@ -179,6 +181,7 @@ async function handleSaveEdit(formData: {
 		};
 	} catch (err) {
 		console.error("Failed to update platform client:", err);
+		addToast("Failed to save changes.");
 	} finally {
 		saving = false;
 	}
@@ -196,6 +199,7 @@ async function quickTierToggle() {
 		selectedClient = { ...selectedClient, tier: newTier };
 	} catch (err) {
 		console.error("Failed to toggle tier:", err);
+		addToast("Failed to update tier.");
 	}
 }
 
@@ -212,6 +216,7 @@ async function quickStatusUpdate(
 		selectedClient = { ...selectedClient, subscriptionStatus: newStatus };
 	} catch (err) {
 		console.error("Failed to update subscription status:", err);
+		addToast("Failed to update subscription.");
 	}
 }
 </script>

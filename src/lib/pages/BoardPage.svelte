@@ -2,6 +2,7 @@
 import { dndzone } from "svelte-dnd-action";
 import { useQuery, useConvexClient } from "@mmailaender/convex-svelte";
 import { getAdminConfig } from "../config";
+import { addToast } from "../toast";
 import { getCategoryColor, toId } from "../utils";
 import FeatureGate from "../components/FeatureGate.svelte";
 import LoadingState from "../components/LoadingState.svelte";
@@ -142,6 +143,7 @@ async function handleFinalize(
 				});
 			} catch (err) {
 				console.error("Failed to move card:", err);
+				addToast("Failed to move card.");
 			}
 		}
 	}
@@ -158,6 +160,7 @@ async function initBoard() {
 		saving = false;
 	} catch (err) {
 		console.error("Failed to init board:", err);
+		addToast("Failed to initialize board.");
 		saving = false;
 	}
 }
@@ -177,6 +180,7 @@ async function addColumn() {
 		saving = false;
 	} catch (err) {
 		console.error("Failed to add column:", err);
+		addToast("Failed to add column.");
 		saving = false;
 	}
 }
@@ -193,6 +197,7 @@ async function renameColumn(columnId: string) {
 		editingColumnId = null;
 	} catch (err) {
 		console.error("Failed to rename column:", err);
+		addToast("Failed to rename column.");
 	}
 }
 
@@ -211,6 +216,7 @@ async function deleteColumn(columnId: string) {
 		showColumnMenu = null;
 	} catch (err) {
 		console.error("Failed to delete column:", err);
+		addToast("Failed to delete column.");
 	}
 }
 

@@ -5,6 +5,7 @@ import FeatureGate from "../components/FeatureGate.svelte";
 import LoadingState from "../components/LoadingState.svelte";
 import type { Quote, QuotePreset } from "../types";
 import { copyPortalLink, dollarsToCents, toId } from "../utils";
+import { addToast } from "../toast";
 import PresetManager from "./quotes/PresetManager.svelte";
 import QuoteCreateModal from "./quotes/QuoteCreateModal.svelte";
 import QuoteDetailModal from "./quotes/QuoteDetailModal.svelte";
@@ -111,6 +112,7 @@ async function saveNewQuote(formData: {
 		showCreateModal = false;
 	} catch (err) {
 		console.error("Failed to create quote:", err);
+		addToast("Failed to create quote.");
 	} finally {
 		saving = false;
 	}
@@ -161,6 +163,7 @@ async function saveAndSendQuote(formData: {
 		showCreateModal = false;
 	} catch (err) {
 		console.error("Failed to create and send quote:", err);
+		addToast("Failed to send quote.");
 	} finally {
 		saving = false;
 	}
@@ -192,6 +195,7 @@ async function saveAsPreset(presetData: {
 		});
 	} catch (err) {
 		console.error("Failed to save preset:", err);
+		addToast("Failed to save preset.");
 	} finally {
 		saving = false;
 	}
@@ -233,6 +237,7 @@ async function saveQuoteEdit(editData: {
 		} as Quote;
 	} catch (err) {
 		console.error("Failed to update quote:", err);
+		addToast("Failed to save changes.");
 	} finally {
 		saving = false;
 	}
@@ -256,6 +261,7 @@ async function sendQuoteEmail(templateId?: string, changeNote?: string) {
 		}
 	} catch (err) {
 		console.error("Failed to send quote email:", err);
+		addToast("Failed to send email.");
 		sendResult = "error";
 	} finally {
 		sending = false;
@@ -294,6 +300,7 @@ async function quoteAction(action: string) {
 		}
 	} catch (err) {
 		console.error("Failed to update quote:", err);
+		addToast("Failed to save changes.");
 	} finally {
 		saving = false;
 	}
@@ -310,6 +317,7 @@ async function deleteQuote() {
 		selectedQuote = null;
 	} catch (err) {
 		console.error("Failed to delete quote:", err);
+		addToast("Failed to delete quote.");
 	} finally {
 		saving = false;
 	}
@@ -339,6 +347,7 @@ async function convertToInvoice(convertData: {
 		convertSuccess = true;
 	} catch (err) {
 		console.error("Failed to convert quote to invoice:", err);
+		addToast("Failed to convert to invoice.");
 	} finally {
 		converting = false;
 	}
@@ -353,6 +362,7 @@ async function copyShareLink() {
 		setTimeout(() => { shareLinkCopied = false; }, 3000);
 	} catch (err) {
 		console.error("Failed to create share link:", err);
+		addToast("Failed to create share link.");
 	}
 }
 
@@ -384,6 +394,7 @@ async function saveNewPreset(presetData: {
 		});
 	} catch (err) {
 		console.error("Failed to create preset:", err);
+		addToast("Failed to create preset.");
 	} finally {
 		saving = false;
 	}
@@ -423,6 +434,7 @@ async function savePresetEdit(editData: {
 		} as QuotePreset;
 	} catch (err) {
 		console.error("Failed to update preset:", err);
+		addToast("Failed to save preset.");
 	} finally {
 		saving = false;
 	}
@@ -439,6 +451,7 @@ async function deletePreset(presetId: string) {
 		selectedPreset = null;
 	} catch (err) {
 		console.error("Failed to delete preset:", err);
+		addToast("Failed to delete preset.");
 	} finally {
 		saving = false;
 	}

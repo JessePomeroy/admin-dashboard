@@ -1,6 +1,7 @@
 <script lang="ts">
 import { useQuery, useConvexClient } from "@mmailaender/convex-svelte";
 import { getAdminConfig } from "../config";
+import { addToast } from "../toast";
 import { getCategoryColor } from "../utils";
 import FeatureGate from "../components/FeatureGate.svelte";
 import LoadingState from "../components/LoadingState.svelte";
@@ -78,6 +79,7 @@ async function saveNewTemplate(formData: { name: string; category: string; subje
 		closeCreateModal();
 	} catch (err) {
 		console.error("Failed to create email template:", err);
+		addToast("Failed to create template.");
 	} finally {
 		saving = false;
 	}
@@ -115,6 +117,7 @@ async function saveEdit(formData: { name: string; category: string; subject: str
 		};
 	} catch (err) {
 		console.error("Failed to update email template:", err);
+		addToast("Failed to save template.");
 	} finally {
 		saving = false;
 	}
@@ -131,6 +134,7 @@ async function deleteTemplate() {
 		closeDetailModal();
 	} catch (err) {
 		console.error("Failed to delete email template:", err);
+		addToast("Failed to delete template.");
 	} finally {
 		saving = false;
 	}
