@@ -6,6 +6,7 @@ import { useQuery, useConvexClient } from "@mmailaender/convex-svelte";
 import { type Feature, hasFeature, type Tier } from "../features";
 import { isDark } from "../theme";
 import { getAdminConfig } from "../config";
+import Toast from "./Toast.svelte";
 import "../theme.css";
 
 const config = getAdminConfig();
@@ -379,6 +380,8 @@ function closeMobileMenu() {
 	<main class="admin-main">
 		{@render children()}
 	</main>
+
+	<Toast />
 </div>
 
 <style>

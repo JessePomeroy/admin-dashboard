@@ -4,6 +4,7 @@ import { getAdminConfig } from "../config";
 import FeatureGate from "../components/FeatureGate.svelte";
 import LoadingState from "../components/LoadingState.svelte";
 import type { ActivityLogEntry, Client, ClientTag } from "../types";
+import { addToast } from "../toast";
 import { toId } from "../utils";
 import ClientCreateModal from "./crm/ClientCreateModal.svelte";
 import ClientDetailModal from "./crm/ClientDetailModal.svelte";
@@ -146,6 +147,7 @@ async function saveNewClient(body: Record<string, string | undefined>) {
 		showAddModal = false;
 	} catch (err) {
 		console.error("Failed to create client:", err);
+		addToast("Failed to create client. Please try again.");
 	} finally {
 		saving = false;
 	}
@@ -172,6 +174,7 @@ async function saveEdit(body: Record<string, string | undefined>) {
 		await loadClientActivity(selectedClient._id);
 	} catch (err) {
 		console.error("Failed to update client:", err);
+		addToast("Failed to save changes. Please try again.");
 	} finally {
 		saving = false;
 	}
@@ -188,6 +191,7 @@ async function deleteClient() {
 		closeDetailModal();
 	} catch (err) {
 		console.error("Failed to delete client:", err);
+		addToast("Failed to delete client. Please try again.");
 	} finally {
 		saving = false;
 	}
@@ -205,6 +209,7 @@ async function quickStatusUpdate(newStatus: string) {
 		await loadClientActivity(selectedClient._id);
 	} catch (err) {
 		console.error("Failed to update status:", err);
+		addToast("Failed to update status. Please try again.");
 	}
 }
 
@@ -220,6 +225,7 @@ async function assignTagToClient(tagId: string) {
 		await loadClientActivity(selectedClient._id);
 	} catch (err) {
 		console.error("Failed to assign tag:", err);
+		addToast("Failed to assign tag.");
 	}
 }
 
@@ -235,6 +241,7 @@ async function removeTagFromClient(tagId: string) {
 		await loadClientActivity(selectedClient._id);
 	} catch (err) {
 		console.error("Failed to remove tag:", err);
+		addToast("Failed to remove tag.");
 	}
 }
 
@@ -248,6 +255,7 @@ async function createTag(name: string, color: string) {
 		});
 	} catch (err) {
 		console.error("Failed to create tag:", err);
+		addToast("Failed to create tag.");
 	} finally {
 		saving = false;
 	}
@@ -266,6 +274,7 @@ async function deleteTag(tagId: string) {
 		tagAssignments = { ...tagAssignments };
 	} catch (err) {
 		console.error("Failed to delete tag:", err);
+		addToast("Failed to delete tag.");
 	}
 }
 

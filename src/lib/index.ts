@@ -25,6 +25,7 @@ export { default as LoadingState } from "./components/LoadingState.svelte";
 export { default as PageHeader } from "./components/PageHeader.svelte";
 export { default as StatusDot } from "./components/StatusDot.svelte";
 export { default as UpgradeBanner } from "./components/UpgradeBanner.svelte";
+export { addToast } from "./toast";
 
 // Page components
 export { default as BoardPage } from "./pages/BoardPage.svelte";
