@@ -1,12 +1,5 @@
-import { error, json } from "@sveltejs/kit";
-import { getServerConfig } from "../../config";
 import { toId } from "../../utils";
-import { getConvex } from "../convexClient";
-import { replaceTemplateVariables, sendEmail } from "../email";
-
-function formatCurrency(cents: number): string {
-	return `$${(cents / 100).toFixed(2)}`;
-}
+import { createEmailSendHandler, formatCurrency } from "./createEmailSendHandler";
 
 function buildDefaultContractHtml(
 	vars: Record<string, string>,
@@ -27,121 +20,23 @@ ${vars.totalPrice ? `<tr><td style="padding: 8px 0; color: #666;">total</td><td 
 }
 
 export function createContractSendHandler() {
-	return async ({
-		params,
-		request,
-	}: {
-		params: { id: string };
-		request: Request;
-	}) => {
-		const config = getServerConfig();
-		const { api } = config;
-		const siteUrl = config.siteUrl;
-		const siteName = config.siteName;
-		const convex = getConvex();
-
-		const { id } = params;
-		const body = await request.json().catch(() => ({}));
-		const { templateId, customSubject, customBody, changeNote } = body;
-
-		try {
-			const contract = await convex.query(api.contracts.get, {
-				contractId: toId(id),
-			});
-			if (!contract) throw error(404, "Contract not found");
-
-			const clientEmail = contract.clientEmail;
-			if (!clientEmail) throw error(400, "Client has no email address");
-
-			let subject: string;
-			let html: string;
-
-			if (customSubject && customBody) {
-				subject = customSubject;
-				html = customBody;
-				if (!html.includes("<")) {
-					html = `<div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; white-space: pre-wrap;">${html}</div>`;
-				}
-			} else {
-				const vars: Record<string, string> = {
-					clientName: contract.clientName ?? "there",
-					title: contract.title,
-					eventDate: contract.eventDate ?? "",
-					eventLocation: contract.eventLocation ?? "",
-					totalPrice: contract.totalPrice
-						? formatCurrency(contract.totalPrice)
-						: "",
-					depositAmount: contract.depositAmount
-						? formatCurrency(contract.depositAmount)
-						: "",
-					changeNote: changeNote || "",
-				};
-
-				const template = templateId
-					? await convex.query(api.emailTemplates.get, { templateId })
-					: (await convex.query(api.emailTemplates.getByCategory, {
-							siteUrl,
-							category: "booking-confirmation",
-						})) ??
-						(await convex.query(api.emailTemplates.getByCategory, {
-							siteUrl,
-							category: "custom",
-						}));
-
-				if (template) {
-					subject = replaceTemplateVariables(template.subject, vars);
-					html = replaceTemplateVariables(template.body, vars);
-					if (!html.includes("<")) {
-						html = `<div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; white-space: pre-wrap;">${html}</div>`;
-					}
-				} else {
-					subject = `contract: ${contract.title}`;
-					html = buildDefaultContractHtml(vars, siteName);
-				}
-			}
-
-			const result = await sendEmail({
-				to: clientEmail,
-				subject,
-				html,
-			});
-
-			await convex.mutation(api.emailLog.create, {
-				siteUrl,
-				to: clientEmail,
-				subject,
-				type: "contract",
-				relatedId: id,
-				status: "sent",
-				resendId: result.data?.id,
-			});
-
-			await convex.mutation(api.contracts.markSent, {
-				contractId: toId(id),
-				siteUrl,
-			});
-
-			return json({ success: true });
-		} catch (err: unknown) {
-			const e = err as { status?: number; message?: string };
-			if (e?.status) throw err;
-			console.error("Failed to send contract email:", err);
-
-			try {
-				await convex.mutation(api.emailLog.create, {
-					siteUrl,
-					to: "unknown",
-					subject: "contract email",
-					type: "contract",
-					relatedId: id,
-					status: "failed",
-					error: e?.message ?? "Unknown error",
-				});
-			} catch (logErr) {
-				console.warn("Failed to log contract email failure:", id, logErr);
-			}
-
-			throw error(500, "Failed to send contract email");
-		}
-	};
+	return createEmailSendHandler({
+		docType: "contract",
+		fetchDocument: (api, convex, id) =>
+			convex.query(api.contracts.get, { contractId: toId(id) }),
+		getClientEmail: (doc) => doc.clientEmail,
+		extractVars: (doc, changeNote) => ({
+			clientName: doc.clientName ?? "there",
+			title: doc.title,
+			eventDate: doc.eventDate ?? "",
+			eventLocation: doc.eventLocation ?? "",
+			totalPrice: doc.totalPrice ? formatCurrency(doc.totalPrice) : "",
+			depositAmount: doc.depositAmount ? formatCurrency(doc.depositAmount) : "",
+			changeNote,
+		}),
+		buildDefaultHtml: buildDefaultContractHtml,
+		defaultSubject: (doc) => `contract: ${doc.title}`,
+		markSent: (api, convex, id, siteUrl) =>
+			convex.mutation(api.contracts.markSent, { contractId: toId(id), siteUrl }),
+	});
 }

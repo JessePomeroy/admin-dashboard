@@ -1,12 +1,5 @@
-import { error, json } from "@sveltejs/kit";
-import { getServerConfig } from "../../config";
 import { toId } from "../../utils";
-import { getConvex } from "../convexClient";
-import { replaceTemplateVariables, sendEmail } from "../email";
-
-function formatCurrency(cents: number): string {
-	return `$${(cents / 100).toFixed(2)}`;
-}
+import { createEmailSendHandler, formatCurrency } from "./createEmailSendHandler";
 
 function buildDefaultInvoiceHtml(
 	vars: Record<string, string>,
@@ -49,145 +42,47 @@ ${vars.taxLine ? `<tr><td colspan="3" style="padding: 8px 0; text-align: right; 
 }
 
 export function createInvoiceSendHandler() {
-	return async ({
-		params,
-		request,
-	}: {
-		params: { id: string };
-		request: Request;
-	}) => {
-		const config = getServerConfig();
-		const { api } = config;
-		const siteUrl = config.siteUrl;
-		const siteName = config.siteName;
-		const convex = getConvex();
+	return createEmailSendHandler({
+		docType: "invoice",
+		fetchDocument: (api, convex, id) =>
+			convex.query(api.invoices.get, { invoiceId: toId(id) }),
+		getClientEmail: (doc) => doc.clientEmail,
+		extractVars: (doc, changeNote) => {
+			const total = doc.items.reduce(
+				(sum: number, item: { quantity: number; unitPrice: number }) =>
+					sum + item.quantity * item.unitPrice,
+				0,
+			);
+			const taxAmount = doc.taxPercent
+				? Math.round(total * (doc.taxPercent / 100))
+				: 0;
+			const grandTotal = total + taxAmount;
 
-		const { id } = params;
-		const body = await request.json().catch(() => ({}));
-		const { templateId, customSubject, customBody, changeNote } = body;
+			const lineItems = doc.items
+				.map(
+					(item: { description: string; quantity: number; unitPrice: number }) => {
+						const lineTotal = item.quantity * item.unitPrice;
+						return `<tr><td style="padding: 6px 0;">${item.description}</td><td style="padding: 6px 0; text-align: right;">${item.quantity}</td><td style="padding: 6px 0; text-align: right;">${formatCurrency(item.unitPrice)}</td><td style="padding: 6px 0; text-align: right;">${formatCurrency(lineTotal)}</td></tr>`;
+					},
+				)
+				.join("\n");
 
-		try {
-			const invoice = await convex.query(api.invoices.get, {
-				invoiceId: toId(id),
-			});
-			if (!invoice) throw error(404, "Invoice not found");
-
-			const clientEmail = invoice.clientEmail;
-			if (!clientEmail) throw error(400, "Client has no email address");
-
-			let subject: string;
-			let html: string;
-
-			if (customSubject && customBody) {
-				subject = customSubject;
-				html = customBody;
-				if (!html.includes("<")) {
-					html = `<div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; white-space: pre-wrap;">${html}</div>`;
-				}
-			} else {
-				const total = invoice.items.reduce(
-					(sum: number, item: { quantity: number; unitPrice: number }) =>
-						sum + item.quantity * item.unitPrice,
-					0,
-				);
-				const taxAmount = invoice.taxPercent
-					? Math.round(total * (invoice.taxPercent / 100))
-					: 0;
-				const grandTotal = total + taxAmount;
-
-				const lineItems = invoice.items
-					.map(
-						(item: {
-							description: string;
-							quantity: number;
-							unitPrice: number;
-						}) => {
-							const lineTotal = item.quantity * item.unitPrice;
-							return `<tr><td style="padding: 6px 0;">${item.description}</td><td style="padding: 6px 0; text-align: right;">${item.quantity}</td><td style="padding: 6px 0; text-align: right;">${formatCurrency(item.unitPrice)}</td><td style="padding: 6px 0; text-align: right;">${formatCurrency(lineTotal)}</td></tr>`;
-						},
-					)
-					.join("\n");
-
-				const vars: Record<string, string> = {
-					clientName: invoice.clientName ?? "there",
-					invoiceNumber: invoice.invoiceNumber,
-					amount: formatCurrency(grandTotal),
-					dueDate: invoice.dueDate ?? "",
-					lineItems,
-					subtotal: formatCurrency(total),
-					taxLine: taxAmount
-						? `${formatCurrency(taxAmount)} (${invoice.taxPercent}%)`
-						: "",
-					changeNote: changeNote || "",
-				};
-
-				const template = templateId
-					? await convex.query(api.emailTemplates.get, { templateId })
-					: (await convex.query(api.emailTemplates.getByCategory, {
-							siteUrl,
-							category: "booking-confirmation",
-						})) ??
-						(await convex.query(api.emailTemplates.getByCategory, {
-							siteUrl,
-							category: "custom",
-						}));
-
-				if (template) {
-					subject = replaceTemplateVariables(template.subject, vars);
-					html = replaceTemplateVariables(template.body, vars);
-					if (!html.includes("<")) {
-						html = `<div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; white-space: pre-wrap;">${html}</div>`;
-					}
-				} else {
-					subject = `invoice ${invoice.invoiceNumber}`;
-					html = buildDefaultInvoiceHtml(vars, siteName);
-				}
-			}
-
-			const result = await sendEmail({
-				to: clientEmail,
-				subject,
-				html,
-			});
-
-			await convex.mutation(api.emailLog.create, {
-				siteUrl,
-				to: clientEmail,
-				subject,
-				type: "invoice",
-				relatedId: id,
-				status: "sent",
-				resendId: result.data?.id,
-			});
-
-			// mark invoice as sent
-			await convex.mutation(api.invoices.markSent, {
-				invoiceId: toId(id),
-				siteUrl,
-			});
-
-			return json({ success: true });
-		} catch (err: unknown) {
-			const e = err as { status?: number; message?: string };
-			if (e?.status) throw err;
-			console.error("Failed to send invoice email:", err);
-
-			// log failure
-			try {
-				await convex.mutation(api.emailLog.create, {
-					siteUrl,
-					to: "unknown",
-					subject: "invoice email",
-					type: "invoice",
-					relatedId: id,
-					status: "failed",
-					error: e?.message ?? "Unknown error",
-				});
-			} catch (logErr) {
-				console.warn("Failed to log invoice email failure:", id, logErr);
-			}
-
-			throw error(500, "Failed to send invoice email");
-		}
-	};
+			return {
+				clientName: doc.clientName ?? "there",
+				invoiceNumber: doc.invoiceNumber,
+				amount: formatCurrency(grandTotal),
+				dueDate: doc.dueDate ?? "",
+				lineItems,
+				subtotal: formatCurrency(total),
+				taxLine: taxAmount
+					? `${formatCurrency(taxAmount)} (${doc.taxPercent}%)`
+					: "",
+				changeNote,
+			};
+		},
+		buildDefaultHtml: buildDefaultInvoiceHtml,
+		defaultSubject: (doc) => `invoice ${doc.invoiceNumber}`,
+		markSent: (api, convex, id, siteUrl) =>
+			convex.mutation(api.invoices.markSent, { invoiceId: toId(id), siteUrl }),
+	});
 }
