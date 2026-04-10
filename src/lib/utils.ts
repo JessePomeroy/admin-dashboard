@@ -21,6 +21,17 @@ export function dollarsToCents(dollars: number): number {
 	return Math.round(dollars * 100);
 }
 
+// Invoice math — amounts are stored in cents
+export function calcSubtotal(
+	items: readonly { quantity: number; unitPrice: number }[],
+): number {
+	return items.reduce((sum, item) => sum + item.quantity * item.unitPrice, 0);
+}
+
+export function calcTax(subtotal: number, taxPercent: number): number {
+	return Math.round(subtotal * (taxPercent / 100));
+}
+
 export function formatDollars(amount: number): string {
 	return new Intl.NumberFormat("en-US", {
 		style: "currency",

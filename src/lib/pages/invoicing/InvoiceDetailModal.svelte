@@ -4,6 +4,8 @@ import StatusDot from "../../components/StatusDot.svelte";
 import { addToast } from "../../toast";
 import type { Invoice, InvoiceItem } from "../../types";
 import {
+	calcSubtotal,
+	calcTax,
 	dollarsToCents,
 	formatCents,
 	formatDollars,
@@ -59,14 +61,6 @@ let editItems = $state<InvoiceItem[]>([]);
 let editTaxPercent = $state(0);
 let editDueDate = $state("");
 let editNotes = $state("");
-
-function calcSubtotal(items: InvoiceItem[]): number {
-	return items.reduce((sum, item) => sum + item.quantity * item.unitPrice, 0);
-}
-
-function calcTax(subtotal: number, taxPercent: number): number {
-	return Math.round(subtotal * (taxPercent / 100));
-}
 
 let detailSubtotal = $derived(calcSubtotal(invoice.items));
 let detailTax = $derived(calcTax(detailSubtotal, invoice.taxPercent || 0));

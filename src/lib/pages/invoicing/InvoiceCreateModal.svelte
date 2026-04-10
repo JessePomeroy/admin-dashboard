@@ -8,7 +8,13 @@ import type {
 	InvoiceItem,
 	InvoiceType,
 } from "../../types";
-import { dollarsToCents, formatCents, formatDollars } from "../../utils";
+import {
+	calcSubtotal,
+	calcTax,
+	dollarsToCents,
+	formatCents,
+	formatDollars,
+} from "../../utils";
 import LineItemEditor from "./LineItemEditor.svelte";
 
 interface EmailTemplate {
@@ -91,14 +97,6 @@ const allTypes: InvoiceType[] = [
 	"package",
 	"milestone",
 ];
-
-function calcSubtotal(items: InvoiceItem[]): number {
-	return items.reduce((sum, item) => sum + item.quantity * item.unitPrice, 0);
-}
-
-function calcTax(subtotal: number, taxPercent: number): number {
-	return Math.round(subtotal * (taxPercent / 100));
-}
 
 let createSubtotal = $derived(calcSubtotal(formItems));
 let createTax = $derived(calcTax(createSubtotal, formTaxPercent));

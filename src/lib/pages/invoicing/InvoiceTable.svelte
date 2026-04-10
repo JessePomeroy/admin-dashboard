@@ -1,7 +1,9 @@
 <script lang="ts">
 import StatusDot from "../../components/StatusDot.svelte";
-import type { Invoice, InvoiceItem } from "../../types";
+import type { Invoice } from "../../types";
 import {
+	calcSubtotal,
+	calcTax,
 	formatCents,
 	formatDate,
 	getStatusColor,
@@ -14,14 +16,6 @@ interface Props {
 }
 
 let { invoices, onselect }: Props = $props();
-
-function calcSubtotal(items: InvoiceItem[]): number {
-	return items.reduce((sum, item) => sum + item.quantity * item.unitPrice, 0);
-}
-
-function calcTax(subtotal: number, taxPercent: number): number {
-	return Math.round(subtotal * (taxPercent / 100));
-}
 </script>
 
 {#if invoices.length === 0}
