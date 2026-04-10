@@ -1,5 +1,6 @@
 <script lang="ts">
 import AdminModal from "../../components/AdminModal.svelte";
+import { CLIENT_STATUSES } from "../../constants";
 import type {
 	ActivityLogEntry,
 	Client,
@@ -70,7 +71,6 @@ const photographyTypes = [
 	"event",
 ];
 const webTypes = ["website", "redesign", "maintenance", "other"];
-const allStatuses = ["lead", "booked", "in-progress", "completed", "archived"];
 const sources = ["referral", "instagram", "website", "word of mouth", "other"];
 
 function formatType(type: string) {
@@ -204,7 +204,7 @@ function handleSave() {
 				<div class="form-group">
 					<label class="form-label" for="edit-status">status</label>
 					<select id="edit-status" class="form-input" bind:value={formStatus}>
-						{#each allStatuses as s}
+						{#each CLIENT_STATUSES as s}
 							<option value={s}>{formatStatus(s)}</option>
 						{/each}
 					</select>
@@ -315,7 +315,7 @@ function handleSave() {
 			<div class="detail-status-row">
 				<span class="detail-label">quick status</span>
 				<div class="status-buttons">
-					{#each allStatuses as s}
+					{#each CLIENT_STATUSES as s}
 						<button
 							class="status-btn"
 							class:active={client.status === s}

@@ -3,6 +3,7 @@ import { useQuery, useConvexClient } from "@mmailaender/convex-svelte";
 import { getAdminConfig } from "../config";
 import FeatureGate from "../components/FeatureGate.svelte";
 import LoadingState from "../components/LoadingState.svelte";
+import { CLIENT_STATUSES } from "../constants";
 import type { ActivityLogEntry, Client, ClientTag } from "../types";
 import { addToast } from "../toast";
 import { toId } from "../utils";
@@ -46,8 +47,6 @@ let loadingActivity = $state(false);
 
 // Tag assignments cache: clientId -> tags
 let tagAssignments = $state<Record<string, ClientTag[]>>({});
-
-const allStatuses = ["lead", "booked", "in-progress", "completed", "archived"];
 
 let filteredClients = $derived(
 	clients.filter((c: Client) => {
@@ -325,7 +324,7 @@ function formatStatus(status: string) {
 		</select>
 		<select class="filter-select" bind:value={statusFilter}>
 			<option value="all">all statuses</option>
-			{#each allStatuses as s}
+			{#each CLIENT_STATUSES as s}
 				<option value={s}>{formatStatus(s)}</option>
 			{/each}
 		</select>
