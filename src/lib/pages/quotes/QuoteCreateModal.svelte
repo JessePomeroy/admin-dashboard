@@ -1,7 +1,7 @@
 <script lang="ts">
 import AdminModal from "../../components/AdminModal.svelte";
 import EmailPreview from "../../components/EmailPreview.svelte";
-import type { Client, QuotePreset } from "../../types";
+import type { Client, EmailTemplate, QuotePreset } from "../../types";
 import { dollarsToCents, formatDollars } from "../../utils";
 import PackageEditor from "./PackageEditor.svelte";
 
@@ -10,15 +10,6 @@ interface EditablePackage {
 	description: string;
 	price: number;
 	included: string[];
-}
-
-interface EmailTemplate {
-	_id: string;
-	name: string;
-	category: string;
-	subject: string;
-	body: string;
-	variables?: string[];
 }
 
 interface Props {

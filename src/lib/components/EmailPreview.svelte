@@ -1,12 +1,5 @@
 <script lang="ts">
-interface EmailTemplate {
-	_id: string;
-	name: string;
-	category: string;
-	subject: string;
-	body: string;
-	variables?: string[];
-}
+import type { EmailTemplate } from "../types";
 
 interface Props {
 	templates: EmailTemplate[];

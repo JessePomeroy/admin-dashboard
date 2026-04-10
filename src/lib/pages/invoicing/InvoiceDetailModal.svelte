@@ -2,7 +2,7 @@
 import AdminModal from "../../components/AdminModal.svelte";
 import StatusDot from "../../components/StatusDot.svelte";
 import { addToast } from "../../toast";
-import type { Invoice, InvoiceItem } from "../../types";
+import type { EmailTemplate, Invoice, InvoiceItem } from "../../types";
 import {
 	calcSubtotal,
 	calcTax,
@@ -15,13 +15,6 @@ import {
 	INVOICE_STATUS_COLORS,
 } from "../../utils";
 import LineItemEditor from "./LineItemEditor.svelte";
-
-interface EmailTemplate {
-	_id: string;
-	name: string;
-	category: string;
-	subject: string;
-}
 
 interface Props {
 	invoice: Invoice;

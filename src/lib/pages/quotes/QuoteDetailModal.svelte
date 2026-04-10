@@ -1,7 +1,7 @@
 <script lang="ts">
 import AdminModal from "../../components/AdminModal.svelte";
 import StatusDot from "../../components/StatusDot.svelte";
-import type { Quote, QuotePackage } from "../../types";
+import type { EmailTemplate, Quote, QuotePackage } from "../../types";
 import {
 	dollarsToCents,
 	formatCents,
@@ -18,13 +18,6 @@ interface EditablePackage {
 	description: string;
 	price: number;
 	included: string[];
-}
-
-interface EmailTemplate {
-	_id: string;
-	name: string;
-	category: string;
-	subject: string;
 }
 
 interface Props {

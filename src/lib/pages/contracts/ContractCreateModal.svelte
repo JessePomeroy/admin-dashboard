@@ -1,17 +1,8 @@
 <script lang="ts">
 import AdminModal from "../../components/AdminModal.svelte";
 import EmailPreview from "../../components/EmailPreview.svelte";
-import type { Client, ContractTemplate } from "../../types";
+import type { Client, ContractTemplate, EmailTemplate } from "../../types";
 import { dollarsToCents } from "../../utils";
-
-interface EmailTemplate {
-	_id: string;
-	name: string;
-	category: string;
-	subject: string;
-	body: string;
-	variables?: string[];
-}
 
 interface Props {
 	clients: Client[];

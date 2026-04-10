@@ -4,6 +4,7 @@ import EmailPreview from "../../components/EmailPreview.svelte";
 import { addToast } from "../../toast";
 import type {
 	Client,
+	EmailTemplate,
 	Invoice,
 	InvoiceItem,
 	InvoiceType,
@@ -16,15 +17,6 @@ import {
 	formatDollars,
 } from "../../utils";
 import LineItemEditor from "./LineItemEditor.svelte";
-
-interface EmailTemplate {
-	_id: string;
-	name: string;
-	category: string;
-	subject: string;
-	body: string;
-	variables?: string[];
-}
 
 interface Props {
 	clients: Client[];

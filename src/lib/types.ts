@@ -146,11 +146,13 @@ export interface ContractTemplate extends ConvexDocument<"contractTemplates"> {
 	variables?: string[];
 }
 
-// Email template types
-export interface EmailTemplate extends ConvexDocument<"emailTemplates"> {
-	siteUrl: string;
+// Email template types — loose UI-facing shape used by send modals and EmailPreview.
+// The Convex document has additional fields (siteUrl, _creationTime, branded _id)
+// but consumers only need this subset.
+export interface EmailTemplate {
+	_id: string;
 	name: string;
-	category: EmailCategory;
+	category: string;
 	subject: string;
 	body: string;
 	variables?: string[];

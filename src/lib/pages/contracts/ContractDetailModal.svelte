@@ -1,7 +1,7 @@
 <script lang="ts">
 import AdminModal from "../../components/AdminModal.svelte";
 import StatusDot from "../../components/StatusDot.svelte";
-import type { Contract } from "../../types";
+import type { Contract, EmailTemplate } from "../../types";
 import {
 	CONTRACT_STATUS_COLORS,
 	dollarsToCents,
@@ -10,13 +10,6 @@ import {
 	formatTimestamp,
 	getStatusColor,
 } from "../../utils";
-
-interface EmailTemplate {
-	_id: string;
-	name: string;
-	category: string;
-	subject: string;
-}
 
 interface Props {
 	contract: Contract;
