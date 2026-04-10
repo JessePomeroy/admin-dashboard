@@ -38,5 +38,6 @@ export function createContractSendHandler() {
 		defaultSubject: (doc) => `contract: ${doc.title}`,
 		markSent: (api, convex, id, siteUrl) =>
 			convex.mutation(api.contracts.markSent, { contractId: toId(id), siteUrl }),
+		fallbackCategories: ["booking-confirmation", "custom"],
 	});
 }

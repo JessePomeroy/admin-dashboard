@@ -84,5 +84,6 @@ export function createInvoiceSendHandler() {
 		defaultSubject: (doc) => `invoice ${doc.invoiceNumber}`,
 		markSent: (api, convex, id, siteUrl) =>
 			convex.mutation(api.invoices.markSent, { invoiceId: toId(id), siteUrl }),
+		fallbackCategories: ["custom"],
 	});
 }

@@ -49,5 +49,6 @@ export function createQuoteSendHandler() {
 		defaultSubject: (doc) => `quote ${doc.quoteNumber}`,
 		markSent: (api, convex, id, siteUrl) =>
 			convex.mutation(api.quotes.markSent, { quoteId: toId(id), siteUrl }),
+		fallbackCategories: ["custom"],
 	});
 }

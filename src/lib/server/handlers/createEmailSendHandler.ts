@@ -1,5 +1,6 @@
 import { error, json } from "@sveltejs/kit";
 import { getServerConfig } from "../../config";
+import type { EmailCategory } from "../../types";
 import { formatCents, toId } from "../../utils";
 import { getConvex } from "../convexClient";
 import { replaceTemplateVariables, sendEmail } from "../email";
@@ -32,6 +33,14 @@ export interface EmailSendConfig {
 	defaultSubject: (doc: any) => string;
 	/** Mark the document as sent after email is delivered. */
 	markSent: (api: any, convex: any, id: string, siteUrl: string) => Promise<void>;
+	/**
+	 * Template category cascade used when the caller does not supply
+	 * an explicit `templateId`. Categories are tried in order; the first
+	 * matching template wins. If none match, the handler falls through
+	 * to `buildDefaultHtml`. Each docType owns its own list so an invoice
+	 * never silently renders a booking-confirmation template.
+	 */
+	fallbackCategories: readonly EmailCategory[];
 }
 
 /**
@@ -73,16 +82,18 @@ export function createEmailSendHandler(config: EmailSendConfig) {
 			} else {
 				const vars = config.extractVars(doc, changeNote || "");
 
-				const template = templateId
-					? await convex.query(api.emailTemplates.get, { templateId })
-					: (await convex.query(api.emailTemplates.getByCategory, {
+				let template = null;
+				if (templateId) {
+					template = await convex.query(api.emailTemplates.get, { templateId });
+				} else {
+					for (const category of config.fallbackCategories) {
+						template = await convex.query(api.emailTemplates.getByCategory, {
 							siteUrl,
-							category: "booking-confirmation",
-						})) ??
-						(await convex.query(api.emailTemplates.getByCategory, {
-							siteUrl,
-							category: "custom",
-						}));
+							category,
+						});
+						if (template) break;
+					}
+				}
 
 				if (template) {
 					subject = replaceTemplateVariables(template.subject, vars);
