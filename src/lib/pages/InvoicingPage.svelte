@@ -71,7 +71,7 @@ async function handleCreate(body: Record<string, unknown>) {
 	await client.mutation(api.invoices.create, {
 		siteUrl: config.siteUrl,
 		invoiceNumber: body.invoiceNumber as string,
-		clientId: toId(body.clientId),
+		clientId: toId(body.clientId as string),
 		invoiceType: body.invoiceType as "one-time" | "recurring" | "deposit" | "package" | "milestone",
 		items: body.items as { description: string; quantity: number; unitPrice: number }[],
 		taxPercent: body.taxPercent as number | undefined,
@@ -82,7 +82,7 @@ async function handleCreate(body: Record<string, unknown>) {
 		totalProject: body.totalProject as number | undefined,
 		milestoneName: body.milestoneName as string | undefined,
 		milestoneIndex: body.milestoneIndex as number | undefined,
-		parentInvoiceId: toId(body.parentInvoiceId),
+		parentInvoiceId: toId(body.parentInvoiceId as string),
 	});
 	showCreateModal = false;
 }
@@ -92,7 +92,7 @@ async function saveAndSendInvoice(body: Record<string, unknown> & { templateId?:
 	const invoiceId = await client.mutation(api.invoices.create, {
 		siteUrl: config.siteUrl,
 		invoiceNumber: invoiceBody.invoiceNumber as string,
-		clientId: toId(invoiceBody.clientId),
+		clientId: toId(invoiceBody.clientId as string),
 		invoiceType: invoiceBody.invoiceType as "one-time" | "recurring" | "deposit" | "package" | "milestone",
 		items: invoiceBody.items as { description: string; quantity: number; unitPrice: number }[],
 		taxPercent: invoiceBody.taxPercent as number | undefined,
@@ -103,7 +103,7 @@ async function saveAndSendInvoice(body: Record<string, unknown> & { templateId?:
 		totalProject: invoiceBody.totalProject as number | undefined,
 		milestoneName: invoiceBody.milestoneName as string | undefined,
 		milestoneIndex: invoiceBody.milestoneIndex as number | undefined,
-		parentInvoiceId: toId(invoiceBody.parentInvoiceId),
+		parentInvoiceId: toId(invoiceBody.parentInvoiceId as string),
 	});
 	await fetch(`/api/admin/invoicing/${invoiceId}/send`, {
 		method: "POST",

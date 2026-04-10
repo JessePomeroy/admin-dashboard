@@ -508,7 +508,7 @@ async function handleDelete() {
 					>
 					<button
 						class="btn-send"
-						onclick={handleSendEmail}
+						onclick={() => handleSendEmail()}
 						disabled={sending}
 					>
 						{sending ? "sending..." : "send email"}

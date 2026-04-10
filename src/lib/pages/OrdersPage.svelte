@@ -22,7 +22,7 @@ const ordersQuery = useQuery(api.orders.list, { siteUrl: config.siteUrl });
 
 // Map Convex format to match what the orders page expects
 let orders = $derived(
-	(ordersQuery.data ?? []).map((order) => ({
+	(ordersQuery.data ?? []).map((order: any) => ({
 		_id: order._id,
 		orderNumber: order.orderNumber,
 		createdAt: new Date(order._creationTime).toISOString(),

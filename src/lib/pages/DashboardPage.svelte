@@ -38,15 +38,15 @@ const crmStats = $derived(crmStatsQuery.data ?? { total: 0, leads: 0, booked: 0,
 // Invoice stats
 const invoices = $derived(invoicesQuery.data ?? []);
 const invoiceStats = $derived({
-	draft: invoices.filter((i) => i.status === "draft").length,
-	sent: invoices.filter((i) => i.status === "sent").length,
-	paid: invoices.filter((i) => i.status === "paid").length,
-	overdue: invoices.filter((i) => i.status === "overdue").length,
+	draft: invoices.filter((i: any) => i.status === "draft").length,
+	sent: invoices.filter((i: any) => i.status === "sent").length,
+	paid: invoices.filter((i: any) => i.status === "paid").length,
+	overdue: invoices.filter((i: any) => i.status === "overdue").length,
 });
 const pendingInvoiceAmount = $derived(
 	invoices
-		.filter((i) => i.status === "draft" || i.status === "sent")
-		.reduce((sum, inv) => {
+		.filter((i: any) => i.status === "draft" || i.status === "sent")
+		.reduce((sum: number, inv: any) => {
 			const invoiceTotal = inv.items.reduce(
 				(t: number, item: { quantity: number; unitPrice: number }) => t + item.quantity * item.unitPrice,
 				0,
@@ -58,10 +58,10 @@ const pendingInvoiceAmount = $derived(
 // Quote stats
 const quotes = $derived(quotesQuery.data ?? []);
 const quoteStats = $derived({
-	draft: quotes.filter((q) => q.status === "draft").length,
-	sent: quotes.filter((q) => q.status === "sent").length,
-	accepted: quotes.filter((q) => q.status === "accepted").length,
-	declined: quotes.filter((q) => q.status === "declined").length,
+	draft: quotes.filter((q: any) => q.status === "draft").length,
+	sent: quotes.filter((q: any) => q.status === "sent").length,
+	accepted: quotes.filter((q: any) => q.status === "accepted").length,
+	declined: quotes.filter((q: any) => q.status === "declined").length,
 });
 
 // Sanity data (still from server)
@@ -69,21 +69,21 @@ const newInquiryCount = $derived(data.newInquiryCount);
 
 // Activity feed: combine recent orders, invoices, quotes
 const activityFeed = $derived(() => {
-	const recentInvoices = invoices.slice(0, 5).map((inv) => ({
+	const recentInvoices = invoices.slice(0, 5).map((inv: any) => ({
 		type: "invoice" as const,
 		description: `${inv.invoiceNumber} — ${inv.clientName}`,
 		createdAt: new Date(inv._creationTime).toISOString(),
 		status: inv.status,
 	}));
 
-	const recentQuoteItems = quotes.slice(0, 5).map((q) => ({
+	const recentQuoteItems = quotes.slice(0, 5).map((q: any) => ({
 		type: "quote" as const,
 		description: `${q.quoteNumber} — ${q.clientName}`,
 		createdAt: new Date(q._creationTime).toISOString(),
 		status: q.status,
 	}));
 
-	const recentOrderItems = recentOrders.slice(0, 5).map((o) => ({
+	const recentOrderItems = recentOrders.slice(0, 5).map((o: any) => ({
 		type: "order" as const,
 		description: `${o.orderNumber} — ${o.customerName || o.customerEmail}`,
 		createdAt: o.createdAt,

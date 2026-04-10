@@ -67,9 +67,9 @@ async function handleCreateContract(payload: Record<string, unknown>) {
 	await client.mutation(api.contracts.create, {
 		siteUrl: config.siteUrl,
 		title: payload.title as string,
-		clientId: toId(payload.clientId),
+		clientId: toId(payload.clientId as string),
 		category: payload.category as "photography" | "web" | undefined,
-		templateId: toId(payload.templateId),
+		templateId: toId(payload.templateId as string),
 		body: payload.body as string,
 		eventDate: payload.eventDate as string | undefined,
 		eventLocation: payload.eventLocation as string | undefined,
@@ -83,9 +83,9 @@ async function saveAndSendContract(payload: Record<string, unknown> & { emailTem
 	const contractId = await client.mutation(api.contracts.create, {
 		siteUrl: config.siteUrl,
 		title: payload.title as string,
-		clientId: toId(payload.clientId),
+		clientId: toId(payload.clientId as string),
 		category: payload.category as "photography" | "web" | undefined,
-		templateId: toId(payload.templateId),
+		templateId: toId(payload.templateId as string),
 		body: payload.body as string,
 		eventDate: payload.eventDate as string | undefined,
 		eventLocation: payload.eventLocation as string | undefined,
