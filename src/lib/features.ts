@@ -6,6 +6,7 @@ export const FEATURES = {
 	galleries: "basic",
 
 	// Full tier — requires CRM subscription
+	galleryDelivery: "full",
 	crm: "full",
 	board: "full",
 	invoicing: "full",

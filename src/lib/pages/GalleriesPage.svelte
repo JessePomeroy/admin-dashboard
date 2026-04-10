@@ -1,19 +1,28 @@
 <script lang="ts">
+import UpgradeBanner from "../components/UpgradeBanner.svelte";
 import { getAdminConfig } from "../config";
+import { hasFeature, type Tier } from "../features";
 import GalleryDeliveryPage from "./gallery-delivery/GalleryDeliveryPage.svelte";
 
-let { data, activeTab = "portfolio" }: {
-	data: { galleries: any[] };
+let {
+	data,
+	activeTab = "portfolio",
+}: {
+	data: { galleries: any[]; tier: Tier };
 	activeTab?: "portfolio" | "delivery";
 } = $props();
 
 const config = getAdminConfig();
-const showDelivery = !!config.galleryWorkerUrl;
+const hasWorker = !!config.galleryWorkerUrl;
+const canDeliver = $derived(
+	hasFeature(data.tier, "galleryDelivery") && hasWorker,
+);
 
 const galleries = $derived(data.galleries);
 
 let tab = $state(activeTab);
-const studioBaseUrl = config.sanityStudioUrl ?? "https://angelsrest.sanity.studio";
+const studioBaseUrl =
+	config.sanityStudioUrl ?? "https://angelsrest.sanity.studio";
 </script>
 
 <div class="galleries-page">
@@ -21,15 +30,19 @@ const studioBaseUrl = config.sanityStudioUrl ?? "https://angelsrest.sanity.studi
 		<h1>galleries</h1>
 	</header>
 
-	{#if showDelivery}
+	{#if hasWorker}
 		<div class="tab-bar" role="tablist">
 			<button class="tab" class:active={tab === "portfolio"} role="tab" aria-selected={tab === "portfolio"} onclick={() => (tab = "portfolio")}>portfolio</button>
 			<button class="tab" class:active={tab === "delivery"} role="tab" aria-selected={tab === "delivery"} onclick={() => (tab = "delivery")}>delivery</button>
 		</div>
 	{/if}
 
-	{#if tab === "delivery" && showDelivery}
-		<GalleryDeliveryPage />
+	{#if tab === "delivery" && hasWorker}
+		{#if canDeliver}
+			<GalleryDeliveryPage />
+		{:else}
+			<UpgradeBanner feature="galleryDelivery" />
+		{/if}
 	{:else}
 		{#if galleries.length === 0}
 			<div class="empty-state">no galleries found</div>
