@@ -38,7 +38,7 @@ async function handleCreate() {
 			? Date.now() + parseInt(expiryDays) * 24 * 60 * 60 * 1000
 			: undefined;
 
-		await client.mutation(api.galleries.create, {
+		await client.mutation(api.galleryDelivery.create, {
 			siteUrl: config.siteUrl,
 			clientId: toId(selectedClientId),
 			name: name.trim(),

@@ -45,12 +45,12 @@ async function handleDndFinalize(e: CustomEvent<{ items: typeof items }>) {
 		id: toId(item._id),
 		order: index,
 	}));
-	await client.mutation(api.galleries.reorderImages, { updates });
+	await client.mutation(api.galleryDelivery.reorderImages, { updates });
 	onchange();
 }
 
 async function handleSetCover(image: GalleryImage) {
-	await client.mutation(api.galleries.update, {
+	await client.mutation(api.galleryDelivery.update, {
 		id: toId(galleryId),
 		coverImageKey: image.r2Key,
 	});
@@ -58,7 +58,7 @@ async function handleSetCover(image: GalleryImage) {
 }
 
 async function handleDelete(image: GalleryImage) {
-	await client.mutation(api.galleries.removeImage, { id: toId(image._id) });
+	await client.mutation(api.galleryDelivery.removeImage, { id: toId(image._id) });
 
 	try {
 		await fetch("/api/admin/galleries/delete", {

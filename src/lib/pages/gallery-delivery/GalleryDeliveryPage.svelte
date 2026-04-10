@@ -2,23 +2,27 @@
 import { useQuery, useConvexClient } from "@mmailaender/convex-svelte";
 import { getAdminConfig } from "../../config";
 import { formatBytes, formatTimestampDate, toId } from "../../utils";
+import FeatureGate from "../../components/FeatureGate.svelte";
 import LoadingState from "../../components/LoadingState.svelte";
 import PageHeader from "../../components/PageHeader.svelte";
+import type { Tier } from "../../features";
 import type { Gallery } from "../../types";
 import GalleryCreateModal from "./GalleryCreateModal.svelte";
 import GalleryDetailModal from "./GalleryDetailModal.svelte";
 
+let { tier }: { tier: Tier } = $props();
+
 const config = getAdminConfig();
 const { api } = config;
 const client = useConvexClient();
-const galleriesQuery = useQuery(api.galleries.listBySite, { siteUrl: config.siteUrl });
+const galleriesQuery = useQuery(api.galleryDelivery.listBySite, { siteUrl: config.siteUrl });
 
 let galleries = $derived(galleriesQuery.data ?? []);
 let isLoading = $derived(galleriesQuery.isLoading);
 
 async function handleQuickAction(e: Event, galleryId: string, status: string) {
 	e.stopPropagation();
-	await client.mutation(api.galleries.update, { id: toId(galleryId), status: status as any });
+	await client.mutation(api.galleryDelivery.update, { id: toId(galleryId), status: status as any });
 }
 
 let showCreateModal = $state(false);
@@ -40,6 +44,7 @@ const statusLabels: Record<string, string> = {
 };
 </script>
 
+<FeatureGate feature="galleryDelivery" {tier}>
 <div class="delivery-page">
 	<PageHeader title="client galleries">
 		{#snippet actions()}
@@ -108,9 +113,11 @@ const statusLabels: Record<string, string> = {
 {#if selectedGallery}
 	<GalleryDetailModal
 		gallery={selectedGallery}
+		{tier}
 		onclose={() => (selectedGallery = null)}
 	/>
 {/if}
+</FeatureGate>
 
 <style>
 	.delivery-page {

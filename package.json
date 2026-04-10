@@ -1,6 +1,6 @@
 {
   "name": "@jessepomeroy/admin",
-  "version": "0.18.0",
+  "version": "0.19.0",
   "packageManager": "pnpm@9.15.9",
   "type": "module",
   "svelte": "./dist/index.js",
@@ -18,7 +18,10 @@
   "scripts": {
     "build": "svelte-package -o dist",
     "dev": "svelte-package -o dist --watch",
-    "prepublishOnly": "npm run build"
+    "prepublishOnly": "npm run build",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "check": "svelte-check --tsconfig ./tsconfig.json"
   },
   "peerDependencies": {
     "@mmailaender/convex-svelte": "^0.18.0",

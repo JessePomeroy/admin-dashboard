@@ -1,21 +1,24 @@
 <script lang="ts">
-import UpgradeBanner from "../components/UpgradeBanner.svelte";
 import { getAdminConfig } from "../config";
-import { hasFeature, type Tier } from "../features";
+import type { Tier } from "../features";
 import GalleryDeliveryPage from "./gallery-delivery/GalleryDeliveryPage.svelte";
 
 let {
 	data,
 	activeTab = "portfolio",
 }: {
-	data: { galleries: any[]; tier: Tier };
+	data: { galleries: any[]; tier?: Tier };
 	activeTab?: "portfolio" | "delivery";
 } = $props();
 
 const config = getAdminConfig();
 const hasWorker = !!config.galleryWorkerUrl;
-const canDeliver = $derived(
-	hasFeature(data.tier, "galleryDelivery") && hasWorker,
+// Tier fallback: creator is always full-tier, otherwise default to basic.
+// Consumer can still override by passing data.tier explicitly.
+// GalleryDeliveryPage gates itself via FeatureGate — this value is just
+// threaded through for its internal check.
+const effectiveTier: Tier = $derived(
+	data.tier ?? (config.isCreator ? "full" : "basic"),
 );
 
 const galleries = $derived(data.galleries);
@@ -38,11 +41,7 @@ const studioBaseUrl =
 	{/if}
 
 	{#if tab === "delivery" && hasWorker}
-		{#if canDeliver}
-			<GalleryDeliveryPage />
-		{:else}
-			<UpgradeBanner feature="galleryDelivery" />
-		{/if}
+		<GalleryDeliveryPage tier={effectiveTier} />
 	{:else}
 		{#if galleries.length === 0}
 			<div class="empty-state">no galleries found</div>

@@ -41,7 +41,7 @@ export interface AdminAPI {
 		getByCategory: FnRef;
 		list: FnRef;
 	};
-	galleries: {
+	galleryDelivery: {
 		create: FnRef;
 		update: FnRef;
 		remove: FnRef;

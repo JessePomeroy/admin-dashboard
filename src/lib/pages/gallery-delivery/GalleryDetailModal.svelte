@@ -3,12 +3,15 @@ import { useQuery, useConvexClient } from "@mmailaender/convex-svelte";
 import { getAdminConfig } from "../../config";
 import { formatBytes, toId } from "../../utils";
 import AdminModal from "../../components/AdminModal.svelte";
+import FeatureGate from "../../components/FeatureGate.svelte";
+import type { Tier } from "../../features";
 import type { Gallery, GalleryImage } from "../../types";
 import GalleryUploader from "./GalleryUploader.svelte";
 import GalleryImageGrid from "./GalleryImageGrid.svelte";
 
-let { gallery, onclose }: {
+let { gallery, tier, onclose }: {
 	gallery: Gallery & { clientName: string };
+	tier: Tier;
 	onclose: () => void;
 } = $props();
 
@@ -16,8 +19,8 @@ const config = getAdminConfig();
 const { api } = config;
 const client = useConvexClient();
 
-const imagesQuery = useQuery(api.galleries.getImages, { galleryId: gallery._id });
-const galleryQuery = useQuery(api.galleries.get, { id: gallery._id });
+const imagesQuery = useQuery(api.galleryDelivery.getImages, { galleryId: gallery._id });
+const galleryQuery = useQuery(api.galleryDelivery.get, { id: gallery._id });
 let images = $derived(imagesQuery.data ?? []);
 let liveGallery = $derived(galleryQuery.data ?? gallery);
 
@@ -35,7 +38,7 @@ let editPassword = $state(gallery.password ?? "");
 async function handleSaveSettings() {
 	saving = true;
 	try {
-		await client.mutation(api.galleries.update, {
+		await client.mutation(api.galleryDelivery.update, {
 			id: toId(gallery._id),
 			name: editName,
 			downloadEnabled: editDownloadEnabled,
@@ -67,7 +70,7 @@ async function handleDelete() {
 			}
 		}
 		// Hard delete gallery + images + downloads from Convex
-		await client.mutation(api.galleries.remove, { id: toId(gallery._id) });
+		await client.mutation(api.galleryDelivery.remove, { id: toId(gallery._id) });
 		onclose();
 	} catch {
 		deleting = false;
@@ -75,7 +78,7 @@ async function handleDelete() {
 }
 
 async function handleStatusChange(newStatus: string) {
-	await client.mutation(api.galleries.update, {
+	await client.mutation(api.galleryDelivery.update, {
 		id: toId(gallery._id),
 		status: newStatus as any,
 	});
@@ -100,6 +103,7 @@ async function handleShare() {
 </script>
 
 <AdminModal title={gallery.name} {onclose} size="wide">
+	<FeatureGate feature="galleryDelivery" {tier}>
 	<div class="modal-body">
 		<div class="detail-header">
 			<span class="client-name">{gallery.clientName}</span>
@@ -129,7 +133,7 @@ async function handleShare() {
 
 		{#if tab === "images"}
 			<div class="images-section" role="tabpanel">
-				<GalleryUploader galleryId={gallery._id as string} onupload={() => {}} />
+				<GalleryUploader galleryId={gallery._id as string} {tier} onupload={() => {}} />
 				<GalleryImageGrid
 					{images}
 					galleryId={gallery._id as string}
@@ -171,6 +175,7 @@ async function handleShare() {
 			</form>
 		{/if}
 	</div>
+	</FeatureGate>
 </AdminModal>
 
 <style>

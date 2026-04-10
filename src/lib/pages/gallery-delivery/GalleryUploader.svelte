@@ -2,9 +2,12 @@
 import { useConvexClient } from "@mmailaender/convex-svelte";
 import { getAdminConfig } from "../../config";
 import { toId } from "../../utils";
+import FeatureGate from "../../components/FeatureGate.svelte";
+import type { Tier } from "../../features";
 
-let { galleryId, onupload }: {
+let { galleryId, tier, onupload }: {
 	galleryId: string;
+	tier: Tier;
 	onupload: () => void;
 } = $props();
 
@@ -107,7 +110,7 @@ async function processQueue() {
 		const dims = await getImageDimensions(next.file);
 
 		// 5. Record in Convex
-		await client.mutation(api.galleries.addImage, {
+		await client.mutation(api.galleryDelivery.addImage, {
 			siteUrl: config.siteUrl,
 			galleryId: toId(galleryId),
 			r2Key,
@@ -155,6 +158,7 @@ function clearCompleted() {
 }
 </script>
 
+<FeatureGate feature="galleryDelivery" {tier}>
 <div
 	class="uploader"
 	class:dragging
@@ -215,6 +219,7 @@ function clearCompleted() {
 		</div>
 	{/if}
 </div>
+</FeatureGate>
 
 <style>
 	.uploader {
