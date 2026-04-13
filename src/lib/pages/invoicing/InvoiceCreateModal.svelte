@@ -98,45 +98,49 @@ let depositTotal = $derived(
 	formTotalProject * (formDepositPercent / 100),
 );
 
+function buildInvoiceBody(): Record<string, unknown> {
+	const items = formItems.map((item) => ({
+		description: item.description,
+		quantity: item.quantity,
+		unitPrice: dollarsToCents(item.unitPrice),
+	}));
+	const body: Record<string, unknown> = {
+		invoiceNumber: formNumber,
+		clientId: formClientId,
+		invoiceType: formType,
+		items,
+	};
+	if (formTaxPercent > 0) body.taxPercent = formTaxPercent;
+	if (formDueDate) body.dueDate = formDueDate;
+	if (formNotes) body.notes = formNotes;
+
+	if (formType === "recurring") {
+		body.recurring = {
+			interval: formRecurringInterval,
+			nextDueDate: formRecurringNextDue || undefined,
+			endDate: formRecurringEndDate || undefined,
+		};
+	}
+
+	if (formType === "deposit") {
+		body.depositPercent = formDepositPercent;
+		body.totalProject = dollarsToCents(formTotalProject);
+	}
+
+	if (formType === "milestone") {
+		if (formMilestoneName) body.milestoneName = formMilestoneName;
+		body.milestoneIndex = formMilestoneIndex;
+		if (formParentInvoiceId) body.parentInvoiceId = formParentInvoiceId;
+	}
+
+	return body;
+}
+
 async function handleSubmit() {
 	if (!formNumber || !formClientId || formItems.length === 0) return;
 	saving = true;
 	try {
-		const items = formItems.map((item) => ({
-			description: item.description,
-			quantity: item.quantity,
-			unitPrice: dollarsToCents(item.unitPrice),
-		}));
-		const body: Record<string, unknown> = {
-			invoiceNumber: formNumber,
-			clientId: formClientId,
-			invoiceType: formType,
-			items,
-		};
-		if (formTaxPercent > 0) body.taxPercent = formTaxPercent;
-		if (formDueDate) body.dueDate = formDueDate;
-		if (formNotes) body.notes = formNotes;
-
-		if (formType === "recurring") {
-			body.recurring = {
-				interval: formRecurringInterval,
-				nextDueDate: formRecurringNextDue || undefined,
-				endDate: formRecurringEndDate || undefined,
-			};
-		}
-
-		if (formType === "deposit") {
-			body.depositPercent = formDepositPercent;
-			body.totalProject = dollarsToCents(formTotalProject);
-		}
-
-		if (formType === "milestone") {
-			if (formMilestoneName) body.milestoneName = formMilestoneName;
-			body.milestoneIndex = formMilestoneIndex;
-			if (formParentInvoiceId) body.parentInvoiceId = formParentInvoiceId;
-		}
-
-		await oncreate(body);
+		await oncreate(buildInvoiceBody());
 	} catch (err) {
 		console.error("Failed to create invoice:", err);
 		addToast("Failed to create invoice.");
@@ -149,42 +153,8 @@ async function handleSaveAndSend() {
 	if (!formNumber || !formClientId || formItems.length === 0) return;
 	saving = true;
 	try {
-		const items = formItems.map((item) => ({
-			description: item.description,
-			quantity: item.quantity,
-			unitPrice: dollarsToCents(item.unitPrice),
-		}));
-		const body: Record<string, unknown> = {
-			invoiceNumber: formNumber,
-			clientId: formClientId,
-			invoiceType: formType,
-			items,
-		};
-		if (formTaxPercent > 0) body.taxPercent = formTaxPercent;
-		if (formDueDate) body.dueDate = formDueDate;
-		if (formNotes) body.notes = formNotes;
-
-		if (formType === "recurring") {
-			body.recurring = {
-				interval: formRecurringInterval,
-				nextDueDate: formRecurringNextDue || undefined,
-				endDate: formRecurringEndDate || undefined,
-			};
-		}
-
-		if (formType === "deposit") {
-			body.depositPercent = formDepositPercent;
-			body.totalProject = dollarsToCents(formTotalProject);
-		}
-
-		if (formType === "milestone") {
-			if (formMilestoneName) body.milestoneName = formMilestoneName;
-			body.milestoneIndex = formMilestoneIndex;
-			if (formParentInvoiceId) body.parentInvoiceId = formParentInvoiceId;
-		}
-
 		await onsaveandsend({
-			...body,
+			...buildInvoiceBody(),
 			templateId: selectedTemplateId || undefined,
 			emailSubject: editedSubject || undefined,
 			emailBody: editedBody || undefined,
