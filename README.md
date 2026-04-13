@@ -162,6 +162,7 @@ interface AdminServerConfig extends AdminConfig {
   convexUrl: string;         // Convex deployment URL
   resendApiKey: string;      // Resend API key for sending emails
   galleryAdminSecret?: string; // Bearer token for gallery worker
+  verifyAdmin?: (request: Request) => Promise<boolean>; // Auth check for handlers
 }
 ```
 
@@ -235,11 +236,90 @@ export const POST = createInvoiceSendHandler();
 | `createGalleryProcessHandler()` | POST | Trigger image processing (preview/thumb) |
 | `createGalleryDeleteHandler()` | POST | Delete image and all size variants |
 
+### Authentication
+
+All server handlers call `verifyAdmin(request)` before processing. To enable this, provide a `verifyAdmin` callback in your server config:
+
+```ts
+export const adminServerConfig: AdminServerConfig = {
+  ...adminConfig,
+  convexUrl: publicEnv.PUBLIC_CONVEX_URL ?? "",
+  resendApiKey: privateEnv.RESEND_API_KEY ?? "",
+  verifyAdmin: async (request) => {
+    // Example: check a session cookie or Bearer token
+    const session = await getSession(request);
+    return !!session?.user;
+  },
+};
+```
+
+If `verifyAdmin` is not provided, handlers skip the auth check — your SvelteKit route middleware or layout guards are responsible for protecting admin endpoints.
+
+The `authClient` field on `AdminConfig` powers the client-side login/signup UI. It expects a Better Auth-compatible client with `signIn`, `signUp`, `signOut`, `changePassword`, and `useSession` methods. If not provided:
+- The login page won't render
+- The sidebar won't show sign out, change password, or the user email
+- The `AuthGuard` component will still render its children (no blocking)
+
+For non-Better Auth setups, implement the `AdminAuthClient` interface with your own provider.
+
+## Gallery delivery setup
+
+Gallery delivery requires a Cloudflare Worker that handles image uploads to R2. The admin package communicates with this worker via `galleryWorkerUrl` and `galleryAdminSecret`.
+
+### Worker endpoints
+
+Your worker must implement these endpoints, all authenticated via `Authorization: Bearer <ADMIN_SECRET>`:
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/upload/presign` | POST | Generate a presigned upload URL |
+| `/upload/put` | PUT | Stream a file to R2 |
+| `/upload/process` | POST | Generate preview + thumbnail variants |
+| `/upload/delete` | POST | Delete original + all variants |
+
+### Configuration
+
+```ts
+// src/lib/config/admin.ts
+export const adminConfig: AdminConfig = {
+  // ...
+  galleryWorkerUrl: "https://your-gallery-worker.workers.dev",
+};
+
+// src/lib/config/admin.server.ts
+export const adminServerConfig: AdminServerConfig = {
+  // ...
+  galleryAdminSecret: privateEnv.GALLERY_ADMIN_SECRET ?? "",
+};
+```
+
+### Server routes
+
+Wire the gallery handlers into your SvelteKit routes:
+
+```ts
+// src/routes/api/admin/gallery/presign/+server.ts
+import { createGalleryPresignHandler, setServerConfig } from "@jessepomeroy/admin";
+import { adminServerConfig } from "$lib/config/admin.server";
+
+setServerConfig(adminServerConfig);
+export const POST = createGalleryPresignHandler();
+```
+
+Repeat for `createGalleryUploadHandler` (PUT), `createGalleryProcessHandler` (POST), and `createGalleryDeleteHandler` (POST).
+
+If `galleryWorkerUrl` is not set in the config, the gallery delivery tab is hidden automatically — the portfolio tab still works.
+
+### File validation
+
+The presign handler validates uploaded filenames: max 255 characters, no path traversal (`..`, `/`, `\`), and image extensions only (jpg, jpeg, png, gif, webp, avif, tiff, heic, heif).
+
 ## Shared components
 
 Beyond page components, the package exports reusable UI primitives:
 
 - `AdminModal` — Modal dialog
+- `NotificationWidget` — Floating unread notification badge (auto-mounted in AdminLayout)
 - `EmailPreview` — Side-by-side email template preview
 - `FeatureGate` — Conditionally render content by tier
 - `FilterBar` — Data table filtering controls

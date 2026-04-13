@@ -1,23 +1,30 @@
 import { error, json } from "@sveltejs/kit";
 import { getServerConfig } from "../../config";
+import { handleServerError } from "../handleError";
+import { requireAdmin } from "../requireAdmin";
+import { validateFilename } from "../validation";
+
+/** Validate gallery worker config, throw 500 if missing. */
+function requireWorkerConfig() {
+	const config = getServerConfig();
+	if (!config.galleryWorkerUrl || !config.galleryAdminSecret) {
+		throw error(500, "Gallery worker not configured");
+	}
+	return config;
+}
+
+/** Standard headers for gallery worker requests. */
+function workerHeaders(secret: string, contentType = "application/json") {
+	return {
+		"Content-Type": contentType,
+		Authorization: `Bearer ${secret}`,
+	};
+}
 
 export function createGalleryPresignHandler() {
 	return async ({ request }: { request: Request }) => {
-		let config;
-		try {
-			config = getServerConfig();
-		} catch (err) {
-			console.error("Gallery presign: config error:", err);
-			throw error(500, "Server config not initialized");
-		}
-
-		if (!config.galleryWorkerUrl || !config.galleryAdminSecret) {
-			console.error("Gallery presign: missing config", {
-				hasWorkerUrl: !!config.galleryWorkerUrl,
-				hasSecret: !!config.galleryAdminSecret,
-			});
-			throw error(500, "Gallery worker not configured");
-		}
+		await requireAdmin(request);
+		const config = requireWorkerConfig();
 
 		let data;
 		try {
@@ -31,38 +38,30 @@ export function createGalleryPresignHandler() {
 		}
 
 		try {
+			data.filename = validateFilename(data.filename);
+		} catch (err) {
+			throw error(400, (err as Error).message);
+		}
+
+		try {
 			const res = await fetch(`${config.galleryWorkerUrl}/upload/presign`, {
 				method: "POST",
-				headers: {
-					"Content-Type": "application/json",
-					Authorization: `Bearer ${config.galleryAdminSecret}`,
-				},
+				headers: workerHeaders(config.galleryAdminSecret!),
 				body: JSON.stringify(data),
 			});
 
-			if (!res.ok) {
-				const text = await res.text();
-				console.error("Gallery presign: worker error", res.status, text);
-				throw error(res.status, text);
-			}
-
-			const result = await res.json();
-			return json(result);
+			if (!res.ok) throw error(res.status, await res.text());
+			return json(await res.json());
 		} catch (err) {
-			if (err && typeof err === "object" && "status" in err) throw err;
-			console.error("Gallery presign failed:", err);
-			throw error(500, "Failed to generate upload URL");
+			handleServerError(err, "Failed to generate upload URL");
 		}
 	};
 }
 
 export function createGalleryUploadHandler() {
 	return async ({ request }: { request: Request }) => {
-		const config = getServerConfig();
-
-		if (!config.galleryWorkerUrl || !config.galleryAdminSecret) {
-			throw error(500, "Gallery worker not configured");
-		}
+		await requireAdmin(request);
+		const config = requireWorkerConfig();
 
 		const url = new URL(request.url);
 		const key = url.searchParams.get("key");
@@ -78,64 +77,45 @@ export function createGalleryUploadHandler() {
 						Authorization: `Bearer ${config.galleryAdminSecret}`,
 					},
 					body: request.body,
-					// @ts-ignore -- duplex needed for streaming body
+					// @ts-expect-error — duplex is required for streaming request bodies but missing from TypeScript's RequestInit
 					duplex: "half",
 				},
 			);
 
-			if (!res.ok) {
-				throw error(res.status, await res.text());
-			}
-
+			if (!res.ok) throw error(res.status, await res.text());
 			return json(await res.json());
 		} catch (err) {
-			if (err && typeof err === "object" && "status" in err) throw err;
-			console.error("Gallery upload failed:", err);
-			throw error(500, "Failed to upload file");
+			handleServerError(err, "Failed to upload file");
 		}
 	};
 }
 
 export function createGalleryProcessHandler() {
 	return async ({ request }: { request: Request }) => {
-		const config = getServerConfig();
-
-		if (!config.galleryWorkerUrl || !config.galleryAdminSecret) {
-			throw error(500, "Gallery worker not configured");
-		}
+		await requireAdmin(request);
+		const config = requireWorkerConfig();
 
 		const data = await request.json();
 
 		try {
 			const res = await fetch(`${config.galleryWorkerUrl}/upload/process`, {
 				method: "POST",
-				headers: {
-					"Content-Type": "application/json",
-					Authorization: `Bearer ${config.galleryAdminSecret}`,
-				},
+				headers: workerHeaders(config.galleryAdminSecret!),
 				body: JSON.stringify(data),
 			});
 
-			if (!res.ok) {
-				throw error(res.status, await res.text());
-			}
-
+			if (!res.ok) throw error(res.status, await res.text());
 			return json(await res.json());
 		} catch (err) {
-			if (err && typeof err === "object" && "status" in err) throw err;
-			console.error("Gallery process failed:", err);
-			throw error(500, "Failed to process image");
+			handleServerError(err, "Failed to process image");
 		}
 	};
 }
 
 export function createGalleryDeleteHandler() {
 	return async ({ request }: { request: Request }) => {
-		const config = getServerConfig();
-
-		if (!config.galleryWorkerUrl || !config.galleryAdminSecret) {
-			throw error(500, "Gallery worker not configured");
-		}
+		await requireAdmin(request);
+		const config = requireWorkerConfig();
 
 		const { r2Key } = await request.json();
 		if (!r2Key) throw error(400, "r2Key is required");
@@ -143,24 +123,14 @@ export function createGalleryDeleteHandler() {
 		try {
 			const res = await fetch(`${config.galleryWorkerUrl}/upload/delete`, {
 				method: "POST",
-				headers: {
-					"Content-Type": "application/json",
-					Authorization: `Bearer ${config.galleryAdminSecret}`,
-				},
+				headers: workerHeaders(config.galleryAdminSecret!),
 				body: JSON.stringify({ r2Key }),
 			});
 
-			if (!res.ok) {
-				const text = await res.text();
-				console.error("Gallery delete: worker error", res.status, text);
-				throw error(res.status, text);
-			}
-
+			if (!res.ok) throw error(res.status, await res.text());
 			return json(await res.json());
 		} catch (err) {
-			if (err && typeof err === "object" && "status" in err) throw err;
-			console.error("Gallery delete failed:", err);
-			throw error(500, "Failed to delete image");
+			handleServerError(err, "Failed to delete image");
 		}
 	};
 }

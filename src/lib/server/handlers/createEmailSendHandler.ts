@@ -1,9 +1,12 @@
 import { error, json } from "@sveltejs/kit";
-import { getServerConfig } from "../../config";
+import type { ConvexHttpClient } from "convex/browser";
+import { type AdminAPI, getServerConfig } from "../../config";
 import type { EmailCategory } from "../../types";
 import { formatCents, toId } from "../../utils";
 import { getConvex } from "../convexClient";
 import { replaceTemplateVariables, sendEmail } from "../email";
+import { handleServerError } from "../handleError";
+import { requireAdmin } from "../requireAdmin";
 
 export { formatCents as formatCurrency };
 
@@ -14,25 +17,25 @@ function wrapPlainText(text: string): string {
 
 export interface EmailSendConfig {
 	docType: string;
-	/** Fetch the document. Return null if not found. */
+	/** Fetch the document by ID. Return null if not found. */
 	fetchDocument: (
-		api: any,
-		convex: any,
+		api: AdminAPI,
+		convex: ConvexHttpClient,
 		id: string,
-	) => Promise<any | null>;
+	) => Promise<Record<string, unknown> | null>;
 	/** Get the client email from the document. */
-	getClientEmail: (doc: any) => string | undefined;
+	getClientEmail: (doc: Record<string, unknown>) => string | undefined;
 	/** Extract template variables from the document. */
-	extractVars: (doc: any, changeNote: string) => Record<string, string>;
+	extractVars: (doc: Record<string, unknown>, changeNote: string) => Record<string, string>;
 	/** Build default HTML when no template is found. */
 	buildDefaultHtml: (
 		vars: Record<string, string>,
 		siteName: string,
 	) => string;
 	/** Build the default subject line. */
-	defaultSubject: (doc: any) => string;
+	defaultSubject: (doc: Record<string, unknown>) => string;
 	/** Mark the document as sent after email is delivered. */
-	markSent: (api: any, convex: any, id: string, siteUrl: string) => Promise<void>;
+	markSent: (api: AdminAPI, convex: ConvexHttpClient, id: string, siteUrl: string) => Promise<void>;
 	/**
 	 * Template category cascade used when the caller does not supply
 	 * an explicit `templateId`. Categories are tried in order; the first
@@ -56,6 +59,7 @@ export function createEmailSendHandler(config: EmailSendConfig) {
 		params: { id: string };
 		request: Request;
 	}) => {
+		await requireAdmin(request);
 		const serverConfig = getServerConfig();
 		const { api } = serverConfig;
 		const siteUrl = serverConfig.siteUrl;
@@ -120,9 +124,10 @@ export function createEmailSendHandler(config: EmailSendConfig) {
 
 			return json({ success: true });
 		} catch (err: unknown) {
-			const e = err as { status?: number; message?: string };
-			if (e?.status) throw err;
-			console.error(`Failed to send ${config.docType} email:`, err);
+			// If it's already a SvelteKit error, rethrow before logging
+			if (err && typeof err === "object" && "status" in err) throw err;
+
+			const message = err instanceof Error ? err.message : "Unknown error";
 
 			try {
 				await convex.mutation(api.emailLog.create, {
@@ -132,13 +137,13 @@ export function createEmailSendHandler(config: EmailSendConfig) {
 					type: config.docType,
 					relatedId: id,
 					status: "failed",
-					error: e?.message ?? "Unknown error",
+					error: message,
 				});
-			} catch (logErr) {
-				console.warn(`Failed to log ${config.docType} email failure:`, id, logErr);
+			} catch {
+				// Best-effort logging — don't mask the original error
 			}
 
-			throw error(500, `Failed to send ${config.docType} email`);
+			handleServerError(err, `Failed to send ${config.docType} email`);
 		}
 	};
 }

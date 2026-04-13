@@ -2,9 +2,13 @@ import { error, json } from "@sveltejs/kit";
 import { getServerConfig } from "../../config";
 import { toId } from "../../utils";
 import { getConvex } from "../convexClient";
+import { handleServerError } from "../handleError";
+import { requireAdmin } from "../requireAdmin";
 
 export function createPortalTokenHandler() {
 	return async ({ request }: { request: Request }) => {
+		await requireAdmin(request);
+
 		const config = getServerConfig();
 		const { api } = config;
 		const siteUrl = config.siteUrl;
@@ -31,8 +35,7 @@ export function createPortalTokenHandler() {
 			});
 			return json({ success: true, token });
 		} catch (err) {
-			console.error("Failed to create portal token:", err);
-			throw error(500, "Failed to create portal token");
+			handleServerError(err, "Failed to create portal token");
 		}
 	};
 }

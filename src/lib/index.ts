@@ -4,6 +4,7 @@ export {
 	getAdminConfig,
 	setServerConfig,
 	getServerConfig,
+	type AdminAPI,
 	type AdminConfig,
 	type AdminServerConfig,
 	type AdminTheme,
@@ -55,8 +56,9 @@ export { isDark } from "./theme";
 // Server utilities
 export { sendEmail, getResend, replaceTemplateVariables } from "./server/email";
 export { getConvex } from "./server/convexClient";
-export { trimString } from "./server/validation";
+export { trimString, validateFilename } from "./server/validation";
 export { createInvoiceSendHandler } from "./server/handlers/sendInvoice";
+export type { EmailSendConfig } from "./server/handlers/createEmailSendHandler";
 export { createContractSendHandler } from "./server/handlers/sendContract";
 export { createQuoteSendHandler } from "./server/handlers/sendQuote";
 export { createPortalTokenHandler } from "./server/handlers/createPortalToken";

@@ -24,8 +24,7 @@ const effectiveTier: Tier = $derived(
 const galleries = $derived(data.galleries);
 
 let tab = $state(activeTab);
-const studioBaseUrl =
-	config.sanityStudioUrl ?? "https://angelsrest.sanity.studio";
+const studioBaseUrl = config.sanityStudioUrl ?? "";
 </script>
 
 <div class="galleries-page">
@@ -80,14 +79,16 @@ const studioBaseUrl =
 							<a href="/gallery/{gallery.slug}" class="action-link" target="_blank" rel="noopener">
 								view
 							</a>
-							<a
-								href="{studioBaseUrl}/structure/gallery;{gallery._id}"
-								class="action-link"
-								target="_blank"
-								rel="noopener"
-							>
-								edit in studio
-							</a>
+							{#if studioBaseUrl}
+								<a
+									href="{studioBaseUrl}/structure/gallery;{gallery._id}"
+									class="action-link"
+									target="_blank"
+									rel="noopener"
+								>
+									edit in studio
+								</a>
+							{/if}
 						</div>
 					</div>
 				{/each}

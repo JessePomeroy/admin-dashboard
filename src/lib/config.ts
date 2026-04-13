@@ -1,6 +1,17 @@
 import { getContext, setContext } from "svelte";
 
-// biome-ignore lint/suspicious/noExplicitAny: Convex FunctionReference is generic, simplified here
+/**
+ * Convex FunctionReference placeholder. Convex's `FunctionReference` type is
+ * heavily generic (`FunctionReference<"query", "public", { ... }, { ... }>`),
+ * making it impractical to type each field precisely. At runtime, these are
+ * opaque references resolved by the Convex client — the package never calls
+ * them directly, only passes them through to `useQuery()` or
+ * `convex.mutation()`.
+ *
+ * Consumers pass their generated `api` object (which IS properly typed in
+ * their project) so type safety is enforced at the consumer boundary, not here.
+ */
+// biome-ignore lint/suspicious/noExplicitAny: see above
 type FnRef = any;
 
 /**
@@ -165,7 +176,7 @@ export interface SessionStoreValue {
  * and plain-object fallbacks (data/isPending directly on the return).
  */
 export interface SessionStore {
-	subscribe?: (cb: (value: SessionStoreValue & Record<string, unknown>) => void) => () => void;
+	subscribe?: (cb: (value: SessionStoreValue) => void) => () => void;
 	data?: AdminAuthSession | null;
 	isPending?: boolean;
 }
@@ -215,6 +226,13 @@ export interface AdminServerConfig extends AdminConfig {
 	convexUrl: string;
 	resendApiKey: string;
 	galleryAdminSecret?: string;
+	/**
+	 * Verify that a request comes from an authenticated admin.
+	 * Called by all server handlers before processing. Throw or return
+	 * false to reject the request with 401. If not provided, handlers
+	 * skip the check (consumer is responsible for route-level auth).
+	 */
+	verifyAdmin?: (request: Request) => Promise<boolean>;
 }
 
 const CONFIG_KEY = Symbol("admin-config");
