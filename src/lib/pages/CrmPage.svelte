@@ -1,4 +1,5 @@
 <script lang="ts">
+import { goto } from "$app/navigation";
 import { useQuery, useConvexClient } from "@mmailaender/convex-svelte";
 import { getAdminConfig } from "../config";
 import FeatureGate from "../components/FeatureGate.svelte";
@@ -362,6 +363,18 @@ function formatStatus(status: string) {
 		onstatuschange={quickStatusUpdate}
 		ontagassign={assignTagToClient}
 		ontagremove={removeTagFromClient}
+		onactivityclick={(docType, docId) => {
+			const routes: Record<string, string> = {
+				invoice: "/admin/invoicing",
+				quote: "/admin/quotes",
+				contract: "/admin/contracts",
+			};
+			const route = routes[docType];
+			if (route) {
+				selectedClient = null;
+				goto(`${route}?open=${docId}`);
+			}
+		}}
 	/>
 {/if}
 

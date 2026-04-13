@@ -5,9 +5,10 @@ import { relativeTime } from "../../utils";
 interface Props {
 	entries: ActivityLogEntry[];
 	loading: boolean;
+	onitemclick?: (docType: string, docId: string) => void;
 }
 
-let { entries, loading }: Props = $props();
+let { entries, loading, onitemclick }: Props = $props();
 
 function getActivityIcon(action: string): string {
 	const icons: Record<string, string> = {
@@ -28,6 +29,22 @@ function getActivityIcon(action: string): string {
 	};
 	return icons[action] || "\u2022";
 }
+
+function parseMetadata(entry: ActivityLogEntry): { docType: string; docId: string } | null {
+	if (!entry.metadata) return null;
+	try {
+		const parsed = JSON.parse(entry.metadata);
+		if (parsed.docType && parsed.docId) return parsed;
+	} catch { /* ignore malformed metadata */ }
+	return null;
+}
+
+function handleClick(entry: ActivityLogEntry) {
+	const meta = parseMetadata(entry);
+	if (meta && onitemclick) {
+		onitemclick(meta.docType, meta.docId);
+	}
+}
 </script>
 
 <div class="activity-section">
@@ -39,11 +56,17 @@ function getActivityIcon(action: string): string {
 	{:else}
 		<div class="activity-list">
 			{#each entries as entry (entry._id)}
-				<div class="activity-entry">
+				{@const clickable = !!parseMetadata(entry) && !!onitemclick}
+				<button
+					class="activity-entry"
+					class:clickable
+					disabled={!clickable}
+					onclick={() => handleClick(entry)}
+				>
 					<span class="activity-icon">{getActivityIcon(entry.action)}</span>
 					<span class="activity-desc">{entry.description}</span>
 					<span class="activity-time">{relativeTime(entry._creationTime)}</span>
-				</div>
+				</button>
 			{/each}
 		</div>
 	{/if}
@@ -82,12 +105,26 @@ function getActivityIcon(action: string): string {
 		align-items: baseline;
 		gap: 8px;
 		padding: 8px 0;
+		border: none;
 		border-bottom: 1px solid var(--admin-border);
+		background: none;
+		font-family: inherit;
 		font-size: 0.8rem;
+		text-align: left;
+		width: 100%;
+		cursor: default;
 	}
 
 	.activity-entry:last-child {
 		border-bottom: none;
+	}
+
+	.activity-entry.clickable {
+		cursor: pointer;
+	}
+
+	.activity-entry.clickable:hover .activity-desc {
+		color: var(--admin-accent);
 	}
 
 	.activity-icon {
@@ -101,6 +138,7 @@ function getActivityIcon(action: string): string {
 	.activity-desc {
 		color: var(--admin-text-muted);
 		flex: 1;
+		transition: color 0.12s;
 	}
 
 	.activity-time {

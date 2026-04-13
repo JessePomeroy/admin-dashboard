@@ -30,6 +30,7 @@ interface Props {
 	onstatuschange: (status: string) => void;
 	ontagassign: (tagId: string) => void;
 	ontagremove: (tagId: string) => void;
+	onactivityclick?: (docType: string, docId: string) => void;
 }
 
 let {
@@ -46,6 +47,7 @@ let {
 	onstatuschange,
 	ontagassign,
 	ontagremove,
+	onactivityclick,
 }: Props = $props();
 
 let editMode = $state(false);
@@ -188,7 +190,7 @@ function handleSave(data: Record<string, string | undefined>) {
 				</div>
 			</div>
 
-			<ActivityTimeline entries={clientActivity} loading={loadingActivity} />
+			<ActivityTimeline entries={clientActivity} loading={loadingActivity} onitemclick={onactivityclick} />
 
 			<div class="modal-actions detail-actions">
 				{#if confirmDelete}
