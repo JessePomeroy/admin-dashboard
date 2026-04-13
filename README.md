@@ -329,6 +329,19 @@ Beyond page components, the package exports reusable UI primitives:
 - `UpgradeBanner` — Tier upgrade prompt
 - `addToast()` — Trigger toast notifications
 
+## Deep linking
+
+All document pages support auto-opening a detail modal via the `?open=` query parameter:
+
+```
+/admin/invoicing?open=<invoiceId>
+/admin/quotes?open=<quoteId>
+/admin/contracts?open=<contractId>
+/admin/orders?open=<orderId>
+```
+
+The dashboard activity feed and CRM activity timeline use this to navigate directly to a document's detail view when clicked.
+
 ## Convex schema
 
 Your Convex backend needs to implement the functions referenced by `AdminAPI`. See the [reflecting-pool](https://github.com/JessePomeroy/reflecting-pool) repo for a minimal reference implementation, or [angelsrest](https://github.com/JessePomeroy/angelsrest) for a full-featured setup with gallery delivery, notifications, and admin auth.
