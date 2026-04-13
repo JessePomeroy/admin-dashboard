@@ -140,7 +140,7 @@ async function handleChangePassword(e: Event) {
 			newPassword,
 		});
 		if (result?.error) {
-			passwordError = result.error.message;
+			passwordError = result.error.message || "Password change failed";
 		} else {
 			passwordSuccess = true;
 			currentPassword = "";

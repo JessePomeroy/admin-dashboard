@@ -18,7 +18,7 @@ async function handleEmailAuth(e: Event) {
 	try {
 		const result = await authClient.signIn.email({ email, password });
 		if (result?.error) {
-			error = result.error.message;
+			error = result.error.message || "Sign-in failed";
 		}
 	} catch (err: any) {
 		error = err?.message || "Something went wrong";

@@ -151,13 +151,23 @@ export interface AdminTheme {
 }
 
 export interface AdminAuthSession {
-	user: { email: string; name?: string; image?: string };
+	user: { email: string; name?: string; image?: string | null };
 }
 
-/** Shape of the value emitted by `useSession()` (both as a plain object and via subscribe). */
+/** Shape of the value emitted by a session store's subscribe callback. */
 export interface SessionStoreValue {
 	data: AdminAuthSession | null;
 	isPending: boolean;
+}
+
+/**
+ * Loose session store shape — compatible with nanostores Atom (subscribe only)
+ * and plain-object fallbacks (data/isPending directly on the return).
+ */
+export interface SessionStore {
+	subscribe?: (cb: (value: SessionStoreValue & Record<string, unknown>) => void) => () => void;
+	data?: AdminAuthSession | null;
+	isPending?: boolean;
 }
 
 export interface AdminAuthClient {
@@ -165,25 +175,25 @@ export interface AdminAuthClient {
 		email: (opts: {
 			email: string;
 			password: string;
-		}) => Promise<{ error: { message: string } | null }>;
+		}) => Promise<{ error?: { message?: string } | null }>;
 		social: (opts: {
 			provider: "google";
 			callbackURL?: string;
-		}) => Promise<{ error: { message: string } | null }>;
+		}) => Promise<{ error?: { message?: string } | null }>;
 	};
 	signUp: {
 		email: (opts: {
 			email: string;
 			password: string;
 			name: string;
-		}) => Promise<{ error: { message: string } | null }>;
+		}) => Promise<{ error?: { message?: string } | null }>;
 	};
-	signOut: () => Promise<void>;
+	signOut: () => Promise<unknown>;
 	changePassword: (opts: {
 		currentPassword: string;
 		newPassword: string;
-	}) => Promise<{ error: { message: string } | null }>;
-	useSession: () => SessionStoreValue & Partial<NanostoreAtom<SessionStoreValue>>;
+	}) => Promise<{ error?: { message?: string } | null }>;
+	useSession: () => SessionStore;
 }
 
 export interface AdminConfig {
