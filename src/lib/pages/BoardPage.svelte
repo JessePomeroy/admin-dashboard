@@ -1,13 +1,12 @@
 <script lang="ts">
-import { dndzone } from "svelte-dnd-action";
 import { useQuery, useConvexClient } from "@mmailaender/convex-svelte";
 import { getAdminConfig } from "../config";
 import { addToast } from "../toast";
-import { getCategoryColor, toId } from "../utils";
+import { toId } from "../utils";
 import FeatureGate from "../components/FeatureGate.svelte";
 import LoadingState from "../components/LoadingState.svelte";
 import BoardCardModal from "./board/BoardCardModal.svelte";
-import BoardColumn from "./board/BoardColumn.svelte";
+import BoardColumn, { type CardItem, type ColumnData } from "./board/BoardColumn.svelte";
 
 const config = getAdminConfig();
 const { api } = config;
@@ -53,24 +52,7 @@ let typeClients = $derived(
 	allClients.filter((c: any) => c.type === selectedType),
 );
 
-interface CardItem {
-	id: string;
-	_id: string;
-	name: string;
-	email?: string;
-	phone?: string;
-	category: string;
-	type?: string;
-	status: string;
-	source?: string;
-	notes?: string;
-	boardColumnId?: string;
-	boardPosition?: number;
-}
-
-let columns = $state<
-	{ id: string; name: string; position: number; cards: CardItem[] }[]
->([]);
+let columns = $state<ColumnData[]>([]);
 
 // Rebuild columns when config or clients change
 $effect(() => {
@@ -276,71 +258,26 @@ function openDetail(card: CardItem) {
 	{:else}
 		<div class="board-container">
 			{#each columns as column (column.id)}
-				<div class="board-column">
-					<div class="column-header">
-						{#if editingColumnId === column.id}
-							<form onsubmit={(e) => { e.preventDefault(); renameColumn(column.id); }} class="rename-form">
-								<input
-									type="text"
-									bind:value={editingColumnName}
-									class="rename-input"
-									onkeydown={(e) => { if (e.key === "Escape") editingColumnId = null; }}
-								/>
-								<button type="submit" class="rename-save">save</button>
-							</form>
-						{:else}
-							<div class="column-title-row">
-								<h3 class="column-title">{column.name}</h3>
-								<span class="column-count">{column.cards.length}</span>
-							</div>
-							<div class="column-actions">
-								<button
-									class="column-menu-btn"
-									aria-label="Column options"
-									aria-expanded={showColumnMenu === column.id}
-									onclick={() => (showColumnMenu = showColumnMenu === column.id ? null : column.id)}
-									onkeydown={(e) => { if (e.key === "Escape") showColumnMenu = null; }}
-								>
-									<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
-										<circle cx="12" cy="5" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="19" r="1"/>
-									</svg>
-								</button>
-								{#if showColumnMenu === column.id}
-									<div class="column-dropdown">
-										<button onclick={() => startRename(column.id, column.name)}>rename</button>
-										{#if columns.length > 1}
-											<button class="danger" onclick={() => deleteColumn(column.id)}>delete</button>
-										{/if}
-									</div>
-								{/if}
-							</div>
-						{/if}
-					</div>
-
-					<div
-						class="column-body"
-						use:dndzone={{ items: column.cards, type: "card", dropTargetStyle: {} }}
-						onconsider={(e) => handleConsider(column.id, e)}
-						onfinalize={(e) => handleFinalize(column.id, e)}
-					>
-						{#each column.cards as card (card.id)}
-							<button class="board-card" onclick={() => openDetail(card)}>
-								<span class="card-name">{card.name}</span>
-								<div class="card-meta">
-									<span class="category-dot" style="background: {getCategoryColor(card.category)}"></span>
-									<span>{card.type || card.category}</span>
-								</div>
-								{#if card.email}
-									<span class="card-email">{card.email}</span>
-								{/if}
-							</button>
-						{/each}
-					</div>
-				</div>
+				<BoardColumn
+					{column}
+					canDelete={columns.length > 1}
+					{editingColumnId}
+					{editingColumnName}
+					{showColumnMenu}
+					onconsider={handleConsider}
+					onfinalize={handleFinalize}
+					onrename={renameColumn}
+					ondelete={deleteColumn}
+					onstartrename={startRename}
+					oncancelrename={() => { editingColumnId = null; }}
+					ontogglemenu={(id) => { showColumnMenu = showColumnMenu === id ? null : id; }}
+					onupdateeditname={(name) => { editingColumnName = name; }}
+					oncardclick={openDetail}
+				/>
 			{/each}
 
 			{#if showAddColumn}
-				<div class="board-column add-column-form">
+				<div class="add-column-form">
 					<form onsubmit={(e) => { e.preventDefault(); addColumn(); }}>
 						<input
 							type="text"
@@ -500,201 +437,11 @@ function openDetail(card: CardItem) {
 		min-height: calc(100vh - 200px);
 	}
 
-	.board-column {
+	/* Add column form */
+	.add-column-form {
 		flex: 0 0 280px;
 		display: flex;
 		flex-direction: column;
-		min-height: 200px;
-	}
-
-	/* Column header */
-	.column-header {
-		display: flex;
-		align-items: center;
-		justify-content: space-between;
-		padding: 0 0 14px;
-		border-bottom: 1px solid var(--admin-border);
-		margin-bottom: 14px;
-		position: relative;
-	}
-
-	.column-title-row {
-		display: flex;
-		align-items: center;
-		gap: 8px;
-	}
-
-	.column-title {
-		font-family: "Synonym", system-ui, sans-serif;
-		font-size: 0.82rem;
-		font-weight: 500;
-		color: var(--admin-text-muted);
-		letter-spacing: 0.03em;
-		margin: 0;
-	}
-
-	.column-count {
-		font-size: 0.72rem;
-		color: var(--admin-text-subtle);
-		background: var(--admin-surface);
-		padding: 2px 7px;
-		border-radius: 10px;
-	}
-
-	.column-actions {
-		position: relative;
-	}
-
-	.column-menu-btn {
-		background: none;
-		border: none;
-		cursor: pointer;
-		padding: 4px;
-		color: var(--admin-text-subtle);
-		transition: color 0.15s;
-	}
-
-	.column-menu-btn:hover {
-		color: var(--admin-text);
-	}
-
-	.column-menu-btn svg {
-		width: 16px;
-		height: 16px;
-	}
-
-	.column-dropdown {
-		position: absolute;
-		top: 100%;
-		right: 0;
-		background: var(--admin-bg);
-		border: 1px solid var(--admin-border-strong);
-		border-radius: 6px;
-		padding: 4px;
-		z-index: 20;
-		min-width: 120px;
-	}
-
-	.column-dropdown button {
-		display: block;
-		width: 100%;
-		text-align: left;
-		background: none;
-		border: none;
-		color: var(--admin-text);
-		padding: 8px 12px;
-		font-family: "Synonym", system-ui, sans-serif;
-		font-size: 0.82rem;
-		cursor: pointer;
-		border-radius: 4px;
-		text-transform: lowercase;
-	}
-
-	.column-dropdown button:hover {
-		background: var(--admin-surface);
-	}
-
-	.column-dropdown button.danger {
-		color: var(--status-rose);
-	}
-
-	/* Rename form */
-	.rename-form {
-		display: flex;
-		align-items: center;
-		gap: 6px;
-		width: 100%;
-	}
-
-	.rename-input {
-		flex: 1;
-		background: var(--admin-surface);
-		border: 1px solid var(--admin-border-strong);
-		color: var(--admin-text);
-		padding: 4px 8px;
-		border-radius: 4px;
-		font-family: "Synonym", system-ui, sans-serif;
-		font-size: 0.82rem;
-		text-transform: lowercase;
-	}
-
-	.rename-save {
-		background: none;
-		border: none;
-		color: var(--admin-accent);
-		font-size: 0.78rem;
-		cursor: pointer;
-		font-family: "Synonym", system-ui, sans-serif;
-		text-transform: lowercase;
-	}
-
-	/* Column body (drop zone) */
-	.column-body {
-		flex: 1;
-		display: flex;
-		flex-direction: column;
-		gap: 10px;
-		min-height: 60px;
-	}
-
-	/* Cards */
-	.board-card {
-		display: block;
-		width: 100%;
-		text-align: left;
-		background: var(--admin-surface-raised);
-		border: 1px solid var(--admin-border);
-		border-radius: 8px;
-		padding: 14px 16px;
-		cursor: grab;
-		transition: background 0.15s, border-color 0.15s, box-shadow 0.15s;
-	}
-
-	.board-card:hover {
-		background: rgba(255, 255, 255, 0.07);
-		border-color: var(--admin-border-strong);
-		box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
-	}
-
-	.board-card:active {
-		cursor: grabbing;
-	}
-
-	.card-name {
-		display: block;
-		font-size: 0.88rem;
-		font-weight: 500;
-		color: var(--admin-heading);
-		margin-bottom: 8px;
-	}
-
-	.card-meta {
-		display: flex;
-		align-items: center;
-		gap: 6px;
-		font-size: 0.75rem;
-		color: var(--admin-text-muted);
-	}
-
-	.category-dot {
-		width: 7px;
-		height: 7px;
-		border-radius: 50%;
-		flex-shrink: 0;
-	}
-
-	.card-email {
-		display: block;
-		font-size: 0.72rem;
-		color: var(--admin-text-subtle);
-		margin-top: 6px;
-		overflow: hidden;
-		text-overflow: ellipsis;
-		white-space: nowrap;
-	}
-
-	/* Add column form */
-	.add-column-form {
 		padding-top: 0;
 	}
 
@@ -746,13 +493,9 @@ function openDetail(card: CardItem) {
 			overflow-x: visible;
 		}
 
-		.board-column {
+		.add-column-form {
 			flex: none;
 			width: 100%;
-		}
-
-		.board-card {
-			cursor: pointer;
 		}
 	}
 </style>
