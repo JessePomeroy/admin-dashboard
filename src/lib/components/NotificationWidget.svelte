@@ -139,7 +139,7 @@ function handleKeydown(e: KeyboardEvent) {
 	}
 
 	.notification-list {
-		background: var(--admin-surface-raised, #1e1e2a);
+		background: var(--admin-bg, #0e0e14);
 		border: 1px solid var(--admin-border-strong, #333);
 		border-radius: 10px;
 		min-width: 220px;
