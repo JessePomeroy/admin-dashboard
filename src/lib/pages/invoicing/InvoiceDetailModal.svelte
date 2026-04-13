@@ -153,11 +153,34 @@ async function handleAction(action: string) {
 	saving = true;
 	try {
 		await onaction(action);
+		// Auto-send reminder email when marking overdue
+		if (action === "overdue") {
+			try {
+				await onsend(undefined, "payment overdue");
+			} catch {
+				addToast("Marked overdue but reminder email failed to send.");
+			}
+		}
 	} catch (err) {
 		console.error("Failed to update invoice:", err);
 		addToast("Failed to save changes.");
 	} finally {
 		saving = false;
+	}
+}
+
+async function handleSendReminder() {
+	sending = true;
+	sendResult = null;
+	try {
+		await onsend(undefined, "payment reminder");
+		sendResult = "success";
+		addToast("Reminder sent.", "success");
+	} catch {
+		sendResult = "error";
+		addToast("Failed to send reminder.");
+	} finally {
+		sending = false;
 	}
 }
 
@@ -527,6 +550,13 @@ async function handleDelete() {
 					</button>
 				{:else if invoice.status === "overdue"}
 					<button class="btn-cancel" onclick={startEdit}>edit</button>
+					<button
+						class="btn-action"
+						onclick={handleSendReminder}
+						disabled={sending}
+					>
+						{sending ? "sending..." : "send reminder"}
+					</button>
 					<button
 						class="btn-save"
 						onclick={() => handleAction("pay")}

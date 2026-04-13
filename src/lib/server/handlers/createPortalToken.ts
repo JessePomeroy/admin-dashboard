@@ -1,7 +1,7 @@
 import { error, json } from "@sveltejs/kit";
 import { getServerConfig } from "../../config";
 import { toId } from "../../utils";
-import { getConvex } from "../convexClient";
+import { getAuthenticatedConvex } from "../convexClient";
 import { handleServerError } from "../handleError";
 import { requireAdmin } from "../requireAdmin";
 
@@ -12,7 +12,7 @@ export function createPortalTokenHandler() {
 		const config = getServerConfig();
 		const { api } = config;
 		const siteUrl = config.siteUrl;
-		const convex = getConvex();
+		const convex = await getAuthenticatedConvex(request);
 
 		const data = await request.json();
 

@@ -3,7 +3,7 @@ import type { ConvexHttpClient } from "convex/browser";
 import { type AdminAPI, getServerConfig } from "../../config";
 import type { EmailCategory } from "../../types";
 import { formatCents, toId } from "../../utils";
-import { getConvex } from "../convexClient";
+import { getAuthenticatedConvex } from "../convexClient";
 import { replaceTemplateVariables, sendEmail } from "../email";
 import { handleServerError } from "../handleError";
 import { requireAdmin } from "../requireAdmin";
@@ -64,7 +64,7 @@ export function createEmailSendHandler(config: EmailSendConfig) {
 		const { api } = serverConfig;
 		const siteUrl = serverConfig.siteUrl;
 		const siteName = serverConfig.siteName;
-		const convex = getConvex();
+		const convex = await getAuthenticatedConvex(request);
 
 		const { id } = params;
 		const body = await request.json().catch(() => ({}));

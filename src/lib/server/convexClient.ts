@@ -9,3 +9,17 @@ export function getConvex(): ConvexHttpClient {
 	}
 	return _client;
 }
+
+/**
+ * Get a Convex HTTP client, optionally authenticated via the
+ * `getConvexToken` callback in AdminServerConfig.
+ */
+export async function getAuthenticatedConvex(request: Request): Promise<ConvexHttpClient> {
+	const config = getServerConfig();
+	const client = new ConvexHttpClient(config.convexUrl || "");
+	if (config.getConvexToken) {
+		const token = await config.getConvexToken(request);
+		if (token) client.setAuth(token);
+	}
+	return client;
+}

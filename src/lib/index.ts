@@ -55,7 +55,7 @@ export { isDark } from "./theme";
 
 // Server utilities
 export { sendEmail, getResend, replaceTemplateVariables } from "./server/email";
-export { getConvex } from "./server/convexClient";
+export { getConvex, getAuthenticatedConvex } from "./server/convexClient";
 export { trimString, validateFilename } from "./server/validation";
 export { createInvoiceSendHandler } from "./server/handlers/sendInvoice";
 export type { EmailSendConfig } from "./server/handlers/createEmailSendHandler";

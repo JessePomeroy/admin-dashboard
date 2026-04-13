@@ -233,6 +233,13 @@ export interface AdminServerConfig extends AdminConfig {
 	 * skip the check (consumer is responsible for route-level auth).
 	 */
 	verifyAdmin?: (request: Request) => Promise<boolean>;
+	/**
+	 * Extract a Convex auth token from the incoming request.
+	 * Called by server handlers before making Convex mutations that
+	 * require authentication. If not provided, the Convex HTTP client
+	 * runs unauthenticated.
+	 */
+	getConvexToken?: (request: Request) => Promise<string | null>;
 }
 
 const CONFIG_KEY = Symbol("admin-config");
