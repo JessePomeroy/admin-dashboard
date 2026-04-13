@@ -1,4 +1,5 @@
 <script lang="ts">
+import { page } from "$app/stores";
 import { useQuery, useConvexClient } from "@mmailaender/convex-svelte";
 import { getAdminConfig } from "../config";
 import FeatureGate from "../components/FeatureGate.svelte";
@@ -43,6 +44,20 @@ let searchQuery = $state("");
 let showCreateModal = $state(false);
 let selectedQuote = $state<Quote | null>(null);
 let saving = $state(false);
+
+// Auto-open quote from ?open= query param
+let openHandled = false;
+$effect(() => {
+	if (openHandled || quotes.length === 0) return;
+	const openId = $page.url.searchParams.get("open");
+	if (openId) {
+		const match = quotes.find((q: Quote) => q._id === openId);
+		if (match) {
+			selectedQuote = match;
+			openHandled = true;
+		}
+	}
+});
 let sending = $state(false);
 let shareLinkCopied = $state(false);
 let sendResult = $state<"success" | "error" | null>(null);

@@ -1,4 +1,5 @@
 <script lang="ts">
+import { page } from "$app/stores";
 import { useQuery, useConvexClient } from "@mmailaender/convex-svelte";
 import { getAdminConfig } from "../config";
 import FeatureGate from "../components/FeatureGate.svelte";
@@ -39,6 +40,20 @@ let searchQuery = $state("");
 let showCreateModal = $state(false);
 let selectedContract = $state<Contract | null>(null);
 let showTemplateCreate = $state(false);
+
+// Auto-open contract from ?open= query param
+let openHandled = false;
+$effect(() => {
+	if (openHandled || contracts.length === 0) return;
+	const openId = $page.url.searchParams.get("open");
+	if (openId) {
+		const match = contracts.find((c: Contract) => c._id === openId);
+		if (match) {
+			selectedContract = match;
+			openHandled = true;
+		}
+	}
+});
 
 const allStatuses: ContractStatus[] = ["draft", "sent", "signed", "expired"];
 

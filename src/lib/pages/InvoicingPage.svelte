@@ -1,4 +1,5 @@
 <script lang="ts">
+import { page } from "$app/stores";
 import { useQuery, useConvexClient } from "@mmailaender/convex-svelte";
 import { getAdminConfig } from "../config";
 import FeatureGate from "../components/FeatureGate.svelte";
@@ -34,6 +35,20 @@ let searchQuery = $state("");
 let showCreateModal = $state(false);
 let selectedInvoice = $state<Invoice | null>(null);
 let shareLinkCopied = $state(false);
+
+// Auto-open invoice from ?open= query param (e.g. from activity timeline)
+let openHandled = false;
+$effect(() => {
+	if (openHandled || invoices.length === 0) return;
+	const openId = $page.url.searchParams.get("open");
+	if (openId) {
+		const match = invoices.find((inv: Invoice) => inv._id === openId);
+		if (match) {
+			selectedInvoice = match;
+			openHandled = true;
+		}
+	}
+});
 
 const allStatuses: InvoiceStatus[] = [
 	"draft",

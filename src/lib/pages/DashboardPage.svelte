@@ -1,4 +1,5 @@
 <script lang="ts">
+import { goto } from "$app/navigation";
 import { useQuery } from "@mmailaender/convex-svelte";
 import { getAdminConfig } from "../config";
 import LoadingState from "../components/LoadingState.svelte";
@@ -71,6 +72,7 @@ const newInquiryCount = $derived(data.newInquiryCount);
 const activityFeed = $derived(() => {
 	const recentInvoices = invoices.slice(0, 5).map((inv: any) => ({
 		type: "invoice" as const,
+		id: inv._id,
 		description: `${inv.invoiceNumber} — ${inv.clientName}`,
 		createdAt: new Date(inv._creationTime).toISOString(),
 		status: inv.status,
@@ -78,6 +80,7 @@ const activityFeed = $derived(() => {
 
 	const recentQuoteItems = quotes.slice(0, 5).map((q: any) => ({
 		type: "quote" as const,
+		id: q._id,
 		description: `${q.quoteNumber} — ${q.clientName}`,
 		createdAt: new Date(q._creationTime).toISOString(),
 		status: q.status,
@@ -85,6 +88,7 @@ const activityFeed = $derived(() => {
 
 	const recentOrderItems = recentOrders.slice(0, 5).map((o: any) => ({
 		type: "order" as const,
+		id: o._id,
 		description: `${o.orderNumber} — ${o.customerName || o.customerEmail}`,
 		createdAt: o.createdAt,
 		status: o.status,
@@ -239,15 +243,21 @@ let sparklineArea = $derived(() => {
 			<ul class="activity-feed">
 				{#each activityFeed() as item}
 					<li class="feed-item">
-						<span class="feed-type-badge feed-type-{item.type}">{item.type}</span>
-						<span class="feed-description">{item.description}</span>
-						<span class="feed-meta">
-							<span class="feed-date">{formatDate(item.createdAt)}</span>
-							<span class="status-indicator">
-								<span class="status-dot" style="background: {getActivityStatusColor(item.type, item.status)}"></span>
-								{formatStatus(item.status)}
+						<button class="feed-item-btn" onclick={() => {
+							const routes: Record<string, string> = { invoice: "/admin/invoicing", quote: "/admin/quotes", order: "/admin/orders", contract: "/admin/contracts" };
+							const route = routes[item.type];
+							if (route && item.id) goto(`${route}?open=${item.id}`);
+						}}>
+							<span class="feed-type-badge feed-type-{item.type}">{item.type}</span>
+							<span class="feed-description">{item.description}</span>
+							<span class="feed-meta">
+								<span class="feed-date">{formatDate(item.createdAt)}</span>
+								<span class="status-indicator">
+									<span class="status-dot" style="background: {getActivityStatusColor(item.type, item.status)}"></span>
+									{formatStatus(item.status)}
+								</span>
 							</span>
-						</span>
+						</button>
 					</li>
 				{/each}
 			</ul>
@@ -542,16 +552,32 @@ let sparklineArea = $derived(() => {
 	}
 
 	.feed-item {
-		display: flex;
-		align-items: center;
-		gap: 12px;
-		padding: 12px 0;
+		padding: 0;
 		border-bottom: 1px solid var(--admin-border);
-		font-size: 0.86rem;
+		list-style: none;
 	}
 
 	.feed-item:first-child {
 		border-top: 1px solid var(--admin-border);
+	}
+
+	.feed-item-btn {
+		display: flex;
+		align-items: center;
+		gap: 12px;
+		padding: 12px 0;
+		width: 100%;
+		background: none;
+		border: none;
+		font-family: inherit;
+		font-size: 0.86rem;
+		text-align: left;
+		cursor: pointer;
+		transition: opacity 0.12s;
+	}
+
+	.feed-item-btn:hover {
+		opacity: 0.75;
 	}
 
 	.feed-type-badge {

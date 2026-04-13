@@ -6,6 +6,7 @@
  * Demonstrates Svelte 5 runes ($state, $derived) for reactive UI.
  */
 
+import { page } from "$app/stores";
 import { useQuery, useConvexClient } from "@mmailaender/convex-svelte";
 import { getAdminConfig } from "../config";
 import { addToast } from "../toast";
@@ -49,6 +50,20 @@ let periodFilter = $state("all"); // all, today, week, month
 let selectedOrder = $state<any>(null);
 let notesValue = $state("");
 let notesSaving = $state(false);
+
+// Auto-open order from ?open= query param
+let openHandled = false;
+$effect(() => {
+	if (openHandled || orders.length === 0) return;
+	const openId = $page.url.searchParams.get("open");
+	if (openId) {
+		const match = orders.find((o: any) => o._id === openId);
+		if (match) {
+			selectedOrder = match;
+			openHandled = true;
+		}
+	}
+});
 
 // Get unique statuses for filter dropdown
 const statuses = [
