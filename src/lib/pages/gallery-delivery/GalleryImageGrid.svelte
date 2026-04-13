@@ -53,6 +53,7 @@ async function handleDndFinalize(e: CustomEvent<{ items: typeof items }>) {
 async function handleSetCover(image: GalleryImage) {
 	await client.mutation(galleryApi.update, {
 		id: toId(galleryId),
+		siteUrl: config.siteUrl,
 		coverImageKey: image.r2Key,
 	});
 	onchange();

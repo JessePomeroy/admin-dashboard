@@ -41,6 +41,7 @@ async function handleSaveSettings() {
 	try {
 		await client.mutation(galleryApi.update, {
 			id: toId(gallery._id),
+			siteUrl: config.siteUrl,
 			name: editName,
 			downloadEnabled: editDownloadEnabled,
 			favoritesEnabled: editFavoritesEnabled,
@@ -81,6 +82,7 @@ async function handleDelete() {
 async function handleStatusChange(newStatus: string) {
 	await client.mutation(galleryApi.update, {
 		id: toId(gallery._id),
+		siteUrl: config.siteUrl,
 		status: newStatus,
 	});
 }

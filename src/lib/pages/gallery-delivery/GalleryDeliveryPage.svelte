@@ -23,7 +23,7 @@ let isLoading = $derived(galleriesQuery.isLoading);
 
 async function handleQuickAction(e: Event, galleryId: string, status: string) {
 	e.stopPropagation();
-	await client.mutation(galleryApi.update, { id: toId(galleryId), status });
+	await client.mutation(galleryApi.update, { id: toId(galleryId), siteUrl: config.siteUrl, status });
 }
 
 let showCreateModal = $state(false);
