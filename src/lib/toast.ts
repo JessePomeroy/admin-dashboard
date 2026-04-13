@@ -1,4 +1,4 @@
-type ToastType = "error" | "success" | "warning";
+type ToastType = "error" | "success" | "warning" | "info";
 
 export interface Toast {
 	id: number;

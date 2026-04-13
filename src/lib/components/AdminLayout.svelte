@@ -6,6 +6,7 @@ import { useQuery, useConvexClient } from "@mmailaender/convex-svelte";
 import { type Feature, hasFeature, type Tier } from "../features";
 import { isDark } from "../theme";
 import { getAdminConfig } from "../config";
+import NotificationWidget from "./NotificationWidget.svelte";
 import Toast from "./Toast.svelte";
 import "../theme.css";
 
@@ -382,6 +383,9 @@ function closeMobileMenu() {
 	</main>
 
 	<Toast />
+	{#if notificationsReady}
+		<NotificationWidget {unreadFlags} />
+	{/if}
 </div>
 
 <style>

@@ -140,18 +140,25 @@ export function createGalleryDeleteHandler() {
 		const { r2Key } = await request.json();
 		if (!r2Key) throw error(400, "r2Key is required");
 
-		// Delete all 3 sizes
-		const keys = [
-			r2Key,
-			r2Key.replace("/original/", "/preview/"),
-			r2Key.replace("/original/", "/thumb/"),
-		];
-
 		try {
-			// We don't have a bulk delete endpoint, so we just return success
-			// The R2 objects will be cleaned up eventually or via a future cleanup job
-			return json({ success: true, deletedKeys: keys });
+			const res = await fetch(`${config.galleryWorkerUrl}/upload/delete`, {
+				method: "POST",
+				headers: {
+					"Content-Type": "application/json",
+					Authorization: `Bearer ${config.galleryAdminSecret}`,
+				},
+				body: JSON.stringify({ r2Key }),
+			});
+
+			if (!res.ok) {
+				const text = await res.text();
+				console.error("Gallery delete: worker error", res.status, text);
+				throw error(res.status, text);
+			}
+
+			return json(await res.json());
 		} catch (err) {
+			if (err && typeof err === "object" && "status" in err) throw err;
 			console.error("Gallery delete failed:", err);
 			throw error(500, "Failed to delete image");
 		}

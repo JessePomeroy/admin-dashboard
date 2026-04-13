@@ -67,6 +67,11 @@ onMount(() => {
 		color: #fff;
 	}
 
+	.toast-info {
+		background: var(--admin-accent, #8b7cf7);
+		color: #fff;
+	}
+
 	.toast-message {
 		flex: 1;
 	}

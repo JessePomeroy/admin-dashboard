@@ -20,6 +20,7 @@ export { default as LoginPage } from "./components/LoginPage.svelte";
 
 // Components
 export { default as AdminModal } from "./components/AdminModal.svelte";
+export { default as NotificationWidget } from "./components/NotificationWidget.svelte";
 export { default as EmailPreview } from "./components/EmailPreview.svelte";
 export { default as FeatureGate } from "./components/FeatureGate.svelte";
 export { default as FilterBar } from "./components/FilterBar.svelte";
