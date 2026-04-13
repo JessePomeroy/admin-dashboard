@@ -23,21 +23,26 @@ let expanded = $state(false);
 let unreadItems = $derived(items.filter((item) => unreadFlags[item.key]));
 let unreadCount = $derived(unreadItems.length);
 
-// Live toast: fire addToast when a flag flips false → true
-let prevFlags = $state<Record<string, boolean>>({});
+// Live toast: fire addToast when a flag flips false → true.
+// prevFlags is intentionally NOT $state — writing it inside $effect
+// would re-trigger the effect and cause an infinite loop.
+let prevFlags: Record<string, boolean> = {};
 
 $effect(() => {
+	// Read unreadFlags (tracked) to re-run when subscription updates
+	const current = { ...unreadFlags };
+
 	// Skip the very first render (initial load shouldn't toast)
 	if (Object.keys(prevFlags).length === 0) {
-		prevFlags = { ...unreadFlags };
+		prevFlags = current;
 		return;
 	}
 	for (const item of items) {
-		if (unreadFlags[item.key] && !prevFlags[item.key]) {
+		if (current[item.key] && !prevFlags[item.key]) {
 			addToast(item.label, "info");
 		}
 	}
-	prevFlags = { ...unreadFlags };
+	prevFlags = current;
 });
 
 function handleItemClick(href: string) {
