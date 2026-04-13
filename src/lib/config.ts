@@ -16,7 +16,7 @@ export interface AdminAPI {
 	activityLog: {
 		getClientActivity: FnRef;
 	};
-	adminAuth: {
+	adminAuth?: {
 		checkAdminAccess: FnRef;
 	};
 	contracts: {
@@ -50,7 +50,7 @@ export interface AdminAPI {
 		getByCategory: FnRef;
 		list: FnRef;
 	};
-	galleryDelivery: {
+	galleryDelivery?: {
 		create: FnRef;
 		update: FnRef;
 		remove: FnRef;

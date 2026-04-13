@@ -13,6 +13,7 @@ let { galleryId, tier, onupload }: {
 
 const config = getAdminConfig();
 const { api } = config;
+const galleryApi = api.galleryDelivery!;
 const client = useConvexClient();
 
 const MAX_CONCURRENT = 3;
@@ -110,7 +111,7 @@ async function processQueue() {
 		const dims = await getImageDimensions(next.file);
 
 		// 5. Record in Convex
-		await client.mutation(api.galleryDelivery.addImage, {
+		await client.mutation(galleryApi.addImage, {
 			siteUrl: config.siteUrl,
 			galleryId: toId(galleryId),
 			r2Key,

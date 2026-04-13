@@ -14,15 +14,16 @@ let { tier }: { tier: Tier } = $props();
 
 const config = getAdminConfig();
 const { api } = config;
+const galleryApi = api.galleryDelivery!;
 const client = useConvexClient();
-const galleriesQuery = useQuery(api.galleryDelivery.listBySite, { siteUrl: config.siteUrl });
+const galleriesQuery = useQuery(galleryApi.listBySite, { siteUrl: config.siteUrl });
 
 let galleries = $derived(galleriesQuery.data ?? []);
 let isLoading = $derived(galleriesQuery.isLoading);
 
 async function handleQuickAction(e: Event, galleryId: string, status: string) {
 	e.stopPropagation();
-	await client.mutation(api.galleryDelivery.update, { id: toId(galleryId), status });
+	await client.mutation(galleryApi.update, { id: toId(galleryId), status });
 }
 
 let showCreateModal = $state(false);

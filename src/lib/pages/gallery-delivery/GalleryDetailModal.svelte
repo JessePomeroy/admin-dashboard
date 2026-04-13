@@ -17,10 +17,11 @@ let { gallery, tier, onclose }: {
 
 const config = getAdminConfig();
 const { api } = config;
+const galleryApi = api.galleryDelivery!;
 const client = useConvexClient();
 
-const imagesQuery = useQuery(api.galleryDelivery.getImages, { galleryId: gallery._id });
-const galleryQuery = useQuery(api.galleryDelivery.get, { id: gallery._id });
+const imagesQuery = useQuery(galleryApi.getImages, { galleryId: gallery._id });
+const galleryQuery = useQuery(galleryApi.get, { id: gallery._id });
 let images = $derived(imagesQuery.data ?? []);
 let liveGallery = $derived(galleryQuery.data ?? gallery);
 
@@ -38,7 +39,7 @@ let editPassword = $state(gallery.password ?? "");
 async function handleSaveSettings() {
 	saving = true;
 	try {
-		await client.mutation(api.galleryDelivery.update, {
+		await client.mutation(galleryApi.update, {
 			id: toId(gallery._id),
 			name: editName,
 			downloadEnabled: editDownloadEnabled,
@@ -70,7 +71,7 @@ async function handleDelete() {
 			}
 		}
 		// Hard delete gallery + images + downloads from Convex
-		await client.mutation(api.galleryDelivery.remove, { id: toId(gallery._id) });
+		await client.mutation(galleryApi.remove, { id: toId(gallery._id) });
 		onclose();
 	} catch {
 		deleting = false;
@@ -78,7 +79,7 @@ async function handleDelete() {
 }
 
 async function handleStatusChange(newStatus: string) {
-	await client.mutation(api.galleryDelivery.update, {
+	await client.mutation(galleryApi.update, {
 		id: toId(gallery._id),
 		status: newStatus,
 	});

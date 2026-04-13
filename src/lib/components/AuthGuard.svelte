@@ -12,7 +12,7 @@ const authClient = config.authClient;
 let { children }: { children: Snippet } = $props();
 
 // Subscribe to the session nanostore reactively
-let sessionData = $state<{ user: { email: string; name?: string; image?: string } } | null>(null);
+let sessionData = $state<{ user: { email: string; name?: string; image?: string | null } } | null>(null);
 let sessionPending = $state(true);
 
 if (authClient) {
@@ -33,7 +33,7 @@ if (authClient) {
 // Authorization check: verify user's email is allowed for this site
 const userEmail = $derived(sessionData?.user?.email);
 const accessCheck = $derived(
-	userEmail && !config.isCreator
+	userEmail && !config.isCreator && config.api.adminAuth
 		? useQuery(config.api.adminAuth.checkAdminAccess, {
 				email: userEmail,
 				siteUrl: config.siteUrl,

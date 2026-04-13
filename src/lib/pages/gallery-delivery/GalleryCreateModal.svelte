@@ -8,6 +8,7 @@ let { onclose }: { onclose: () => void } = $props();
 
 const config = getAdminConfig();
 const { api } = config;
+const galleryApi = api.galleryDelivery!;
 const client = useConvexClient();
 
 const clientsQuery = useQuery(api.crm.listClients, { siteUrl: config.siteUrl });
@@ -38,7 +39,7 @@ async function handleCreate() {
 			? Date.now() + parseInt(expiryDays) * 24 * 60 * 60 * 1000
 			: undefined;
 
-		await client.mutation(api.galleryDelivery.create, {
+		await client.mutation(galleryApi.create, {
 			siteUrl: config.siteUrl,
 			clientId: toId(selectedClientId),
 			name: name.trim(),
