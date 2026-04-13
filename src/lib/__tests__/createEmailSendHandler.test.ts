@@ -53,6 +53,7 @@ function makeEvent(body: Record<string, unknown> = {}) {
 			method: "POST",
 			body: JSON.stringify(body),
 		}),
+	// biome-ignore lint/suspicious/noExplicitAny: partial SvelteKit RequestEvent mock for testing
 	} as any;
 }
 
@@ -77,6 +78,7 @@ describe("createEmailSendHandler template fallback cascade", () => {
 					getByCategory: "getByCategory",
 				},
 				emailLog: { create: "create" },
+			// biome-ignore lint/suspicious/noExplicitAny: partial AdminAPI mock — only the fields the handler touches
 			} as any,
 			siteUrl: "https://example.com",
 			siteName: "Example",

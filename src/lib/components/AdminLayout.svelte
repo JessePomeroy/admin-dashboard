@@ -65,8 +65,8 @@ let mobileMenuOpen = $state(false);
 let authUserEmail = $state<string | undefined>(undefined);
 if (config.authClient) {
 	const sessionStore = config.authClient.useSession();
-	if (sessionStore && typeof (sessionStore as any).subscribe === "function") {
-		(sessionStore as any).subscribe((val: any) => {
+	if (sessionStore?.subscribe) {
+		sessionStore.subscribe((val) => {
 			authUserEmail = val?.data?.user?.email;
 		});
 	}

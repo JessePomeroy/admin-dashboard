@@ -3,6 +3,15 @@ import { getContext, setContext } from "svelte";
 // biome-ignore lint/suspicious/noExplicitAny: Convex FunctionReference is generic, simplified here
 type FnRef = any;
 
+/**
+ * Minimal nanostore atom shape. Better Auth's `useSession()` returns an atom
+ * with a `.subscribe()` method, but we don't want to depend on the nanostores
+ * package directly. This captures just what the admin package needs.
+ */
+export interface NanostoreAtom<T> {
+	subscribe(cb: (value: T) => void): () => void;
+}
+
 export interface AdminAPI {
 	activityLog: {
 		getClientActivity: FnRef;
@@ -145,6 +154,12 @@ export interface AdminAuthSession {
 	user: { email: string; name?: string; image?: string };
 }
 
+/** Shape of the value emitted by `useSession()` (both as a plain object and via subscribe). */
+export interface SessionStoreValue {
+	data: AdminAuthSession | null;
+	isPending: boolean;
+}
+
 export interface AdminAuthClient {
 	signIn: {
 		email: (opts: {
@@ -168,7 +183,7 @@ export interface AdminAuthClient {
 		currentPassword: string;
 		newPassword: string;
 	}) => Promise<{ error: { message: string } | null }>;
-	useSession: () => { data: AdminAuthSession | null; isPending: boolean };
+	useSession: () => SessionStoreValue & Partial<NanostoreAtom<SessionStoreValue>>;
 }
 
 export interface AdminConfig {

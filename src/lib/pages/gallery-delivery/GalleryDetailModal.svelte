@@ -80,7 +80,7 @@ async function handleDelete() {
 async function handleStatusChange(newStatus: string) {
 	await client.mutation(api.galleryDelivery.update, {
 		id: toId(gallery._id),
-		status: newStatus as any,
+		status: newStatus,
 	});
 }
 
@@ -88,7 +88,7 @@ async function handleShare() {
 	try {
 		const token = await client.mutation(api.portal.createToken, {
 			siteUrl: config.siteUrl,
-			type: "gallery" as any,
+			type: "gallery",
 			documentId: gallery._id as string,
 			clientId: toId(gallery.clientId),
 		});

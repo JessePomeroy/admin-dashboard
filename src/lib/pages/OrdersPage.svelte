@@ -154,7 +154,7 @@ async function updateStatus(orderId: string, newStatus: string) {
 	try {
 		await convexClient.mutation(api.orders.updateStatus, {
 			orderId: toId(orderId),
-			status: newStatus as any,
+			status: newStatus,
 		});
 		if (selectedOrder?._id === orderId) {
 			selectedOrder = { ...selectedOrder, status: newStatus };

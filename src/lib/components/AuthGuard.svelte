@@ -18,8 +18,8 @@ let sessionPending = $state(true);
 if (authClient) {
 	const sessionStore = authClient.useSession();
 	// useSession() returns a nanostore atom — subscribe to get reactive updates
-	if (sessionStore && typeof (sessionStore as any).subscribe === "function") {
-		(sessionStore as any).subscribe((val: any) => {
+	if (sessionStore?.subscribe) {
+		sessionStore.subscribe((val) => {
 			sessionData = val?.data ?? null;
 			sessionPending = val?.isPending ?? false;
 		});
