@@ -1,12 +1,17 @@
+import type { GenericId } from "convex/values";
+
 /**
  * Cast a string to a Convex GenericId. Convex IDs are strings at runtime,
  * but the TypeScript types require GenericId<"tableName">. Since the admin
  * package doesn't import Convex's generated types (it receives `api: any`),
  * we use this helper to centralize the cast and document the intent.
+ *
+ * Usage: `toId<"invoices">(id)` returns `GenericId<"invoices">`.
+ * When the table name isn't known statically, omit the type parameter —
+ * it defaults to `string` which is compatible with any Convex ID position.
  */
-// biome-ignore lint/suspicious/noExplicitAny: Convex GenericId is structurally a string, cast is safe at runtime
-export function toId(id: string): any {
-	return id;
+export function toId<T extends string = string>(id: string): GenericId<T> {
+	return id as GenericId<T>;
 }
 
 // Currency formatting
