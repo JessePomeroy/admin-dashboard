@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { replaceTemplateVariables } from "../server/email";
+import { replaceTemplateVariables } from "../src/lib/server/email";
 
 describe("replaceTemplateVariables", () => {
 	it("replaces single variable", () => {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { hasFeature, getFullFeatures } from "../features";
+import { hasFeature, getFullFeatures } from "../src/lib/features";
 
 describe("hasFeature", () => {
 	// Basic tier features

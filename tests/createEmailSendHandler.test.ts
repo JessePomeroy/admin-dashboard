@@ -13,10 +13,11 @@ vi.mock("convex/browser", () => {
 	return { ConvexHttpClient: MockConvexHttpClient };
 });
 
-vi.mock("../server/email", async () => {
-	const actual = await vi.importActual<typeof import("../server/email")>(
-		"../server/email",
-	);
+vi.mock("../src/lib/server/email", async () => {
+	const actual =
+		await vi.importActual<typeof import("../src/lib/server/email")>(
+			"../src/lib/server/email",
+		);
 	return {
 		...actual,
 		sendEmail: vi.fn().mockResolvedValue({ data: { id: "msg_123" } }),
@@ -24,9 +25,9 @@ vi.mock("../server/email", async () => {
 });
 
 // Imports AFTER mocks so the module graph uses them
-import { setServerConfig } from "../config";
-import { createEmailSendHandler } from "../server/handlers/createEmailSendHandler";
-import type { EmailCategory } from "../types";
+import { setServerConfig } from "../src/lib/config";
+import { createEmailSendHandler } from "../src/lib/server/handlers/createEmailSendHandler";
+import type { EmailCategory } from "../src/lib/types";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 

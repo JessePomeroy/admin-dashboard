@@ -4,7 +4,7 @@ import {
 	trimString,
 	requireString,
 	validatePositiveNumber,
-} from "../server/validation";
+} from "../src/lib/server/validation";
 
 describe("validateEmail", () => {
 	it("accepts valid emails", () => {

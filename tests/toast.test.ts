@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { addToast, getToasts, removeToast } from "../toast";
+import { addToast, getToasts, removeToast } from "../src/lib/toast";
 
 describe("toast store", () => {
 	beforeEach(() => {
