@@ -267,6 +267,24 @@ export interface Inquiry extends ConvexDocument<"inquiries"> {
 }
 export type InquiryStatus = "new" | "read" | "replied";
 
+/**
+ * UI-facing inquiry shape. Unlike the Convex `Inquiry` above, this represents
+ * the data as it flows from the page `load` function into the inquiries page
+ * components — typically sourced from a Sanity-backed feed where string fields
+ * may be null, and the timestamp comes through as `submittedAt: string` rather
+ * than `_creationTime: number`. Keep in sync with InquiryTable/Modal props.
+ */
+export interface InquiryUI {
+	_id: string;
+	name: string | null;
+	email: string | null;
+	phone?: string;
+	subject: string | null;
+	message: string | null;
+	status: InquiryStatus;
+	submittedAt: string;
+}
+
 // Portal types
 export interface PortalToken extends ConvexDocument<"portalTokens"> {
 	token: string;

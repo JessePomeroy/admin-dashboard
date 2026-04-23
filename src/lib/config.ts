@@ -72,6 +72,9 @@ export interface AdminAPI {
 		getImages: FnRef;
 		listBySite: FnRef;
 	};
+	inquiries: {
+		updateStatus: FnRef;
+	};
 	invoices: {
 		create: FnRef;
 		update: FnRef;
@@ -220,6 +223,30 @@ export interface AdminConfig {
 		dark?: AdminTheme;
 		light?: AdminTheme;
 	};
+	/**
+	 * How mutations are sent to Convex.
+	 *
+	 * - `"websocket"` (default): calls `client.mutation(...)` directly over
+	 *   the Convex WebSocket. Requires the WebSocket to be authenticated
+	 *   (e.g. via `createSvelteAuthClient`).
+	 * - `"http"`: routes each mutation through a SvelteKit `+server.ts`
+	 *   endpoint that holds the Better Auth cookie and calls Convex via
+	 *   the HTTP client. Use this when the browser Convex WebSocket is
+	 *   intentionally unauthenticated (e.g. to avoid the WebSocket-pause
+	 *   bug in `@mmailaender/convex-better-auth-svelte` on SvelteKit nav).
+	 *
+	 * Default: `"websocket"`.
+	 */
+	mutationTransport?: "websocket" | "http";
+	/**
+	 * Endpoint path for the HTTP mutation proxy. Only consulted when
+	 * `mutationTransport === "http"`. The endpoint must accept
+	 * `POST { name: string, args: unknown }` and return
+	 * `{ result } | { error }`.
+	 *
+	 * Default: `"/api/admin/mutation"`.
+	 */
+	mutationEndpoint?: string;
 }
 
 export interface AdminServerConfig extends AdminConfig {

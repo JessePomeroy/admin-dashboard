@@ -10,13 +10,15 @@
 import { writable } from "svelte/store";
 import { browser } from "$app/environment";
 
+const STORAGE_KEY = "theme";
+
 function createThemeStore() {
 	// Default to dark mode
 	let initial = true;
 
 	// On client-side, check for saved preference or system preference
 	if (browser) {
-		const stored = localStorage.getItem("theme");
+		const stored = localStorage.getItem(STORAGE_KEY);
 		if (stored) {
 			// User has a saved preference
 			initial = stored === "dark";
@@ -26,13 +28,24 @@ function createThemeStore() {
 		}
 	}
 
-	const { subscribe, set } = writable(initial);
+	const store = writable(initial);
+
+	// Persist every change to localStorage so user preference survives reload
+	if (browser) {
+		store.subscribe((val) => {
+			try {
+				localStorage.setItem(STORAGE_KEY, val ? "dark" : "light");
+			} catch {
+				// Private browsing / quota errors — non-fatal
+			}
+		});
+	}
 
 	return {
-		subscribe,
-		setDark: () => set(true),
-		setLight: () => set(false),
-		set,
+		subscribe: store.subscribe,
+		setDark: () => store.set(true),
+		setLight: () => store.set(false),
+		set: store.set,
 	};
 }
 

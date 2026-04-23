@@ -1,4 +1,5 @@
 import type { GenericId } from "convex/values";
+import type { AdminAPI } from "./config";
 
 /**
  * Cast a string to a Convex GenericId. Convex IDs are strings at runtime,
@@ -170,8 +171,9 @@ export function getCategoryColor(category: string): string {
 }
 
 export async function copyPortalLink(
-	client: { mutation: (ref: any, args: any) => Promise<any> },
-	api: any,
+	// biome-ignore lint/suspicious/noExplicitAny: ref type is Convex's FunctionReference; loose here to interop with any ConvexClient.
+	client: { mutation: (ref: any, args: unknown) => Promise<unknown> },
+	api: AdminAPI,
 	siteUrl: string,
 	type: "invoice" | "quote" | "contract" | "gallery",
 	documentId: string,
