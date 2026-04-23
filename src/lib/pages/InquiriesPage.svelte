@@ -1,25 +1,33 @@
 <script lang="ts">
+import { useAdminClient } from "../adminClient";
+import { getAdminConfig } from "../config";
+import { logger } from "../logger";
 import { addToast } from "../toast";
-import { formatDateTime } from "../utils";
+import type { InquiryStatus, InquiryUI } from "../types";
+import { formatDateTime, toId } from "../utils";
 import InquiryDetailModal from "./inquiries/InquiryDetailModal.svelte";
 import InquiryTable from "./inquiries/InquiryTable.svelte";
 
-let { data } = $props();
+let { data }: { data: { inquiries: InquiryUI[] } } = $props();
+
+const config = getAdminConfig();
+const { api } = config;
+const convexClient = useAdminClient();
 
 // svelte-ignore state_referenced_locally
-let inquiries = $state(data.inquiries);
-let selectedInquiry = $state<any>(null);
-let statusFilter = $state("all");
+let inquiries = $state<InquiryUI[]>(data.inquiries);
+let selectedInquiry = $state<InquiryUI | null>(null);
+let statusFilter = $state<"all" | InquiryStatus>("all");
 
-const statusOptions = ["all", "new", "read", "replied"];
+const statusOptions: (InquiryStatus | "all")[] = ["all", "new", "read", "replied"];
 
 let filteredInquiries = $derived(
 	statusFilter === "all"
 		? inquiries
-		: inquiries.filter((inq: any) => inq.status === statusFilter),
+		: inquiries.filter((inq) => inq.status === statusFilter),
 );
 
-function openInquiry(inq: any) {
+function openInquiry(inq: InquiryUI) {
 	selectedInquiry = inq;
 }
 
@@ -28,37 +36,45 @@ function closeModal() {
 }
 
 async function updateStatus(id: string, newStatus: string) {
+	// Capture the current status BEFORE applying the optimistic update so that
+	// a failure reverts to the last-known-good state (not to the page-load
+	// snapshot, which may itself be stale after earlier updates).
+	const idx = inquiries.findIndex((inq: InquiryUI) => inq._id === id);
+	const previousStatus: InquiryStatus | undefined =
+		idx !== -1 ? inquiries[idx].status : undefined;
+	const previousSelectedStatus =
+		selectedInquiry?._id === id ? selectedInquiry.status : undefined;
+
 	// Optimistic update
-	const idx = inquiries.findIndex((inq: any) => inq._id === id);
 	if (idx !== -1) {
-		inquiries[idx] = { ...inquiries[idx], status: newStatus };
+		inquiries[idx] = { ...inquiries[idx], status: newStatus as InquiryStatus };
 		inquiries = [...inquiries];
 	}
 	if (selectedInquiry?._id === id) {
-		selectedInquiry = { ...selectedInquiry, status: newStatus };
+		selectedInquiry = {
+			...selectedInquiry,
+			status: newStatus as InquiryStatus,
+		};
 	}
 
 	try {
-		const response = await fetch(`/api/admin/inquiries/${id}`, {
-			method: "PATCH",
-			headers: { "Content-Type": "application/json" },
-			body: JSON.stringify({ status: newStatus }),
+		await convexClient.mutation(api.inquiries.updateStatus, {
+			id: toId(id),
+			status: newStatus as InquiryStatus,
 		});
-		if (!response.ok) {
-			// Revert on failure
-			if (idx !== -1) {
-				inquiries[idx] = {
-					...inquiries[idx],
-					status:
-						data.inquiries.find((inq: any) => inq._id === id)?.status || "new",
-				};
-				inquiries = [...inquiries];
-			}
-			console.error("Failed to update inquiry status");
-			addToast("Failed to update inquiry status.");
-		}
 	} catch (err) {
-		console.error("Failed to update inquiry status:", err);
+		// Revert both the list and the open modal to the pre-update status
+		if (idx !== -1 && previousStatus !== undefined) {
+			inquiries[idx] = { ...inquiries[idx], status: previousStatus };
+			inquiries = [...inquiries];
+		}
+		if (selectedInquiry?._id === id && previousSelectedStatus !== undefined) {
+			selectedInquiry = {
+				...selectedInquiry,
+				status: previousSelectedStatus,
+			};
+		}
+		logger.error("Failed to update inquiry status:", err);
 		addToast("Failed to update inquiry status.");
 	}
 }

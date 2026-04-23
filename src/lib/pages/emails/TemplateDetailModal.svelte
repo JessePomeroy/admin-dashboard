@@ -1,9 +1,10 @@
 <script lang="ts">
 	import DOMPurify from "isomorphic-dompurify";
+	import type { EmailTemplate } from "../../types";
 	import { getCategoryColor } from "../../utils";
 
 	let { template, saving, categories, onclose, onsave, ondelete } = $props<{
-		template: any;
+		template: EmailTemplate | null;
 		saving: boolean;
 		categories: readonly string[];
 		onclose: () => void;

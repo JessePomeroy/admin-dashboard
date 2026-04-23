@@ -1,7 +1,8 @@
 <script lang="ts">
-import { useConvexClient } from "@mmailaender/convex-svelte";
+import { useAdminClient } from "../../adminClient";
 import { getAdminConfig } from "../../config";
 import { toId } from "../../utils";
+import { logger } from "../../logger";
 import { dndzone } from "svelte-dnd-action";
 import type { GalleryImage } from "../../types";
 
@@ -15,7 +16,7 @@ let { images, galleryId, coverImageKey, onchange }: {
 const config = getAdminConfig();
 const { api } = config;
 const galleryApi = api.galleryDelivery!;
-const client = useConvexClient();
+const client = useAdminClient();
 
 // Local copy for drag-and-drop reordering
 let items = $state<(GalleryImage & { id: string })[]>([]);
@@ -69,7 +70,7 @@ async function handleDelete(image: GalleryImage) {
 			body: JSON.stringify({ r2Key: image.r2Key }),
 		});
 	} catch (err) {
-		console.warn("Failed to delete R2 image:", image.r2Key, err);
+		logger.warn("Failed to delete R2 image:", image.r2Key, err);
 	}
 
 	onchange();

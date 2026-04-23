@@ -1,12 +1,14 @@
 <script lang="ts">
 import { page } from "$app/stores";
-import { useQuery, useConvexClient } from "@mmailaender/convex-svelte";
+import { useQuery } from "@mmailaender/convex-svelte";
+import { useAdminClient } from "../adminClient";
 import { getAdminConfig } from "../config";
 import FeatureGate from "../components/FeatureGate.svelte";
 import LoadingState from "../components/LoadingState.svelte";
 import type { Quote, QuotePreset } from "../types";
 import { copyPortalLink, dollarsToCents, toId } from "../utils";
 import { addToast } from "../toast";
+import { logger } from "../logger";
 import PresetManager from "./quotes/PresetManager.svelte";
 import QuoteCreateModal from "./quotes/QuoteCreateModal.svelte";
 import QuoteDetailModal from "./quotes/QuoteDetailModal.svelte";
@@ -17,7 +19,7 @@ const { api } = config;
 
 let { data } = $props();
 
-const client = useConvexClient();
+const client = useAdminClient();
 const quotesQuery = useQuery(api.quotes.list, { siteUrl: config.siteUrl });
 const clientsQuery = useQuery(api.crm.listClients, { siteUrl: config.siteUrl });
 const nextNumberQuery = useQuery(api.quotes.getNextNumber, { siteUrl: config.siteUrl });
@@ -126,7 +128,7 @@ async function saveNewQuote(formData: {
 		});
 		showCreateModal = false;
 	} catch (err) {
-		console.error("Failed to create quote:", err);
+		logger.error("Failed to create quote:", err);
 		addToast("Failed to create quote.");
 	} finally {
 		saving = false;
@@ -177,7 +179,7 @@ async function saveAndSendQuote(formData: {
 		});
 		showCreateModal = false;
 	} catch (err) {
-		console.error("Failed to create and send quote:", err);
+		logger.error("Failed to create and send quote:", err);
 		addToast("Failed to send quote.");
 	} finally {
 		saving = false;
@@ -209,7 +211,7 @@ async function saveAsPreset(presetData: {
 			packages,
 		});
 	} catch (err) {
-		console.error("Failed to save preset:", err);
+		logger.error("Failed to save preset:", err);
 		addToast("Failed to save preset.");
 	} finally {
 		saving = false;
@@ -251,7 +253,7 @@ async function saveQuoteEdit(editData: {
 			notes: editData.notes || undefined,
 		} as Quote;
 	} catch (err) {
-		console.error("Failed to update quote:", err);
+		logger.error("Failed to update quote:", err);
 		addToast("Failed to save changes.");
 	} finally {
 		saving = false;
@@ -275,7 +277,7 @@ async function sendQuoteEmail(templateId?: string, changeNote?: string) {
 			sendResult = "error";
 		}
 	} catch (err) {
-		console.error("Failed to send quote email:", err);
+		logger.error("Failed to send quote email:", err);
 		addToast("Failed to send email.");
 		sendResult = "error";
 	} finally {
@@ -314,7 +316,7 @@ async function quoteAction(action: string) {
 			selectedQuote = { ...selectedQuote, status: "expired" } as Quote;
 		}
 	} catch (err) {
-		console.error("Failed to update quote:", err);
+		logger.error("Failed to update quote:", err);
 		addToast("Failed to save changes.");
 	} finally {
 		saving = false;
@@ -331,7 +333,7 @@ async function deleteQuote() {
 		});
 		selectedQuote = null;
 	} catch (err) {
-		console.error("Failed to delete quote:", err);
+		logger.error("Failed to delete quote:", err);
 		addToast("Failed to delete quote.");
 	} finally {
 		saving = false;
@@ -361,7 +363,7 @@ async function convertToInvoice(convertData: {
 		} as Quote;
 		convertSuccess = true;
 	} catch (err) {
-		console.error("Failed to convert quote to invoice:", err);
+		logger.error("Failed to convert quote to invoice:", err);
 		addToast("Failed to convert to invoice.");
 	} finally {
 		converting = false;
@@ -376,7 +378,7 @@ async function copyShareLink() {
 		shareLinkCopied = true;
 		setTimeout(() => { shareLinkCopied = false; }, 3000);
 	} catch (err) {
-		console.error("Failed to create share link:", err);
+		logger.error("Failed to create share link:", err);
 		addToast("Failed to create share link.");
 	}
 }
@@ -408,7 +410,7 @@ async function saveNewPreset(presetData: {
 			packages,
 		});
 	} catch (err) {
-		console.error("Failed to create preset:", err);
+		logger.error("Failed to create preset:", err);
 		addToast("Failed to create preset.");
 	} finally {
 		saving = false;
@@ -448,7 +450,7 @@ async function savePresetEdit(editData: {
 			packages,
 		} as QuotePreset;
 	} catch (err) {
-		console.error("Failed to update preset:", err);
+		logger.error("Failed to update preset:", err);
 		addToast("Failed to save preset.");
 	} finally {
 		saving = false;
@@ -465,7 +467,7 @@ async function deletePreset(presetId: string) {
 		showPresetModal = false;
 		selectedPreset = null;
 	} catch (err) {
-		console.error("Failed to delete preset:", err);
+		logger.error("Failed to delete preset:", err);
 		addToast("Failed to delete preset.");
 	} finally {
 		saving = false;

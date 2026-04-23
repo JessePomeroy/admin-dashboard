@@ -1,7 +1,10 @@
 <script lang="ts">
-import { useQuery, useConvexClient } from "@mmailaender/convex-svelte";
+import { useQuery } from "@mmailaender/convex-svelte";
+import { useAdminClient } from "../adminClient";
 import { getAdminConfig } from "../config";
 import { addToast } from "../toast";
+import { logger } from "../logger";
+import type { BoardConfig, Client } from "../types";
 import { toId } from "../utils";
 import FeatureGate from "../components/FeatureGate.svelte";
 import LoadingState from "../components/LoadingState.svelte";
@@ -13,12 +16,12 @@ const { api } = config;
 
 let { data } = $props();
 
-const client = useConvexClient();
+const client = useAdminClient();
 const boardConfigsQuery = useQuery(api.kanban.listBoardConfigs, { siteUrl: config.siteUrl });
 const clientsQuery = useQuery(api.crm.listClients, { siteUrl: config.siteUrl });
 
-let boardConfigs = $derived(boardConfigsQuery.data ?? []);
-let allClients = $derived(clientsQuery.data ?? []);
+let boardConfigs = $derived((boardConfigsQuery.data ?? []) as BoardConfig[]);
+let allClients = $derived((clientsQuery.data ?? []) as Client[]);
 let isLoading = $derived(boardConfigsQuery.isLoading || clientsQuery.isLoading);
 
 // Project types
@@ -35,7 +38,7 @@ const allTypes = [...photographyTypes, ...webTypes];
 // State
 let selectedType = $state(allTypes[0]);
 let saving = $state(false);
-let selectedClient = $state<any>(null);
+let selectedClient = $state<CardItem | null>(null);
 let editingColumnId = $state<string | null>(null);
 let editingColumnName = $state("");
 let showAddColumn = $state(false);
@@ -44,12 +47,12 @@ let showColumnMenu = $state<string | null>(null);
 
 // Board config for selected type
 let activeConfig = $derived(
-	boardConfigs.find((c: any) => c.projectType === selectedType) || null,
+	boardConfigs.find((c: BoardConfig) => c.projectType === selectedType) || null,
 );
 
 // Clients for selected type, grouped by column
 let typeClients = $derived(
-	allClients.filter((c: any) => c.type === selectedType),
+	allClients.filter((c: Client) => c.type === selectedType),
 );
 
 let columns = $state<ColumnData[]>([]);
@@ -62,20 +65,20 @@ $effect(() => {
 	}
 
 	const sorted = [...activeConfig.columns].sort(
-		(a: any, b: any) => a.position - b.position,
+		(a: BoardConfig["columns"][number], b: BoardConfig["columns"][number]) => a.position - b.position,
 	);
-	const unassigned = typeClients.filter((c: any) => !c.boardColumnId);
+	const unassigned = typeClients.filter((c: Client) => !c.boardColumnId);
 
-	columns = sorted.map((col: any, i: number) => {
+	columns = sorted.map((col: BoardConfig["columns"][number], i: number) => {
 		const colClients = typeClients
-			.filter((c: any) => c.boardColumnId === col.id)
+			.filter((c: Client) => c.boardColumnId === col.id)
 			.sort(
-				(a: any, b: any) => (a.boardPosition ?? 0) - (b.boardPosition ?? 0),
+				(a: Client, b: Client) => (a.boardPosition ?? 0) - (b.boardPosition ?? 0),
 			);
 
 		// Add unassigned clients to the first column
 		const cards = (i === 0 ? [...unassigned, ...colClients] : colClients).map(
-			(c: any) => ({
+			(c: Client) => ({
 				id: c._id,
 				_id: c._id,
 				name: c.name,
@@ -124,7 +127,7 @@ async function handleFinalize(
 					targetPosition: i,
 				});
 			} catch (err) {
-				console.error("Failed to move card:", err);
+				logger.error("Failed to move card:", err);
 				addToast("Failed to move card.");
 			}
 		}
@@ -141,7 +144,7 @@ async function initBoard() {
 		});
 		saving = false;
 	} catch (err) {
-		console.error("Failed to init board:", err);
+		logger.error("Failed to init board:", err);
 		addToast("Failed to initialize board.");
 		saving = false;
 	}
@@ -161,7 +164,7 @@ async function addColumn() {
 		showAddColumn = false;
 		saving = false;
 	} catch (err) {
-		console.error("Failed to add column:", err);
+		logger.error("Failed to add column:", err);
 		addToast("Failed to add column.");
 		saving = false;
 	}
@@ -178,14 +181,14 @@ async function renameColumn(columnId: string) {
 		});
 		editingColumnId = null;
 	} catch (err) {
-		console.error("Failed to rename column:", err);
+		logger.error("Failed to rename column:", err);
 		addToast("Failed to rename column.");
 	}
 }
 
 async function deleteColumn(columnId: string) {
 	if (!activeConfig) return;
-	const remaining = activeConfig.columns.filter((c: any) => c.id !== columnId);
+	const remaining = activeConfig.columns.filter((c: BoardConfig["columns"][number]) => c.id !== columnId);
 	if (remaining.length === 0) return; // can't delete last column
 
 	try {
@@ -197,7 +200,7 @@ async function deleteColumn(columnId: string) {
 		});
 		showColumnMenu = null;
 	} catch (err) {
-		console.error("Failed to delete column:", err);
+		logger.error("Failed to delete column:", err);
 		addToast("Failed to delete column.");
 	}
 }

@@ -20,8 +20,8 @@ async function handleEmailAuth(e: Event) {
 		if (result?.error) {
 			error = result.error.message || "Sign-in failed";
 		}
-	} catch (err: any) {
-		error = err?.message || "Something went wrong";
+	} catch (err: unknown) {
+		error = err instanceof Error ? err.message : "Something went wrong";
 	} finally {
 		loading = false;
 	}
@@ -34,8 +34,8 @@ async function handleGoogle() {
 			provider: "google",
 			callbackURL: "/admin",
 		});
-	} catch (err: any) {
-		error = err?.message || "Google sign-in failed";
+	} catch (err: unknown) {
+		error = err instanceof Error ? err.message : "Google sign-in failed";
 	}
 }
 </script>

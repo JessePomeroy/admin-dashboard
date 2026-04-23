@@ -1,5 +1,5 @@
 <script lang="ts">
-import { useConvexClient } from "@mmailaender/convex-svelte";
+import { useAdminClient } from "../../adminClient";
 import { getAdminConfig } from "../../config";
 import { toId } from "../../utils";
 import FeatureGate from "../../components/FeatureGate.svelte";
@@ -14,11 +14,16 @@ let { galleryId, tier, onupload }: {
 const config = getAdminConfig();
 const { api } = config;
 const galleryApi = api.galleryDelivery!;
-const client = useConvexClient();
+const client = useAdminClient();
 
 const MAX_CONCURRENT = 3;
 const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
 const ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp", "image/tiff"];
+// Per-step timeout. Presign is fast; the PUT upload and process step can take
+// a while for large images but should never hang indefinitely.
+const PRESIGN_TIMEOUT_MS = 15_000;
+const UPLOAD_TIMEOUT_MS = 120_000;
+const PROCESS_TIMEOUT_MS = 60_000;
 
 interface UploadFile {
 	file: File;
@@ -30,6 +35,29 @@ interface UploadFile {
 
 let files = $state<UploadFile[]>([]);
 let dragging = $state(false);
+
+/**
+ * Wrap a fetch with an AbortController so large uploads on flaky networks
+ * don't hang forever. Throws a clear timeout error on expiry.
+ */
+async function fetchWithTimeout(
+	input: RequestInfo | URL,
+	init: RequestInit,
+	timeoutMs: number,
+): Promise<Response> {
+	const ctrl = new AbortController();
+	const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+	try {
+		return await fetch(input, { ...init, signal: ctrl.signal });
+	} catch (err) {
+		if (err instanceof DOMException && err.name === "AbortError") {
+			throw new Error(`Request timed out after ${timeoutMs / 1000}s`);
+		}
+		throw err;
+	} finally {
+		clearTimeout(timer);
+	}
+}
 
 function addFiles(fileList: FileList | File[]) {
 	const newFiles: UploadFile[] = [];
@@ -59,28 +87,31 @@ function handleFileInput(e: Event) {
 	input.value = "";
 }
 
-async function processQueue() {
-	const uploading = files.filter((f) => f.status === "uploading" || f.status === "processing");
-	if (uploading.length >= MAX_CONCURRENT) return;
-
-	const next = files.find((f) => f.status === "pending");
-	if (!next) return;
-
+/**
+ * Upload a single file through the full presign → PUT → process → record flow.
+ * Returns when the upload is complete (or errored). Concurrency is controlled
+ * by `processQueue` which fans out up to MAX_CONCURRENT of these in parallel.
+ */
+async function uploadOne(next: UploadFile): Promise<void> {
 	next.status = "uploading";
 	files = [...files];
 
 	try {
 		// 1. Get presign URL from our SvelteKit API (proxies to Worker)
-		const presignRes = await fetch("/api/admin/galleries/presign", {
-			method: "POST",
-			headers: { "Content-Type": "application/json" },
-			body: JSON.stringify({
-				siteUrl: config.siteUrl,
-				galleryId,
-				filename: next.file.name,
-				contentType: next.file.type,
-			}),
-		});
+		const presignRes = await fetchWithTimeout(
+			"/api/admin/galleries/presign",
+			{
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({
+					siteUrl: config.siteUrl,
+					galleryId,
+					filename: next.file.name,
+					contentType: next.file.type,
+				}),
+			},
+			PRESIGN_TIMEOUT_MS,
+		);
 		if (!presignRes.ok) throw new Error("Failed to get upload URL");
 		const { r2Key } = await presignRes.json();
 
@@ -88,11 +119,15 @@ async function processQueue() {
 		next.progress = 30;
 		files = [...files];
 
-		const uploadRes = await fetch(`/api/admin/galleries/upload?key=${encodeURIComponent(r2Key)}`, {
-			method: "PUT",
-			headers: { "Content-Type": next.file.type },
-			body: next.file,
-		});
+		const uploadRes = await fetchWithTimeout(
+			`/api/admin/galleries/upload?key=${encodeURIComponent(r2Key)}`,
+			{
+				method: "PUT",
+				headers: { "Content-Type": next.file.type },
+				body: next.file,
+			},
+			UPLOAD_TIMEOUT_MS,
+		);
 		if (!uploadRes.ok) throw new Error("Upload failed");
 
 		// 3. Process (generate sizes)
@@ -100,11 +135,15 @@ async function processQueue() {
 		next.progress = 70;
 		files = [...files];
 
-		const processRes = await fetch("/api/admin/galleries/process", {
-			method: "POST",
-			headers: { "Content-Type": "application/json" },
-			body: JSON.stringify({ r2Key }),
-		});
+		const processRes = await fetchWithTimeout(
+			"/api/admin/galleries/process",
+			{
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({ r2Key }),
+			},
+			PROCESS_TIMEOUT_MS,
+		);
 		if (!processRes.ok) throw new Error("Processing failed");
 
 		// 4. Get image dimensions
@@ -130,7 +169,41 @@ async function processQueue() {
 		next.error = err instanceof Error ? err.message : "Upload failed";
 		files = [...files];
 	}
+}
 
+/**
+ * Start as many pending uploads as the concurrency limit allows. Each started
+ * upload re-invokes processQueue on completion to pick up the next pending
+ * item, so the queue drains fully while never exceeding MAX_CONCURRENT
+ * in-flight requests.
+ */
+function processQueue(): void {
+	while (true) {
+		const uploading = files.filter(
+			(f) => f.status === "uploading" || f.status === "processing",
+		).length;
+		if (uploading >= MAX_CONCURRENT) return;
+
+		const next = files.find((f) => f.status === "pending");
+		if (!next) return;
+
+		// Mark as uploading synchronously so the next loop iteration sees the
+		// updated in-flight count and doesn't pick the same file twice.
+		next.status = "uploading";
+		files = [...files];
+
+		uploadOne(next).then(processQueue);
+	}
+}
+
+/** Retry a single errored upload from the start of the pipeline. */
+function retryUpload(id: string): void {
+	const target = files.find((f) => f.id === id);
+	if (!target || target.status !== "error") return;
+	target.status = "pending";
+	target.error = undefined;
+	target.progress = 0;
+	files = [...files];
 	processQueue();
 }
 
@@ -212,6 +285,7 @@ function clearCompleted() {
 						<span class="file-status done-text">done</span>
 					{:else if f.status === "error"}
 						<span class="file-status error-text">{f.error}</span>
+						<button class="retry-btn" onclick={() => retryUpload(f.id)}>retry</button>
 					{:else}
 						<span class="file-status">waiting...</span>
 					{/if}
@@ -354,4 +428,21 @@ function clearCompleted() {
 
 	.done-text { color: var(--status-sage); }
 	.error-text { color: var(--status-rose); }
+
+	.retry-btn {
+		padding: 3px 10px;
+		border: 1px solid var(--admin-border);
+		border-radius: 4px;
+		background: transparent;
+		color: var(--admin-text-muted);
+		font-size: 0.72rem;
+		font-family: inherit;
+		cursor: pointer;
+		flex-shrink: 0;
+	}
+
+	.retry-btn:hover {
+		color: var(--admin-heading);
+		border-color: var(--admin-border-strong);
+	}
 </style>

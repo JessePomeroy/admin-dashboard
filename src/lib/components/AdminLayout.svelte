@@ -2,10 +2,12 @@
 import { onMount } from "svelte";
 import { browser } from "$app/environment";
 import { page } from "$app/stores";
-import { useQuery, useConvexClient } from "@mmailaender/convex-svelte";
+import { useQuery } from "@mmailaender/convex-svelte";
+import { useAdminClient } from "../adminClient";
 import { type Feature, hasFeature, type Tier } from "../features";
 import { isDark } from "../theme";
 import { getAdminConfig } from "../config";
+import { logger } from "../logger";
 import NotificationWidget from "./NotificationWidget.svelte";
 import Toast from "./Toast.svelte";
 import "../theme.css";
@@ -74,7 +76,7 @@ if (config.authClient) {
 }
 
 // Notification dots
-const convexClient = useConvexClient();
+const convexClient = useAdminClient();
 let unreadFlags = $state<Record<string, boolean>>({
 	orders: false,
 	inquiries: false,
@@ -118,7 +120,7 @@ $effect(() => {
 		convexClient.mutation(api.notifications.markSeen, {
 			siteUrl: config.siteUrl,
 			page: pageKey,
-		}).catch((err: unknown) => console.warn("Failed to mark notifications seen:", pageKey, err));
+		}).catch((err: unknown) => logger.warn("Failed to mark notifications seen:", pageKey, err));
 	}
 });
 
@@ -151,8 +153,9 @@ async function handleChangePassword(e: Event) {
 				passwordSuccess = false;
 			}, 1500);
 		}
-	} catch (err: any) {
-		passwordError = err?.message || "Failed to change password";
+	} catch (err: unknown) {
+		passwordError =
+			err instanceof Error ? err.message : "Failed to change password";
 	} finally {
 		passwordSaving = false;
 	}

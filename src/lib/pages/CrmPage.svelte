@@ -1,12 +1,14 @@
 <script lang="ts">
 import { goto } from "$app/navigation";
-import { useQuery, useConvexClient } from "@mmailaender/convex-svelte";
+import { useQuery } from "@mmailaender/convex-svelte";
+import { useAdminClient } from "../adminClient";
 import { getAdminConfig } from "../config";
 import FeatureGate from "../components/FeatureGate.svelte";
 import LoadingState from "../components/LoadingState.svelte";
 import { CLIENT_STATUSES } from "../constants";
 import type { ActivityLogEntry, Client, ClientTag } from "../types";
 import { addToast } from "../toast";
+import { logger } from "../logger";
 import { toId } from "../utils";
 import ClientCreateModal from "./crm/ClientCreateModal.svelte";
 import ClientDetailModal from "./crm/ClientDetailModal.svelte";
@@ -18,7 +20,7 @@ const { api } = config;
 
 let { data } = $props();
 
-const client = useConvexClient();
+const client = useAdminClient();
 const clientsQuery = useQuery(api.crm.listClients, { siteUrl: config.siteUrl });
 const statsQuery = useQuery(api.crm.getStats, { siteUrl: config.siteUrl });
 const tagsQuery = useQuery(api.tags.listTags, { siteUrl: config.siteUrl });
@@ -78,7 +80,7 @@ async function loadAllClientTags() {
 			const result = await client.query(api.tags.getClientTags, { clientId: c._id });
 			tagAssignments[c._id] = result || [];
 		} catch (err) {
-			console.warn("Failed to load tags for client:", c._id, err);
+			logger.warn("Failed to load tags for client:", c._id, err);
 		}
 	}
 	tagAssignments = { ...tagAssignments };
@@ -98,7 +100,7 @@ async function loadClientTags(clientId: string) {
 		tagAssignments[clientId] = clientTags;
 		tagAssignments = { ...tagAssignments };
 	} catch (err) {
-		console.error("Failed to load client tags:", err);
+		logger.error("Failed to load client tags:", err);
 	} finally {
 		loadingTags = false;
 	}
@@ -110,7 +112,7 @@ async function loadClientActivity(clientId: string) {
 		const result = await client.query(api.activityLog.getClientActivity, { clientId: toId(clientId) });
 		clientActivity = result || [];
 	} catch (err) {
-		console.error("Failed to load client activity:", err);
+		logger.error("Failed to load client activity:", err);
 	} finally {
 		loadingActivity = false;
 	}
@@ -146,7 +148,7 @@ async function saveNewClient(body: Record<string, string | undefined>) {
 		});
 		showAddModal = false;
 	} catch (err) {
-		console.error("Failed to create client:", err);
+		logger.error("Failed to create client:", err);
 		addToast("Failed to create client. Please try again.");
 	} finally {
 		saving = false;
@@ -173,7 +175,7 @@ async function saveEdit(body: Record<string, string | undefined>) {
 		selectedClient = { ...selectedClient, ...body } as Client;
 		await loadClientActivity(selectedClient._id);
 	} catch (err) {
-		console.error("Failed to update client:", err);
+		logger.error("Failed to update client:", err);
 		addToast("Failed to save changes. Please try again.");
 	} finally {
 		saving = false;
@@ -190,7 +192,7 @@ async function deleteClient() {
 		});
 		closeDetailModal();
 	} catch (err) {
-		console.error("Failed to delete client:", err);
+		logger.error("Failed to delete client:", err);
 		addToast("Failed to delete client. Please try again.");
 	} finally {
 		saving = false;
@@ -208,7 +210,7 @@ async function quickStatusUpdate(newStatus: string) {
 		selectedClient = { ...selectedClient, status: newStatus } as Client;
 		await loadClientActivity(selectedClient._id);
 	} catch (err) {
-		console.error("Failed to update status:", err);
+		logger.error("Failed to update status:", err);
 		addToast("Failed to update status. Please try again.");
 	}
 }
@@ -224,7 +226,7 @@ async function assignTagToClient(tagId: string) {
 		await loadClientTags(selectedClient._id);
 		await loadClientActivity(selectedClient._id);
 	} catch (err) {
-		console.error("Failed to assign tag:", err);
+		logger.error("Failed to assign tag:", err);
 		addToast("Failed to assign tag.");
 	}
 }
@@ -240,7 +242,7 @@ async function removeTagFromClient(tagId: string) {
 		await loadClientTags(selectedClient._id);
 		await loadClientActivity(selectedClient._id);
 	} catch (err) {
-		console.error("Failed to remove tag:", err);
+		logger.error("Failed to remove tag:", err);
 		addToast("Failed to remove tag.");
 	}
 }
@@ -254,7 +256,7 @@ async function createTag(name: string, color: string) {
 			color,
 		});
 	} catch (err) {
-		console.error("Failed to create tag:", err);
+		logger.error("Failed to create tag:", err);
 		addToast("Failed to create tag.");
 	} finally {
 		saving = false;
@@ -273,7 +275,7 @@ async function deleteTag(tagId: string) {
 		}
 		tagAssignments = { ...tagAssignments };
 	} catch (err) {
-		console.error("Failed to delete tag:", err);
+		logger.error("Failed to delete tag:", err);
 		addToast("Failed to delete tag.");
 	}
 }

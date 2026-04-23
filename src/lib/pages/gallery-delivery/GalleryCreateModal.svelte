@@ -1,5 +1,6 @@
 <script lang="ts">
-import { useQuery, useConvexClient } from "@mmailaender/convex-svelte";
+import { useQuery } from "@mmailaender/convex-svelte";
+import { useAdminClient } from "../../adminClient";
 import { getAdminConfig } from "../../config";
 import { toId } from "../../utils";
 import AdminModal from "../../components/AdminModal.svelte";
@@ -9,7 +10,7 @@ let { onclose }: { onclose: () => void } = $props();
 const config = getAdminConfig();
 const { api } = config;
 const galleryApi = api.galleryDelivery!;
-const client = useConvexClient();
+const client = useAdminClient();
 
 const clientsQuery = useQuery(api.crm.listClients, { siteUrl: config.siteUrl });
 let clients = $derived(clientsQuery.data ?? []);

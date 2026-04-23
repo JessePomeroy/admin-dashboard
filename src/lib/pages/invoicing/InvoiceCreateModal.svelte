@@ -2,6 +2,7 @@
 import AdminModal from "../../components/AdminModal.svelte";
 import EmailPreview from "../../components/EmailPreview.svelte";
 import { addToast } from "../../toast";
+import { logger } from "../../logger";
 import type {
 	Client,
 	EmailTemplate,
@@ -142,7 +143,7 @@ async function handleSubmit() {
 	try {
 		await oncreate(buildInvoiceBody());
 	} catch (err) {
-		console.error("Failed to create invoice:", err);
+		logger.error("Failed to create invoice:", err);
 		addToast("Failed to create invoice.");
 	} finally {
 		saving = false;
@@ -160,7 +161,7 @@ async function handleSaveAndSend() {
 			emailBody: editedBody || undefined,
 		});
 	} catch (err) {
-		console.error("Failed to create and send invoice:", err);
+		logger.error("Failed to create and send invoice:", err);
 		addToast("Failed to send invoice.");
 	} finally {
 		saving = false;

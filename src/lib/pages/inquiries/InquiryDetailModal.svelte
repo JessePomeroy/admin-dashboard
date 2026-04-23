@@ -1,26 +1,15 @@
 <script lang="ts">
 import AdminModal from "../../components/AdminModal.svelte";
 import StatusDot from "../../components/StatusDot.svelte";
-import type { InquiryStatus } from "../../types";
+import type { InquiryStatus, InquiryUI } from "../../types";
 import {
 	formatDateTime,
 	getStatusColor,
 	INQUIRY_STATUS_COLORS,
 } from "../../utils";
 
-interface Inquiry {
-	_id: string;
-	name: string | null;
-	email: string | null;
-	phone?: string;
-	subject: string | null;
-	message: string | null;
-	status: InquiryStatus;
-	submittedAt: string;
-}
-
 interface Props {
-	inquiry: Inquiry;
+	inquiry: InquiryUI;
 	onclose: () => void;
 	onupdatestatus: (id: string, status: InquiryStatus) => void;
 }

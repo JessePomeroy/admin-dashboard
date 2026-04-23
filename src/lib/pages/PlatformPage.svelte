@@ -1,9 +1,12 @@
 <script lang="ts">
-import { useQuery, useConvexClient } from "@mmailaender/convex-svelte";
+import { useQuery } from "@mmailaender/convex-svelte";
+import { useAdminClient } from "../adminClient";
 import { getAdminConfig } from "../config";
 import LoadingState from "../components/LoadingState.svelte";
+import type { PlatformClient } from "../types";
 import { formatTimestampDate } from "../utils";
 import { addToast } from "../toast";
+import { logger } from "../logger";
 import AddClientModal from "./platform/AddClientModal.svelte";
 import ClientDetailModal from "./platform/ClientDetailModal.svelte";
 import CredentialsModal from "./platform/CredentialsModal.svelte";
@@ -13,12 +16,12 @@ const { api } = config;
 
 let { data } = $props();
 
-const convexClient = useConvexClient();
+const convexClient = useAdminClient();
 const clientsQuery = useQuery(api.platform.listAll, {});
 
 // Modal state
 let showAddModal = $state(false);
-let selectedClient = $state<any>(null);
+let selectedClient = $state<PlatformClient | null>(null);
 let saving = $state(false);
 
 // Search
@@ -29,22 +32,22 @@ let showCredentials = $state(false);
 let credentialsEmail = $state("");
 let credentialsPassword = $state("");
 
-let clients = $derived(clientsQuery.data ?? []);
+let clients = $derived((clientsQuery.data ?? []) as PlatformClient[]);
 
 // Stats
 let totalClients = $derived(clients.length);
 let basicCount = $derived(
-	clients.filter((c: any) => c.tier === "basic").length,
+	clients.filter((c: PlatformClient) => c.tier === "basic").length,
 );
 let fullCount = $derived(
-	clients.filter((c: any) => c.tier === "full").length,
+	clients.filter((c: PlatformClient) => c.tier === "full").length,
 );
 let activeCount = $derived(
-	clients.filter((c: any) => c.subscriptionStatus === "active").length,
+	clients.filter((c: PlatformClient) => c.subscriptionStatus === "active").length,
 );
 
 let filteredClients = $derived(
-	clients.filter((client: any) => {
+	clients.filter((client: PlatformClient) => {
 		if (searchQuery) {
 			const q = searchQuery.toLowerCase();
 			const matchName = client.name?.toLowerCase().includes(q);
@@ -64,7 +67,7 @@ function closeAddModal() {
 	showAddModal = false;
 }
 
-function openDetailModal(client: any) {
+function openDetailModal(client: PlatformClient) {
 	selectedClient = { ...client };
 }
 
@@ -135,7 +138,7 @@ async function handleSaveNewClient(formData: {
 
 		closeAddModal();
 	} catch (err) {
-		console.error("Failed to create platform client:", err);
+		logger.error("Failed to create platform client:", err);
 		addToast("Failed to create client.");
 	} finally {
 		saving = false;
@@ -169,11 +172,11 @@ async function handleSaveEdit(formData: {
 			email: formData.email,
 			siteUrl: formData.siteUrl,
 			tier: formData.tier,
-			subscriptionStatus: formData.subscriptionStatus,
+			subscriptionStatus: formData.subscriptionStatus as PlatformClient["subscriptionStatus"],
 			notes: formData.notes,
 		};
 	} catch (err) {
-		console.error("Failed to update platform client:", err);
+		logger.error("Failed to update platform client:", err);
 		addToast("Failed to save changes.");
 	} finally {
 		saving = false;
@@ -191,7 +194,7 @@ async function quickTierToggle() {
 		});
 		selectedClient = { ...selectedClient, tier: newTier };
 	} catch (err) {
-		console.error("Failed to toggle tier:", err);
+		logger.error("Failed to toggle tier:", err);
 		addToast("Failed to update tier.");
 	}
 }
@@ -208,7 +211,7 @@ async function quickStatusUpdate(
 		});
 		selectedClient = { ...selectedClient, subscriptionStatus: newStatus };
 	} catch (err) {
-		console.error("Failed to update subscription status:", err);
+		logger.error("Failed to update subscription status:", err);
 		addToast("Failed to update subscription.");
 	}
 }

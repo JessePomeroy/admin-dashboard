@@ -1,5 +1,6 @@
 <script lang="ts">
-import { useQuery, useConvexClient } from "@mmailaender/convex-svelte";
+import { useQuery } from "@mmailaender/convex-svelte";
+import { useAdminClient } from "../../adminClient";
 import { getAdminConfig } from "../../config";
 import { formatBytes, formatTimestampDate, toId } from "../../utils";
 import FeatureGate from "../../components/FeatureGate.svelte";
@@ -15,7 +16,7 @@ let { tier }: { tier: Tier } = $props();
 const config = getAdminConfig();
 const { api } = config;
 const galleryApi = api.galleryDelivery!;
-const client = useConvexClient();
+const client = useAdminClient();
 const galleriesQuery = useQuery(galleryApi.listBySite, { siteUrl: config.siteUrl });
 
 let galleries = $derived(galleriesQuery.data ?? []);

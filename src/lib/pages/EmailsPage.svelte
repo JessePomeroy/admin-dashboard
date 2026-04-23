@@ -1,7 +1,10 @@
 <script lang="ts">
-import { useQuery, useConvexClient } from "@mmailaender/convex-svelte";
+import { useQuery } from "@mmailaender/convex-svelte";
+import { useAdminClient } from "../adminClient";
 import { getAdminConfig } from "../config";
 import { addToast } from "../toast";
+import { logger } from "../logger";
+import type { EmailTemplate } from "../types";
 import { getCategoryColor } from "../utils";
 import FeatureGate from "../components/FeatureGate.svelte";
 import LoadingState from "../components/LoadingState.svelte";
@@ -13,10 +16,10 @@ const { api } = config;
 
 let { data } = $props();
 
-const client = useConvexClient();
+const client = useAdminClient();
 const templatesQuery = useQuery(api.emailTemplates.list, { siteUrl: config.siteUrl });
 
-let templates = $derived(templatesQuery.data ?? []);
+let templates = $derived((templatesQuery.data ?? []) as EmailTemplate[]);
 
 // Categories
 const categories = [
@@ -35,11 +38,11 @@ let searchQuery = $state("");
 
 // Modal state
 let showCreateModal = $state(false);
-let selectedTemplate = $state<any>(null);
+let selectedTemplate = $state<EmailTemplate | null>(null);
 let saving = $state(false);
 
 let filteredTemplates = $derived(
-	templates.filter((t: any) => {
+	templates.filter((t: EmailTemplate) => {
 		if (categoryFilter !== "all" && t.category !== categoryFilter) return false;
 		if (searchQuery) {
 			const q = searchQuery.toLowerCase();
@@ -78,7 +81,7 @@ async function saveNewTemplate(formData: { name: string; category: string; subje
 		});
 		closeCreateModal();
 	} catch (err) {
-		console.error("Failed to create email template:", err);
+		logger.error("Failed to create email template:", err);
 		addToast("Failed to create template.");
 	} finally {
 		saving = false;
@@ -86,7 +89,7 @@ async function saveNewTemplate(formData: { name: string; category: string; subje
 }
 
 // Detail modal
-function openDetailModal(template: any) {
+function openDetailModal(template: EmailTemplate) {
 	selectedTemplate = { ...template };
 }
 
@@ -116,7 +119,7 @@ async function saveEdit(formData: { name: string; category: string; subject: str
 			variables: formData.variables,
 		};
 	} catch (err) {
-		console.error("Failed to update email template:", err);
+		logger.error("Failed to update email template:", err);
 		addToast("Failed to save template.");
 	} finally {
 		saving = false;
@@ -133,7 +136,7 @@ async function deleteTemplate() {
 		});
 		closeDetailModal();
 	} catch (err) {
-		console.error("Failed to delete email template:", err);
+		logger.error("Failed to delete email template:", err);
 		addToast("Failed to delete template.");
 	} finally {
 		saving = false;

@@ -2,6 +2,7 @@
 import AdminModal from "../../components/AdminModal.svelte";
 import StatusDot from "../../components/StatusDot.svelte";
 import { addToast } from "../../toast";
+import { logger } from "../../logger";
 import type { EmailTemplate, Invoice, InvoiceItem } from "../../types";
 import {
 	calcSubtotal,
@@ -120,7 +121,7 @@ async function handleSaveEdit() {
 			confirmResend = true;
 		}
 	} catch (err) {
-		console.error("Failed to update invoice:", err);
+		logger.error("Failed to update invoice:", err);
 		addToast("Failed to save changes.");
 	} finally {
 		saving = false;
@@ -162,7 +163,7 @@ async function handleAction(action: string) {
 			}
 		}
 	} catch (err) {
-		console.error("Failed to update invoice:", err);
+		logger.error("Failed to update invoice:", err);
 		addToast("Failed to save changes.");
 	} finally {
 		saving = false;
@@ -189,7 +190,7 @@ async function handleDelete() {
 	try {
 		await ondelete();
 	} catch (err) {
-		console.error("Failed to delete invoice:", err);
+		logger.error("Failed to delete invoice:", err);
 		addToast("Failed to delete invoice.");
 	} finally {
 		saving = false;

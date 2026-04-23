@@ -7,24 +7,46 @@
  */
 
 import { page } from "$app/stores";
-import { useQuery, useConvexClient } from "@mmailaender/convex-svelte";
+import { useQuery } from "@mmailaender/convex-svelte";
+import { useAdminClient } from "../adminClient";
 import { getAdminConfig } from "../config";
 import { addToast } from "../toast";
+import { logger } from "../logger";
+import type { Order, OrderStatus } from "../types";
 import { formatCents, getStatusColor, ORDER_STATUS_COLORS, toId } from "../utils";
 import LoadingState from "../components/LoadingState.svelte";
 import OrderDetailModal from "./orders/OrderDetailModal.svelte";
 import OrderTable from "./orders/OrderTable.svelte";
 
+// UI-facing order shape used by this page and the orders/* components.
+// Unlike the Convex `Order` type, the Convex `_creationTime: number` is
+// projected to `createdAt: string` (ISO), `currency` is always "usd", and
+// nullable/optional fields are normalized to defaults.
+interface OrderUI {
+	_id: string;
+	orderNumber: string;
+	createdAt: string;
+	customerEmail: string;
+	customerName: string;
+	total: number;
+	stripeFees?: number;
+	status: OrderStatus;
+	currency: string;
+	items: Order["items"];
+	shippingAddress: NonNullable<Order["shippingAddress"]> | null;
+	notes: string;
+}
+
 let { data } = $props();
 
 const config = getAdminConfig();
 const { api } = config;
-const convexClient = useConvexClient();
+const convexClient = useAdminClient();
 const ordersQuery = useQuery(api.orders.list, { siteUrl: config.siteUrl });
 
 // Map Convex format to match what the orders page expects
 let orders = $derived(
-	(ordersQuery.data ?? []).map((order: any) => ({
+	((ordersQuery.data ?? []) as Order[]).map((order: Order): OrderUI => ({
 		_id: order._id,
 		orderNumber: order.orderNumber,
 		createdAt: new Date(order._creationTime).toISOString(),
@@ -47,7 +69,7 @@ let yearFilter = $state("all");
 let periodFilter = $state("all"); // all, today, week, month
 
 // Modal state - for the order details popup
-let selectedOrder = $state<any>(null);
+let selectedOrder = $state<OrderUI | null>(null);
 let notesValue = $state("");
 let notesSaving = $state(false);
 
@@ -57,7 +79,7 @@ $effect(() => {
 	if (openHandled || orders.length === 0) return;
 	const openId = $page.url.searchParams.get("open");
 	if (openId) {
-		const match = orders.find((o: any) => o._id === openId);
+		const match = orders.find((o: OrderUI) => o._id === openId);
 		if (match) {
 			selectedOrder = match;
 			openHandled = true;
@@ -80,7 +102,7 @@ let availableYears = $derived(
 	(
 		[
 			...new Set(
-				orders.map((o: any) => new Date(o.createdAt).getFullYear()),
+				orders.map((o: OrderUI) => new Date(o.createdAt).getFullYear()),
 			),
 		] as number[]
 	).sort((a, b) => b - a),
@@ -118,7 +140,7 @@ function getDateRange(period: string): { start: Date; end: Date } | null {
 
 // Filter orders
 let filteredOrders = $derived(
-	orders.filter((order: any) => {
+	orders.filter((order: OrderUI) => {
 		const orderDate = new Date(order.createdAt);
 
 		// Period filter (today/week/month)
@@ -156,13 +178,13 @@ let filteredOrders = $derived(
 
 let totalRevenue = $derived(
 	filteredOrders.reduce(
-		(sum: number, order: any) => sum + (order.total || 0),
+		(sum: number, order: OrderUI) => sum + (order.total || 0),
 		0,
 	),
 );
 
 let allTimeRevenue = $derived(
-	orders.reduce((sum: number, order: any) => sum + (order.total || 0), 0),
+	orders.reduce((sum: number, order: OrderUI) => sum + (order.total || 0), 0),
 );
 
 async function updateStatus(orderId: string, newStatus: string) {
@@ -172,15 +194,15 @@ async function updateStatus(orderId: string, newStatus: string) {
 			status: newStatus,
 		});
 		if (selectedOrder?._id === orderId) {
-			selectedOrder = { ...selectedOrder, status: newStatus };
+			selectedOrder = { ...selectedOrder, status: newStatus as OrderStatus };
 		}
 	} catch (err) {
-		console.error("Failed to update status:", err);
+		logger.error("Failed to update status:", err);
 		addToast("Failed to update order status.");
 	}
 }
 
-function openOrderDetails(order: any) {
+function openOrderDetails(order: OrderUI) {
 	selectedOrder = order;
 	notesValue = order.notes || "";
 }
@@ -200,7 +222,7 @@ async function saveNotes(orderId: string, notes: string) {
 			selectedOrder = { ...selectedOrder, notes };
 		}
 	} catch (err) {
-		console.error("Failed to save notes:", err);
+		logger.error("Failed to save notes:", err);
 		addToast("Failed to save notes.");
 	} finally {
 		notesSaving = false;
@@ -221,7 +243,7 @@ function exportCSV() {
 		"Notes",
 	];
 
-	const rows = filteredOrders.map((order: any) => {
+	const rows = filteredOrders.map((order: OrderUI) => {
 		const gross = (order.total || 0) / 100;
 		const fees = (order.stripeFees || 0) / 100;
 		const net = gross - fees;
@@ -232,7 +254,7 @@ function exportCSV() {
 			order.customerName || "",
 			order.customerEmail || "",
 			(order.items || [])
-				.map((i: any) => `${i.productName} x${i.quantity}`)
+				.map((i: OrderUI["items"][number]) => `${i.productName} x${i.quantity}`)
 				.join("; "),
 			gross.toFixed(2),
 			fees.toFixed(2),
@@ -244,8 +266,8 @@ function exportCSV() {
 
 	const csvContent = [
 		headers.join(","),
-		...rows.map((row: any[]) =>
-			row.map((cell: any) => `"${String(cell).replace(/"/g, '""')}"`).join(","),
+		...rows.map((row: (string | number)[]) =>
+			row.map((cell: string | number) => `"${String(cell).replace(/"/g, '""')}"`).join(","),
 		),
 	].join("\n");
 

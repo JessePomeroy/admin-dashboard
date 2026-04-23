@@ -1,11 +1,13 @@
 <script lang="ts">
 import { page } from "$app/stores";
-import { useQuery, useConvexClient } from "@mmailaender/convex-svelte";
+import { useQuery } from "@mmailaender/convex-svelte";
+import { useAdminClient } from "../adminClient";
 import { getAdminConfig } from "../config";
 import FeatureGate from "../components/FeatureGate.svelte";
 import LoadingState from "../components/LoadingState.svelte";
 import type { Contract, ContractStatus } from "../types";
 import { addToast } from "../toast";
+import { logger } from "../logger";
 import { copyPortalLink, toId } from "../utils";
 import ContractCreateModal from "./contracts/ContractCreateModal.svelte";
 import ContractDetailModal from "./contracts/ContractDetailModal.svelte";
@@ -17,7 +19,7 @@ const { api } = config;
 
 let { data } = $props();
 
-const client = useConvexClient();
+const client = useAdminClient();
 const contractsQuery = useQuery(api.contracts.list, { siteUrl: config.siteUrl });
 const clientsQuery = useQuery(api.crm.listClients, { siteUrl: config.siteUrl });
 const templatesQuery = useQuery(api.contracts.listTemplates, { siteUrl: config.siteUrl });
@@ -183,7 +185,7 @@ async function handleShareLink(id: string, clientId: string) {
 	try {
 		await copyPortalLink(client, api, config.siteUrl, "contract", id, clientId);
 	} catch (err) {
-		console.error("Failed to create share link:", err);
+		logger.error("Failed to create share link:", err);
 		addToast("Failed to create share link.");
 	}
 }

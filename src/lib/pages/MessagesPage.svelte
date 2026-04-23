@@ -1,7 +1,10 @@
 <script lang="ts">
-import { useQuery, useConvexClient } from "@mmailaender/convex-svelte";
+import { useQuery } from "@mmailaender/convex-svelte";
+import { useAdminClient } from "../adminClient";
 import { getAdminConfig } from "../config";
 import { addToast } from "../toast";
+import { logger } from "../logger";
+import type { PlatformClient } from "../types";
 import FeatureGate from "../components/FeatureGate.svelte";
 import LoadingState from "../components/LoadingState.svelte";
 import ConversationView from "./messages/ConversationView.svelte";
@@ -29,14 +32,14 @@ const { api } = config;
 
 let { data } = $props();
 
-const client = useConvexClient();
+const client = useAdminClient();
 const threadsQuery = useQuery(api.messages.allThreads, {});
 const platformClientsQuery = useQuery(api.platform.listAll, {});
 
-let threads = $derived(threadsQuery.data ?? []);
-let platformClients = $derived(platformClientsQuery.data ?? []);
+let threads = $derived((threadsQuery.data ?? []) as Thread[]);
+let platformClients = $derived((platformClientsQuery.data ?? []) as PlatformClient[]);
 let clientsWithoutThreads = $derived(
-	platformClients.filter((pc: any) => !threads.some((t: Thread) => t.client.siteUrl === pc.siteUrl))
+	platformClients.filter((pc: PlatformClient) => !threads.some((t: Thread) => t.client.siteUrl === pc.siteUrl))
 );
 
 let selectedThread = $state<Thread | null>(null);
@@ -58,7 +61,7 @@ async function selectThread(thread: Thread) {
 			await client.mutation(api.messages.markRead, { siteUrl: thread.client.siteUrl });
 		}
 	} catch (err) {
-		console.error("Failed to mark messages read:", err);
+		logger.error("Failed to mark messages read:", err);
 	}
 }
 
@@ -75,14 +78,14 @@ async function sendMessage() {
 			content,
 		});
 	} catch (err) {
-		console.error("Failed to send message:", err);
+		logger.error("Failed to send message:", err);
 		addToast("Failed to send message.");
 	} finally {
 		sending = false;
 	}
 }
 
-function startNewConversation(platformClient: any) {
+function startNewConversation(platformClient: PlatformClient) {
 	selectedThread = {
 		client: {
 			_id: platformClient._id,

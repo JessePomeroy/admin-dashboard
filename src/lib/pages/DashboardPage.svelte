@@ -3,6 +3,7 @@ import { goto } from "$app/navigation";
 import { useQuery } from "@mmailaender/convex-svelte";
 import { getAdminConfig } from "../config";
 import LoadingState from "../components/LoadingState.svelte";
+import type { Invoice, InvoiceItem, Quote } from "../types";
 import {
 	formatCents,
 	formatDate,
@@ -14,6 +15,18 @@ import {
 
 const config = getAdminConfig();
 const { api } = config;
+
+// Recent orders as returned by api.orders.getStats — `createdAt` is a
+// pre-formatted ISO string (not a Convex `_creationTime` number).
+interface RecentOrderUI {
+	_id: string;
+	orderNumber: string;
+	createdAt: string;
+	customerEmail: string;
+	customerName?: string;
+	total: number;
+	status: string;
+}
 
 let { data } = $props();
 
@@ -37,19 +50,19 @@ const recentOrders = $derived(orderStatsData?.recentOrders ?? []);
 const crmStats = $derived(crmStatsQuery.data ?? { total: 0, leads: 0, booked: 0, inProgress: 0, completed: 0, photography: 0, web: 0 });
 
 // Invoice stats
-const invoices = $derived(invoicesQuery.data ?? []);
+const invoices = $derived((invoicesQuery.data ?? []) as Invoice[]);
 const invoiceStats = $derived({
-	draft: invoices.filter((i: any) => i.status === "draft").length,
-	sent: invoices.filter((i: any) => i.status === "sent").length,
-	paid: invoices.filter((i: any) => i.status === "paid").length,
-	overdue: invoices.filter((i: any) => i.status === "overdue").length,
+	draft: invoices.filter((i: Invoice) => i.status === "draft").length,
+	sent: invoices.filter((i: Invoice) => i.status === "sent").length,
+	paid: invoices.filter((i: Invoice) => i.status === "paid").length,
+	overdue: invoices.filter((i: Invoice) => i.status === "overdue").length,
 });
 const pendingInvoiceAmount = $derived(
 	invoices
-		.filter((i: any) => i.status === "draft" || i.status === "sent")
-		.reduce((sum: number, inv: any) => {
+		.filter((i: Invoice) => i.status === "draft" || i.status === "sent")
+		.reduce((sum: number, inv: Invoice) => {
 			const invoiceTotal = inv.items.reduce(
-				(t: number, item: { quantity: number; unitPrice: number }) => t + item.quantity * item.unitPrice,
+				(t: number, item: InvoiceItem) => t + item.quantity * item.unitPrice,
 				0,
 			);
 			return sum + invoiceTotal;
@@ -57,12 +70,12 @@ const pendingInvoiceAmount = $derived(
 );
 
 // Quote stats
-const quotes = $derived(quotesQuery.data ?? []);
+const quotes = $derived((quotesQuery.data ?? []) as Quote[]);
 const quoteStats = $derived({
-	draft: quotes.filter((q: any) => q.status === "draft").length,
-	sent: quotes.filter((q: any) => q.status === "sent").length,
-	accepted: quotes.filter((q: any) => q.status === "accepted").length,
-	declined: quotes.filter((q: any) => q.status === "declined").length,
+	draft: quotes.filter((q: Quote) => q.status === "draft").length,
+	sent: quotes.filter((q: Quote) => q.status === "sent").length,
+	accepted: quotes.filter((q: Quote) => q.status === "accepted").length,
+	declined: quotes.filter((q: Quote) => q.status === "declined").length,
 });
 
 // Sanity data (still from server)
@@ -70,7 +83,7 @@ const newInquiryCount = $derived(data.newInquiryCount);
 
 // Activity feed: combine recent orders, invoices, quotes
 const activityFeed = $derived(() => {
-	const recentInvoices = invoices.slice(0, 5).map((inv: any) => ({
+	const recentInvoices = invoices.slice(0, 5).map((inv: Invoice) => ({
 		type: "invoice" as const,
 		id: inv._id,
 		description: `${inv.invoiceNumber} — ${inv.clientName}`,
@@ -78,7 +91,7 @@ const activityFeed = $derived(() => {
 		status: inv.status,
 	}));
 
-	const recentQuoteItems = quotes.slice(0, 5).map((q: any) => ({
+	const recentQuoteItems = quotes.slice(0, 5).map((q: Quote) => ({
 		type: "quote" as const,
 		id: q._id,
 		description: `${q.quoteNumber} — ${q.clientName}`,
@@ -86,7 +99,7 @@ const activityFeed = $derived(() => {
 		status: q.status,
 	}));
 
-	const recentOrderItems = recentOrders.slice(0, 5).map((o: any) => ({
+	const recentOrderItems = (recentOrders as RecentOrderUI[]).slice(0, 5).map((o: RecentOrderUI) => ({
 		type: "order" as const,
 		id: o._id,
 		description: `${o.orderNumber} — ${o.customerName || o.customerEmail}`,
@@ -115,8 +128,13 @@ let maxRevenue = $derived(
 );
 
 let sparklinePath = $derived(() => {
+	if (dailyRevenue.length === 0) return "";
+	// Single-point series: divide-by-zero in the x-coordinate would yield NaN,
+	// so center the point horizontally.
+	const divisor = dailyRevenue.length > 1 ? dailyRevenue.length - 1 : 1;
 	const points = dailyRevenue.map((d: { amount: number }, i: number) => {
-		const x = (i / (dailyRevenue.length - 1)) * chartWidth;
+		const x =
+			dailyRevenue.length > 1 ? (i / divisor) * chartWidth : chartWidth / 2;
 		const y = chartHeight - (d.amount / maxRevenue) * (chartHeight - 8);
 		return `${x},${y}`;
 	});
@@ -132,8 +150,11 @@ let chartPoints = $derived(
 );
 
 let sparklineArea = $derived(() => {
+	if (dailyRevenue.length === 0) return "";
+	const divisor = dailyRevenue.length > 1 ? dailyRevenue.length - 1 : 1;
 	const points = dailyRevenue.map((d: { amount: number }, i: number) => {
-		const x = (i / (dailyRevenue.length - 1)) * chartWidth;
+		const x =
+			dailyRevenue.length > 1 ? (i / divisor) * chartWidth : chartWidth / 2;
 		const y = chartHeight - (d.amount / maxRevenue) * (chartHeight - 8);
 		return `${x},${y}`;
 	});
