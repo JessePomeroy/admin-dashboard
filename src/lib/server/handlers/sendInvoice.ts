@@ -1,10 +1,23 @@
 import { toId } from "../../utils";
+import { escapeHtml } from "../html";
 import { createEmailSendHandler, formatCurrency } from "./createEmailSendHandler";
+
+/** Subset of the Convex Invoice document the send handler needs. */
+interface InvoiceDoc extends Record<string, unknown> {
+	clientEmail?: string;
+	clientName?: string;
+	invoiceNumber: string;
+	items: { description: string; quantity: number; unitPrice: number }[];
+	taxPercent?: number;
+	dueDate?: string;
+}
 
 function buildDefaultInvoiceHtml(
 	vars: Record<string, string>,
 	siteName: string,
 ): string {
+	// All vars come from extractVars below, which pre-escapes user-controlled
+	// strings. `lineItems` is intentionally pre-built HTML and must not be escaped.
 	return `<div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 24px;">
 <p>hi ${vars.clientName},</p>
 ${vars.changeNote ? `<p>your invoice has been updated (${vars.changeNote}).</p>` : "<p>a new invoice has been created for you.</p>"}
@@ -37,12 +50,12 @@ ${vars.taxLine ? `<tr><td colspan="3" style="padding: 8px 0; text-align: right; 
 </tfoot>
 </table>
 <p>please reach out if you have any questions.</p>
-<p style="color: #999; font-size: 0.85em; margin-top: 32px;">${siteName}</p>
+<p style="color: #999; font-size: 0.85em; margin-top: 32px;">${escapeHtml(siteName)}</p>
 </div>`;
 }
 
 export function createInvoiceSendHandler() {
-	return createEmailSendHandler({
+	return createEmailSendHandler<InvoiceDoc>({
 		docType: "invoice",
 		fetchDocument: (api, convex, id) =>
 			convex.query(api.invoices.get, { invoiceId: toId(id) }),
@@ -58,26 +71,28 @@ export function createInvoiceSendHandler() {
 				: 0;
 			const grandTotal = total + taxAmount;
 
+			// lineItems is pre-built HTML. User-controlled `description` is escaped
+			// inside the template string; quantity and unitPrice are numeric.
 			const lineItems = doc.items
 				.map(
 					(item: { description: string; quantity: number; unitPrice: number }) => {
 						const lineTotal = item.quantity * item.unitPrice;
-						return `<tr><td style="padding: 6px 0;">${item.description}</td><td style="padding: 6px 0; text-align: right;">${item.quantity}</td><td style="padding: 6px 0; text-align: right;">${formatCurrency(item.unitPrice)}</td><td style="padding: 6px 0; text-align: right;">${formatCurrency(lineTotal)}</td></tr>`;
+						return `<tr><td style="padding: 6px 0;">${escapeHtml(item.description)}</td><td style="padding: 6px 0; text-align: right;">${item.quantity}</td><td style="padding: 6px 0; text-align: right;">${formatCurrency(item.unitPrice)}</td><td style="padding: 6px 0; text-align: right;">${formatCurrency(lineTotal)}</td></tr>`;
 					},
 				)
 				.join("\n");
 
 			return {
-				clientName: doc.clientName ?? "there",
-				invoiceNumber: doc.invoiceNumber,
+				clientName: escapeHtml(doc.clientName ?? "there"),
+				invoiceNumber: escapeHtml(doc.invoiceNumber),
 				amount: formatCurrency(grandTotal),
-				dueDate: doc.dueDate ?? "",
+				dueDate: escapeHtml(doc.dueDate ?? ""),
 				lineItems,
 				subtotal: formatCurrency(total),
 				taxLine: taxAmount
-					? `${formatCurrency(taxAmount)} (${doc.taxPercent}%)`
+					? `${formatCurrency(taxAmount)} (${escapeHtml(String(doc.taxPercent))}%)`
 					: "",
-				changeNote,
+				changeNote: escapeHtml(changeNote),
 			};
 		},
 		buildDefaultHtml: buildDefaultInvoiceHtml,

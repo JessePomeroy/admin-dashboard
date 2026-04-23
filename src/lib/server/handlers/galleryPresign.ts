@@ -21,6 +21,23 @@ function workerHeaders(secret: string, contentType = "application/json") {
 	};
 }
 
+/**
+ * Safely parse a worker response as JSON. If the worker returns non-JSON
+ * (e.g. a Cloudflare interstitial HTML page on 200), surface a clean 502 so
+ * callers don't see a confusing "Unexpected token <" JSON parse error.
+ */
+async function parseWorkerJson(res: Response): Promise<unknown> {
+	const contentType = res.headers.get("content-type") ?? "";
+	if (!contentType.includes("application/json")) {
+		const snippet = (await res.text()).slice(0, 200);
+		throw error(
+			502,
+			`Gallery worker returned non-JSON response (content-type: ${contentType || "unknown"}): ${snippet}`,
+		);
+	}
+	return res.json();
+}
+
 export function createGalleryPresignHandler() {
 	return async ({ request }: { request: Request }) => {
 		await requireAdmin(request);
@@ -51,7 +68,7 @@ export function createGalleryPresignHandler() {
 			});
 
 			if (!res.ok) throw error(res.status, await res.text());
-			return json(await res.json());
+			return json(await parseWorkerJson(res));
 		} catch (err) {
 			handleServerError(err, "Failed to generate upload URL");
 		}
@@ -83,7 +100,7 @@ export function createGalleryUploadHandler() {
 			);
 
 			if (!res.ok) throw error(res.status, await res.text());
-			return json(await res.json());
+			return json(await parseWorkerJson(res));
 		} catch (err) {
 			handleServerError(err, "Failed to upload file");
 		}
@@ -105,7 +122,7 @@ export function createGalleryProcessHandler() {
 			});
 
 			if (!res.ok) throw error(res.status, await res.text());
-			return json(await res.json());
+			return json(await parseWorkerJson(res));
 		} catch (err) {
 			handleServerError(err, "Failed to process image");
 		}
@@ -128,7 +145,7 @@ export function createGalleryDeleteHandler() {
 			});
 
 			if (!res.ok) throw error(res.status, await res.text());
-			return json(await res.json());
+			return json(await parseWorkerJson(res));
 		} catch (err) {
 			handleServerError(err, "Failed to delete image");
 		}

@@ -6,34 +6,53 @@ import { formatCents, toId } from "../../utils";
 import { getAuthenticatedConvex } from "../convexClient";
 import { replaceTemplateVariables, sendEmail } from "../email";
 import { handleServerError } from "../handleError";
+import { escapeHtml } from "../html";
 import { requireAdmin } from "../requireAdmin";
 
 export { formatCents as formatCurrency };
 
-function wrapPlainText(text: string): string {
-	if (text.includes("<")) return text;
-	return `<div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; white-space: pre-wrap;">${text}</div>`;
+/**
+ * Detects whether a body is intended to be HTML. Conservative heuristic:
+ * the body must begin with a tag-like prefix (after optional whitespace).
+ * Anything else — including a prose body that happens to contain `<` —
+ * is treated as plain text, escaped, and wrapped.
+ */
+function looksLikeHtml(text: string): boolean {
+	return /^\s*<[a-zA-Z!]/.test(text);
 }
 
-export interface EmailSendConfig {
+function wrapPlainText(text: string): string {
+	if (looksLikeHtml(text)) return text;
+	return `<div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; white-space: pre-wrap;">${escapeHtml(text)}</div>`;
+}
+
+/**
+ * Shape of a document passed through the send handler. Each caller narrows
+ * this to a concrete doc interface (InvoiceDoc, QuoteDoc, ContractDoc) so
+ * that `extractVars` / `defaultSubject` can access fields without casts.
+ * Defaults to `Record<string, unknown>` for back-compat.
+ */
+export interface EmailSendConfig<
+	TDoc extends Record<string, unknown> = Record<string, unknown>,
+> {
 	docType: string;
 	/** Fetch the document by ID. Return null if not found. */
 	fetchDocument: (
 		api: AdminAPI,
 		convex: ConvexHttpClient,
 		id: string,
-	) => Promise<Record<string, unknown> | null>;
+	) => Promise<TDoc | null>;
 	/** Get the client email from the document. */
-	getClientEmail: (doc: Record<string, unknown>) => string | undefined;
+	getClientEmail: (doc: TDoc) => string | undefined;
 	/** Extract template variables from the document. */
-	extractVars: (doc: Record<string, unknown>, changeNote: string) => Record<string, string>;
+	extractVars: (doc: TDoc, changeNote: string) => Record<string, string>;
 	/** Build default HTML when no template is found. */
 	buildDefaultHtml: (
 		vars: Record<string, string>,
 		siteName: string,
 	) => string;
 	/** Build the default subject line. */
-	defaultSubject: (doc: Record<string, unknown>) => string;
+	defaultSubject: (doc: TDoc) => string;
 	/** Mark the document as sent after email is delivered. */
 	markSent: (api: AdminAPI, convex: ConvexHttpClient, id: string, siteUrl: string) => Promise<void>;
 	/**
@@ -51,7 +70,9 @@ export interface EmailSendConfig {
  * Handles: template lookup, custom subject/body, email sending,
  * logging, mark-sent, and error handling.
  */
-export function createEmailSendHandler(config: EmailSendConfig) {
+export function createEmailSendHandler<
+	TDoc extends Record<string, unknown> = Record<string, unknown>,
+>(config: EmailSendConfig<TDoc>) {
 	return async ({
 		params,
 		request,
@@ -117,7 +138,10 @@ export function createEmailSendHandler(config: EmailSendConfig) {
 				type: config.docType,
 				relatedId: id,
 				status: "sent",
-				resendId: result.data?.id,
+				// Resend returns `{ data: { id }, error: null }` on success, but
+				// `data` can be null on certain failure shapes. Coalesce so the
+				// mutation always sees an explicit null rather than `undefined`.
+				resendId: result.data?.id ?? null,
 			});
 
 			await config.markSent(api, convex, id, siteUrl);

@@ -23,8 +23,15 @@ export function requireString(
 	return value.trim().slice(0, maxLength);
 }
 
-const ALLOWED_IMAGE_EXTENSIONS = new Set([
-	".jpg", ".jpeg", ".png", ".gif", ".webp", ".avif", ".tiff", ".tif", ".heic", ".heif",
+/**
+ * Gallery image extension allowlist. Must stay in sync with the client-side
+ * `ALLOWED_TYPES` in GalleryUploader.svelte — the UI and processing pipeline
+ * only handle these formats. Keeping both lists identical prevents a caller
+ * from smuggling unsupported formats (e.g. gif, heic, avif) past the UI and
+ * into R2, where downstream processing would silently fail.
+ */
+export const ALLOWED_IMAGE_EXTENSIONS = new Set([
+	".jpg", ".jpeg", ".png", ".webp", ".tiff", ".tif",
 ]);
 
 /**
