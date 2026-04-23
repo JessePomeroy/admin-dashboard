@@ -14,6 +14,9 @@ export {
 	type NanostoreAtom,
 } from "./config";
 
+// Convex client (honors AdminConfig.mutationTransport)
+export { useAdminClient } from "./adminClient";
+
 // Layout & Auth
 export { default as AdminLayout } from "./components/AdminLayout.svelte";
 export { default as AuthGuard } from "./components/AuthGuard.svelte";
