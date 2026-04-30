@@ -32,7 +32,16 @@ jobs:
           PACKAGE_VERSION=$(jq -r .version package.json)
           echo "version=$PACKAGE_VERSION" >> "$GITHUB_OUTPUT"
 
-          if npm view "${PACKAGE_NAME}@${PACKAGE_VERSION}" version 2>/dev/null; then
+          # Query GitHub Packages explicitly. Without --registry, npm view
+          # falls through to the default registry written by
+          # actions/setup-node (which sets npmjs.org as the global registry
+          # via its registry-url input, even when a scoped registry rule
+          # exists in the project .npmrc). On npmjs.org the package doesn't
+          # exist, so the check always reported "not found" and the publish
+          # step would try to publish — failing with E409 on every push
+          # that didn't bump the version. Pinning --registry forces
+          # GitHub Packages, so version-skip detection actually works.
+          if npm view "${PACKAGE_NAME}@${PACKAGE_VERSION}" version --registry=https://npm.pkg.github.com 2>/dev/null; then
             echo "exists=true" >> "$GITHUB_OUTPUT"
             echo "Version ${PACKAGE_VERSION} already published, skipping."
           else
