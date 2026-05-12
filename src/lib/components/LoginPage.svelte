@@ -4,6 +4,7 @@ import "../theme.css";
 
 const config = getAdminConfig();
 const authClient = config.authClient!;
+const authCallbackURL = config.authCallbackURL ?? "/admin";
 
 let email = $state("");
 let password = $state("");
@@ -19,6 +20,8 @@ async function handleEmailAuth(e: Event) {
 		const result = await authClient.signIn.email({ email, password });
 		if (result?.error) {
 			error = result.error.message || "Sign-in failed";
+		} else {
+			window.location.assign(authCallbackURL);
 		}
 	} catch (err: unknown) {
 		error = err instanceof Error ? err.message : "Something went wrong";
@@ -32,7 +35,7 @@ async function handleGoogle() {
 	try {
 		await authClient.signIn.social({
 			provider: "google",
-			callbackURL: "/admin",
+			callbackURL: authCallbackURL,
 		});
 	} catch (err: unknown) {
 		error = err instanceof Error ? err.message : "Google sign-in failed";
