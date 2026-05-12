@@ -218,6 +218,18 @@ export interface AdminConfig {
 	sanityStudioUrl?: string;
 	api: AdminAPI;
 	authClient?: AdminAuthClient;
+	/**
+	 * Route to load after a successful auth flow.
+	 *
+	 * Email/password sign-in sets the Better Auth cookie without a full-page
+	 * navigation. Apps that validate admin access in SvelteKit server loaders
+	 * need one navigation after sign-in so those loaders can re-read the
+	 * cookie and initialize authenticated Convex state. OAuth providers also
+	 * use this as their callback target.
+	 *
+	 * Default: `"/admin"`.
+	 */
+	authCallbackURL?: string;
 	galleryWorkerUrl?: string;
 	theme?: {
 		dark?: AdminTheme;
