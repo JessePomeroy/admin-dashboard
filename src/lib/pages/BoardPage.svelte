@@ -33,10 +33,17 @@ const photographyTypes = [
 	"event",
 ];
 const webTypes = ["website", "redesign", "maintenance", "other"];
-const allTypes = [...photographyTypes, ...webTypes];
+const defaultProjectTypeGroups = [
+	{ label: "photography", values: photographyTypes },
+	{ label: "web", values: webTypes },
+];
+const projectTypeGroups = config.boardProjectTypes?.length
+	? config.boardProjectTypes
+	: defaultProjectTypeGroups;
+const allTypes = projectTypeGroups.flatMap((group) => group.values);
 
 // State
-let selectedType = $state(allTypes[0]);
+let selectedType = $state(allTypes[0] ?? "other");
 let saving = $state(false);
 let selectedClient = $state<CardItem | null>(null);
 let editingColumnId = $state<string | null>(null);
@@ -227,16 +234,13 @@ function openDetail(card: CardItem) {
 			<h1>board</h1>
 			<div class="header-controls">
 				<select bind:value={selectedType} class="type-select">
-					<optgroup label="photography">
-						{#each photographyTypes as t}
-							<option value={t}>{t}</option>
-						{/each}
-					</optgroup>
-					<optgroup label="web">
-						{#each webTypes as t}
-							<option value={t}>{t}</option>
-						{/each}
-					</optgroup>
+					{#each projectTypeGroups as group}
+						<optgroup label={group.label}>
+							{#each group.values as t}
+								<option value={t}>{t}</option>
+							{/each}
+						</optgroup>
+					{/each}
 				</select>
 				{#if activeConfig}
 					<button class="action-btn" onclick={() => (showAddColumn = true)}>

@@ -164,6 +164,11 @@ export interface AdminTheme {
 	"status-rose"?: string;
 }
 
+export interface BoardProjectTypeGroup {
+	label: string;
+	values: string[];
+}
+
 export interface AdminAuthSession {
 	user: { email: string; name?: string; image?: string | null };
 }
@@ -231,6 +236,12 @@ export interface AdminConfig {
 	 */
 	authCallbackURL?: string;
 	galleryWorkerUrl?: string;
+	/**
+	 * Project types shown on the board page. Defaults to photography + web
+	 * presets for the creator dashboard; client tenants should pass only the
+	 * business-specific project types they actually sell.
+	 */
+	boardProjectTypes?: BoardProjectTypeGroup[];
 	theme?: {
 		dark?: AdminTheme;
 		light?: AdminTheme;
