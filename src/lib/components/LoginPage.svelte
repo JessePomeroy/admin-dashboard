@@ -11,17 +11,29 @@ let password = $state("");
 let error = $state("");
 let loading = $state(false);
 
+function finishAuthRedirect() {
+	const target = new URL(authCallbackURL, window.location.href);
+	const current = new URL(window.location.href);
+
+	if (target.href === current.href) {
+		window.location.reload();
+		return;
+	}
+
+	window.location.replace(target.href);
+}
+
 async function handleEmailAuth(e: Event) {
 	e.preventDefault();
 	error = "";
 	loading = true;
 
 	try {
-		const result = await authClient.signIn.email({ email, password });
+		const result = await authClient.signIn.email({ email, password, callbackURL: authCallbackURL });
 		if (result?.error) {
 			error = result.error.message || "Sign-in failed";
 		} else {
-			window.location.assign(authCallbackURL);
+			finishAuthRedirect();
 		}
 	} catch (err: unknown) {
 		error = err instanceof Error ? err.message : "Something went wrong";

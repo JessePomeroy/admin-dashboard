@@ -194,6 +194,7 @@ export interface AdminAuthClient {
 		email: (opts: {
 			email: string;
 			password: string;
+			callbackURL?: string;
 		}) => Promise<{ error?: { message?: string } | null }>;
 		social: (opts: {
 			provider: "google";
