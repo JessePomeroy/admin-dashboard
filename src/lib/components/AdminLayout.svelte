@@ -212,6 +212,7 @@ const navItems: {
 		label: "messages",
 		icon: "messages",
 		feature: "messages",
+		creatorOnly: true,
 	},
 	{
 		href: "/admin/platform",
