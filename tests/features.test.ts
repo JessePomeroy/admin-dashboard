@@ -73,6 +73,14 @@ describe("hasFeature", () => {
 		expect(hasFeature("full", "emails")).toBe(true);
 		expect(hasFeature("full", "messages")).toBe(true);
 	});
+
+	it("full client tenants do not unlock creator-only messages", () => {
+		expect(hasFeature("full", "messages", { isCreator: false })).toBe(false);
+	});
+
+	it("full creator tenants unlock creator-only messages", () => {
+		expect(hasFeature("full", "messages", { isCreator: true })).toBe(true);
+	});
 });
 
 describe("getFullFeatures", () => {
