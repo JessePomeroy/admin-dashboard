@@ -1,6 +1,7 @@
 <script lang="ts">
 import type { Snippet } from "svelte";
 import { useQuery } from "@mmailaender/convex-svelte";
+import { getTenantAdminSessionState } from "../adminSession";
 import { getAdminConfig } from "../config";
 import LoginPage from "./LoginPage.svelte";
 import LoadingState from "./LoadingState.svelte";
@@ -48,22 +49,32 @@ const isAuthorized = $derived(
 const authCheckLoading = $derived(
 	!config.isCreator && accessCheck && !accessCheck.data && !accessCheck.error,
 );
+const adminSession = $derived(
+	getTenantAdminSessionState({
+		hasAuthClient: Boolean(authClient),
+		sessionPending,
+		session: sessionData,
+		isCreator: config.isCreator,
+		accessCheckPending: Boolean(authCheckLoading),
+		accessAuthorized: isAuthorized,
+	}),
+);
 </script>
 
-{#if !authClient}
+{#if adminSession.status === "auth-disabled"}
 	{@render children()}
-{:else if sessionPending || authCheckLoading}
+{:else if adminSession.status === "loading"}
 	<div class="auth-loading" data-admin>
 		<LoadingState />
 	</div>
-{:else if !sessionData}
+{:else if adminSession.status === "unauthenticated"}
 	<LoginPage />
-{:else if !isAuthorized}
+{:else if adminSession.status === "unauthorized"}
 	<div class="auth-denied" data-admin>
 		<div class="denied-container">
 			<h1 class="denied-title">{config.siteName}</h1>
 			<p class="denied-message">
-				this account ({userEmail}) is not authorized to access this admin panel.
+				this account ({adminSession.email}) is not authorized to access this admin panel.
 			</p>
 			<button
 				class="denied-button"

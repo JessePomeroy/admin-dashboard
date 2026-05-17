@@ -49,6 +49,7 @@ export { default as PlatformPage } from "./pages/PlatformPage.svelte";
 export { default as QuotesPage } from "./pages/QuotesPage.svelte";
 
 // Features & types
+export * from "./adminSession";
 export * from "./capabilities";
 export * from "./features";
 export type * from "./types";
