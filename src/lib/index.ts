@@ -49,6 +49,7 @@ export { default as PlatformPage } from "./pages/PlatformPage.svelte";
 export { default as QuotesPage } from "./pages/QuotesPage.svelte";
 
 // Features & types
+export * from "./capabilities";
 export * from "./features";
 export type * from "./types";
 export * from "./utils";
@@ -65,6 +66,11 @@ export type { EmailSendConfig } from "./server/handlers/createEmailSendHandler";
 export { createContractSendHandler } from "./server/handlers/sendContract";
 export { createQuoteSendHandler } from "./server/handlers/sendQuote";
 export { createPortalTokenHandler } from "./server/handlers/createPortalToken";
+export {
+	createAdminMutationHandler,
+	resolveConvexFunction,
+	type AdminMutationProxyOptions,
+} from "./server/adminMutationProxy";
 export {
 	createGalleryPresignHandler,
 	createGalleryUploadHandler,

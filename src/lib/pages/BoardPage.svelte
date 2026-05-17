@@ -1,6 +1,7 @@
 <script lang="ts">
 import { useQuery } from "@mmailaender/convex-svelte";
 import { useAdminClient } from "../adminClient";
+import { getAdminCapabilities } from "../capabilities";
 import { getAdminConfig } from "../config";
 import { addToast } from "../toast";
 import { logger } from "../logger";
@@ -19,31 +20,24 @@ let { data } = $props();
 const client = useAdminClient();
 const boardConfigsQuery = useQuery(api.kanban.listBoardConfigs, { siteUrl: config.siteUrl });
 const clientsQuery = useQuery(api.crm.listClients, { siteUrl: config.siteUrl });
+const capabilities = $derived(
+	getAdminCapabilities({
+		tier: data.tier,
+		isCreator: data.isCreator ?? config.isCreator,
+		boardProjectTypes: config.boardProjectTypes,
+	}),
+);
 
 let boardConfigs = $derived((boardConfigsQuery.data ?? []) as BoardConfig[]);
 let allClients = $derived((clientsQuery.data ?? []) as Client[]);
 let isLoading = $derived(boardConfigsQuery.isLoading || clientsQuery.isLoading);
 
 // Project types
-const photographyTypes = [
-	"wedding",
-	"portrait",
-	"family",
-	"commercial",
-	"event",
-];
-const webTypes = ["website", "redesign", "maintenance", "other"];
-const defaultProjectTypeGroups = [
-	{ label: "photography", values: photographyTypes },
-	{ label: "web", values: webTypes },
-];
-const projectTypeGroups = config.boardProjectTypes?.length
-	? config.boardProjectTypes
-	: defaultProjectTypeGroups;
-const allTypes = projectTypeGroups.flatMap((group) => group.values);
+let projectTypeGroups = $derived(capabilities.boardProjectTypeGroups);
+let allTypes = $derived(projectTypeGroups.flatMap((group) => group.values));
 
 // State
-let selectedType = $state(allTypes[0] ?? "other");
+let selectedType = $state("");
 let saving = $state(false);
 let selectedClient = $state<CardItem | null>(null);
 let editingColumnId = $state<string | null>(null);
@@ -51,6 +45,12 @@ let editingColumnName = $state("");
 let showAddColumn = $state(false);
 let newColumnName = $state("");
 let showColumnMenu = $state<string | null>(null);
+
+$effect(() => {
+	if (!allTypes.includes(selectedType)) {
+		selectedType = allTypes[0] ?? "";
+	}
+});
 
 // Board config for selected type
 let activeConfig = $derived(
@@ -143,6 +143,10 @@ async function handleFinalize(
 
 // Board initialization
 async function initBoard() {
+	if (!selectedType || !capabilities.canInitializeBoardType(selectedType)) {
+		addToast("This project type is not available for this tenant.");
+		return;
+	}
 	saving = true;
 	try {
 		await client.mutation(api.kanban.initializeBoard, {
@@ -233,6 +237,7 @@ function openDetail(card: CardItem) {
 		<div class="header-top">
 			<h1>board</h1>
 			<div class="header-controls">
+				{#if allTypes.length}
 				<select bind:value={selectedType} class="type-select">
 					{#each projectTypeGroups as group}
 						<optgroup label={group.label}>
@@ -242,6 +247,7 @@ function openDetail(card: CardItem) {
 						</optgroup>
 					{/each}
 				</select>
+				{/if}
 				{#if activeConfig}
 					<button class="action-btn" onclick={() => (showAddColumn = true)}>
 						+ column
@@ -251,7 +257,15 @@ function openDetail(card: CardItem) {
 		</div>
 	</header>
 
-	{#if !activeConfig}
+	{#if !allTypes.length}
+		<div class="empty-state">
+			<svg class="empty-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+				<rect x="3" y="3" width="5" height="14" rx="1"/><rect x="10" y="3" width="5" height="10" rx="1"/><rect x="17" y="3" width="5" height="18" rx="1"/>
+			</svg>
+			<p class="empty-title">no board project types configured</p>
+			<p class="empty-desc">add tenant-specific board project types before initializing boards</p>
+		</div>
+	{:else if !activeConfig}
 		<div class="empty-state">
 			<svg class="empty-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
 				<rect x="3" y="3" width="5" height="14" rx="1"/><rect x="10" y="3" width="5" height="10" rx="1"/><rect x="17" y="3" width="5" height="18" rx="1"/>

@@ -18,15 +18,33 @@ export const FEATURES = {
 
 export type Feature = keyof typeof FEATURES;
 export type Tier = "basic" | "full";
+export type FeatureContext = {
+	isCreator?: boolean;
+};
 
 const TIER_RANK: Record<Tier, number> = {
 	basic: 0,
 	full: 1,
 };
 
-export function hasFeature(tier: Tier, feature: Feature): boolean {
+const CREATOR_ONLY_FEATURES = new Set<Feature>(["messages"]);
+
+export function isCreatorOnlyFeature(feature: Feature): boolean {
+	return CREATOR_ONLY_FEATURES.has(feature);
+}
+
+export function hasFeature(
+	tier: Tier,
+	feature: Feature,
+	context: FeatureContext = {},
+): boolean {
 	const required = FEATURES[feature];
-	return TIER_RANK[tier] >= TIER_RANK[required];
+	const tierAllowsFeature = TIER_RANK[tier] >= TIER_RANK[required];
+	if (!tierAllowsFeature) return false;
+	if (isCreatorOnlyFeature(feature) && context.isCreator !== true) {
+		return false;
+	}
+	return true;
 }
 
 export function getFullFeatures(): Feature[] {

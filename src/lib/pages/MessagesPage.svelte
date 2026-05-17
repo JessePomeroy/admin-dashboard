@@ -2,6 +2,7 @@
 import { useQuery } from "@mmailaender/convex-svelte";
 import { useAdminClient } from "../adminClient";
 import { getAdminConfig } from "../config";
+import { hasFeature } from "../features";
 import { addToast } from "../toast";
 import { logger } from "../logger";
 import type { PlatformClient } from "../types";
@@ -33,8 +34,17 @@ const { api } = config;
 let { data } = $props();
 
 const client = useAdminClient();
-const threadsQuery = useQuery(api.messages.allThreads, {});
-const platformClientsQuery = useQuery(api.platform.listAll, {});
+const canUseMessages = $derived(
+	hasFeature(data.tier, "messages", {
+		isCreator: data.isCreator ?? config.isCreator,
+	}),
+);
+const threadsQuery = useQuery(api.messages.allThreads, () =>
+	canUseMessages ? {} : "skip",
+);
+const platformClientsQuery = useQuery(api.platform.listAll, () =>
+	canUseMessages ? {} : "skip",
+);
 
 let threads = $derived((threadsQuery.data ?? []) as Thread[]);
 let platformClients = $derived((platformClientsQuery.data ?? []) as PlatformClient[]);
@@ -44,7 +54,9 @@ let clientsWithoutThreads = $derived(
 
 let selectedThread = $state<Thread | null>(null);
 let selectedSiteUrl = $state<string | null>(null);
-const messagesQuery = useQuery(api.messages.list, () => selectedSiteUrl ? { siteUrl: selectedSiteUrl } : "skip");
+const messagesQuery = useQuery(api.messages.list, () =>
+	canUseMessages && selectedSiteUrl ? { siteUrl: selectedSiteUrl } : "skip",
+);
 let messages = $derived(messagesQuery.data ?? []);
 let messageInput = $state("");
 let sending = $state(false);
@@ -114,7 +126,11 @@ function handleNewMessageKeydown(e: KeyboardEvent) {
 }
 </script>
 
-<FeatureGate feature="messages" tier={data.tier}>
+<FeatureGate
+	feature="messages"
+	tier={data.tier}
+	isCreator={data.isCreator ?? config.isCreator}
+>
 {#if threadsQuery.isLoading}
 	<LoadingState />
 {:else}
