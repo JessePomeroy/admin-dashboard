@@ -67,6 +67,11 @@ export { createContractSendHandler } from "./server/handlers/sendContract";
 export { createQuoteSendHandler } from "./server/handlers/sendQuote";
 export { createPortalTokenHandler } from "./server/handlers/createPortalToken";
 export {
+	createAdminMutationHandler,
+	resolveConvexFunction,
+	type AdminMutationProxyOptions,
+} from "./server/adminMutationProxy";
+export {
 	createGalleryPresignHandler,
 	createGalleryUploadHandler,
 	createGalleryProcessHandler,
