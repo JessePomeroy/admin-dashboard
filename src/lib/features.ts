@@ -41,7 +41,7 @@ export function hasFeature(
 	const required = FEATURES[feature];
 	const tierAllowsFeature = TIER_RANK[tier] >= TIER_RANK[required];
 	if (!tierAllowsFeature) return false;
-	if (isCreatorOnlyFeature(feature) && context.isCreator === false) {
+	if (isCreatorOnlyFeature(feature) && context.isCreator !== true) {
 		return false;
 	}
 	return true;
