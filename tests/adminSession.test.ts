@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
 	canRenderTenantAdmin,
+	getTenantAdminLayoutData,
 	getTenantAdminSessionState,
 } from "../src/lib/adminSession";
 
@@ -88,5 +89,65 @@ describe("getTenantAdminSessionState", () => {
 
 		expect(session).toEqual({ status: "authorized", email: "maggie@example.com" });
 		expect(canRenderTenantAdmin(session)).toBe(true);
+	});
+});
+
+describe("getTenantAdminLayoutData", () => {
+	it("preserves the old layout fields for authorized creator admins", () => {
+		expect(
+			getTenantAdminLayoutData({
+				status: "authorized",
+				email: "jesse@example.com",
+				tier: "full",
+				isCreator: true,
+			}),
+		).toEqual({
+			tier: "full",
+			isCreator: true,
+			isAuthenticated: true,
+			adminSession: {
+				status: "authorized",
+				email: "jesse@example.com",
+				tier: "full",
+				isCreator: true,
+			},
+		});
+	});
+
+	it("returns unauthenticated defaults without exposing full-tier data", () => {
+		expect(getTenantAdminLayoutData({ status: "unauthenticated" })).toEqual({
+			tier: "basic",
+			isCreator: false,
+			isAuthenticated: false,
+			adminSession: { status: "unauthenticated" },
+		});
+	});
+
+	it("uses explicit fallback layout fields for unauthenticated creator sites", () => {
+		expect(
+			getTenantAdminLayoutData(
+				{ status: "unauthenticated" },
+				{ tier: "full", isCreator: true },
+			),
+		).toEqual({
+			tier: "full",
+			isCreator: true,
+			isAuthenticated: false,
+			adminSession: { status: "unauthenticated" },
+		});
+	});
+
+	it("keeps unauthorized sessions unauthenticated for existing child loaders", () => {
+		expect(
+			getTenantAdminLayoutData(
+				{ status: "unauthorized", email: "maggie@example.com" },
+				{ tier: "basic", isCreator: false },
+			),
+		).toEqual({
+			tier: "basic",
+			isCreator: false,
+			isAuthenticated: false,
+			adminSession: { status: "unauthorized", email: "maggie@example.com" },
+		});
 	});
 });
