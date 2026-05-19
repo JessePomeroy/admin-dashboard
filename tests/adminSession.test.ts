@@ -94,7 +94,7 @@ describe("getTenantAdminSessionState", () => {
 });
 
 describe("getTenantAdminLayoutData", () => {
-	it("preserves the old layout fields for authorized creator admins", () => {
+	it("returns only the canonical admin session for authorized creator admins", () => {
 		expect(
 			getTenantAdminLayoutData({
 				status: "authorized",
@@ -103,9 +103,6 @@ describe("getTenantAdminLayoutData", () => {
 				isCreator: true,
 			}),
 		).toEqual({
-			tier: "full",
-			isCreator: true,
-			isAuthenticated: true,
 			adminSession: {
 				status: "authorized",
 				email: "jesse@example.com",
@@ -117,37 +114,17 @@ describe("getTenantAdminLayoutData", () => {
 
 	it("returns unauthenticated defaults without exposing full-tier data", () => {
 		expect(getTenantAdminLayoutData({ status: "unauthenticated" })).toEqual({
-			tier: "basic",
-			isCreator: false,
-			isAuthenticated: false,
 			adminSession: { status: "unauthenticated" },
 		});
 	});
 
-	it("uses explicit fallback layout fields for unauthenticated creator sites", () => {
+	it("keeps unauthorized sessions normalized", () => {
 		expect(
-			getTenantAdminLayoutData(
-				{ status: "unauthenticated" },
-				{ tier: "full", isCreator: true },
-			),
+			getTenantAdminLayoutData({
+				status: "unauthorized",
+				email: "maggie@example.com",
+			}),
 		).toEqual({
-			tier: "full",
-			isCreator: true,
-			isAuthenticated: false,
-			adminSession: { status: "unauthenticated" },
-		});
-	});
-
-	it("keeps unauthorized sessions unauthenticated for existing child loaders", () => {
-		expect(
-			getTenantAdminLayoutData(
-				{ status: "unauthorized", email: "maggie@example.com" },
-				{ tier: "basic", isCreator: false },
-			),
-		).toEqual({
-			tier: "basic",
-			isCreator: false,
-			isAuthenticated: false,
 			adminSession: { status: "unauthorized", email: "maggie@example.com" },
 		});
 	});

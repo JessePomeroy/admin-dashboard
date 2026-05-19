@@ -1,26 +1,18 @@
 <script lang="ts">
-import { getAdminCapabilityFallback } from "../capabilities";
 import { getAdminConfig } from "../config";
 import type { TenantAdminServerSession } from "../adminSession";
-import type { Tier } from "../features";
 import GalleryDeliveryPage from "./gallery-delivery/GalleryDeliveryPage.svelte";
 
 let {
 	data,
 	activeTab = "portfolio",
 }: {
-	data: { galleries: any[]; adminSession?: TenantAdminServerSession; tier?: Tier };
+	data: { galleries: any[]; adminSession: TenantAdminServerSession };
 	activeTab?: "portfolio" | "delivery";
 } = $props();
 
 const config = getAdminConfig();
 const hasWorker = !!config.galleryWorkerUrl;
-const effectiveTier: Tier = $derived(
-	getAdminCapabilityFallback(data.adminSession, {
-		tier: data.tier ?? (config.isCreator ? "full" : "basic"),
-		isCreator: config.isCreator,
-	}).tier,
-);
 
 const galleries = $derived(data.galleries);
 
@@ -41,7 +33,7 @@ const studioBaseUrl = config.sanityStudioUrl ?? "";
 	{/if}
 
 	{#if tab === "delivery" && hasWorker}
-		<GalleryDeliveryPage tier={effectiveTier} />
+		<GalleryDeliveryPage adminSession={data.adminSession} />
 	{:else}
 		{#if galleries.length === 0}
 			<div class="empty-state">no galleries found</div>

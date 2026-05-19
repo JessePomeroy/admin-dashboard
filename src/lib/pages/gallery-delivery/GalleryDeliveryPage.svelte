@@ -6,12 +6,12 @@ import { formatBytes, formatTimestampDate, toId } from "../../utils";
 import FeatureGate from "../../components/FeatureGate.svelte";
 import LoadingState from "../../components/LoadingState.svelte";
 import PageHeader from "../../components/PageHeader.svelte";
-import type { Tier } from "../../features";
+import type { TenantAdminServerSession } from "../../adminSession";
 import type { Gallery } from "../../types";
 import GalleryCreateModal from "./GalleryCreateModal.svelte";
 import GalleryDetailModal from "./GalleryDetailModal.svelte";
 
-let { tier }: { tier: Tier } = $props();
+let { adminSession }: { adminSession: TenantAdminServerSession } = $props();
 
 const config = getAdminConfig();
 const { api } = config;
@@ -46,7 +46,7 @@ const statusLabels: Record<string, string> = {
 };
 </script>
 
-<FeatureGate feature="galleryDelivery" {tier}>
+<FeatureGate feature="galleryDelivery" {adminSession}>
 <div class="delivery-page">
 	<PageHeader title="client galleries">
 		{#snippet actions()}
@@ -115,7 +115,7 @@ const statusLabels: Record<string, string> = {
 {#if selectedGallery}
 	<GalleryDetailModal
 		gallery={selectedGallery}
-		{tier}
+		{adminSession}
 		onclose={() => (selectedGallery = null)}
 	/>
 {/if}

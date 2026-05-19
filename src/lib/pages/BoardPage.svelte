@@ -23,10 +23,6 @@ const clientsQuery = useQuery(api.crm.listClients, { siteUrl: config.siteUrl });
 const capabilities = $derived(
 	getAdminCapabilitiesForLayout(data, {
 		boardProjectTypes: config.boardProjectTypes,
-		fallback: {
-			tier: data.tier ?? (config.isCreator ? "full" : "basic"),
-			isCreator: data.isCreator ?? config.isCreator,
-		},
 	}),
 );
 

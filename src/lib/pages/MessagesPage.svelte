@@ -35,12 +35,7 @@ let { data } = $props();
 
 const client = useAdminClient();
 const capabilities = $derived(
-	getAdminCapabilitiesForLayout(data, {
-		fallback: {
-			tier: data.tier ?? (config.isCreator ? "full" : "basic"),
-			isCreator: data.isCreator ?? config.isCreator,
-		},
-	}),
+	getAdminCapabilitiesForLayout(data),
 );
 const canUseMessages = $derived(
 	capabilities.hasFeature("messages"),

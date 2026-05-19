@@ -56,39 +56,13 @@ export function isTenantAdminServerAuthorized(
 }
 
 export interface TenantAdminLayoutData {
-	tier: Tier;
-	isCreator: boolean;
-	isAuthenticated: boolean;
 	adminSession: TenantAdminServerSession;
 }
 
-export interface TenantAdminLayoutFallback {
-	tier: Tier;
-	isCreator: boolean;
-}
-
-const DEFAULT_UNAUTHENTICATED_LAYOUT: TenantAdminLayoutFallback = {
-	tier: "basic",
-	isCreator: false,
-};
-
 export function getTenantAdminLayoutData(
 	session: TenantAdminServerSession,
-	fallback: TenantAdminLayoutFallback = DEFAULT_UNAUTHENTICATED_LAYOUT,
 ): TenantAdminLayoutData {
-	if (session.status === "authorized") {
-		return {
-			tier: session.tier,
-			isCreator: session.isCreator,
-			isAuthenticated: true,
-			adminSession: session,
-		};
-	}
-
 	return {
-		tier: fallback.tier,
-		isCreator: fallback.isCreator,
-		isAuthenticated: false,
 		adminSession: session,
 	};
 }

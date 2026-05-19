@@ -16,11 +16,6 @@ export interface AdminCapabilityInput {
 	boardProjectTypes?: BoardProjectTypeGroup[];
 }
 
-export interface AdminCapabilityFallback {
-	tier: Tier;
-	isCreator: boolean;
-}
-
 export interface AdminCapabilities {
 	tier: Tier;
 	isCreator: boolean;
@@ -54,43 +49,48 @@ export function getAdminCapabilities(
 	};
 }
 
-const DEFAULT_CAPABILITY_FALLBACK: AdminCapabilityFallback = {
+const DEFAULT_UNAUTHORIZED_CAPABILITIES: AdminCapabilityInput = {
 	tier: "basic",
 	isCreator: false,
 };
 
-export function getAdminCapabilityFallback(
-	session: TenantAdminServerSession | undefined,
-	fallback: AdminCapabilityFallback = DEFAULT_CAPABILITY_FALLBACK,
-): AdminCapabilityFallback {
-	if (session?.status === "authorized") {
+export function getAdminCapabilitiesForSession(
+	session: TenantAdminServerSession,
+	input: {
+		boardProjectTypes?: BoardProjectTypeGroup[];
+	} = {},
+): AdminCapabilities {
+	if (session.status === "authorized") {
+		return getAdminCapabilities({
+			tier: session.tier,
+			isCreator: session.isCreator,
+			boardProjectTypes: input.boardProjectTypes,
+		});
+	}
+
+	return getAdminCapabilities({
+		...DEFAULT_UNAUTHORIZED_CAPABILITIES,
+		boardProjectTypes: input.boardProjectTypes,
+	});
+}
+
+export function getAdminSessionCapabilityInput(
+	session: TenantAdminServerSession,
+): AdminCapabilityInput {
+	if (session.status === "authorized") {
 		return {
 			tier: session.tier,
 			isCreator: session.isCreator,
 		};
 	}
 
-	return fallback;
-}
-
-export function getAdminCapabilitiesForSession(
-	session: TenantAdminServerSession | undefined,
-	input: {
-		boardProjectTypes?: BoardProjectTypeGroup[];
-		fallback?: AdminCapabilityFallback;
-	} = {},
-): AdminCapabilities {
-	return getAdminCapabilities({
-		...getAdminCapabilityFallback(session, input.fallback),
-		boardProjectTypes: input.boardProjectTypes,
-	});
+	return DEFAULT_UNAUTHORIZED_CAPABILITIES;
 }
 
 export function getAdminCapabilitiesForLayout(
 	data: Pick<TenantAdminLayoutData, "adminSession">,
 	input: {
 		boardProjectTypes?: BoardProjectTypeGroup[];
-		fallback?: AdminCapabilityFallback;
 	} = {},
 ): AdminCapabilities {
 	return getAdminCapabilitiesForSession(data.adminSession, input);
