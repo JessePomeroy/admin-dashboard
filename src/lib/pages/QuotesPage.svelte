@@ -493,7 +493,7 @@ function closePresetModal() {
 }
 </script>
 
-<FeatureGate feature="quotes" tier={data.tier}>
+<FeatureGate feature="quotes" adminSession={data.adminSession}>
 {#if isLoading}
 	<LoadingState />
 {:else}

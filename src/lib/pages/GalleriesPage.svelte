@@ -1,5 +1,7 @@
 <script lang="ts">
+import { getAdminCapabilityFallback } from "../capabilities";
 import { getAdminConfig } from "../config";
+import type { TenantAdminServerSession } from "../adminSession";
 import type { Tier } from "../features";
 import GalleryDeliveryPage from "./gallery-delivery/GalleryDeliveryPage.svelte";
 
@@ -7,18 +9,17 @@ let {
 	data,
 	activeTab = "portfolio",
 }: {
-	data: { galleries: any[]; tier?: Tier };
+	data: { galleries: any[]; adminSession?: TenantAdminServerSession; tier?: Tier };
 	activeTab?: "portfolio" | "delivery";
 } = $props();
 
 const config = getAdminConfig();
 const hasWorker = !!config.galleryWorkerUrl;
-// Tier fallback: creator is always full-tier, otherwise default to basic.
-// Consumer can still override by passing data.tier explicitly.
-// GalleryDeliveryPage gates itself via FeatureGate — this value is just
-// threaded through for its internal check.
 const effectiveTier: Tier = $derived(
-	data.tier ?? (config.isCreator ? "full" : "basic"),
+	getAdminCapabilityFallback(data.adminSession, {
+		tier: data.tier ?? (config.isCreator ? "full" : "basic"),
+		isCreator: config.isCreator,
+	}).tier,
 );
 
 const galleries = $derived(data.galleries);

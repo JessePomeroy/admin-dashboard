@@ -288,7 +288,7 @@ function formatStatus(status: string) {
 }
 </script>
 
-<FeatureGate feature="crm" tier={data.tier}>
+<FeatureGate feature="crm" adminSession={data.adminSession}>
 {#if isLoading}
 	<LoadingState />
 {:else}

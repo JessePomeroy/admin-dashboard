@@ -144,7 +144,7 @@ async function deleteTemplate() {
 }
 </script>
 
-<FeatureGate feature="emails" tier={data.tier}>
+<FeatureGate feature="emails" adminSession={data.adminSession}>
 {#if templatesQuery.isLoading}
 	<LoadingState />
 {:else}

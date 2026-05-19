@@ -49,6 +49,12 @@ export type TenantAdminServerSession =
 	| { status: "unauthorized"; email: string }
 	| { status: "authorized"; email: string | null; tier: Tier; isCreator: boolean };
 
+export function isTenantAdminServerAuthorized(
+	session: TenantAdminServerSession | undefined,
+): boolean {
+	return session?.status === "authorized";
+}
+
 export interface TenantAdminLayoutData {
 	tier: Tier;
 	isCreator: boolean;
