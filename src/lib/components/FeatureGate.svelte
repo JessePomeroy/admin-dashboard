@@ -2,11 +2,14 @@
 import type { Snippet } from "svelte";
 import { type Feature, hasFeature, type Tier } from "../features";
 import { getAdminConfig } from "../config";
+import type { TenantAdminServerSession } from "../adminSession";
+import { getAdminCapabilityFallback } from "../capabilities";
 import UpgradeBanner from "./UpgradeBanner.svelte";
 
 interface Props {
 	feature: Feature;
-	tier: Tier;
+	adminSession?: TenantAdminServerSession;
+	tier?: Tier;
 	isCreator?: boolean;
 	platformUrl?: string;
 	siteUrl?: string;
@@ -16,9 +19,19 @@ interface Props {
 
 const config = getAdminConfig();
 
-let { feature, tier, isCreator = config.isCreator, platformUrl, siteUrl, clientEmail, children }: Props =
+let { feature, adminSession, tier, isCreator, platformUrl, siteUrl, clientEmail, children }: Props =
 	$props();
-let unlocked = $derived(hasFeature(tier, feature, { isCreator }));
+let capabilityFallback = $derived(
+	getAdminCapabilityFallback(adminSession, {
+		tier: tier ?? (config.isCreator ? "full" : "basic"),
+		isCreator: isCreator ?? config.isCreator,
+	}),
+);
+let unlocked = $derived(
+	hasFeature(capabilityFallback.tier, feature, {
+		isCreator: capabilityFallback.isCreator,
+	}),
+);
 </script>
 
 {#if unlocked}

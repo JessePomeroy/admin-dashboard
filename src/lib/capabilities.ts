@@ -1,5 +1,6 @@
 import type { BoardProjectTypeGroup } from "./config";
 import { type Feature, type Tier, hasFeature } from "./features";
+import type { TenantAdminLayoutData, TenantAdminServerSession } from "./adminSession";
 
 export const DEFAULT_CREATOR_BOARD_PROJECT_TYPE_GROUPS: BoardProjectTypeGroup[] = [
 	{
@@ -13,6 +14,11 @@ export interface AdminCapabilityInput {
 	tier: Tier;
 	isCreator: boolean;
 	boardProjectTypes?: BoardProjectTypeGroup[];
+}
+
+export interface AdminCapabilityFallback {
+	tier: Tier;
+	isCreator: boolean;
 }
 
 export interface AdminCapabilities {
@@ -46,4 +52,46 @@ export function getAdminCapabilities(
 			hasFeature(input.tier, feature, { isCreator: input.isCreator }),
 		canInitializeBoardType: (projectType) => boardProjectTypes.has(projectType),
 	};
+}
+
+const DEFAULT_CAPABILITY_FALLBACK: AdminCapabilityFallback = {
+	tier: "basic",
+	isCreator: false,
+};
+
+export function getAdminCapabilityFallback(
+	session: TenantAdminServerSession | undefined,
+	fallback: AdminCapabilityFallback = DEFAULT_CAPABILITY_FALLBACK,
+): AdminCapabilityFallback {
+	if (session?.status === "authorized") {
+		return {
+			tier: session.tier,
+			isCreator: session.isCreator,
+		};
+	}
+
+	return fallback;
+}
+
+export function getAdminCapabilitiesForSession(
+	session: TenantAdminServerSession | undefined,
+	input: {
+		boardProjectTypes?: BoardProjectTypeGroup[];
+		fallback?: AdminCapabilityFallback;
+	} = {},
+): AdminCapabilities {
+	return getAdminCapabilities({
+		...getAdminCapabilityFallback(session, input.fallback),
+		boardProjectTypes: input.boardProjectTypes,
+	});
+}
+
+export function getAdminCapabilitiesForLayout(
+	data: Pick<TenantAdminLayoutData, "adminSession">,
+	input: {
+		boardProjectTypes?: BoardProjectTypeGroup[];
+		fallback?: AdminCapabilityFallback;
+	} = {},
+): AdminCapabilities {
+	return getAdminCapabilitiesForSession(data.adminSession, input);
 }

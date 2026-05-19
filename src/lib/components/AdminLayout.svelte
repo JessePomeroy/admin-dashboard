@@ -4,8 +4,8 @@ import { browser } from "$app/environment";
 import { page } from "$app/stores";
 import { useQuery } from "@mmailaender/convex-svelte";
 import { useAdminClient } from "../adminClient";
-import { getAdminCapabilities } from "../capabilities";
-import { type Feature, type Tier } from "../features";
+import { getAdminCapabilitiesForLayout } from "../capabilities";
+import type { Feature } from "../features";
 import { isDark } from "../theme";
 import { getAdminConfig } from "../config";
 import { logger } from "../logger";
@@ -62,13 +62,13 @@ $effect(() => {
 	}
 });
 
-let tier: Tier = $derived(data.tier);
-let isCreator = $derived(data.isCreator ?? config.isCreator);
 let capabilities = $derived(
-	getAdminCapabilities({
-		tier,
-		isCreator,
+	getAdminCapabilitiesForLayout(data, {
 		boardProjectTypes: config.boardProjectTypes,
+		fallback: {
+			tier: data.tier ?? (config.isCreator ? "full" : "basic"),
+			isCreator: data.isCreator ?? config.isCreator,
+		},
 	}),
 );
 let mobileMenuOpen = $state(false);

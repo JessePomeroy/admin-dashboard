@@ -1,7 +1,7 @@
 <script lang="ts">
 import { useQuery } from "@mmailaender/convex-svelte";
 import { useAdminClient } from "../adminClient";
-import { getAdminCapabilities } from "../capabilities";
+import { getAdminCapabilitiesForLayout } from "../capabilities";
 import { getAdminConfig } from "../config";
 import { addToast } from "../toast";
 import { logger } from "../logger";
@@ -21,10 +21,12 @@ const client = useAdminClient();
 const boardConfigsQuery = useQuery(api.kanban.listBoardConfigs, { siteUrl: config.siteUrl });
 const clientsQuery = useQuery(api.crm.listClients, { siteUrl: config.siteUrl });
 const capabilities = $derived(
-	getAdminCapabilities({
-		tier: data.tier,
-		isCreator: data.isCreator ?? config.isCreator,
+	getAdminCapabilitiesForLayout(data, {
 		boardProjectTypes: config.boardProjectTypes,
+		fallback: {
+			tier: data.tier ?? (config.isCreator ? "full" : "basic"),
+			isCreator: data.isCreator ?? config.isCreator,
+		},
 	}),
 );
 
@@ -228,7 +230,7 @@ function openDetail(card: CardItem) {
 
 </script>
 
-<FeatureGate feature="board" tier={data.tier}>
+<FeatureGate feature="board" adminSession={data.adminSession}>
 {#if isLoading}
 	<LoadingState />
 {:else}

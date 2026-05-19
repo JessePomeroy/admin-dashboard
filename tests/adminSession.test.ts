@@ -3,6 +3,7 @@ import {
 	canRenderTenantAdmin,
 	getTenantAdminLayoutData,
 	getTenantAdminSessionState,
+	isTenantAdminServerAuthorized,
 } from "../src/lib/adminSession";
 
 describe("getTenantAdminSessionState", () => {
@@ -149,5 +150,28 @@ describe("getTenantAdminLayoutData", () => {
 			isAuthenticated: false,
 			adminSession: { status: "unauthorized", email: "maggie@example.com" },
 		});
+	});
+});
+
+describe("isTenantAdminServerAuthorized", () => {
+	it("treats only authorized server sessions as authenticated for Convex", () => {
+		expect(
+			isTenantAdminServerAuthorized({
+				status: "authorized",
+				email: "jesse@example.com",
+				tier: "full",
+				isCreator: true,
+			}),
+		).toBe(true);
+		expect(isTenantAdminServerAuthorized({ status: "unauthenticated" })).toBe(
+			false,
+		);
+		expect(
+			isTenantAdminServerAuthorized({
+				status: "unauthorized",
+				email: "maggie@example.com",
+			}),
+		).toBe(false);
+		expect(isTenantAdminServerAuthorized(undefined)).toBe(false);
 	});
 });

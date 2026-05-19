@@ -221,7 +221,7 @@ async function handleDeleteTemplate(id: string) {
 }
 </script>
 
-<FeatureGate feature="contracts" tier={data.tier}>
+<FeatureGate feature="contracts" adminSession={data.adminSession}>
 	{#if isLoading}
 		<LoadingState />
 	{:else}

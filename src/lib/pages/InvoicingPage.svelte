@@ -204,7 +204,7 @@ async function handleShareLink() {
 }
 </script>
 
-<FeatureGate feature="invoicing" tier={data.tier}>
+<FeatureGate feature="invoicing" adminSession={data.adminSession}>
 	{#if isLoading}
 		<LoadingState />
 	{:else}

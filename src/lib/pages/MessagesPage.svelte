@@ -1,8 +1,8 @@
 <script lang="ts">
 import { useQuery } from "@mmailaender/convex-svelte";
 import { useAdminClient } from "../adminClient";
+import { getAdminCapabilitiesForLayout } from "../capabilities";
 import { getAdminConfig } from "../config";
-import { hasFeature } from "../features";
 import { addToast } from "../toast";
 import { logger } from "../logger";
 import type { PlatformClient } from "../types";
@@ -34,10 +34,16 @@ const { api } = config;
 let { data } = $props();
 
 const client = useAdminClient();
-const canUseMessages = $derived(
-	hasFeature(data.tier, "messages", {
-		isCreator: data.isCreator ?? config.isCreator,
+const capabilities = $derived(
+	getAdminCapabilitiesForLayout(data, {
+		fallback: {
+			tier: data.tier ?? (config.isCreator ? "full" : "basic"),
+			isCreator: data.isCreator ?? config.isCreator,
+		},
 	}),
+);
+const canUseMessages = $derived(
+	capabilities.hasFeature("messages"),
 );
 const threadsQuery = useQuery(api.messages.allThreads, () =>
 	canUseMessages ? {} : "skip",
@@ -128,8 +134,7 @@ function handleNewMessageKeydown(e: KeyboardEvent) {
 
 <FeatureGate
 	feature="messages"
-	tier={data.tier}
-	isCreator={data.isCreator ?? config.isCreator}
+	adminSession={data.adminSession}
 >
 {#if threadsQuery.isLoading}
 	<LoadingState />
