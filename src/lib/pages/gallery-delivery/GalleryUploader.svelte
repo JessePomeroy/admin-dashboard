@@ -3,11 +3,11 @@ import { useAdminClient } from "../../adminClient";
 import { getAdminConfig } from "../../config";
 import { toId } from "../../utils";
 import FeatureGate from "../../components/FeatureGate.svelte";
-import type { Tier } from "../../features";
+import type { TenantAdminServerSession } from "../../adminSession";
 
-let { galleryId, tier, onupload }: {
+let { galleryId, adminSession, onupload }: {
 	galleryId: string;
-	tier: Tier;
+	adminSession: TenantAdminServerSession;
 	onupload: () => void;
 } = $props();
 
@@ -232,7 +232,7 @@ function clearCompleted() {
 }
 </script>
 
-<FeatureGate feature="galleryDelivery" {tier}>
+<FeatureGate feature="galleryDelivery" {adminSession}>
 <div
 	class="uploader"
 	class:dragging

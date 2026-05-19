@@ -1,35 +1,24 @@
 <script lang="ts">
 import type { Snippet } from "svelte";
-import { type Feature, hasFeature, type Tier } from "../features";
-import { getAdminConfig } from "../config";
+import { type Feature, hasFeature } from "../features";
 import type { TenantAdminServerSession } from "../adminSession";
-import { getAdminCapabilityFallback } from "../capabilities";
+import { getAdminSessionCapabilityInput } from "../capabilities";
 import UpgradeBanner from "./UpgradeBanner.svelte";
 
 interface Props {
 	feature: Feature;
-	adminSession?: TenantAdminServerSession;
-	tier?: Tier;
-	isCreator?: boolean;
+	adminSession: TenantAdminServerSession;
 	platformUrl?: string;
 	siteUrl?: string;
 	clientEmail?: string;
 	children: Snippet;
 }
 
-const config = getAdminConfig();
-
-let { feature, adminSession, tier, isCreator, platformUrl, siteUrl, clientEmail, children }: Props =
-	$props();
-let capabilityFallback = $derived(
-	getAdminCapabilityFallback(adminSession, {
-		tier: tier ?? (config.isCreator ? "full" : "basic"),
-		isCreator: isCreator ?? config.isCreator,
-	}),
-);
+let { feature, adminSession, platformUrl, siteUrl, clientEmail, children }: Props = $props();
+let capability = $derived(getAdminSessionCapabilityInput(adminSession));
 let unlocked = $derived(
-	hasFeature(capabilityFallback.tier, feature, {
-		isCreator: capabilityFallback.isCreator,
+	hasFeature(capability.tier, feature, {
+		isCreator: capability.isCreator,
 	}),
 );
 </script>

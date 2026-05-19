@@ -5,14 +5,14 @@ import { getAdminConfig } from "../../config";
 import { formatBytes, toId } from "../../utils";
 import AdminModal from "../../components/AdminModal.svelte";
 import FeatureGate from "../../components/FeatureGate.svelte";
-import type { Tier } from "../../features";
+import type { TenantAdminServerSession } from "../../adminSession";
 import type { Gallery, GalleryImage } from "../../types";
 import GalleryUploader from "./GalleryUploader.svelte";
 import GalleryImageGrid from "./GalleryImageGrid.svelte";
 
-let { gallery, tier, onclose }: {
+let { gallery, adminSession, onclose }: {
 	gallery: Gallery & { clientName: string };
-	tier: Tier;
+	adminSession: TenantAdminServerSession;
 	onclose: () => void;
 } = $props();
 
@@ -107,7 +107,7 @@ async function handleShare() {
 </script>
 
 <AdminModal title={gallery.name} {onclose} size="wide">
-	<FeatureGate feature="galleryDelivery" {tier}>
+	<FeatureGate feature="galleryDelivery" {adminSession}>
 	<div class="modal-body">
 		<div class="detail-header">
 			<span class="client-name">{gallery.clientName}</span>
@@ -137,7 +137,7 @@ async function handleShare() {
 
 		{#if tab === "images"}
 			<div class="images-section" role="tabpanel">
-				<GalleryUploader galleryId={gallery._id as string} {tier} onupload={() => {}} />
+				<GalleryUploader galleryId={gallery._id as string} {adminSession} onupload={() => {}} />
 				<GalleryImageGrid
 					{images}
 					galleryId={gallery._id as string}

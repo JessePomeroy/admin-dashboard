@@ -3,6 +3,7 @@ import {
 	getAdminCapabilities,
 	getAdminCapabilitiesForLayout,
 	getAdminCapabilitiesForSession,
+	getAdminSessionCapabilityInput,
 } from "../src/lib/capabilities";
 
 describe("getAdminCapabilities", () => {
@@ -85,14 +86,14 @@ describe("getAdminCapabilities", () => {
 		expect(capabilities.hasFeature("crm")).toBe(false);
 	});
 
-	it("allows an explicit compatibility fallback when no session is authorized", () => {
-		const capabilities = getAdminCapabilitiesForLayout(
-			{ adminSession: { status: "unauthenticated" } },
-			{ fallback: { tier: "full", isCreator: true } },
-		);
+	it("exposes session capability input for FeatureGate", () => {
+		const capabilityInput = getAdminSessionCapabilityInput({
+			status: "authorized",
+			email: "jesse@example.com",
+			tier: "full",
+			isCreator: true,
+		});
 
-		expect(capabilities.tier).toBe("full");
-		expect(capabilities.isCreator).toBe(true);
-		expect(capabilities.hasFeature("messages")).toBe(true);
+		expect(capabilityInput).toEqual({ tier: "full", isCreator: true });
 	});
 });

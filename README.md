@@ -63,7 +63,30 @@ export const adminServerConfig: AdminServerConfig = {
 };
 ```
 
-### 3. Wire up the admin layout
+### 3. Return the admin session from the server layout
+
+```ts
+// src/routes/admin/+layout.server.ts
+import {
+  getTenantAdminLayoutData,
+  type TenantAdminServerSession,
+} from "@jessepomeroy/admin";
+
+export async function load({ locals }) {
+  const adminSession: TenantAdminServerSession = locals.admin
+    ? {
+        status: "authorized",
+        email: locals.admin.email,
+        tier: locals.admin.tier,
+        isCreator: locals.admin.isCreator,
+      }
+    : { status: "unauthenticated" };
+
+  return getTenantAdminLayoutData(adminSession);
+}
+```
+
+### 4. Wire up the admin layout
 
 ```svelte
 <!-- src/routes/admin/+layout.svelte -->
@@ -77,11 +100,11 @@ export const adminServerConfig: AdminServerConfig = {
 
   setAdminConfig(adminConfig);
 
-  let { children } = $props();
+  let { data, children } = $props();
 </script>
 
 <AuthGuard>
-  <AdminLayout>
+  <AdminLayout {data}>
     {@render children()}
   </AdminLayout>
 </AuthGuard>
@@ -92,7 +115,7 @@ export const adminServerConfig: AdminServerConfig = {
 export const ssr = false; // Required — avoids DOMPurify ESM issues on Vercel
 ```
 
-### 4. Add page routes
+### 5. Add page routes
 
 Each admin page is a thin wrapper:
 
@@ -100,18 +123,22 @@ Each admin page is a thin wrapper:
 <!-- src/routes/admin/+page.svelte -->
 <script lang="ts">
   import { DashboardPage } from "@jessepomeroy/admin";
+
+  let { data } = $props();
 </script>
 
-<DashboardPage />
+<DashboardPage {data} />
 ```
 
 ```svelte
 <!-- src/routes/admin/orders/+page.svelte -->
 <script lang="ts">
   import { OrdersPage } from "@jessepomeroy/admin";
+
+  let { data } = $props();
 </script>
 
-<OrdersPage />
+<OrdersPage {data} />
 ```
 
 ## Pages
@@ -133,12 +160,12 @@ Each admin page is a thin wrapper:
 
 ## Feature tiers
 
-Pages are gated by subscription tier. The `FeatureGate` component and `hasFeature()` function control access:
+Pages are gated by the server-provided `adminSession`. The `FeatureGate` component and `hasFeature()` function control access:
 
 - **basic** — dashboard, orders, inquiries, galleries
 - **full** — everything above plus CRM, board, invoicing, quotes, contracts, emails, messages, gallery delivery
 
-The `AdminLayout` sidebar automatically hides pages the current tier can't access. Use `UpgradeBanner` to prompt upgrades.
+The `AdminLayout` sidebar automatically hides pages the current session can't access. Use `UpgradeBanner` to prompt upgrades.
 
 ## AdminConfig reference
 
@@ -321,7 +348,7 @@ Beyond page components, the package exports reusable UI primitives:
 - `AdminModal` — Modal dialog
 - `NotificationWidget` — Floating unread notification badge (auto-mounted in AdminLayout)
 - `EmailPreview` — Side-by-side email template preview
-- `FeatureGate` — Conditionally render content by tier
+- `FeatureGate` — Conditionally render content from `adminSession`
 - `FilterBar` — Data table filtering controls
 - `LoadingState` — Loading spinner
 - `PageHeader` — Page title with optional breadcrumb
