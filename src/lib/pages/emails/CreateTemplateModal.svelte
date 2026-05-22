@@ -1,5 +1,5 @@
 <script lang="ts">
-	import DOMPurify from "isomorphic-dompurify";
+	import { getVariableHighlightParts } from "../../emailTemplatePreview";
 
 	let { isOpen, saving, categories, onclose, onsave } = $props<{
 		isOpen: boolean;
@@ -37,13 +37,6 @@
 	function countVariables(body: string): number {
 		const matches = body.match(/\{\{[^}]+\}\}/g);
 		return matches ? matches.length : 0;
-	}
-
-	function highlightVariables(text: string): string {
-		return text.replace(
-			/(\{\{[^}]+\}\})/g,
-			'<span class="var-highlight">$1</span>',
-		);
 	}
 
 	function resetForm() {
@@ -149,7 +142,15 @@
 				{#if formBody}
 					<div class="preview-section">
 						<span class="preview-label">preview</span>
-						<div class="preview-body">{@html DOMPurify.sanitize(highlightVariables(formBody))}</div>
+						<div class="preview-body">
+							{#each getVariableHighlightParts(formBody) as part}
+								{#if part.isVariable}
+									<span class="var-highlight">{part.text}</span>
+								{:else}
+									{part.text}
+								{/if}
+							{/each}
+						</div>
 					</div>
 				{/if}
 

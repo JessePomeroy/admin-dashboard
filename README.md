@@ -21,7 +21,6 @@ Published to GitHub Packages. Your `.npmrc` needs:
 @mmailaender/convex-svelte  ^0.18.0
 @sveltejs/kit               ^2.0.0
 convex                      ^1.30.0
-isomorphic-dompurify        ^3.0.0
 resend                      ^6.0.0
 svelte                      ^5.0.0
 svelte-dnd-action           ^0.9.0
@@ -112,7 +111,7 @@ export async function load({ locals }) {
 
 ```ts
 // src/routes/admin/+layout.ts
-export const ssr = false; // Required — avoids DOMPurify ESM issues on Vercel
+export const ssr = false;
 ```
 
 ### 5. Add page routes
