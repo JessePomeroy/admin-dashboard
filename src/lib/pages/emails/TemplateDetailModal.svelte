@@ -1,5 +1,5 @@
 <script lang="ts">
-	import DOMPurify from "isomorphic-dompurify";
+	import { getVariableHighlightParts } from "../../emailTemplatePreview";
 	import type { EmailTemplate } from "../../types";
 	import { getCategoryColor } from "../../utils";
 
@@ -38,13 +38,6 @@
 			.split(",")
 			.map((v) => v.trim())
 			.filter(Boolean);
-	}
-
-	function highlightVariables(text: string): string {
-		return text.replace(
-			/(\{\{[^}]+\}\})/g,
-			'<span class="var-highlight">$1</span>',
-		);
 	}
 
 	function handleClose() {
@@ -163,7 +156,15 @@
 					{#if editBody}
 						<div class="preview-section">
 							<span class="preview-label">preview</span>
-							<div class="preview-body">{@html DOMPurify.sanitize(highlightVariables(editBody))}</div>
+							<div class="preview-body">
+								{#each getVariableHighlightParts(editBody) as part}
+									{#if part.isVariable}
+										<span class="var-highlight">{part.text}</span>
+									{:else}
+										{part.text}
+									{/if}
+								{/each}
+							</div>
 						</div>
 					{/if}
 
@@ -191,7 +192,15 @@
 					<div class="detail-fields">
 						<div class="detail-field">
 							<span class="detail-label">body</span>
-							<div class="detail-body-text">{@html DOMPurify.sanitize(highlightVariables(template.body))}</div>
+							<div class="detail-body-text">
+								{#each getVariableHighlightParts(template.body) as part}
+									{#if part.isVariable}
+										<span class="var-highlight">{part.text}</span>
+									{:else}
+										{part.text}
+									{/if}
+								{/each}
+							</div>
 						</div>
 
 						{#if template.variables?.length}
