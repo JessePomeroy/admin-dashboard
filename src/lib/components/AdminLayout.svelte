@@ -2,7 +2,7 @@
 import { onMount } from "svelte";
 import { browser } from "$app/environment";
 import { page } from "$app/stores";
-import { useQuery } from "@mmailaender/convex-svelte";
+import { useQuery } from "convex-svelte";
 import { useAdminClient } from "../adminClient";
 import { getAdminCapabilitiesForLayout } from "../capabilities";
 import type { Feature } from "../features";

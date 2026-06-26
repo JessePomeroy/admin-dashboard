@@ -257,7 +257,7 @@ export interface AdminConfig {
 	 *   endpoint that holds the Better Auth cookie and calls Convex via
 	 *   the HTTP client. Use this when the browser Convex WebSocket is
 	 *   intentionally unauthenticated (e.g. to avoid the WebSocket-pause
-	 *   bug in `@mmailaender/convex-better-auth-svelte` on SvelteKit nav).
+	 *   bug in older Better Auth Svelte auth wiring on SvelteKit nav).
 	 *
 	 * Default: `"websocket"`.
 	 */

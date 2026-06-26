@@ -1,6 +1,6 @@
 <script lang="ts">
 import { goto } from "$app/navigation";
-import { useQuery } from "@mmailaender/convex-svelte";
+import { useQuery } from "convex-svelte";
 import { getAdminConfig } from "../config";
 import LoadingState from "../components/LoadingState.svelte";
 import type { Invoice, InvoiceItem, Quote } from "../types";

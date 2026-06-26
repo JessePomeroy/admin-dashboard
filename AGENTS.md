@@ -5,7 +5,7 @@ Rules for working on this Svelte 5 admin-dashboard library package.
 ## Project Context
 
 - **Package name:** `@jessepomeroy/admin`
-- **Current version:** `1.1.0` (not yet published — v1.0.2 is latest on npm; publish before consumers bump their deps past link)
+- **Current version:** see `package.json`; publish before consumers bump their deps.
 - **Purpose:** Shared admin dashboard UI for multi-tenant photographer CRM platform. Consumed by `angelsrest` (creator's site) and `reflecting-pool` (first client template), with more to come.
 - **Stack:** Svelte 5 (runes) + Convex client + Better Auth (via consumer). No server runtime — pure client library.
 
@@ -19,21 +19,21 @@ Rules for working on this Svelte 5 admin-dashboard library package.
 
 The package supports two mutation transports via `AdminConfig.mutationTransport`:
 
-- `"websocket"` (default): `client.mutation(...)` fires over the authenticated Convex WebSocket. Requires the consumer to wire auth into the Convex client (e.g. via `createSvelteAuthClient`).
+- `"websocket"` (default): `client.mutation(...)` fires over the authenticated Convex WebSocket. Requires the consumer to wire auth into the Convex client.
 - `"http"`: `client.mutation(...)` POSTs to `AdminConfig.mutationEndpoint` (default `/api/admin/mutation`). The consumer must implement that route as a server-side proxy that holds the auth cookie and forwards via `ConvexHttpClient`.
 
 **Every admin page calls `useAdminClient()` (from `src/lib/adminClient.ts`), NOT `useConvexClient()` directly.** `useAdminClient` is a `Proxy` over the raw Convex client — it intercepts `.mutation()` when transport is `"http"` and passes through everything else (queries, actions, connection state). This means:
 
 - New pages **must** use `useAdminClient()`, not `useConvexClient()`.
 - Mutation call sites look identical regardless of transport: `await client.mutation(api.foo.bar, args)`.
-- Why the indirection: `@mmailaender/convex-better-auth-svelte@0.7.3` has a permanent WebSocket pause bug on SvelteKit client-side navigation when paired with `better-auth@1.5.x`. `angelsrest` works around it by running an unauthenticated browser WebSocket and routing mutations through an HTTP proxy. See the Obsidian note at `~/Documents/quilt/00_inbox/2026-04-23 PR candidate — convex-better-auth-svelte pause bug.md` for full context + the upstream PR plan (deferred).
+- Why the indirection: older Better Auth Svelte wiring could pause the Convex WebSocket on SvelteKit client-side navigation. Consumers can route mutations through an HTTP proxy when they want server-cookie-backed mutation auth independent of the browser WebSocket lifecycle.
 
 ## Svelte conventions (in this package)
 
 - Svelte 5 runes everywhere: `$state`, `$derived`, `$effect`, `$props`. No `writable()` stores except where Better Auth nanostores cross the boundary.
 - Context for shared config (`setAdminConfig`/`getAdminConfig`), not stores.
 - Page components accept `{ data }` from SvelteKit page loaders.
-- `useXxx()` naming for context-reading helpers — matches `@mmailaender/convex-svelte` (`useConvexClient`, `useQuery`). Slightly React-flavored but locally consistent.
+- `useXxx()` naming for context-reading helpers — matches `convex-svelte` (`useConvexClient`, `useQuery`). Slightly React-flavored but locally consistent.
 - Keep `FnRef = any` for Convex API references (see `src/lib/config.ts` note). Tight typing is impractical across the consumer boundary and typing is enforced at the consumer's generated `api`.
 
 ## Running checks

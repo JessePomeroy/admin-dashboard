@@ -1,4 +1,4 @@
-import { useConvexClient } from "@mmailaender/convex-svelte";
+import { useConvexClient } from "convex-svelte";
 import type { ConvexClient } from "convex/browser";
 import { getFunctionName } from "convex/server";
 import { getAdminConfig } from "./config";
@@ -21,13 +21,11 @@ import { getAdminConfig } from "./config";
  * Call sites do not change shape: `await client.mutation(api.foo.bar, args)`
  * works regardless of transport.
  *
- * Why this exists: `@mmailaender/convex-better-auth-svelte@0.7.3` has a
- * WebSocket-pause bug on SvelteKit client-side navigation under
- * `better-auth@1.5.x` (the library's 150ms transient-guard races with the
- * newer session-signal timing, producing a permanent pause on new
- * `useQuery` subscriptions). Keeping the WebSocket unauthenticated sidesteps
- * the pause entirely; this proxy preserves working mutations by routing
- * them through a SvelteKit endpoint that *does* have the auth cookie.
+ * Why this exists: older Better Auth Svelte adapters could pause the Convex
+ * WebSocket on SvelteKit client-side navigation when the session briefly
+ * emitted null. This proxy preserves working mutations by routing them
+ * through a SvelteKit endpoint that *does* have the auth cookie when consumers
+ * choose `mutationTransport: "http"`.
  *
  * See the Obsidian note "PR candidate — convex-better-auth-svelte pause bug"
  * for background and the upstream fix plan.

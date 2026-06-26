@@ -1,6 +1,6 @@
 <script lang="ts">
 import type { Snippet } from "svelte";
-import { useQuery } from "@mmailaender/convex-svelte";
+import { useQuery } from "convex-svelte";
 import { getTenantAdminSessionState } from "../adminSession";
 import { getAdminConfig } from "../config";
 import LoginPage from "./LoginPage.svelte";

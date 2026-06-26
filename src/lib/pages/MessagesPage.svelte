@@ -1,5 +1,5 @@
 <script lang="ts">
-import { useQuery } from "@mmailaender/convex-svelte";
+import { useQuery } from "convex-svelte";
 import { useAdminClient } from "../adminClient";
 import { getAdminCapabilitiesForLayout } from "../capabilities";
 import { getAdminConfig } from "../config";
