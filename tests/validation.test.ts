@@ -4,6 +4,7 @@ import {
 	trimString,
 	requireString,
 	validatePositiveNumber,
+	validateFilename,
 } from "../src/lib/server/validation";
 
 describe("validateEmail", () => {
@@ -82,6 +83,24 @@ describe("validatePositiveNumber", () => {
 		);
 		expect(() => validatePositiveNumber(NaN, "price")).toThrow(
 			"price must be a positive number",
+		);
+	});
+});
+
+describe("validateFilename", () => {
+	it("allows browser image, tiff, and camera raw extensions", () => {
+		expect(validateFilename("portrait.jpg")).toBe("portrait.jpg");
+		expect(validateFilename("scan.tiff")).toBe("scan.tiff");
+		expect(validateFilename("fuji.RAF")).toBe("fuji.RAF");
+		expect(validateFilename("sony.arw")).toBe("sony.arw");
+		expect(validateFilename("canon.cr3")).toBe("canon.cr3");
+		expect(validateFilename("archive.dng")).toBe("archive.dng");
+	});
+
+	it("rejects unsupported or unsafe filenames", () => {
+		expect(() => validateFilename("script.svg")).toThrow("File type not allowed");
+		expect(() => validateFilename("../portrait.raf")).toThrow(
+			"Filename contains invalid characters",
 		);
 	});
 });

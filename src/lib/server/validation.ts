@@ -1,3 +1,5 @@
+import { GALLERY_UPLOAD_EXTENSIONS, galleryFileExtension } from "../galleryUploadPolicy";
+
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export function validateEmail(email: string): boolean {
@@ -24,17 +26,6 @@ export function requireString(
 }
 
 /**
- * Gallery image extension allowlist. Must stay in sync with the client-side
- * `ALLOWED_TYPES` in GalleryUploader.svelte — the UI and processing pipeline
- * only handle these formats. Keeping both lists identical prevents a caller
- * from smuggling unsupported formats (e.g. gif, heic, avif) past the UI and
- * into R2, where downstream processing would silently fail.
- */
-export const ALLOWED_IMAGE_EXTENSIONS = new Set([
-	".jpg", ".jpeg", ".png", ".webp", ".tiff", ".tif",
-]);
-
-/**
  * Validate a filename for gallery uploads.
  * Rejects path traversal, excessively long names, and non-image extensions.
  */
@@ -51,8 +42,8 @@ export function validateFilename(filename: string): string {
 		throw new Error("Filename contains invalid characters");
 	}
 
-	const ext = trimmed.slice(trimmed.lastIndexOf(".")).toLowerCase();
-	if (!ALLOWED_IMAGE_EXTENSIONS.has(ext)) {
+	const ext = galleryFileExtension(trimmed);
+	if (!GALLERY_UPLOAD_EXTENSIONS.has(ext)) {
 		throw new Error(`File type not allowed: ${ext}`);
 	}
 

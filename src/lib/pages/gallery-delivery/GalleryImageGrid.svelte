@@ -5,6 +5,10 @@ import { toId } from "../../utils";
 import { logger } from "../../logger";
 import { dndzone } from "svelte-dnd-action";
 import type { GalleryImage } from "../../types";
+import {
+	galleryFileExtension,
+	isBrowserPreviewableGalleryFile,
+} from "../../galleryUploadPolicy";
 
 let { images, galleryId, coverImageKey, onchange }: {
 	images: GalleryImage[];
@@ -29,6 +33,14 @@ $effect(() => {
 function thumbUrl(image: GalleryImage): string {
 	const thumbKey = image.r2Key.replace("/original/", "/thumb/");
 	return `${config.galleryWorkerUrl}/image/${thumbKey}`;
+}
+
+function canPreview(image: GalleryImage): boolean {
+	return isBrowserPreviewableGalleryFile(image.filename);
+}
+
+function fileLabel(image: GalleryImage): string {
+	return galleryFileExtension(image.filename).replace(".", "") || "file";
 }
 
 function isCover(image: GalleryImage): boolean {
@@ -91,7 +103,13 @@ async function handleDelete(image: GalleryImage) {
 				{#if isCover(image)}
 					<span class="cover-badge">cover</span>
 				{/if}
-				<img src={thumbUrl(image)} alt={image.filename} loading="lazy" />
+				{#if canPreview(image)}
+					<img src={thumbUrl(image)} alt={image.filename} loading="lazy" />
+				{:else}
+					<div class="file-tile" aria-label={image.filename}>
+						<span>{fileLabel(image)}</span>
+					</div>
+				{/if}
 				<div class="overlay">
 					<span class="filename">{image.filename}</span>
 					<div class="item-actions">
@@ -151,6 +169,25 @@ async function handleDelete(image: GalleryImage) {
 		width: 100%;
 		height: 100%;
 		object-fit: cover;
+	}
+
+	.file-tile {
+		width: 100%;
+		height: 100%;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		background: color-mix(in srgb, var(--admin-surface-raised) 78%, var(--admin-accent));
+		color: var(--admin-heading);
+		text-transform: uppercase;
+		font-size: 0.9rem;
+		letter-spacing: 0.08em;
+	}
+
+	.file-tile span {
+		padding: 6px 10px;
+		border: 1px solid var(--admin-border-strong);
+		border-radius: 4px;
 	}
 
 	.overlay {

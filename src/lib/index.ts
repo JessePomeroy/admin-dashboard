@@ -52,6 +52,7 @@ export { default as QuotesPage } from "./pages/QuotesPage.svelte";
 export * from "./adminSession";
 export * from "./capabilities";
 export * from "./features";
+export * from "./galleryUploadPolicy";
 export type * from "./types";
 export * from "./utils";
 

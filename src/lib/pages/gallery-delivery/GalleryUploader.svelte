@@ -4,6 +4,13 @@ import { getAdminConfig } from "../../config";
 import { toId } from "../../utils";
 import FeatureGate from "../../components/FeatureGate.svelte";
 import type { TenantAdminServerSession } from "../../adminSession";
+import {
+	GALLERY_MAX_FILE_SIZE_BYTES,
+	GALLERY_MAX_FILE_SIZE_LABEL,
+	GALLERY_UPLOAD_ACCEPT,
+	galleryFileContentType,
+	isAllowedGalleryFile,
+} from "../../galleryUploadPolicy";
 
 let { galleryId, adminSession, onupload }: {
 	galleryId: string;
@@ -17,13 +24,12 @@ const galleryApi = api.galleryDelivery!;
 const client = useAdminClient();
 
 const MAX_CONCURRENT = 3;
-const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
-const ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp", "image/tiff"];
 // Per-step timeout. Presign is fast; the PUT upload and process step can take
 // a while for large images but should never hang indefinitely.
 const PRESIGN_TIMEOUT_MS = 15_000;
-const UPLOAD_TIMEOUT_MS = 120_000;
+const UPLOAD_TIMEOUT_MS = 10 * 60_000;
 const PROCESS_TIMEOUT_MS = 60_000;
+const DIRECT_UPLOAD_FALLBACK_STATUSES = new Set([401, 403, 404]);
 
 interface UploadFile {
 	file: File;
@@ -31,6 +37,7 @@ interface UploadFile {
 	status: "pending" | "uploading" | "processing" | "done" | "error";
 	progress: number;
 	error?: string;
+	retryable?: boolean;
 }
 
 let files = $state<UploadFile[]>([]);
@@ -59,11 +66,59 @@ async function fetchWithTimeout(
 	}
 }
 
+async function uploadFileToStorage(
+	file: File,
+	r2Key: string,
+	uploadUrl: string | undefined,
+	contentType: string,
+): Promise<Response> {
+	const proxyEndpoint = `/api/admin/galleries/upload?key=${encodeURIComponent(r2Key)}`;
+	const requestInit = {
+		method: "PUT",
+		headers: { "Content-Type": contentType },
+		body: file,
+	};
+
+	if (uploadUrl && config.galleryWorkerUrl) {
+		const directEndpoint = new URL(uploadUrl, config.galleryWorkerUrl).toString();
+		const directRes = await fetchWithTimeout(
+			directEndpoint,
+			requestInit,
+			UPLOAD_TIMEOUT_MS,
+		);
+		if (directRes.ok || !DIRECT_UPLOAD_FALLBACK_STATUSES.has(directRes.status)) {
+			return directRes;
+		}
+	}
+
+	return fetchWithTimeout(proxyEndpoint, requestInit, UPLOAD_TIMEOUT_MS);
+}
+
 function addFiles(fileList: FileList | File[]) {
 	const newFiles: UploadFile[] = [];
 	for (const file of fileList) {
-		if (!ALLOWED_TYPES.includes(file.type)) continue;
-		if (file.size > MAX_FILE_SIZE) continue;
+		if (!isAllowedGalleryFile(file)) {
+			newFiles.push({
+				file,
+				id: crypto.randomUUID(),
+				status: "error",
+				progress: 0,
+				error: "File type not allowed",
+				retryable: false,
+			});
+			continue;
+		}
+		if (file.size > GALLERY_MAX_FILE_SIZE_BYTES) {
+			newFiles.push({
+				file,
+				id: crypto.randomUUID(),
+				status: "error",
+				progress: 0,
+				error: `File is over ${GALLERY_MAX_FILE_SIZE_LABEL}`,
+				retryable: false,
+			});
+			continue;
+		}
 		newFiles.push({
 			file,
 			id: crypto.randomUUID(),
@@ -97,6 +152,8 @@ async function uploadOne(next: UploadFile): Promise<void> {
 	files = [...files];
 
 	try {
+		const contentType = galleryFileContentType(next.file);
+
 		// 1. Get presign URL from our SvelteKit API (proxies to Worker)
 		const presignRes = await fetchWithTimeout(
 			"/api/admin/galleries/presign",
@@ -107,27 +164,23 @@ async function uploadOne(next: UploadFile): Promise<void> {
 					siteUrl: config.siteUrl,
 					galleryId,
 					filename: next.file.name,
-					contentType: next.file.type,
+					contentType,
 				}),
 			},
 			PRESIGN_TIMEOUT_MS,
 		);
 		if (!presignRes.ok) throw new Error("Failed to get upload URL");
-		const { r2Key } = await presignRes.json();
+		const { r2Key, uploadUrl } = await presignRes.json() as {
+			r2Key: string;
+			uploadUrl?: string;
+		};
 
-		// 2. Upload file via our SvelteKit proxy
+		// 2. Upload file directly to the Worker when it provides a tokenized URL.
+		// Fall back to the SvelteKit proxy for older Worker deployments.
 		next.progress = 30;
 		files = [...files];
 
-		const uploadRes = await fetchWithTimeout(
-			`/api/admin/galleries/upload?key=${encodeURIComponent(r2Key)}`,
-			{
-				method: "PUT",
-				headers: { "Content-Type": next.file.type },
-				body: next.file,
-			},
-			UPLOAD_TIMEOUT_MS,
-		);
+		const uploadRes = await uploadFileToStorage(next.file, r2Key, uploadUrl, contentType);
 		if (!uploadRes.ok) throw new Error("Upload failed");
 
 		// 3. Process (generate sizes)
@@ -199,7 +252,7 @@ function processQueue(): void {
 /** Retry a single errored upload from the start of the pipeline. */
 function retryUpload(id: string): void {
 	const target = files.find((f) => f.id === id);
-	if (!target || target.status !== "error") return;
+	if (!target || target.status !== "error" || target.retryable === false) return;
 	target.status = "pending";
 	target.error = undefined;
 	target.progress = 0;
@@ -230,6 +283,11 @@ let hasErrors = $derived(files.some((f) => f.status === "error"));
 function clearCompleted() {
 	files = files.filter((f) => f.status !== "done");
 }
+
+function formatFileSize(bytes: number): string {
+	if (bytes >= 1024 * 1024) return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+	return `${(bytes / 1024).toFixed(0)} KB`;
+}
 </script>
 
 <FeatureGate feature="galleryDelivery" {adminSession}>
@@ -248,9 +306,9 @@ function clearCompleted() {
 			<p class="drop-hint">or</p>
 			<label class="browse-btn">
 				browse files
-				<input type="file" multiple accept={ALLOWED_TYPES.join(",")} onchange={handleFileInput} hidden />
+				<input type="file" multiple accept={GALLERY_UPLOAD_ACCEPT} onchange={handleFileInput} hidden />
 			</label>
-			<p class="drop-limits">jpg, png, webp, tiff — max 50MB per file</p>
+			<p class="drop-limits">jpg, png, webp, tiff, raw — max {GALLERY_MAX_FILE_SIZE_LABEL} per file</p>
 		</div>
 	{:else}
 		<div class="upload-list" aria-live="polite">
@@ -264,7 +322,7 @@ function clearCompleted() {
 				<div class="upload-actions">
 					<label class="add-more-btn">
 						+ add more
-						<input type="file" multiple accept={ALLOWED_TYPES.join(",")} onchange={handleFileInput} hidden />
+						<input type="file" multiple accept={GALLERY_UPLOAD_ACCEPT} onchange={handleFileInput} hidden />
 					</label>
 					{#if completedCount > 0}
 						<button class="clear-btn" onclick={clearCompleted}>clear done</button>
@@ -275,7 +333,7 @@ function clearCompleted() {
 			{#each files as f (f.id)}
 				<div class="upload-item" class:done={f.status === "done"} class:error={f.status === "error"}>
 					<span class="file-name">{f.file.name}</span>
-					<span class="file-size">{(f.file.size / 1024).toFixed(0)} KB</span>
+					<span class="file-size">{formatFileSize(f.file.size)}</span>
 					{#if f.status === "uploading" || f.status === "processing"}
 						<div class="progress-bar">
 							<div class="progress-fill" style="width: {f.progress}%"></div>
@@ -285,7 +343,9 @@ function clearCompleted() {
 						<span class="file-status done-text">done</span>
 					{:else if f.status === "error"}
 						<span class="file-status error-text">{f.error}</span>
-						<button class="retry-btn" onclick={() => retryUpload(f.id)}>retry</button>
+						{#if f.retryable !== false}
+							<button class="retry-btn" onclick={() => retryUpload(f.id)}>retry</button>
+						{/if}
 					{:else}
 						<span class="file-status">waiting...</span>
 					{/if}
