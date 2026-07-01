@@ -1,8 +1,8 @@
 import { error, json } from "@sveltejs/kit";
-import { getServerConfig } from "../../config";
-import { handleServerError } from "../handleError";
-import { requireAdmin } from "../requireAdmin";
-import { validateFilename } from "../validation";
+import { getServerConfig } from "../../config.js";
+import { handleServerError } from "../handleError.js";
+import { requireAdmin } from "../requireAdmin.js";
+import { validateFilename } from "../validation.js";
 
 const UPLOAD_SESSION_SCOPE = "gallery-upload-session";
 const DEFAULT_UPLOAD_SESSION_TTL_MS = 4 * 60 * 60 * 1000;

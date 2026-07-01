@@ -48,7 +48,7 @@ export const adminConfig: AdminConfig = {
 
 ```ts
 // src/lib/config/admin.server.ts
-import type { AdminServerConfig } from "@jessepomeroy/admin";
+import type { AdminServerConfig } from "@jessepomeroy/admin/server";
 import { env as privateEnv } from "$env/dynamic/private";
 import { env as publicEnv } from "$env/dynamic/public";
 import { adminConfig } from "./admin";
@@ -242,7 +242,7 @@ The package exports factory functions for common server-side operations. Wire th
 
 ```ts
 // src/routes/api/admin/send-invoice/+server.ts
-import { createInvoiceSendHandler, setServerConfig } from "@jessepomeroy/admin";
+import { createInvoiceSendHandler, setServerConfig } from "@jessepomeroy/admin/server";
 import { adminServerConfig } from "$lib/config/admin.server";
 
 setServerConfig(adminServerConfig);
@@ -269,8 +269,7 @@ export const POST = createInvoiceSendHandler();
 All server handlers call `verifyAdmin(request)` before processing. To enable this, provide a `verifyAdmin` callback in your server config:
 
 ```ts
-import type { AdminServerConfig } from "@jessepomeroy/admin";
-import { cookiesFromRequest } from "@jessepomeroy/admin/server";
+import { cookiesFromRequest, type AdminServerConfig } from "@jessepomeroy/admin/server";
 import { getToken } from "@mmailaender/convex-better-auth-svelte/sveltekit";
 import { requireAuth } from "$lib/server/adminAuth";
 
@@ -339,7 +338,7 @@ Wire the gallery handlers into your SvelteKit routes:
 import {
   createGalleryPresignHandler,
   setServerConfig,
-} from "@jessepomeroy/admin";
+} from "@jessepomeroy/admin/server";
 import { adminServerConfig } from "$lib/config/admin.server";
 
 setServerConfig(adminServerConfig);

@@ -1,5 +1,5 @@
 import { Resend } from "resend";
-import { getServerConfig } from "../config";
+import { getServerConfig } from "../config.js";
 
 export function getResend() {
 	return new Resend(getServerConfig().resendApiKey);

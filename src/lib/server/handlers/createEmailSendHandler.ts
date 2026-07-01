@@ -1,13 +1,13 @@
 import { error, json } from "@sveltejs/kit";
 import type { ConvexHttpClient } from "convex/browser";
-import { type AdminAPI, getServerConfig } from "../../config";
-import type { EmailCategory } from "../../types";
-import { formatCents, toId } from "../../utils";
-import { getAuthenticatedConvex } from "../convexClient";
-import { replaceTemplateVariables, sendEmail } from "../email";
-import { handleServerError } from "../handleError";
-import { escapeHtml } from "../html";
-import { requireAdmin } from "../requireAdmin";
+import { type AdminAPI, getServerConfig } from "../../config.js";
+import type { EmailCategory } from "../../types.js";
+import { formatCents, toId } from "../../utils.js";
+import { getAuthenticatedConvex } from "../convexClient.js";
+import { replaceTemplateVariables, sendEmail } from "../email.js";
+import { handleServerError } from "../handleError.js";
+import { escapeHtml } from "../html.js";
+import { requireAdmin } from "../requireAdmin.js";
 
 export { formatCents as formatCurrency };
 
