@@ -266,30 +266,55 @@ export const POST = createInvoiceSendHandler();
 
 ### Authentication
 
-All server handlers call `verifyAdmin(request)` before processing. To enable this, provide a `verifyAdmin` callback in your server config:
+Use `createAdminAuthValidator()` to centralize server-side admin auth. The host app still injects its Better Auth token reader, Convex URL, and generated `api.adminAuth.whoami` reference; the package owns the fail-closed validation flow.
 
 ```ts
-import { cookiesFromRequest, type AdminServerConfig } from "@jessepomeroy/admin/server";
+// src/lib/server/adminAuth.ts
+import {
+  createAdminAuthValidator,
+  createAdminTokenHandler,
+} from "@jessepomeroy/admin/server";
 import { getToken } from "@mmailaender/convex-better-auth-svelte/sveltekit";
-import { requireAuth } from "$lib/server/adminAuth";
+import { api } from "$convex/api";
+import { env as publicEnv } from "$env/dynamic/public";
+
+export const adminAuth = createAdminAuthValidator({
+  getToken,
+  getConvexUrl: () => publicEnv.PUBLIC_CONVEX_URL,
+  whoami: api.adminAuth.whoami,
+});
+
+export const { requireAuth, requireAuthWithIdentity } = adminAuth;
+export const adminTokenHandler = createAdminTokenHandler({ getToken });
+```
+
+The token route can then stay tiny:
+
+```ts
+// src/routes/api/admin/token/+server.ts
+import { adminTokenHandler } from "$lib/server/adminAuth";
+
+export const GET = adminTokenHandler;
+```
+
+All server handlers call `verifyAdmin(request)` before processing. Wire the shared validator into your server config:
+
+```ts
+import { type AdminServerConfig } from "@jessepomeroy/admin/server";
+import { adminAuth } from "$lib/server/adminAuth";
 
 export const adminServerConfig: AdminServerConfig = {
   ...adminConfig,
   convexUrl: publicEnv.PUBLIC_CONVEX_URL ?? "",
   resendApiKey: privateEnv.RESEND_API_KEY ?? "",
-  verifyAdmin: async (request) => {
-    await requireAuth(cookiesFromRequest(request));
-    return true;
-  },
-  getConvexToken: async (request) => {
-    return getToken(cookiesFromRequest(request)) ?? null;
-  },
+  verifyAdmin: adminAuth.verifyRequest,
+  getConvexToken: adminAuth.getTokenFromRequest,
 };
 ```
 
 If `verifyAdmin` is not provided, handlers skip the auth check — your SvelteKit route middleware or layout guards are responsible for protecting admin endpoints.
 
-`cookiesFromRequest(request)` is a read-only adapter for callbacks that only receive a standard `Request` and only need `cookies.get()` / `cookies.getAll()`. Import server-only helpers from `@jessepomeroy/admin/server`; keep the package root for SvelteKit/bundled app code. Use SvelteKit's real `event.cookies` object when you need to set or delete cookies.
+`cookiesFromRequest(request)` is also available as a lower-level read-only adapter for callbacks that only receive a standard `Request` and only need `cookies.get()` / `cookies.getAll()`. Import server-only helpers from `@jessepomeroy/admin/server`; keep the package root for SvelteKit/bundled app code. Use SvelteKit's real `event.cookies` object when you need to set or delete cookies.
 
 The `authClient` field on `AdminConfig` powers the client-side login/signup UI. It expects a Better Auth-compatible client with `signIn`, `signUp`, `signOut`, `changePassword`, and `useSession` methods. If not provided:
 - The login page won't render

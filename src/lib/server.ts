@@ -18,6 +18,16 @@ export {
 	type AdminMutationProxyOptions,
 } from "./server/adminMutationProxy.js";
 export {
+	createAdminAuthValidator,
+	createAdminTokenHandler,
+	type AdminAuthConvexClient,
+	type AdminAuthIdentity,
+	type AdminAuthTokenReader,
+	type AdminAuthValidator,
+	type AdminAuthValidatorOptions,
+	type AdminTokenHandlerOptions,
+} from "./server/adminAuth.js";
+export {
 	cookiesFromRequest,
 	parseRequestCookieHeader,
 	type RequestCookieEntry,

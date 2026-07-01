@@ -15,7 +15,9 @@ describe("package server subpath Node import", () => {
 				"-e",
 				[
 					"import {",
+					"createAdminAuthValidator,",
 					"createAdminMutationHandler,",
+					"createAdminTokenHandler,",
 					"createContractSendHandler,",
 					"createGalleryDeleteHandler,",
 					"createGalleryPresignHandler,",
@@ -39,7 +41,9 @@ describe("package server subpath Node import", () => {
 					"validateFilename",
 					"} from '@jessepomeroy/admin/server';",
 					"const exports = [",
+					"createAdminAuthValidator,",
 					"createAdminMutationHandler,",
+					"createAdminTokenHandler,",
 					"createContractSendHandler,",
 					"createGalleryDeleteHandler,",
 					"createGalleryPresignHandler,",
@@ -71,6 +75,6 @@ describe("package server subpath Node import", () => {
 			},
 		);
 
-		expect(output).toBe(new Array(22).fill("function").join(","));
+		expect(output).toBe(new Array(24).fill("function").join(","));
 	}, 30_000);
 });
