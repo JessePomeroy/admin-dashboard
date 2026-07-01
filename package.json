@@ -1,6 +1,6 @@
 {
   "name": "@jessepomeroy/admin",
-  "version": "2.1.0",
+  "version": "2.1.1",
   "packageManager": "pnpm@9.15.9",
   "type": "module",
   "svelte": "./dist/index.js",
@@ -10,6 +10,10 @@
       "types": "./dist/index.d.ts",
       "svelte": "./dist/index.js",
       "default": "./dist/index.js"
+    },
+    "./server": {
+      "types": "./dist/server.d.ts",
+      "default": "./dist/server.js"
     }
   },
   "files": [
