@@ -1,9 +1,9 @@
 import { error, json } from "@sveltejs/kit";
-import { getServerConfig } from "../../config";
-import { toId } from "../../utils";
-import { getAuthenticatedConvex } from "../convexClient";
-import { handleServerError } from "../handleError";
-import { requireAdmin } from "../requireAdmin";
+import { getServerConfig } from "../../config.js";
+import { toId } from "../../utils.js";
+import { getAuthenticatedConvex } from "../convexClient.js";
+import { handleServerError } from "../handleError.js";
+import { requireAdmin } from "../requireAdmin.js";
 
 export function createPortalTokenHandler() {
 	return async ({ request }: { request: Request }) => {

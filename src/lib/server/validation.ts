@@ -1,4 +1,4 @@
-import { GALLERY_UPLOAD_EXTENSIONS, galleryFileExtension } from "../galleryUploadPolicy";
+import { GALLERY_UPLOAD_EXTENSIONS, galleryFileExtension } from "../galleryUploadPolicy.js";
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 

@@ -1,6 +1,6 @@
-import { toId } from "../../utils";
-import { escapeHtml } from "../html";
-import { createEmailSendHandler, formatCurrency } from "./createEmailSendHandler";
+import { toId } from "../../utils.js";
+import { escapeHtml } from "../html.js";
+import { createEmailSendHandler, formatCurrency } from "./createEmailSendHandler.js";
 
 /** Subset of the Convex Contract document the send handler needs. */
 interface ContractDoc extends Record<string, unknown> {

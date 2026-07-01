@@ -2,7 +2,7 @@ import { execFileSync } from "node:child_process";
 import { describe, expect, it } from "vitest";
 
 describe("package server subpath Node import", () => {
-	it("loads cookie helpers from the packaged ESM server subpath", () => {
+	it("loads server helpers from the packaged ESM server subpath", () => {
 		execFileSync("pnpm", ["build"], {
 			cwd: process.cwd(),
 			stdio: "pipe",
@@ -13,7 +13,16 @@ describe("package server subpath Node import", () => {
 			[
 				"--input-type=module",
 				"-e",
-				"import { cookiesFromRequest } from '@jessepomeroy/admin/server'; process.stdout.write(typeof cookiesFromRequest);",
+				[
+					"import {",
+					"cookiesFromRequest,",
+					"setServerConfig,",
+					"createAdminMutationHandler,",
+					"createGalleryUploadSessionHandler,",
+					"createInvoiceSendHandler",
+					"} from '@jessepomeroy/admin/server';",
+					"process.stdout.write([cookiesFromRequest, setServerConfig, createAdminMutationHandler, createGalleryUploadSessionHandler, createInvoiceSendHandler].map((value) => typeof value).join(','));",
+				].join(" "),
 			],
 			{
 				cwd: process.cwd(),
@@ -21,6 +30,6 @@ describe("package server subpath Node import", () => {
 			},
 		);
 
-		expect(output).toBe("function");
+		expect(output).toBe("function,function,function,function,function");
 	}, 30_000);
 });

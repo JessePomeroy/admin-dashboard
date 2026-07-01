@@ -1,5 +1,5 @@
 import { ConvexHttpClient } from "convex/browser";
-import { getServerConfig } from "../config";
+import { getServerConfig } from "../config.js";
 
 let _client: ConvexHttpClient | null = null;
 

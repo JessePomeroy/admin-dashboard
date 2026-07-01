@@ -1,5 +1,5 @@
 import { error } from "@sveltejs/kit";
-import { getServerConfig } from "../config";
+import { getServerConfig } from "../config.js";
 
 /**
  * Verify the request is from an authenticated admin.
