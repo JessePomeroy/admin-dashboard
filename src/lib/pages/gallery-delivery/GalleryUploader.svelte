@@ -65,6 +65,9 @@ let selectedFileIds = $state<string[]>([]);
 let deletingSelected = $state(false);
 let uploadSession = $state<GalleryUploadSession | null>(null);
 let uploadSessionPromise: Promise<GalleryUploadSession> | null = null;
+let batchTotalCount = $state(0);
+let batchTotalSizeBytes = $state(0);
+let clearedCompletedCount = $state(0);
 
 /**
  * Wrap a fetch with an AbortController so large uploads on flaky networks
@@ -199,6 +202,12 @@ async function ensureUploadSession(): Promise<string> {
 }
 
 function addFiles(fileList: FileList | File[]) {
+	if (files.length === 0) {
+		batchTotalCount = 0;
+		batchTotalSizeBytes = 0;
+		clearedCompletedCount = 0;
+	}
+
 	const newFiles: UploadFile[] = [];
 	for (const file of fileList) {
 		if (!isAllowedGalleryFile(file)) {
@@ -230,6 +239,8 @@ function addFiles(fileList: FileList | File[]) {
 			progress: 0,
 		});
 	}
+	batchTotalCount += newFiles.length;
+	batchTotalSizeBytes += newFiles.reduce((sum, uploadFile) => sum + uploadFile.file.size, 0);
 	files = [...files, ...newFiles];
 	processQueue();
 }
@@ -482,6 +493,11 @@ async function deleteSelectedFiles(): Promise<void> {
 		}
 
 		files = files.filter((file) => !selectedIds.has(file.id));
+		batchTotalCount = Math.max(0, batchTotalCount - selectedFiles.length);
+		batchTotalSizeBytes = Math.max(
+			0,
+			batchTotalSizeBytes - selectedFiles.reduce((sum, file) => sum + file.file.size, 0),
+		);
 		selectedFileIds = selectedFileIds.filter((id) => !selectedIds.has(id));
 		onupload();
 		processQueue();
@@ -513,9 +529,10 @@ function getImageDimensions(file: File): Promise<{ width: number; height: number
 	});
 }
 
-let completedCount = $derived(files.filter((f) => f.status === "done").length);
-let totalCount = $derived(files.length);
-let totalSizeBytes = $derived(files.reduce((sum, f) => sum + f.file.size, 0));
+let visibleCompletedCount = $derived(files.filter((f) => f.status === "done").length);
+let completedCount = $derived(clearedCompletedCount + visibleCompletedCount);
+let totalCount = $derived(batchTotalCount);
+let totalSizeBytes = $derived(batchTotalSizeBytes);
 let hasErrors = $derived(files.some((f) => f.status === "error"));
 let retryableErrorCount = $derived(files.filter((f) => f.status === "error" && f.retryable !== false).length);
 let selectableCount = $derived(files.filter(canSelectForDelete).length);
@@ -532,6 +549,7 @@ $effect(() => {
 });
 
 function clearCompleted() {
+	clearedCompletedCount += visibleCompletedCount;
 	files = files.filter((f) => f.status !== "done");
 	selectedFileIds = selectedFileIds.filter((id) => files.some((f) => f.id === id));
 }
