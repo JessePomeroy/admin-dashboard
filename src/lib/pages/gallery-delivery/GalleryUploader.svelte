@@ -438,6 +438,17 @@ function formatFileSize(bytes: number): string {
 					{/if}
 				</span>
 				<div class="upload-actions">
+					<span class="delete-action-slot" class:active={selectedCount > 0}>
+						<button
+							class="delete-selected-btn"
+							onclick={deleteSelectedFiles}
+							disabled={selectedCount === 0 || deletingSelected}
+							tabindex={selectedCount > 0 ? 0 : -1}
+							aria-hidden={selectedCount === 0}
+						>
+							{deletingSelected ? "deleting..." : `delete selected (${selectedCount})`}
+						</button>
+					</span>
 					<label class="add-more-btn">
 						+ add more
 						<input type="file" multiple accept={GALLERY_UPLOAD_ACCEPT} onchange={handleFileInput} hidden />
@@ -456,11 +467,6 @@ function formatFileSize(bytes: number): string {
 							/>
 							select all
 						</label>
-					{/if}
-					{#if selectedCount > 0}
-						<button class="delete-selected-btn" onclick={deleteSelectedFiles} disabled={deletingSelected}>
-							{deletingSelected ? "deleting..." : `delete selected (${selectedCount})`}
-						</button>
 					{/if}
 					{#if completedCount > 0}
 						<button class="clear-btn" onclick={clearCompleted}>clear done</button>
@@ -564,17 +570,37 @@ function formatFileSize(bytes: number): string {
 		display: flex;
 		justify-content: space-between;
 		align-items: center;
+		gap: 12px;
 		margin-bottom: 12px;
 	}
 
 	.upload-progress-text {
+		flex: 1 1 auto;
+		min-width: 140px;
 		font-size: 0.82rem;
 		color: var(--admin-text-muted);
 	}
 
 	.upload-actions {
 		display: flex;
+		align-items: center;
+		justify-content: flex-end;
+		flex: 0 1 auto;
+		flex-wrap: wrap;
 		gap: 8px;
+		min-width: 0;
+	}
+
+	.delete-action-slot {
+		display: inline-flex;
+		justify-content: flex-start;
+		flex: 0 0 158px;
+		width: 158px;
+		visibility: hidden;
+	}
+
+	.delete-action-slot.active {
+		visibility: visible;
 	}
 
 	.add-more-btn, .clear-btn, .delete-selected-btn, .retry-all-btn {
@@ -627,6 +653,7 @@ function formatFileSize(bytes: number): string {
 	.delete-selected-btn {
 		color: var(--status-rose);
 		border-color: color-mix(in srgb, var(--status-rose) 45%, var(--admin-border));
+		white-space: nowrap;
 	}
 
 	.delete-selected-btn:disabled {
@@ -638,6 +665,21 @@ function formatFileSize(bytes: number): string {
 		background: color-mix(in srgb, var(--status-rose) 16%, transparent);
 		border-color: var(--status-rose);
 		color: var(--status-rose);
+	}
+
+	@media (max-width: 640px) {
+		.upload-header {
+			align-items: stretch;
+			flex-direction: column;
+		}
+
+		.upload-actions {
+			justify-content: flex-start;
+		}
+
+		.delete-action-slot:not(.active) {
+			display: none;
+		}
 	}
 
 	.upload-item {
