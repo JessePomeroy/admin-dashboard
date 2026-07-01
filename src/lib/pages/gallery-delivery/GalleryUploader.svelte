@@ -6,19 +6,21 @@ import FeatureGate from "../../components/FeatureGate.svelte";
 import { logger } from "../../logger";
 import type { TenantAdminServerSession } from "../../adminSession";
 import {
-	GALLERY_MAX_FILE_SIZE_BYTES,
 	GALLERY_MAX_FILE_SIZE_LABEL,
 	GALLERY_UPLOAD_ACCEPT,
-	galleryFileContentType,
-	isAllowedGalleryFile,
 } from "../../galleryUploadPolicy";
-import { createGalleryStoragePort, type GalleryUploadSession } from "./galleryStoragePort";
+import { createGalleryStoragePort } from "./galleryStoragePort";
+import {
+	createGalleryUploadController,
+	type GalleryUploadBatchSummary,
+	type GalleryUploadSnapshot,
+} from "./galleryUploadController";
 
 let { galleryId, adminSession, onupload, onbatchchange = () => {} }: {
 	galleryId: string;
 	adminSession: TenantAdminServerSession;
 	onupload: () => void;
-	onbatchchange?: (summary: UploadBatchSummary) => void;
+	onbatchchange?: (summary: GalleryUploadBatchSummary) => void;
 } = $props();
 
 const config = getAdminConfig();
@@ -30,335 +32,60 @@ const storage = createGalleryStoragePort({
 	galleryWorkerUrl: config.galleryWorkerUrl,
 });
 
-const MAX_CONCURRENT = 3;
-const UPLOAD_SESSION_REFRESH_BUFFER_MS = 60_000;
-
-interface UploadBatchSummary {
-	totalCount: number;
-	completedCount: number;
-	totalSizeBytes: number;
-	hasErrors: boolean;
-}
-
-interface UploadFile {
-	file: File;
-	id: string;
-	status: "pending" | "uploading" | "processing" | "done" | "error";
-	progress: number;
-	error?: string;
-	retryable?: boolean;
-	r2Key?: string;
-	imageId?: string;
-	deleting?: boolean;
-	controller?: AbortController;
-}
-
-let files = $state<UploadFile[]>([]);
 let dragging = $state(false);
-let selectedFileIds = $state<string[]>([]);
-let deletingSelected = $state(false);
-let uploadSession = $state<GalleryUploadSession | null>(null);
-let uploadSessionPromise: Promise<GalleryUploadSession> | null = null;
-let batchTotalCount = $state(0);
-let batchTotalSizeBytes = $state(0);
-let clearedCompletedCount = $state(0);
+let uploadState = $state<GalleryUploadSnapshot>({
+	files: [],
+	selectedFileIds: [],
+	deletingSelected: false,
+	visibleCompletedCount: 0,
+	totalCount: 0,
+	completedCount: 0,
+	totalSizeBytes: 0,
+	hasErrors: false,
+	retryableErrorCount: 0,
+	selectableCount: 0,
+	selectedCount: 0,
+	allSelectableSelected: false,
+});
 
-function throwIfCanceled(signal: AbortSignal): void {
-	if (signal.aborted) throw new Error("Request canceled");
-}
-
-async function ensureUploadSession(): Promise<string> {
-	if (uploadSession && uploadSession.expiresAt - UPLOAD_SESSION_REFRESH_BUFFER_MS > Date.now()) {
-		return uploadSession.token;
-	}
-
-	if (!uploadSessionPromise) {
-		uploadSessionPromise = storage.startUploadSession({
-			siteUrl: config.siteUrl,
-			galleryId,
-		}).finally(() => {
-			uploadSessionPromise = null;
+const uploadController = createGalleryUploadController({
+	storage,
+	siteUrl: config.siteUrl,
+	galleryId: () => galleryId,
+	addImage: async (input) => {
+		const imageId = await client.mutation(galleryApi.addImage, {
+			siteUrl: input.siteUrl,
+			galleryId: toId(input.galleryId),
+			r2Key: input.r2Key,
+			filename: input.filename,
+			sizeBytes: input.sizeBytes,
+			width: input.width,
+			height: input.height,
 		});
-	}
-
-	uploadSession = await uploadSessionPromise;
-	return uploadSession.token;
-}
-
-function addFiles(fileList: FileList | File[]) {
-	if (files.length === 0) {
-		batchTotalCount = 0;
-		batchTotalSizeBytes = 0;
-		clearedCompletedCount = 0;
-	}
-
-	const newFiles: UploadFile[] = [];
-	for (const file of fileList) {
-		if (!isAllowedGalleryFile(file)) {
-			newFiles.push({
-				file,
-				id: crypto.randomUUID(),
-				status: "error",
-				progress: 0,
-				error: "File type not allowed",
-				retryable: false,
-			});
-			continue;
-		}
-		if (file.size > GALLERY_MAX_FILE_SIZE_BYTES) {
-			newFiles.push({
-				file,
-				id: crypto.randomUUID(),
-				status: "error",
-				progress: 0,
-				error: `File is over ${GALLERY_MAX_FILE_SIZE_LABEL}`,
-				retryable: false,
-			});
-			continue;
-		}
-		newFiles.push({
-			file,
-			id: crypto.randomUUID(),
-			status: "pending",
-			progress: 0,
-		});
-	}
-	batchTotalCount += newFiles.length;
-	batchTotalSizeBytes += newFiles.reduce((sum, uploadFile) => sum + uploadFile.file.size, 0);
-	files = [...files, ...newFiles];
-	processQueue();
-}
+		return imageId as string;
+	},
+	removeImage: async (id) => {
+		await client.mutation(galleryApi.removeImage, { id: toId(id) });
+	},
+	getImageDimensions,
+	onupload: () => onupload(),
+	onchange: (snapshot) => {
+		uploadState = snapshot;
+	},
+	logger,
+});
+uploadState = uploadController.getSnapshot();
 
 function handleDrop(e: DragEvent) {
 	e.preventDefault();
 	dragging = false;
-	if (e.dataTransfer?.files) addFiles(e.dataTransfer.files);
+	if (e.dataTransfer?.files) uploadController.addFiles(e.dataTransfer.files);
 }
 
 function handleFileInput(e: Event) {
 	const input = e.target as HTMLInputElement;
-	if (input.files) addFiles(input.files);
+	if (input.files) uploadController.addFiles(input.files);
 	input.value = "";
-}
-
-/**
- * Upload a single file through the full presign → PUT → process → record flow.
- * Returns when the upload is complete (or errored). Concurrency is controlled
- * by `processQueue` which fans out up to MAX_CONCURRENT of these in parallel.
- */
-async function uploadOne(next: UploadFile): Promise<void> {
-	next.status = "uploading";
-	next.controller = new AbortController();
-	files = [...files];
-
-	try {
-		const contentType = galleryFileContentType(next.file);
-		const signal = next.controller.signal;
-		const uploadSessionToken = await ensureUploadSession();
-		throwIfCanceled(signal);
-
-		const { r2Key, uploadUrl } = await storage.presign({
-			siteUrl: config.siteUrl,
-			galleryId,
-			filename: next.file.name,
-			contentType,
-			uploadSessionToken,
-			signal,
-		});
-		throwIfCanceled(signal);
-		next.r2Key = r2Key;
-		files = [...files];
-
-		// 2. Upload file directly to the Worker when it provides a tokenized URL.
-		// Fall back to the SvelteKit proxy for older Worker deployments.
-		next.progress = 30;
-		files = [...files];
-
-		await storage.uploadFile({
-			file: next.file,
-			r2Key,
-			uploadUrl,
-			contentType,
-			uploadSessionToken,
-			signal,
-		});
-		throwIfCanceled(signal);
-
-		// 3. Process (generate sizes)
-		next.status = "processing";
-		next.progress = 70;
-		files = [...files];
-
-		await storage.process({ r2Key, uploadSessionToken, signal });
-		throwIfCanceled(signal);
-
-		// 4. Get image dimensions
-		const dims = await getImageDimensions(next.file);
-		throwIfCanceled(signal);
-
-		// 5. Record in Convex
-		const imageId = await client.mutation(galleryApi.addImage, {
-			siteUrl: config.siteUrl,
-			galleryId: toId(galleryId),
-			r2Key,
-			filename: next.file.name,
-			sizeBytes: next.file.size,
-			width: dims.width,
-			height: dims.height,
-		});
-
-		next.imageId = imageId as string;
-		if (signal.aborted) {
-			try {
-				await client.mutation(galleryApi.removeImage, { id: toId(next.imageId) });
-				next.imageId = undefined;
-			} catch (cleanupErr) {
-				logger.warn("Failed to clean up canceled gallery image:", next.imageId, cleanupErr);
-			}
-			throw new Error("Request canceled");
-		}
-		next.status = "done";
-		next.progress = 100;
-		files = [...files];
-		onupload();
-	} catch (err) {
-		next.status = "error";
-		const message = err instanceof Error ? err.message : "Upload failed";
-		next.error = message === "Request canceled" ? "Canceled" : message;
-		next.retryable = message === "Request canceled" ? false : next.retryable;
-		files = [...files];
-	} finally {
-		next.controller = undefined;
-	}
-}
-
-/**
- * Start as many pending uploads as the concurrency limit allows. Each started
- * upload re-invokes processQueue on completion to pick up the next pending
- * item, so the queue drains fully while never exceeding MAX_CONCURRENT
- * in-flight requests.
- */
-function processQueue(): void {
-	while (true) {
-		const uploading = files.filter(
-			(f) => f.status === "uploading" || f.status === "processing",
-		).length;
-		if (uploading >= MAX_CONCURRENT) return;
-
-		const next = files.find((f) => f.status === "pending" && !f.deleting);
-		if (!next) return;
-
-		// Mark as uploading synchronously so the next loop iteration sees the
-		// updated in-flight count and doesn't pick the same file twice.
-		next.status = "uploading";
-		files = [...files];
-
-		uploadOne(next).then(processQueue);
-	}
-}
-
-/** Retry a single errored upload from the start of the pipeline. */
-function retryUpload(id: string): void {
-	const target = files.find((f) => f.id === id);
-	if (!target || target.status !== "error" || target.retryable === false) return;
-	target.status = "pending";
-	target.error = undefined;
-	target.progress = 0;
-	target.retryable = undefined;
-	target.controller = undefined;
-	files = [...files];
-	processQueue();
-}
-
-function retryAllUploads(): void {
-	let changed = false;
-	for (const file of files) {
-		if (file.status !== "error" || file.retryable === false) continue;
-		file.status = "pending";
-		file.error = undefined;
-		file.progress = 0;
-		file.retryable = undefined;
-		file.controller = undefined;
-		changed = true;
-	}
-	if (!changed) return;
-	files = [...files];
-	processQueue();
-}
-
-function canSelectForDelete(file: UploadFile): boolean {
-	return !file.deleting;
-}
-
-function isSelected(id: string): boolean {
-	return selectedFileIds.includes(id);
-}
-
-function toggleSelected(id: string): void {
-	if (isSelected(id)) {
-		selectedFileIds = selectedFileIds.filter((selectedId) => selectedId !== id);
-	} else {
-		selectedFileIds = [...selectedFileIds, id];
-	}
-}
-
-function toggleSelectAll(): void {
-	const selectableIds = files.filter(canSelectForDelete).map((file) => file.id);
-	if (selectableIds.length === 0) return;
-	const allSelected = selectableIds.every((id) => selectedFileIds.includes(id));
-	selectedFileIds = allSelected ? [] : selectableIds;
-}
-
-async function deleteR2File(r2Key: string): Promise<void> {
-	try {
-		await storage.delete({ r2Key, uploadSessionToken: uploadSession?.token });
-	} catch (err) {
-		logger.warn("Failed to delete R2 image:", r2Key, err);
-	}
-}
-
-async function deleteSelectedFiles(): Promise<void> {
-	if (deletingSelected) return;
-	const selectedFiles = files.filter((file) => selectedFileIds.includes(file.id) && canSelectForDelete(file));
-	if (selectedFiles.length === 0) return;
-
-	deletingSelected = true;
-	const selectedIds = new Set(selectedFiles.map((file) => file.id));
-	for (const file of selectedFiles) {
-		file.deleting = true;
-		file.controller?.abort();
-	}
-	files = [...files];
-
-	try {
-		for (const file of selectedFiles) {
-			if (file.imageId) {
-				await client.mutation(galleryApi.removeImage, { id: toId(file.imageId) });
-			}
-			if (file.r2Key) {
-				await deleteR2File(file.r2Key);
-			}
-		}
-
-		files = files.filter((file) => !selectedIds.has(file.id));
-		batchTotalCount = Math.max(0, batchTotalCount - selectedFiles.length);
-		batchTotalSizeBytes = Math.max(
-			0,
-			batchTotalSizeBytes - selectedFiles.reduce((sum, file) => sum + file.file.size, 0),
-		);
-		selectedFileIds = selectedFileIds.filter((id) => !selectedIds.has(id));
-		onupload();
-		processQueue();
-	} catch (err) {
-		for (const file of selectedFiles) {
-			file.deleting = false;
-			file.status = "error";
-			file.error = err instanceof Error ? err.message : "Delete failed";
-		}
-		files = [...files];
-	} finally {
-		deletingSelected = false;
-	}
 }
 
 function getImageDimensions(file: File): Promise<{ width: number; height: number }> {
@@ -377,15 +104,15 @@ function getImageDimensions(file: File): Promise<{ width: number; height: number
 	});
 }
 
-let visibleCompletedCount = $derived(files.filter((f) => f.status === "done").length);
-let completedCount = $derived(clearedCompletedCount + visibleCompletedCount);
-let totalCount = $derived(batchTotalCount);
-let totalSizeBytes = $derived(batchTotalSizeBytes);
-let hasErrors = $derived(files.some((f) => f.status === "error"));
-let retryableErrorCount = $derived(files.filter((f) => f.status === "error" && f.retryable !== false).length);
-let selectableCount = $derived(files.filter(canSelectForDelete).length);
-let selectedCount = $derived(selectedFileIds.filter((id) => files.some((f) => f.id === id && canSelectForDelete(f))).length);
-let allSelectableSelected = $derived(selectableCount > 0 && selectedCount === selectableCount);
+let files = $derived(uploadState.files);
+let completedCount = $derived(uploadState.completedCount);
+let totalCount = $derived(uploadState.totalCount);
+let totalSizeBytes = $derived(uploadState.totalSizeBytes);
+let hasErrors = $derived(uploadState.hasErrors);
+let retryableErrorCount = $derived(uploadState.retryableErrorCount);
+let selectableCount = $derived(uploadState.selectableCount);
+let selectedCount = $derived(uploadState.selectedCount);
+let allSelectableSelected = $derived(uploadState.allSelectableSelected);
 
 $effect(() => {
 	onbatchchange({
@@ -395,12 +122,6 @@ $effect(() => {
 		hasErrors,
 	});
 });
-
-function clearCompleted() {
-	clearedCompletedCount += visibleCompletedCount;
-	files = files.filter((f) => f.status !== "done");
-	selectedFileIds = selectedFileIds.filter((id) => files.some((f) => f.id === id));
-}
 
 function formatFileSize(bytes: number): string {
 	if (bytes >= 1024 * 1024) return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
@@ -441,12 +162,12 @@ function formatFileSize(bytes: number): string {
 					<span class="delete-action-slot" class:active={selectedCount > 0}>
 						<button
 							class="delete-selected-btn"
-							onclick={deleteSelectedFiles}
-							disabled={selectedCount === 0 || deletingSelected}
+							onclick={() => uploadController.deleteSelectedFiles()}
+							disabled={selectedCount === 0 || uploadState.deletingSelected}
 							tabindex={selectedCount > 0 ? 0 : -1}
 							aria-hidden={selectedCount === 0}
 						>
-							{deletingSelected ? "deleting..." : `delete selected (${selectedCount})`}
+							{uploadState.deletingSelected ? "deleting..." : `delete selected (${selectedCount})`}
 						</button>
 					</span>
 					<label class="add-more-btn">
@@ -454,7 +175,7 @@ function formatFileSize(bytes: number): string {
 						<input type="file" multiple accept={GALLERY_UPLOAD_ACCEPT} onchange={handleFileInput} hidden />
 					</label>
 					{#if retryableErrorCount > 0}
-						<button class="retry-all-btn" onclick={retryAllUploads}>
+						<button class="retry-all-btn" onclick={() => uploadController.retryAllUploads()}>
 							retry all ({retryableErrorCount})
 						</button>
 					{/if}
@@ -463,13 +184,13 @@ function formatFileSize(bytes: number): string {
 							<input
 								type="checkbox"
 								checked={allSelectableSelected}
-								onchange={toggleSelectAll}
+								onchange={() => uploadController.toggleSelectAll()}
 							/>
 							select all
 						</label>
 					{/if}
 					{#if completedCount > 0}
-						<button class="clear-btn" onclick={clearCompleted}>clear done</button>
+						<button class="clear-btn" onclick={() => uploadController.clearCompleted()}>clear done</button>
 					{/if}
 				</div>
 			</div>
@@ -480,9 +201,9 @@ function formatFileSize(bytes: number): string {
 						class="delete-checkbox"
 						type="checkbox"
 						aria-label={`select ${f.file.name} for deletion`}
-						checked={isSelected(f.id)}
-						disabled={!canSelectForDelete(f)}
-						onchange={() => toggleSelected(f.id)}
+						checked={uploadController.isSelected(f.id)}
+						disabled={!uploadController.canSelectForDelete(f)}
+						onchange={() => uploadController.toggleSelected(f.id)}
 					/>
 					<span class="file-name">{f.file.name}</span>
 					<span class="file-size">{formatFileSize(f.file.size)}</span>
@@ -498,7 +219,7 @@ function formatFileSize(bytes: number): string {
 					{:else if f.status === "error"}
 						<span class="file-status error-text">{f.error}</span>
 						{#if f.retryable !== false}
-							<button class="retry-btn" onclick={() => retryUpload(f.id)}>retry</button>
+							<button class="retry-btn" onclick={() => uploadController.retryUpload(f.id)}>retry</button>
 						{/if}
 					{:else}
 						<span class="file-status">waiting...</span>
