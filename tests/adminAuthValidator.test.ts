@@ -95,6 +95,27 @@ describe("createAdminAuthValidator", () => {
 		});
 	});
 
+	it("preserves intentional status errors thrown by the validator", async () => {
+		const client = {
+			setAuth: vi.fn(),
+			query: vi.fn(async () => {
+				const err = new Error("Forbidden");
+				Object.assign(err, { status: 403 });
+				throw err;
+			}),
+		};
+		const auth = createAdminAuthValidator({
+			getToken: () => "token",
+			getConvexUrl: () => "https://convex.example",
+			whoami: "adminAuth.whoami",
+			createClient: vi.fn(() => client),
+		});
+
+		await expect(auth.requireAuth(makeCookies())).rejects.toMatchObject({
+			status: 403,
+		});
+	});
+
 	it("returns the validated token and identity", async () => {
 		const identity = {
 			email: "admin@example.com",
@@ -133,7 +154,7 @@ describe("createAdminAuthValidator", () => {
 		);
 	});
 
-	it("reads tokens directly from standard Requests", () => {
+	it("reads tokens directly from standard Requests", async () => {
 		const auth = createAdminAuthValidator({
 			getToken: (cookies) => cookies.get("session"),
 			getConvexUrl: () => "https://convex.example",
@@ -141,8 +162,10 @@ describe("createAdminAuthValidator", () => {
 			createClient: vi.fn(() => makeClient().client),
 		});
 
-		expect(auth.getTokenFromRequest(makeRequest("session=token"))).toBe("token");
-		expect(auth.getTokenFromRequest(makeRequest())).toBeNull();
+		await expect(auth.getTokenFromRequest(makeRequest("session=token"))).resolves.toBe(
+			"token",
+		);
+		await expect(auth.getTokenFromRequest(makeRequest())).resolves.toBeNull();
 	});
 });
 

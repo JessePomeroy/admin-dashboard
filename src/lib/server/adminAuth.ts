@@ -29,7 +29,7 @@ export interface AdminAuthValidator {
 		identity: AdminAuthIdentity;
 	}>;
 	verifyRequest(request: Request): Promise<boolean>;
-	getTokenFromRequest(request: Request): string | null;
+	getTokenFromRequest(request: Request): Promise<string | null>;
 }
 
 export interface AdminTokenHandlerOptions {
@@ -82,7 +82,7 @@ export function createAdminAuthValidator(
 		return true;
 	}
 
-	function getTokenFromRequest(request: Request): string | null {
+	async function getTokenFromRequest(request: Request): Promise<string | null> {
 		return options.getToken(cookiesFromRequest(request)) ?? null;
 	}
 
