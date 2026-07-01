@@ -13,10 +13,11 @@ import {
 	isAllowedGalleryFile,
 } from "../../galleryUploadPolicy";
 
-let { galleryId, adminSession, onupload }: {
+let { galleryId, adminSession, onupload, onbatchchange = () => {} }: {
 	galleryId: string;
 	adminSession: TenantAdminServerSession;
 	onupload: () => void;
+	onbatchchange?: (summary: UploadBatchSummary) => void;
 } = $props();
 
 const config = getAdminConfig();
@@ -36,6 +37,13 @@ const UPLOAD_SESSION_REFRESH_BUFFER_MS = 60_000;
 interface GalleryUploadSession {
 	token: string;
 	expiresAt: number;
+}
+
+interface UploadBatchSummary {
+	totalCount: number;
+	completedCount: number;
+	totalSizeBytes: number;
+	hasErrors: boolean;
 }
 
 interface UploadFile {
@@ -491,10 +499,20 @@ function getImageDimensions(file: File): Promise<{ width: number; height: number
 
 let completedCount = $derived(files.filter((f) => f.status === "done").length);
 let totalCount = $derived(files.length);
+let totalSizeBytes = $derived(files.reduce((sum, f) => sum + f.file.size, 0));
 let hasErrors = $derived(files.some((f) => f.status === "error"));
 let selectableCount = $derived(files.filter(canSelectForDelete).length);
 let selectedCount = $derived(selectedFileIds.filter((id) => files.some((f) => f.id === id && canSelectForDelete(f))).length);
 let allSelectableSelected = $derived(selectableCount > 0 && selectedCount === selectableCount);
+
+$effect(() => {
+	onbatchchange({
+		totalCount,
+		completedCount,
+		totalSizeBytes,
+		hasErrors,
+	});
+});
 
 function clearCompleted() {
 	files = files.filter((f) => f.status !== "done");

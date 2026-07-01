@@ -10,6 +10,13 @@ import type { Gallery, GalleryImage } from "../../types";
 import GalleryUploader from "./GalleryUploader.svelte";
 import GalleryImageGrid from "./GalleryImageGrid.svelte";
 
+interface UploadBatchSummary {
+	totalCount: number;
+	completedCount: number;
+	totalSizeBytes: number;
+	hasErrors: boolean;
+}
+
 let { gallery, adminSession, onclose }: {
 	gallery: Gallery & { clientName: string };
 	adminSession: TenantAdminServerSession;
@@ -30,12 +37,22 @@ let tab = $state<"images" | "settings">("images");
 let saving = $state(false);
 let deleting = $state(false);
 let copyText = $state("copy link");
+let uploadBatch = $state<UploadBatchSummary | null>(null);
+let headerStats = $derived(
+	uploadBatch && uploadBatch.totalCount > 0
+		? `${uploadBatch.completedCount}/${uploadBatch.totalCount} uploaded — ${formatBytes(uploadBatch.totalSizeBytes)}`
+		: `${liveGallery.imageCount} image${liveGallery.imageCount !== 1 ? "s" : ""} — ${formatBytes(liveGallery.totalSizeBytes)}`,
+);
 
 // Settings state
 let editName = $state(gallery.name);
 let editDownloadEnabled = $state(gallery.downloadEnabled);
 let editFavoritesEnabled = $state(gallery.favoritesEnabled);
 let editPassword = $state(gallery.password ?? "");
+
+function handleUploadBatchChange(summary: UploadBatchSummary) {
+	uploadBatch = summary.totalCount > 0 ? summary : null;
+}
 
 async function handleSaveSettings() {
 	saving = true;
@@ -112,7 +129,10 @@ async function handleShare() {
 		<div class="detail-header">
 			<span class="client-name">{gallery.clientName}</span>
 			<span class="stats">
-				{liveGallery.imageCount} image{liveGallery.imageCount !== 1 ? "s" : ""} — {formatBytes(liveGallery.totalSizeBytes)}
+				{headerStats}
+				{#if uploadBatch?.hasErrors}
+					<span class="error-text">— some failed</span>
+				{/if}
 			</span>
 			<div class="header-actions">
 				{#if liveGallery.status === "draft"}
@@ -137,7 +157,12 @@ async function handleShare() {
 
 		{#if tab === "images"}
 			<div class="images-section" role="tabpanel">
-				<GalleryUploader galleryId={gallery._id as string} {adminSession} onupload={() => {}} />
+				<GalleryUploader
+					galleryId={gallery._id as string}
+					{adminSession}
+					onupload={() => {}}
+					onbatchchange={handleUploadBatchChange}
+				/>
 				<GalleryImageGrid
 					{images}
 					galleryId={gallery._id as string}
@@ -196,6 +221,7 @@ async function handleShare() {
 
 	.client-name { font-size: 0.82rem; color: var(--admin-text-muted); }
 	.stats { font-size: 0.78rem; color: var(--admin-text-subtle); }
+	.error-text { color: var(--status-rose); }
 	.header-actions { margin-left: auto; display: flex; gap: 8px; align-items: center; }
 
 	.status-action-btn {
