@@ -269,7 +269,8 @@ export const POST = createInvoiceSendHandler();
 All server handlers call `verifyAdmin(request)` before processing. To enable this, provide a `verifyAdmin` callback in your server config:
 
 ```ts
-import { cookiesFromRequest, type AdminServerConfig } from "@jessepomeroy/admin";
+import type { AdminServerConfig } from "@jessepomeroy/admin";
+import { cookiesFromRequest } from "@jessepomeroy/admin/server";
 import { getToken } from "@mmailaender/convex-better-auth-svelte/sveltekit";
 import { requireAuth } from "$lib/server/adminAuth";
 
@@ -289,7 +290,7 @@ export const adminServerConfig: AdminServerConfig = {
 
 If `verifyAdmin` is not provided, handlers skip the auth check — your SvelteKit route middleware or layout guards are responsible for protecting admin endpoints.
 
-`cookiesFromRequest(request)` is a read-only adapter for callbacks that only receive a standard `Request` and only need `cookies.get()` / `cookies.getAll()`. Use SvelteKit's real `event.cookies` object when you need to set or delete cookies.
+`cookiesFromRequest(request)` is a read-only adapter for callbacks that only receive a standard `Request` and only need `cookies.get()` / `cookies.getAll()`. Import server-only helpers from `@jessepomeroy/admin/server`; keep the package root for SvelteKit/bundled app code. Use SvelteKit's real `event.cookies` object when you need to set or delete cookies.
 
 The `authClient` field on `AdminConfig` powers the client-side login/signup UI. It expects a Better Auth-compatible client with `signIn`, `signUp`, `signOut`, `changePassword`, and `useSession` methods. If not provided:
 - The login page won't render
