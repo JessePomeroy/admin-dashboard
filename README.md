@@ -376,7 +376,7 @@ If `galleryWorkerUrl` is not set in the config, the gallery delivery tab is hidd
 
 ### File validation
 
-The presign handler validates uploaded filenames: max 255 characters, no path traversal (`..`, `/`, `\`), and image extensions only (jpg, jpeg, png, webp, tiff, tif). The allowlist mirrors `GalleryUploader`'s accepted MIME types.
+The presign handler validates uploaded filenames: max 255 characters, no path traversal (`..`, `/`, `\`), and gallery image extensions only. The allowlist mirrors `GalleryUploader`: jpg/jpeg, png, webp, tif/tiff, and common camera RAW formats including raf, cr2/cr3, dng, nef, arw, orf, rw2, and related RAW extensions.
 
 ## Shared components
 
