@@ -18,7 +18,7 @@ Published to GitHub Packages. Your `.npmrc` needs:
 ### Peer dependencies
 
 ```
-@mmailaender/convex-svelte  ^0.18.0
+convex-svelte               ^0.14.0
 @sveltejs/kit               ^2.0.0
 convex                      ^1.30.0
 resend                      ^6.0.0
@@ -189,6 +189,7 @@ interface AdminServerConfig extends AdminConfig {
   resendApiKey: string;      // Resend API key for sending emails
   galleryAdminSecret?: string; // Bearer token for gallery worker
   verifyAdmin?: (request: Request) => Promise<boolean>; // Auth check for handlers
+  getConvexToken?: (request: Request) => Promise<string | null>; // Convex auth token
 }
 ```
 
@@ -257,6 +258,7 @@ export const POST = createInvoiceSendHandler();
 | `createContractSendHandler()` | POST | Send contract for e-signature |
 | `createQuoteSendHandler()` | POST | Send quote email to client |
 | `createPortalTokenHandler()` | POST | Generate client portal access token |
+| `createGalleryUploadSessionHandler()` | POST | Issue a short-lived gallery upload-session token |
 | `createGalleryPresignHandler()` | POST | Get presigned URL for gallery upload |
 | `createGalleryUploadHandler()` | PUT | Stream file to gallery worker |
 | `createGalleryProcessHandler()` | POST | Trigger image processing (preview/thumb) |
@@ -267,19 +269,27 @@ export const POST = createInvoiceSendHandler();
 All server handlers call `verifyAdmin(request)` before processing. To enable this, provide a `verifyAdmin` callback in your server config:
 
 ```ts
+import { cookiesFromRequest, type AdminServerConfig } from "@jessepomeroy/admin";
+import { getToken } from "@mmailaender/convex-better-auth-svelte/sveltekit";
+import { requireAuth } from "$lib/server/adminAuth";
+
 export const adminServerConfig: AdminServerConfig = {
   ...adminConfig,
   convexUrl: publicEnv.PUBLIC_CONVEX_URL ?? "",
   resendApiKey: privateEnv.RESEND_API_KEY ?? "",
   verifyAdmin: async (request) => {
-    // Example: check a session cookie or Bearer token
-    const session = await getSession(request);
-    return !!session?.user;
+    await requireAuth(cookiesFromRequest(request));
+    return true;
+  },
+  getConvexToken: async (request) => {
+    return getToken(cookiesFromRequest(request)) ?? null;
   },
 };
 ```
 
 If `verifyAdmin` is not provided, handlers skip the auth check — your SvelteKit route middleware or layout guards are responsible for protecting admin endpoints.
+
+`cookiesFromRequest(request)` is a read-only adapter for callbacks that only receive a standard `Request` and only need `cookies.get()` / `cookies.getAll()`. Use SvelteKit's real `event.cookies` object when you need to set or delete cookies.
 
 The `authClient` field on `AdminConfig` powers the client-side login/signup UI. It expects a Better Auth-compatible client with `signIn`, `signUp`, `signOut`, `changePassword`, and `useSession` methods. If not provided:
 - The login page won't render
@@ -324,15 +334,18 @@ export const adminServerConfig: AdminServerConfig = {
 Wire the gallery handlers into your SvelteKit routes:
 
 ```ts
-// src/routes/api/admin/gallery/presign/+server.ts
-import { createGalleryPresignHandler, setServerConfig } from "@jessepomeroy/admin";
+// src/routes/api/admin/galleries/presign/+server.ts
+import {
+  createGalleryPresignHandler,
+  setServerConfig,
+} from "@jessepomeroy/admin";
 import { adminServerConfig } from "$lib/config/admin.server";
 
 setServerConfig(adminServerConfig);
 export const POST = createGalleryPresignHandler();
 ```
 
-Repeat for `createGalleryUploadHandler` (PUT), `createGalleryProcessHandler` (POST), and `createGalleryDeleteHandler` (POST).
+Repeat for `createGalleryUploadSessionHandler` (POST), `createGalleryUploadHandler` (PUT), `createGalleryProcessHandler` (POST), and `createGalleryDeleteHandler` (POST).
 
 If `galleryWorkerUrl` is not set in the config, the gallery delivery tab is hidden automatically — the portfolio tab still works.
 
@@ -367,6 +380,10 @@ All document pages support auto-opening a detail modal via the `?open=` query pa
 ```
 
 The dashboard activity feed and CRM activity timeline use this to navigate directly to a document's detail view when clicked.
+
+## Build warning classification
+
+Host app builds may emit non-fatal optional dependency resolution warnings involving Sentry, Babel, or `debug`. The admin package does not import those modules directly. Treat those warnings as non-blocking when the build exits successfully and admin routes render; investigate them only if they become runtime import failures or the build exits non-zero.
 
 ## Convex schema
 

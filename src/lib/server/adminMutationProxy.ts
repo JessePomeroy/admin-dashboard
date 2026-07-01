@@ -83,7 +83,7 @@ export function createAdminMutationHandler(
 		const client = createClient(convexUrl);
 		client.setAuth(token);
 
-	try {
+		try {
 			// biome-ignore lint/suspicious/noExplicitAny: function refs are resolved by Convex name at runtime; this shared proxy intentionally accepts generated API trees from different consumer apps.
 			const result = await client.mutation(fnRef as any, args);
 			return json({ result });
