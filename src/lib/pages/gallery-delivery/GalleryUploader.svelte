@@ -81,13 +81,20 @@ async function uploadFileToStorage(
 
 	if (uploadUrl && config.galleryWorkerUrl) {
 		const directEndpoint = new URL(uploadUrl, config.galleryWorkerUrl).toString();
-		const directRes = await fetchWithTimeout(
-			directEndpoint,
-			requestInit,
-			UPLOAD_TIMEOUT_MS,
-		);
-		if (directRes.ok || !DIRECT_UPLOAD_FALLBACK_STATUSES.has(directRes.status)) {
-			return directRes;
+		try {
+			const directRes = await fetchWithTimeout(
+				directEndpoint,
+				requestInit,
+				UPLOAD_TIMEOUT_MS,
+			);
+			if (directRes.ok || !DIRECT_UPLOAD_FALLBACK_STATUSES.has(directRes.status)) {
+				return directRes;
+			}
+		} catch (err) {
+			const message = err instanceof Error ? err.message : "";
+			if (message.startsWith("Request timed out")) {
+				throw err;
+			}
 		}
 	}
 
