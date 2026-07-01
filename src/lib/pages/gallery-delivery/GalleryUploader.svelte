@@ -400,6 +400,22 @@ function retryUpload(id: string): void {
 	processQueue();
 }
 
+function retryAllUploads(): void {
+	let changed = false;
+	for (const file of files) {
+		if (file.status !== "error" || file.retryable === false) continue;
+		file.status = "pending";
+		file.error = undefined;
+		file.progress = 0;
+		file.retryable = undefined;
+		file.controller = undefined;
+		changed = true;
+	}
+	if (!changed) return;
+	files = [...files];
+	processQueue();
+}
+
 function canSelectForDelete(file: UploadFile): boolean {
 	return !file.deleting;
 }
@@ -501,6 +517,7 @@ let completedCount = $derived(files.filter((f) => f.status === "done").length);
 let totalCount = $derived(files.length);
 let totalSizeBytes = $derived(files.reduce((sum, f) => sum + f.file.size, 0));
 let hasErrors = $derived(files.some((f) => f.status === "error"));
+let retryableErrorCount = $derived(files.filter((f) => f.status === "error" && f.retryable !== false).length);
 let selectableCount = $derived(files.filter(canSelectForDelete).length);
 let selectedCount = $derived(selectedFileIds.filter((id) => files.some((f) => f.id === id && canSelectForDelete(f))).length);
 let allSelectableSelected = $derived(selectableCount > 0 && selectedCount === selectableCount);
@@ -559,6 +576,11 @@ function formatFileSize(bytes: number): string {
 						+ add more
 						<input type="file" multiple accept={GALLERY_UPLOAD_ACCEPT} onchange={handleFileInput} hidden />
 					</label>
+					{#if retryableErrorCount > 0}
+						<button class="retry-all-btn" onclick={retryAllUploads}>
+							retry all ({retryableErrorCount})
+						</button>
+					{/if}
 					{#if selectableCount > 0}
 						<label class="select-all-control">
 							<input
@@ -689,7 +711,7 @@ function formatFileSize(bytes: number): string {
 		gap: 8px;
 	}
 
-	.add-more-btn, .clear-btn, .delete-selected-btn {
+	.add-more-btn, .clear-btn, .delete-selected-btn, .retry-all-btn {
 		padding: 4px 12px;
 		border: 1px solid var(--admin-border);
 		border-radius: 5px;
@@ -697,6 +719,16 @@ function formatFileSize(bytes: number): string {
 		color: var(--admin-text-muted);
 		font-size: 0.74rem;
 		cursor: pointer;
+	}
+
+	.retry-all-btn {
+		color: var(--admin-accent);
+		border-color: color-mix(in srgb, var(--admin-accent) 50%, var(--admin-border));
+	}
+
+	.retry-all-btn:hover {
+		background: color-mix(in srgb, var(--admin-accent) 12%, transparent);
+		border-color: var(--admin-accent);
 	}
 
 	.select-all-control {
