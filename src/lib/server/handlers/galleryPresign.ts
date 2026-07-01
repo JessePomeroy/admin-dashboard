@@ -4,6 +4,17 @@ import { handleServerError } from "../handleError";
 import { requireAdmin } from "../requireAdmin";
 import { validateFilename } from "../validation";
 
+const UPLOAD_SESSION_SCOPE = "gallery-upload-session";
+const DEFAULT_UPLOAD_SESSION_TTL_MS = 4 * 60 * 60 * 1000;
+
+interface GalleryUploadSessionPayload {
+	scope: typeof UPLOAD_SESSION_SCOPE;
+	siteUrl: string;
+	galleryId: string;
+	iat: number;
+	exp: number;
+}
+
 /** Validate gallery worker config, throw 500 if missing. */
 function requireWorkerConfig() {
 	const config = getServerConfig();
@@ -11,6 +22,122 @@ function requireWorkerConfig() {
 		throw error(500, "Gallery worker not configured");
 	}
 	return config;
+}
+
+function base64UrlEncode(input: string | ArrayBuffer): string {
+	const bytes = typeof input === "string"
+		? new TextEncoder().encode(input)
+		: new Uint8Array(input);
+	let binary = "";
+	for (const byte of bytes) binary += String.fromCharCode(byte);
+	return btoa(binary).replaceAll("+", "-").replaceAll("/", "_").replace(/=+$/, "");
+}
+
+function base64UrlDecode(input: string): Uint8Array {
+	const padded = input.replaceAll("-", "+").replaceAll("_", "/").padEnd(
+		Math.ceil(input.length / 4) * 4,
+		"=",
+	);
+	const binary = atob(padded);
+	const bytes = new Uint8Array(binary.length);
+	for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+	return bytes;
+}
+
+async function hmacSha256(secret: string, payload: string): Promise<ArrayBuffer> {
+	const key = await crypto.subtle.importKey(
+		"raw",
+		new TextEncoder().encode(secret),
+		{ name: "HMAC", hash: "SHA-256" },
+		false,
+		["sign"],
+	);
+	return crypto.subtle.sign("HMAC", key, new TextEncoder().encode(payload));
+}
+
+function timingSafeEqual(a: Uint8Array, b: Uint8Array): boolean {
+	if (a.length !== b.length) return false;
+	let diff = 0;
+	for (let i = 0; i < a.length; i++) diff |= a[i] ^ b[i];
+	return diff === 0;
+}
+
+async function createUploadSessionToken(
+	secret: string,
+	siteUrl: string,
+	galleryId: string,
+): Promise<{ token: string; expiresAt: number }> {
+	const now = Date.now();
+	const expiresAt = now + DEFAULT_UPLOAD_SESSION_TTL_MS;
+	const payload: GalleryUploadSessionPayload = {
+		scope: UPLOAD_SESSION_SCOPE,
+		siteUrl,
+		galleryId,
+		iat: now,
+		exp: expiresAt,
+	};
+	const encodedPayload = base64UrlEncode(JSON.stringify(payload));
+	const signature = base64UrlEncode(await hmacSha256(secret, encodedPayload));
+	return { token: `${encodedPayload}.${signature}`, expiresAt };
+}
+
+async function verifyUploadSessionToken(
+	secret: string,
+	token: string | null | undefined,
+): Promise<GalleryUploadSessionPayload | null> {
+	if (!token) return null;
+	const [encodedPayload, encodedSignature] = token.split(".");
+	if (!encodedPayload || !encodedSignature) return null;
+
+	const expectedSignature = new Uint8Array(await hmacSha256(secret, encodedPayload));
+	let actualSignature: Uint8Array;
+	try {
+		actualSignature = base64UrlDecode(encodedSignature);
+	} catch {
+		return null;
+	}
+	if (!timingSafeEqual(expectedSignature, actualSignature)) return null;
+
+	let payload: GalleryUploadSessionPayload;
+	try {
+		payload = JSON.parse(new TextDecoder().decode(base64UrlDecode(encodedPayload)));
+	} catch {
+		return null;
+	}
+
+	if (payload.scope !== UPLOAD_SESSION_SCOPE) return null;
+	if (typeof payload.siteUrl !== "string" || typeof payload.galleryId !== "string") return null;
+	if (typeof payload.exp !== "number" || payload.exp <= Date.now()) return null;
+	return payload;
+}
+
+function r2KeyBelongsToSession(r2Key: string, session: GalleryUploadSessionPayload): boolean {
+	return r2Key.startsWith(`${session.siteUrl}/${session.galleryId}/`);
+}
+
+async function requireGalleryUploadAccess(
+	request: Request,
+	constraints: {
+		siteUrl?: string;
+		galleryId?: string;
+		r2Key?: string;
+		uploadSessionToken?: string | null;
+	},
+): Promise<void> {
+	const config = requireWorkerConfig();
+	const token = constraints.uploadSessionToken ?? request.headers.get("X-Gallery-Upload-Session");
+	const session = await verifyUploadSessionToken(config.galleryAdminSecret!, token);
+
+	if (session) {
+		if (constraints.siteUrl && session.siteUrl !== constraints.siteUrl) throw error(403, "Upload session site mismatch");
+		if (constraints.galleryId && session.galleryId !== constraints.galleryId) throw error(403, "Upload session gallery mismatch");
+		if (constraints.r2Key && !r2KeyBelongsToSession(constraints.r2Key, session)) {
+			throw error(403, "Upload session cannot access this file");
+		}
+		return;
+	}
+
+	await requireAdmin(request);
 }
 
 /** Standard headers for gallery worker requests. */
@@ -38,9 +165,37 @@ async function parseWorkerJson(res: Response): Promise<unknown> {
 	return res.json();
 }
 
-export function createGalleryPresignHandler() {
+export function createGalleryUploadSessionHandler() {
 	return async ({ request }: { request: Request }) => {
 		await requireAdmin(request);
+		const config = requireWorkerConfig();
+
+		let data;
+		try {
+			data = await request.json();
+		} catch {
+			throw error(400, "Invalid JSON body");
+		}
+
+		if (!data.siteUrl || !data.galleryId) {
+			throw error(400, "siteUrl and galleryId are required");
+		}
+		if (data.siteUrl !== config.siteUrl) {
+			throw error(403, "Upload session site mismatch");
+		}
+
+		const { token, expiresAt } = await createUploadSessionToken(
+			config.galleryAdminSecret!,
+			data.siteUrl,
+			data.galleryId,
+		);
+
+		return json({ uploadSessionToken: token, expiresAt });
+	};
+}
+
+export function createGalleryPresignHandler() {
+	return async ({ request }: { request: Request }) => {
 		const config = requireWorkerConfig();
 
 		let data;
@@ -53,6 +208,11 @@ export function createGalleryPresignHandler() {
 		if (!data.siteUrl || !data.galleryId || !data.filename || !data.contentType) {
 			throw error(400, "siteUrl, galleryId, filename, and contentType are required");
 		}
+		await requireGalleryUploadAccess(request, {
+			siteUrl: data.siteUrl,
+			galleryId: data.galleryId,
+			uploadSessionToken: data.uploadSessionToken,
+		});
 
 		try {
 			data.filename = validateFilename(data.filename);
@@ -77,12 +237,12 @@ export function createGalleryPresignHandler() {
 
 export function createGalleryUploadHandler() {
 	return async ({ request }: { request: Request }) => {
-		await requireAdmin(request);
 		const config = requireWorkerConfig();
 
 		const url = new URL(request.url);
 		const key = url.searchParams.get("key");
 		if (!key) throw error(400, "Missing key parameter");
+		await requireGalleryUploadAccess(request, { r2Key: key });
 
 		try {
 			const res = await fetch(
@@ -109,10 +269,14 @@ export function createGalleryUploadHandler() {
 
 export function createGalleryProcessHandler() {
 	return async ({ request }: { request: Request }) => {
-		await requireAdmin(request);
 		const config = requireWorkerConfig();
 
 		const data = await request.json();
+		if (!data.r2Key) throw error(400, "r2Key is required");
+		await requireGalleryUploadAccess(request, {
+			r2Key: data.r2Key,
+			uploadSessionToken: data.uploadSessionToken,
+		});
 
 		try {
 			const res = await fetch(`${config.galleryWorkerUrl}/upload/process`, {
@@ -131,11 +295,11 @@ export function createGalleryProcessHandler() {
 
 export function createGalleryDeleteHandler() {
 	return async ({ request }: { request: Request }) => {
-		await requireAdmin(request);
 		const config = requireWorkerConfig();
 
-		const { r2Key } = await request.json();
+		const { r2Key, uploadSessionToken } = await request.json();
 		if (!r2Key) throw error(400, "r2Key is required");
+		await requireGalleryUploadAccess(request, { r2Key, uploadSessionToken });
 
 		try {
 			const res = await fetch(`${config.galleryWorkerUrl}/upload/delete`, {

@@ -74,6 +74,7 @@ export {
 	type AdminMutationProxyOptions,
 } from "./server/adminMutationProxy";
 export {
+	createGalleryUploadSessionHandler,
 	createGalleryPresignHandler,
 	createGalleryUploadHandler,
 	createGalleryProcessHandler,
