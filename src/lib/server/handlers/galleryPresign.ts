@@ -1,6 +1,7 @@
 import { error, json } from "@sveltejs/kit";
 import { getServerConfig } from "../../config.js";
 import { handleServerError } from "../handleError.js";
+import { isGalleryOriginalKeyForSession } from "../galleryStorageKeys.js";
 import { requireAdmin } from "../requireAdmin.js";
 import { validateFilename } from "../validation.js";
 
@@ -111,10 +112,6 @@ async function verifyUploadSessionToken(
 	return payload;
 }
 
-function r2KeyBelongsToSession(r2Key: string, session: GalleryUploadSessionPayload): boolean {
-	return r2Key.startsWith(`${session.siteUrl}/${session.galleryId}/`);
-}
-
 async function requireGalleryUploadAccess(
 	request: Request,
 	constraints: {
@@ -131,7 +128,7 @@ async function requireGalleryUploadAccess(
 	if (session) {
 		if (constraints.siteUrl && session.siteUrl !== constraints.siteUrl) throw error(403, "Upload session site mismatch");
 		if (constraints.galleryId && session.galleryId !== constraints.galleryId) throw error(403, "Upload session gallery mismatch");
-		if (constraints.r2Key && !r2KeyBelongsToSession(constraints.r2Key, session)) {
+		if (constraints.r2Key && !isGalleryOriginalKeyForSession(constraints.r2Key, session)) {
 			throw error(403, "Upload session cannot access this file");
 		}
 		return;

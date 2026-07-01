@@ -12,6 +12,7 @@ import {
 	galleryFileContentType,
 	isAllowedGalleryFile,
 } from "../../galleryUploadPolicy";
+import { createGalleryStoragePort, type GalleryUploadSession } from "./galleryStoragePort";
 
 let { galleryId, adminSession, onupload, onbatchchange = () => {} }: {
 	galleryId: string;
@@ -24,20 +25,13 @@ const config = getAdminConfig();
 const { api } = config;
 const galleryApi = api.galleryDelivery!;
 const client = useAdminClient();
+const storage = createGalleryStoragePort({
+	fetch,
+	galleryWorkerUrl: config.galleryWorkerUrl,
+});
 
 const MAX_CONCURRENT = 3;
-// Per-step timeout. Presign is fast; the PUT upload and process step can take
-// a while for large images but should never hang indefinitely.
-const PRESIGN_TIMEOUT_MS = 15_000;
-const UPLOAD_TIMEOUT_MS = 10 * 60_000;
-const PROCESS_TIMEOUT_MS = 60_000;
-const DIRECT_UPLOAD_FALLBACK_STATUSES = new Set([401, 403, 404]);
 const UPLOAD_SESSION_REFRESH_BUFFER_MS = 60_000;
-
-interface GalleryUploadSession {
-	token: string;
-	expiresAt: number;
-}
 
 interface UploadBatchSummary {
 	totalCount: number;
@@ -69,99 +63,8 @@ let batchTotalCount = $state(0);
 let batchTotalSizeBytes = $state(0);
 let clearedCompletedCount = $state(0);
 
-/**
- * Wrap a fetch with an AbortController so large uploads on flaky networks
- * don't hang forever. Throws a clear timeout error on expiry.
- */
-async function fetchWithTimeout(
-	input: RequestInfo | URL,
-	init: RequestInit,
-	timeoutMs: number,
-	externalSignal?: AbortSignal,
-): Promise<Response> {
-	const ctrl = new AbortController();
-	let abortReason: "timeout" | "canceled" | undefined;
-	const abort = (reason: "timeout" | "canceled") => {
-		abortReason ??= reason;
-		ctrl.abort();
-	};
-	const timer = setTimeout(() => abort("timeout"), timeoutMs);
-	if (externalSignal?.aborted) abort("canceled");
-	const handleExternalAbort = () => abort("canceled");
-	externalSignal?.addEventListener("abort", handleExternalAbort, { once: true });
-
-	try {
-		return await fetch(input, { ...init, signal: ctrl.signal });
-	} catch (err) {
-		if (ctrl.signal.aborted && abortReason === "timeout") {
-			throw new Error(`Request timed out after ${timeoutMs / 1000}s`);
-		}
-		if (ctrl.signal.aborted && abortReason === "canceled") {
-			throw new Error("Request canceled");
-		}
-		throw err;
-	} finally {
-		clearTimeout(timer);
-		externalSignal?.removeEventListener("abort", handleExternalAbort);
-	}
-}
-
-async function uploadFileToStorage(
-	file: File,
-	r2Key: string,
-	uploadUrl: string | undefined,
-	contentType: string,
-	uploadSessionToken: string,
-	signal?: AbortSignal,
-): Promise<Response> {
-	const proxyEndpoint = `/api/admin/galleries/upload?key=${encodeURIComponent(r2Key)}`;
-	const requestInit = {
-		method: "PUT",
-		headers: { "Content-Type": contentType },
-		body: file,
-	};
-
-	if (uploadUrl && config.galleryWorkerUrl) {
-		const directEndpoint = new URL(uploadUrl, config.galleryWorkerUrl).toString();
-		try {
-			const directRes = await fetchWithTimeout(
-				directEndpoint,
-				requestInit,
-				UPLOAD_TIMEOUT_MS,
-				signal,
-			);
-			if (directRes.ok || !DIRECT_UPLOAD_FALLBACK_STATUSES.has(directRes.status)) {
-				return directRes;
-			}
-		} catch (err) {
-			const message = err instanceof Error ? err.message : "";
-			if (message.startsWith("Request timed out") || message === "Request canceled") {
-				throw err;
-			}
-		}
-	}
-
-	return fetchWithTimeout(
-		proxyEndpoint,
-		{
-			...requestInit,
-			headers: {
-				...requestInit.headers,
-				"X-Gallery-Upload-Session": uploadSessionToken,
-			},
-		},
-		UPLOAD_TIMEOUT_MS,
-		signal,
-	);
-}
-
 function throwIfCanceled(signal: AbortSignal): void {
 	if (signal.aborted) throw new Error("Request canceled");
-}
-
-async function parseErrorResponse(res: Response, fallback: string): Promise<Error> {
-	const body = (await res.text()).trim();
-	return new Error(body ? `${fallback}: ${res.status} ${body}` : `${fallback}: ${res.status}`);
 }
 
 async function ensureUploadSession(): Promise<string> {
@@ -170,29 +73,10 @@ async function ensureUploadSession(): Promise<string> {
 	}
 
 	if (!uploadSessionPromise) {
-		uploadSessionPromise = (async () => {
-			const res = await fetchWithTimeout(
-				"/api/admin/galleries/upload-session",
-				{
-					method: "POST",
-					headers: { "Content-Type": "application/json" },
-					body: JSON.stringify({
-						siteUrl: config.siteUrl,
-						galleryId,
-					}),
-				},
-				PRESIGN_TIMEOUT_MS,
-			);
-			if (!res.ok) throw await parseErrorResponse(res, "Failed to start upload session");
-			const data = await res.json() as {
-				uploadSessionToken?: string;
-				expiresAt?: number;
-			};
-			if (!data.uploadSessionToken || typeof data.expiresAt !== "number") {
-				throw new Error("Upload session response was invalid");
-			}
-			return { token: data.uploadSessionToken, expiresAt: data.expiresAt };
-		})().finally(() => {
+		uploadSessionPromise = storage.startUploadSession({
+			siteUrl: config.siteUrl,
+			galleryId,
+		}).finally(() => {
 			uploadSessionPromise = null;
 		});
 	}
@@ -273,29 +157,15 @@ async function uploadOne(next: UploadFile): Promise<void> {
 		const uploadSessionToken = await ensureUploadSession();
 		throwIfCanceled(signal);
 
-		// 1. Get presign URL from our SvelteKit API (proxies to Worker)
-		const presignRes = await fetchWithTimeout(
-			"/api/admin/galleries/presign",
-			{
-				method: "POST",
-				headers: { "Content-Type": "application/json" },
-				body: JSON.stringify({
-					siteUrl: config.siteUrl,
-					galleryId,
-					filename: next.file.name,
-					contentType,
-					uploadSessionToken,
-				}),
-			},
-			PRESIGN_TIMEOUT_MS,
+		const { r2Key, uploadUrl } = await storage.presign({
+			siteUrl: config.siteUrl,
+			galleryId,
+			filename: next.file.name,
+			contentType,
+			uploadSessionToken,
 			signal,
-		);
-		if (!presignRes.ok) throw await parseErrorResponse(presignRes, "Failed to get upload URL");
+		});
 		throwIfCanceled(signal);
-		const { r2Key, uploadUrl } = await presignRes.json() as {
-			r2Key: string;
-			uploadUrl?: string;
-		};
 		next.r2Key = r2Key;
 		files = [...files];
 
@@ -304,15 +174,14 @@ async function uploadOne(next: UploadFile): Promise<void> {
 		next.progress = 30;
 		files = [...files];
 
-		const uploadRes = await uploadFileToStorage(
-			next.file,
+		await storage.uploadFile({
+			file: next.file,
 			r2Key,
 			uploadUrl,
 			contentType,
 			uploadSessionToken,
 			signal,
-		);
-		if (!uploadRes.ok) throw await parseErrorResponse(uploadRes, "Upload failed");
+		});
 		throwIfCanceled(signal);
 
 		// 3. Process (generate sizes)
@@ -320,17 +189,7 @@ async function uploadOne(next: UploadFile): Promise<void> {
 		next.progress = 70;
 		files = [...files];
 
-		const processRes = await fetchWithTimeout(
-			"/api/admin/galleries/process",
-			{
-				method: "POST",
-				headers: { "Content-Type": "application/json" },
-				body: JSON.stringify({ r2Key, uploadSessionToken }),
-			},
-			PROCESS_TIMEOUT_MS,
-			signal,
-		);
-		if (!processRes.ok) throw await parseErrorResponse(processRes, "Processing failed");
+		await storage.process({ r2Key, uploadSessionToken, signal });
 		throwIfCanceled(signal);
 
 		// 4. Get image dimensions
@@ -452,18 +311,7 @@ function toggleSelectAll(): void {
 
 async function deleteR2File(r2Key: string): Promise<void> {
 	try {
-		await fetchWithTimeout(
-			"/api/admin/galleries/delete",
-			{
-				method: "POST",
-				headers: { "Content-Type": "application/json" },
-				body: JSON.stringify({
-					r2Key,
-					uploadSessionToken: uploadSession?.token,
-				}),
-			},
-			PROCESS_TIMEOUT_MS,
-		);
+		await storage.delete({ r2Key, uploadSessionToken: uploadSession?.token });
 	} catch (err) {
 		logger.warn("Failed to delete R2 image:", r2Key, err);
 	}
