@@ -1,32 +1,32 @@
 /* shared detail-modal styles — used by Invoice, Quote, and Contract modals */
 
-.modal-form {
+:global([data-admin] .modal-form) {
 	padding: 0 28px 28px;
 	display: flex;
 	flex-direction: column;
 	gap: 14px;
 }
 
-.form-row {
+:global([data-admin] .form-row) {
 	display: grid;
 	grid-template-columns: 1fr 1fr;
 	gap: 14px;
 }
 
-.form-group {
+:global([data-admin] .form-group) {
 	display: flex;
 	flex-direction: column;
 	gap: 4px;
 }
 
-.form-label {
+:global([data-admin] .form-label) {
 	font-size: 0.76rem;
 	color: var(--admin-text-muted);
 	font-weight: 400;
 	letter-spacing: 0.02em;
 }
 
-.form-input {
+:global([data-admin] .form-input) {
 	padding: 8px 10px;
 	background: rgba(255, 255, 255, 0.03);
 	color: var(--admin-text);
@@ -38,17 +38,17 @@
 	transition: border-color 0.15s;
 }
 
-.form-input:focus {
+:global([data-admin] .form-input:focus) {
 	border-color: var(--admin-accent);
 }
 
-.form-textarea {
+:global([data-admin] .form-textarea) {
 	resize: vertical;
 	min-height: 60px;
 	font-family: inherit;
 }
 
-.totals-line {
+:global([data-admin] .totals-line) {
 	display: flex;
 	align-items: baseline;
 	gap: 8px;
@@ -57,30 +57,30 @@
 	padding-top: 4px;
 }
 
-.stat-sep {
+:global([data-admin] .stat-sep) {
 	color: var(--admin-text-subtle);
 }
 
-.total-amount {
+:global([data-admin] .total-amount) {
 	font-weight: 500;
 	color: var(--admin-heading);
 }
 
-.modal-actions {
+:global([data-admin] .modal-actions) {
 	display: flex;
 	justify-content: flex-end;
 	gap: 10px;
 	padding-top: 6px;
 }
 
-.detail-body {
+:global([data-admin] .detail-body) {
 	padding: 0 28px 28px;
 	display: flex;
 	flex-direction: column;
 	gap: 20px;
 }
 
-.detail-meta-line {
+:global([data-admin] .detail-meta-line) {
 	display: flex;
 	align-items: center;
 	gap: 8px;
@@ -88,19 +88,19 @@
 	flex-wrap: wrap;
 }
 
-.meta-sep {
+:global([data-admin] .meta-sep) {
 	color: var(--admin-text-subtle);
 }
 
-.detail-client {
+:global([data-admin] .detail-client) {
 	color: var(--admin-text);
 }
 
-.detail-due {
+:global([data-admin] .detail-due) {
 	color: var(--admin-text-muted);
 }
 
-.detail-fields {
+:global([data-admin] .detail-fields) {
 	display: flex;
 	flex-direction: column;
 	gap: 16px;
@@ -108,41 +108,41 @@
 	padding-top: 16px;
 }
 
-.detail-field {
+:global([data-admin] .detail-field) {
 	display: flex;
 	flex-direction: column;
 	gap: 2px;
 }
 
-.detail-label {
+:global([data-admin] .detail-label) {
 	font-size: 0.72rem;
 	color: var(--admin-text-subtle);
 	letter-spacing: 0.04em;
 	font-weight: 400;
 }
 
-.detail-value {
+:global([data-admin] .detail-value) {
 	font-size: 0.88rem;
 	color: var(--admin-heading);
 }
 
-.detail-notes {
+:global([data-admin] .detail-notes) {
 	white-space: pre-wrap;
 	line-height: 1.5;
 }
 
-.detail-actions {
+:global([data-admin] .detail-actions) {
 	border-top: 1px solid var(--admin-border);
 	padding-top: 16px;
 }
 
-.share-link-row {
+:global([data-admin] .share-link-row) {
 	display: flex;
 	justify-content: flex-end;
 	padding: 12px 0 0;
 }
 
-.btn-share {
+:global([data-admin] .btn-share) {
 	padding: 5px 14px;
 	border-radius: 6px;
 	font-size: 0.78rem;
@@ -154,12 +154,12 @@
 	transition: color 0.15s, border-color 0.15s;
 }
 
-.btn-share:hover {
+:global([data-admin] .btn-share:hover) {
 	color: var(--admin-accent);
 	border-color: var(--admin-accent);
 }
 
-.email-template-picker {
+:global([data-admin] .email-template-picker) {
 	display: flex;
 	flex-direction: column;
 	gap: 4px;
@@ -167,7 +167,7 @@
 	border-top: 1px solid var(--admin-border);
 }
 
-.template-select {
+:global([data-admin] .template-select) {
 	padding: 8px 10px;
 	background: rgba(255, 255, 255, 0.03);
 	color: var(--admin-text);
@@ -178,16 +178,16 @@
 	outline: none;
 }
 
-.template-select:focus {
+:global([data-admin] .template-select:focus) {
 	border-color: var(--admin-accent);
 }
 
-.btn-cancel,
-.btn-save,
-.btn-danger,
-.btn-danger-outline,
-.btn-action,
-.btn-send {
+:global([data-admin] .btn-cancel),
+:global([data-admin] .btn-save),
+:global([data-admin] .btn-danger),
+:global([data-admin] .btn-danger-outline),
+:global([data-admin] .btn-action),
+:global([data-admin] .btn-send) {
 	padding: 7px 16px;
 	border-radius: 6px;
 	font-size: 0.82rem;
@@ -197,104 +197,104 @@
 	border: 1px solid transparent;
 }
 
-.btn-cancel {
+:global([data-admin] .btn-cancel) {
 	background: transparent;
 	color: var(--admin-text-muted);
 	border-color: var(--admin-border-strong);
 }
 
-.btn-cancel:hover {
+:global([data-admin] .btn-cancel:hover) {
 	color: var(--admin-text);
 }
 
-.btn-save {
+:global([data-admin] .btn-save) {
 	background: rgba(129, 140, 248, 0.15);
 	border-color: rgba(129, 140, 248, 0.25);
 	color: var(--admin-accent-hover);
 	font-weight: 500;
 }
 
-.btn-save:hover {
+:global([data-admin] .btn-save:hover) {
 	background: rgba(129, 140, 248, 0.22);
 }
 
-.btn-save:disabled {
+:global([data-admin] .btn-save:disabled) {
 	opacity: 0.4;
 	cursor: not-allowed;
 }
 
-.btn-send {
+:global([data-admin] .btn-send) {
 	background: rgba(74, 222, 128, 0.12);
 	border-color: rgba(74, 222, 128, 0.25);
 	color: #4ade80;
 	font-weight: 500;
 }
 
-.btn-send:hover {
+:global([data-admin] .btn-send:hover) {
 	background: rgba(74, 222, 128, 0.2);
 }
 
-.btn-send:disabled {
+:global([data-admin] .btn-send:disabled) {
 	opacity: 0.4;
 	cursor: not-allowed;
 }
 
-.btn-action {
+:global([data-admin] .btn-action) {
 	background: rgba(212, 160, 83, 0.12);
 	border-color: rgba(212, 160, 83, 0.25);
 	color: var(--status-amber);
 }
 
-.btn-action:hover {
+:global([data-admin] .btn-action:hover) {
 	background: rgba(212, 160, 83, 0.2);
 }
 
-.btn-action:disabled {
+:global([data-admin] .btn-action:disabled) {
 	opacity: 0.4;
 	cursor: not-allowed;
 }
 
-.btn-danger {
+:global([data-admin] .btn-danger) {
 	background: rgba(248, 113, 113, 0.15);
 	border-color: rgba(248, 113, 113, 0.3);
 	color: var(--status-rose);
 }
 
-.btn-danger:disabled {
+:global([data-admin] .btn-danger:disabled) {
 	opacity: 0.4;
 	cursor: not-allowed;
 }
 
-.btn-danger-outline {
+:global([data-admin] .btn-danger-outline) {
 	background: transparent;
 	color: var(--status-rose);
 	border-color: rgba(248, 113, 113, 0.25);
 }
 
-.btn-danger-outline:hover {
+:global([data-admin] .btn-danger-outline:hover) {
 	background: rgba(248, 113, 113, 0.08);
 }
 
-.btn-danger-outline:disabled {
+:global([data-admin] .btn-danger-outline:disabled) {
 	opacity: 0.4;
 	cursor: not-allowed;
 }
 
-.confirm-text {
+:global([data-admin] .confirm-text) {
 	font-size: 0.82rem;
 	color: var(--status-rose);
 	margin-right: auto;
 	align-self: center;
 }
 
-.send-success {
+:global([data-admin] .send-success) {
 	font-size: 0.82rem;
 	color: #4ade80;
 	margin-right: auto;
 	align-self: center;
 }
 
-.send-error {
+:global([data-admin] .send-error) {
 	font-size: 0.82rem;
 	color: var(--status-rose);
 	margin-right: auto;
@@ -302,15 +302,15 @@
 }
 
 @media (max-width: 768px) {
-	.form-row {
+	:global([data-admin] .form-row) {
 		grid-template-columns: 1fr;
 	}
 
-	.modal-form {
+	:global([data-admin] .modal-form) {
 		padding: 0 20px 20px;
 	}
 
-	.detail-body {
+	:global([data-admin] .detail-body) {
 		padding: 0 20px 20px;
 	}
 }

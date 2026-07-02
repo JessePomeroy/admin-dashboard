@@ -16,8 +16,12 @@ const hasWorker = !!config.galleryWorkerUrl;
 
 const galleries = $derived(data.galleries);
 
-let tab = $state(activeTab);
+let tab = $state<"portfolio" | "delivery">("portfolio");
 const studioBaseUrl = config.sanityStudioUrl ?? "";
+
+$effect(() => {
+	tab = activeTab;
+});
 </script>
 
 <div class="galleries-page">

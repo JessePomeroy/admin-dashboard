@@ -375,27 +375,6 @@ async function quickStatusUpdate(
 		color: var(--admin-text-muted);
 	}
 
-	.btn-add {
-		display: flex;
-		align-items: center;
-		gap: 6px;
-		padding: 7px 14px;
-		background: transparent;
-		color: var(--admin-text);
-		border: 1px solid var(--admin-border-strong);
-		border-radius: 6px;
-		font-size: 0.82rem;
-		font-family: "Synonym", system-ui, sans-serif;
-		cursor: pointer;
-		transition: color 0.15s, border-color 0.15s;
-		white-space: nowrap;
-	}
-
-	.btn-add:hover {
-		color: var(--admin-heading);
-		border-color: var(--admin-text-muted);
-	}
-
 	/* Stats line */
 	.stats-line {
 		display: flex;
@@ -567,10 +546,6 @@ async function quickStatusUpdate(
 		.header-left {
 			flex-direction: column;
 			gap: 4px;
-		}
-
-		.btn-add {
-			align-self: flex-start;
 		}
 
 		.stats-line {

@@ -1,18 +1,18 @@
 /* shared data-table styles — used by Client, Invoice, Quote, Contract, Order, Inquiry tables */
 
-.table-wrap {
+:global([data-admin] .table-wrap) {
 	overflow-x: auto;
 	-webkit-overflow-scrolling: touch;
 }
 
-.data-table {
+:global([data-admin] .data-table) {
 	width: 100%;
 	border-collapse: collapse;
 	text-align: left;
 	font-size: 0.85rem;
 }
 
-.data-table th {
+:global([data-admin] .data-table th) {
 	padding: 0 16px 12px 0;
 	color: var(--admin-text-subtle);
 	font-weight: 400;
@@ -21,37 +21,37 @@
 	border-bottom: 1px solid var(--admin-border);
 }
 
-.data-table td {
+:global([data-admin] .data-table td) {
 	padding: 14px 16px 14px 0;
 	border-bottom: 1px solid var(--admin-border);
 }
 
 /* opt-in: header + body cells don't wrap */
-.data-table--nowrap th,
-.data-table--nowrap td {
+:global([data-admin] .data-table--nowrap th),
+:global([data-admin] .data-table--nowrap td) {
 	white-space: nowrap;
 }
 
 /* opt-in: clickable body rows (cursor + transition + hover background) */
-.data-table--clickable tbody tr {
+:global([data-admin] .data-table--clickable tbody tr) {
 	cursor: pointer;
 	transition: background 0.12s;
 }
 
-.data-table--clickable tbody tr:hover {
+:global([data-admin] .data-table--clickable tbody tr:hover) {
 	background: var(--admin-active);
 }
 
 /* opt-in: hoverable body rows (hover background only, no pointer) */
-.data-table--hoverable tbody tr {
+:global([data-admin] .data-table--hoverable tbody tr) {
 	transition: background 0.12s;
 }
 
-.data-table--hoverable tbody tr:hover {
+:global([data-admin] .data-table--hoverable tbody tr:hover) {
 	background: var(--admin-active);
 }
 
-.empty-state {
+:global([data-admin] .empty-state) {
 	padding: 48px 0;
 	color: var(--admin-text-subtle);
 	font-size: 0.88rem;

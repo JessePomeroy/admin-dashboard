@@ -12,16 +12,30 @@ interface Props {
 
 let { client, saving, onsave, oncancel }: Props = $props();
 
-// Initialize form values from client prop (component mounts fresh each edit)
-let formName = $state(client.name || "");
-let formEmail = $state(client.email || "");
-let formPhone = $state(client.phone || "");
-let formCategory = $state<ClientCategory>((client.category as ClientCategory) || "photography");
-let formType = $state(client.type || "");
-let formClientWebsite = $state(client.siteUrl_client || "");
-let formSource = $state(client.source || "");
-let formNotes = $state(client.notes || "");
-let formStatus = $state(client.status || "lead");
+let formName = $state("");
+let formEmail = $state("");
+let formPhone = $state("");
+let formCategory = $state<ClientCategory>("photography");
+let formType = $state("");
+let formClientWebsite = $state("");
+let formSource = $state("");
+let formNotes = $state("");
+let formStatus = $state("lead");
+let loadedClientId = $state<string | null>(null);
+
+$effect(() => {
+	if (loadedClientId === client._id) return;
+	loadedClientId = client._id;
+	formName = client.name || "";
+	formEmail = client.email || "";
+	formPhone = client.phone || "";
+	formCategory = (client.category as ClientCategory) || "photography";
+	formType = client.type || "";
+	formClientWebsite = client.siteUrl_client || "";
+	formSource = client.source || "";
+	formNotes = client.notes || "";
+	formStatus = client.status || "lead";
+});
 
 const photographyTypes = [
 	"wedding",

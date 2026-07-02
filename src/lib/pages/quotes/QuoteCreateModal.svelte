@@ -57,7 +57,7 @@ let {
 	saving,
 }: Props = $props();
 
-let formNumber = $state(nextNumber);
+let formNumber = $state("");
 let formClientId = $state("");
 let formCategory = $state<"photography" | "web">("photography");
 let formValidUntil = $state("");
@@ -70,6 +70,13 @@ let formPresetId = $state("");
 let selectedTemplateId = $state<string>("");
 let editedSubject = $state("");
 let editedBody = $state("");
+let initializedNumber = false;
+
+$effect(() => {
+	if (initializedNumber) return;
+	formNumber = nextNumber;
+	initializedNumber = true;
+});
 
 let selectedClientName = $derived(
 	clients.find((c) => c._id === formClientId)?.name ?? "",

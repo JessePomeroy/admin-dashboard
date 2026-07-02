@@ -45,6 +45,12 @@ function handleKeydown(e: KeyboardEvent) {
 		}
 	}
 }
+
+function handleOverlayClick(e: MouseEvent) {
+	if (e.target === e.currentTarget) {
+		onclose();
+	}
+}
 </script>
 
 <div
@@ -52,7 +58,8 @@ function handleKeydown(e: KeyboardEvent) {
 	role="dialog"
 	aria-modal="true"
 	aria-label={title}
-	onclick={onclose}
+	tabindex="-1"
+	onclick={handleOverlayClick}
 	onkeydown={handleKeydown}
 >
 	<div
@@ -62,7 +69,6 @@ function handleKeydown(e: KeyboardEvent) {
 		class:modal-content-full={size === "full"}
 		bind:this={contentEl}
 		role="document"
-		onclick={(e) => e.stopPropagation()}
 	>
 		<div class="modal-header">
 			<h2 class="modal-title">{title}</h2>

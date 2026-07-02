@@ -170,25 +170,4 @@ function autoGrow(e: Event) {
 		font-family: inherit;
 	}
 
-	.preview-empty {
-		flex: 1;
-		display: flex;
-		flex-direction: column;
-		align-items: center;
-		justify-content: center;
-		gap: 4px;
-		padding: 32px 16px;
-		color: var(--admin-text-subtle);
-		font-size: 0.84rem;
-		text-align: center;
-	}
-
-	.preview-empty p {
-		margin: 0;
-	}
-
-	.preview-hint {
-		font-size: 0.76rem;
-		opacity: 0.7;
-	}
 </style>

@@ -37,7 +37,7 @@ let editedSubject = $state("");
 let editedBody = $state("");
 
 // Form state
-let formNumber = $state(nextNumber);
+let formNumber = $state("");
 let formClientId = $state("");
 let formType = $state<InvoiceType>("one-time");
 let formItems = $state<InvoiceItem[]>([
@@ -46,6 +46,13 @@ let formItems = $state<InvoiceItem[]>([
 let formTaxPercent = $state(0);
 let formDueDate = $state("");
 let formNotes = $state("");
+let initializedNumber = false;
+
+$effect(() => {
+	if (initializedNumber) return;
+	formNumber = nextNumber;
+	initializedNumber = true;
+});
 
 let selectedClientName = $derived(
 	clients.find((c) => c._id === formClientId)?.name ?? "",

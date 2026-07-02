@@ -28,8 +28,8 @@ const { api } = config;
 const galleryApi = api.galleryDelivery!;
 const client = useAdminClient();
 
-const imagesQuery = useQuery(galleryApi.getImages, { galleryId: gallery._id });
-const galleryQuery = useQuery(galleryApi.get, { id: gallery._id });
+const imagesQuery = useQuery(galleryApi.getImages, () => ({ galleryId: gallery._id }));
+const galleryQuery = useQuery(galleryApi.get, () => ({ id: gallery._id }));
 let images = $derived(imagesQuery.data ?? []);
 let liveGallery = $derived(galleryQuery.data ?? gallery);
 
@@ -45,10 +45,20 @@ let headerStats = $derived(
 );
 
 // Settings state
-let editName = $state(gallery.name);
-let editDownloadEnabled = $state(gallery.downloadEnabled);
-let editFavoritesEnabled = $state(gallery.favoritesEnabled);
-let editPassword = $state(gallery.password ?? "");
+let editName = $state("");
+let editDownloadEnabled = $state(false);
+let editFavoritesEnabled = $state(false);
+let editPassword = $state("");
+let loadedGalleryId = $state<string | null>(null);
+
+$effect(() => {
+	if (loadedGalleryId === gallery._id) return;
+	loadedGalleryId = gallery._id;
+	editName = gallery.name;
+	editDownloadEnabled = gallery.downloadEnabled;
+	editFavoritesEnabled = gallery.favoritesEnabled;
+	editPassword = gallery.password ?? "";
+});
 
 function handleUploadBatchChange(summary: UploadBatchSummary) {
 	uploadBatch = summary.totalCount > 0 ? summary : null;
@@ -171,37 +181,39 @@ async function handleShare() {
 				/>
 			</div>
 		{:else}
-			<form onsubmit={(e) => { e.preventDefault(); handleSaveSettings(); }} class="settings-form" role="tabpanel">
-				<div class="field">
-					<label for="edit-name">name</label>
-					<input id="edit-name" type="text" bind:value={editName} />
-				</div>
+			<div role="tabpanel">
+				<form onsubmit={(e) => { e.preventDefault(); handleSaveSettings(); }} class="settings-form">
+					<div class="field">
+						<label for="edit-name">name</label>
+						<input id="edit-name" type="text" bind:value={editName} />
+					</div>
 
-				<div class="toggles">
-					<label class="toggle">
-						<input type="checkbox" bind:checked={editDownloadEnabled} />
-						<span>allow downloads</span>
-					</label>
-					<label class="toggle">
-						<input type="checkbox" bind:checked={editFavoritesEnabled} />
-						<span>allow favorites</span>
-					</label>
-				</div>
+					<div class="toggles">
+						<label class="toggle">
+							<input type="checkbox" bind:checked={editDownloadEnabled} />
+							<span>allow downloads</span>
+						</label>
+						<label class="toggle">
+							<input type="checkbox" bind:checked={editFavoritesEnabled} />
+							<span>allow favorites</span>
+						</label>
+					</div>
 
-				<div class="field">
-					<label for="edit-password">password</label>
-					<input id="edit-password" type="text" bind:value={editPassword} placeholder="leave blank for token-only" />
-				</div>
+					<div class="field">
+						<label for="edit-password">password</label>
+						<input id="edit-password" type="text" bind:value={editPassword} placeholder="leave blank for token-only" />
+					</div>
 
-				<div class="actions">
-					<button class="delete-btn" type="button" onclick={handleDelete}>
-						{deleting ? "deleting..." : "delete gallery"}
-					</button>
-					<button type="submit" class="save-btn" disabled={saving}>
-						{saving ? "saving..." : "save settings"}
-					</button>
-				</div>
-			</form>
+					<div class="actions">
+						<button class="delete-btn" type="button" onclick={handleDelete}>
+							{deleting ? "deleting..." : "delete gallery"}
+						</button>
+						<button type="submit" class="save-btn" disabled={saving}>
+							{saving ? "saving..." : "save settings"}
+						</button>
+					</div>
+				</form>
+			</div>
 		{/if}
 	</div>
 	</FeatureGate>
@@ -305,7 +317,7 @@ async function handleShare() {
 	.settings-form { display: flex; flex-direction: column; gap: 18px; }
 	.field { display: flex; flex-direction: column; gap: 5px; }
 	.field label { font-size: 0.78rem; color: var(--admin-text-muted); }
-	.field input, .field select {
+	.field input {
 		padding: 8px 12px;
 		border: 1px solid var(--admin-border);
 		border-radius: 5px;

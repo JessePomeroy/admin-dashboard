@@ -51,8 +51,15 @@ const statuses: OrderStatus[] = [
 	"refunded",
 ];
 
-let notesValue = $state(order.notes || "");
+let notesValue = $state("");
 let notesSaving = $state(false);
+let loadedOrderId = $state<string | null>(null);
+
+$effect(() => {
+	if (loadedOrderId === order._id) return;
+	loadedOrderId = order._id;
+	notesValue = order.notes || "";
+});
 
 async function saveNotes() {
 	notesSaving = true;
