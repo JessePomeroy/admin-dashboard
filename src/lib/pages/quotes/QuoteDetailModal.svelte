@@ -85,10 +85,18 @@ let editCategory = $state<"photography" | "web">("photography");
 let editNewIncludedItem = $state<Record<number, string>>({});
 
 // Convert to invoice state
-let convertInvoiceNumber = $state(nextInvoiceNumber);
+let convertInvoiceNumber = $state("");
 let convertInvoiceType = $state("one-time");
 let convertDueDate = $state("");
-let convertNotes = $state(quote.notes || "");
+let convertNotes = $state("");
+let loadedConvertQuoteId = $state<string | null>(null);
+
+$effect(() => {
+	if (loadedConvertQuoteId === quote._id) return;
+	loadedConvertQuoteId = quote._id;
+	convertInvoiceNumber = nextInvoiceNumber;
+	convertNotes = quote.notes || "";
+});
 
 let detailTotal = $derived(
 	quote.packages.reduce((sum: number, pkg: QuotePackage) => sum + pkg.price, 0),

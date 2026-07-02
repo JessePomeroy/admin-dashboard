@@ -197,8 +197,8 @@ let sparklineArea = $derived(() => {
 	<!-- Sparkline chart -->
 	<div class="chart-section">
 		<h2 class="section-label">revenue — last 30 days</h2>
-		<div class="chart-container" role="img" aria-label="Revenue sparkline chart">
-			<svg viewBox="0 0 {chartWidth} {chartHeight}" preserveAspectRatio="none" class="chart-svg" onmouseleave={() => { hoveredIndex = null; }}>
+		<div class="chart-container" role="img" aria-label="Revenue sparkline chart" onmouseleave={() => { hoveredIndex = null; }}>
+			<svg viewBox="0 0 {chartWidth} {chartHeight}" preserveAspectRatio="none" class="chart-svg" aria-hidden="true">
 				<path d={sparklineArea()} fill="var(--admin-active)" />
 				<path d={sparklinePath()} fill="none" stroke="var(--admin-accent)" stroke-width="1.5" stroke-opacity="0.5" />
 				{#each chartPoints as point, i}
@@ -209,6 +209,7 @@ let sparklineArea = $derived(() => {
 						width={chartWidth / dailyRevenue.length}
 						height={chartHeight}
 						fill="transparent"
+						role="presentation"
 						onmouseenter={() => { hoveredIndex = i; }}
 					/>
 					<!-- visible dot on hover -->
