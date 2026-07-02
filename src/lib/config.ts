@@ -70,6 +70,7 @@ export interface AdminAPI {
 		removeImage: FnRef;
 		reorderImages: FnRef;
 		getImages: FnRef;
+		listImageStorageKeys?: FnRef;
 		listBySite: FnRef;
 	};
 	inquiries: {
