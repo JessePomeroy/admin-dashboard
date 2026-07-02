@@ -184,6 +184,66 @@ describe("createGalleryUploadController", () => {
 		expect(controller.getSnapshot().totalCount).toBe(0);
 	});
 
+	it("aborts and deletes storage when deleting during a direct upload", async () => {
+		let uploadSignal: AbortSignal | undefined;
+		const uploadGate = deferred<void>();
+		const storage = createStorage({
+			uploadFile: vi.fn(async ({ signal }) => {
+				uploadSignal = signal;
+				return uploadGate.promise;
+			}),
+		});
+		const { controller, removeImage } = createController({ storage });
+
+		controller.addFiles([file("photo.jpg")]);
+
+		await vi.waitFor(() => {
+			expect(storage.uploadFile).toHaveBeenCalledTimes(1);
+		});
+		const id = controller.getSnapshot().files[0].id;
+		controller.toggleSelected(id);
+		await controller.deleteSelectedFiles();
+
+		expect(uploadSignal?.aborted).toBe(true);
+		expect(removeImage).not.toHaveBeenCalled();
+		expect(storage.delete).toHaveBeenCalledWith({
+			r2Key: "site/gallery/original/photo.jpg",
+			uploadSessionToken: "session-token",
+		});
+		expect(controller.getSnapshot().files).toHaveLength(0);
+		uploadGate.resolve();
+	});
+
+	it("aborts and deletes storage when deleting during processing", async () => {
+		let processSignal: AbortSignal | undefined;
+		const processGate = deferred<void>();
+		const storage = createStorage({
+			process: vi.fn(async ({ signal }) => {
+				processSignal = signal;
+				return processGate.promise;
+			}),
+		});
+		const { controller, removeImage } = createController({ storage });
+
+		controller.addFiles([file("photo.jpg")]);
+
+		await vi.waitFor(() => {
+			expect(storage.process).toHaveBeenCalledTimes(1);
+		});
+		const id = controller.getSnapshot().files[0].id;
+		controller.toggleSelected(id);
+		await controller.deleteSelectedFiles();
+
+		expect(processSignal?.aborted).toBe(true);
+		expect(removeImage).not.toHaveBeenCalled();
+		expect(storage.delete).toHaveBeenCalledWith({
+			r2Key: "site/gallery/original/photo.jpg",
+			uploadSessionToken: "session-token",
+		});
+		expect(controller.getSnapshot().files).toHaveLength(0);
+		processGate.resolve();
+	});
+
 	it("removes a Convex image record when a delete abort lands after addImage resolves", async () => {
 		const addImageGate = deferred<string>();
 		const addImage = vi.fn(async () => addImageGate.promise);
