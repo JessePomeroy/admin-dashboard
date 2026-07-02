@@ -7,6 +7,7 @@ import { validateFilename } from "../validation.js";
 
 const UPLOAD_SESSION_SCOPE = "gallery-upload-session";
 const DEFAULT_UPLOAD_SESSION_TTL_MS = 4 * 60 * 60 * 1000;
+const BULK_DELETE_KEYS_PER_WORKER_REQUEST = 150;
 
 interface GalleryUploadSessionPayload {
 	scope: typeof UPLOAD_SESSION_SCOPE;
@@ -162,6 +163,20 @@ async function parseWorkerJson(res: Response): Promise<unknown> {
 	return res.json();
 }
 
+function chunkKeys(keys: string[]): string[][] {
+	const chunks: string[][] = [];
+	for (let i = 0; i < keys.length; i += BULK_DELETE_KEYS_PER_WORKER_REQUEST) {
+		chunks.push(keys.slice(i, i + BULK_DELETE_KEYS_PER_WORKER_REQUEST));
+	}
+	return chunks;
+}
+
+function getDeletedCount(result: unknown): number {
+	if (!result || typeof result !== "object") return 0;
+	const { deleted } = result as { deleted?: unknown };
+	return typeof deleted === "number" ? deleted : 0;
+}
+
 export function createGalleryUploadSessionHandler() {
 	return async ({ request }: { request: Request }) => {
 		await requireAdmin(request);
@@ -309,6 +324,51 @@ export function createGalleryDeleteHandler() {
 			return json(await parseWorkerJson(res));
 		} catch (err) {
 			handleServerError(err, "Failed to delete image");
+		}
+	};
+}
+
+export function createGalleryBulkDeleteHandler() {
+	return async ({ request }: { request: Request }) => {
+		const config = requireWorkerConfig();
+		await requireAdmin(request);
+
+		let data: unknown;
+		try {
+			data = await request.json();
+		} catch {
+			throw error(400, "Invalid JSON body");
+		}
+
+		if (!data || typeof data !== "object" || Array.isArray(data)) {
+			throw error(400, "keys are required");
+		}
+		const { keys } = data as { keys?: unknown };
+		if (!Array.isArray(keys) || keys.length === 0) {
+			throw error(400, "keys are required");
+		}
+		if (keys.some((key) => typeof key !== "string")) {
+			throw error(400, "keys must be strings");
+		}
+		const stringKeys = keys as string[];
+
+		try {
+			let deleted = 0;
+			let chunks = 0;
+			for (const keyChunk of chunkKeys(stringKeys)) {
+				const res = await fetch(`${config.galleryWorkerUrl}/admin/bulk-delete`, {
+					method: "POST",
+					headers: workerHeaders(config.galleryAdminSecret!),
+					body: JSON.stringify({ keys: keyChunk }),
+				});
+
+				if (!res.ok) throw error(res.status, await res.text());
+				deleted += getDeletedCount(await parseWorkerJson(res));
+				chunks += 1;
+			}
+			return json({ success: true, deleted, chunks });
+		} catch (err) {
+			handleServerError(err, "Failed to bulk delete gallery images");
 		}
 	};
 }

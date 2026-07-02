@@ -2,6 +2,7 @@ import { error } from "@sveltejs/kit";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { setServerConfig, type AdminServerConfig } from "../src/lib/config";
 import {
+	createGalleryBulkDeleteHandler,
 	createGalleryDeleteHandler,
 	createGalleryProcessHandler,
 	createGalleryUploadSessionHandler,
@@ -41,6 +42,17 @@ function makeJsonRequest(path: string, body: unknown): Request {
 	return new Request(`https://tenant.example${path}`, {
 		method: "POST",
 		body: JSON.stringify(body),
+		headers: {
+			"Content-Type": "application/json",
+			cookie: "session=admin-token",
+		},
+	});
+}
+
+function makeRawRequest(path: string, body: string): Request {
+	return new Request(`https://tenant.example${path}`, {
+		method: "POST",
+		body,
 		headers: {
 			"Content-Type": "application/json",
 			cookie: "session=admin-token",
@@ -168,5 +180,130 @@ describe("createGalleryUploadSessionHandler", () => {
 				}),
 			}),
 		);
+	});
+});
+
+describe("createGalleryBulkDeleteHandler", () => {
+	it("forwards admin bulk-delete requests to the gallery worker", async () => {
+		configureServerConfig();
+		const fetchMock = vi.fn(async () => Response.json({ success: true, deleted: 3 }));
+		vi.stubGlobal("fetch", fetchMock);
+		const handler = createGalleryBulkDeleteHandler();
+
+		const response = await handler({
+			request: makeJsonRequest("/api/admin/galleries/bulk-delete", {
+				keys: [
+					"https://tenant.example/gallery-1/original/photo-1.jpg",
+					"https://tenant.example/gallery-1/original/photo-2.jpg",
+				],
+			}),
+		});
+
+		await expect(response.json()).resolves.toEqual({ success: true, deleted: 3, chunks: 1 });
+		expect(fetchMock).toHaveBeenCalledWith(
+			"https://gallery.example/admin/bulk-delete",
+			expect.objectContaining({
+				method: "POST",
+				headers: {
+					"Content-Type": "application/json",
+					Authorization: "Bearer gallery-secret",
+				},
+				body: JSON.stringify({
+					keys: [
+						"https://tenant.example/gallery-1/original/photo-1.jpg",
+						"https://tenant.example/gallery-1/original/photo-2.jpg",
+					],
+				}),
+			}),
+		);
+	});
+
+	it("chunks large bulk-delete requests below the worker expanded-target limit", async () => {
+		configureServerConfig();
+		const fetchMock = vi.fn(async () => Response.json({ success: true, deleted: 450 }));
+		vi.stubGlobal("fetch", fetchMock);
+		const handler = createGalleryBulkDeleteHandler();
+		const keys = Array.from(
+			{ length: 301 },
+			(_, index) => `https://tenant.example/gallery-1/original/photo-${index}.jpg`,
+		);
+
+		const response = await handler({
+			request: makeJsonRequest("/api/admin/galleries/bulk-delete", { keys }),
+		});
+
+		await expect(response.json()).resolves.toEqual({
+			success: true,
+			deleted: 1350,
+			chunks: 3,
+		});
+		expect(fetchMock).toHaveBeenCalledTimes(3);
+		expect(JSON.parse(fetchMock.mock.calls[0][1]?.body as string).keys).toHaveLength(150);
+		expect(JSON.parse(fetchMock.mock.calls[1][1]?.body as string).keys).toHaveLength(150);
+		expect(JSON.parse(fetchMock.mock.calls[2][1]?.body as string).keys).toHaveLength(1);
+	});
+
+	it("rejects malformed JSON before contacting the worker", async () => {
+		configureServerConfig();
+		const fetchMock = vi.fn();
+		vi.stubGlobal("fetch", fetchMock);
+		const handler = createGalleryBulkDeleteHandler();
+
+		await expect(
+			handler({
+				request: makeRawRequest("/api/admin/galleries/bulk-delete", "{"),
+			}),
+		).rejects.toMatchObject({ status: 400 });
+		expect(fetchMock).not.toHaveBeenCalled();
+	});
+
+	it("rejects missing or empty keys before contacting the worker", async () => {
+		configureServerConfig();
+		const fetchMock = vi.fn();
+		vi.stubGlobal("fetch", fetchMock);
+		const handler = createGalleryBulkDeleteHandler();
+
+		await expect(
+			handler({
+				request: makeJsonRequest("/api/admin/galleries/bulk-delete", null),
+			}),
+		).rejects.toMatchObject({ status: 400 });
+		await expect(
+			handler({
+				request: makeJsonRequest("/api/admin/galleries/bulk-delete", { keys: [] }),
+			}),
+		).rejects.toMatchObject({ status: 400 });
+		expect(fetchMock).not.toHaveBeenCalled();
+	});
+
+	it("rejects non-string keys before contacting the worker", async () => {
+		configureServerConfig();
+		const fetchMock = vi.fn();
+		vi.stubGlobal("fetch", fetchMock);
+		const handler = createGalleryBulkDeleteHandler();
+
+		await expect(
+			handler({
+				request: makeJsonRequest("/api/admin/galleries/bulk-delete", {
+					keys: ["https://tenant.example/gallery-1/original/photo.jpg", 42],
+				}),
+			}),
+		).rejects.toMatchObject({ status: 400 });
+		expect(fetchMock).not.toHaveBeenCalled();
+	});
+
+	it("surfaces worker failures without masking the worker status", async () => {
+		configureServerConfig();
+		const fetchMock = vi.fn(async () => new Response("worker failed", { status: 502 }));
+		vi.stubGlobal("fetch", fetchMock);
+		const handler = createGalleryBulkDeleteHandler();
+
+		await expect(
+			handler({
+				request: makeJsonRequest("/api/admin/galleries/bulk-delete", {
+					keys: ["https://tenant.example/gallery-1/original/photo.jpg"],
+				}),
+			}),
+		).rejects.toMatchObject({ status: 502 });
 	});
 });

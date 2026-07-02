@@ -30,7 +30,7 @@ const client = useAdminClient();
 
 const imagesQuery = useQuery(galleryApi.getImages, () => ({ galleryId: gallery._id }));
 const galleryQuery = useQuery(galleryApi.get, () => ({ id: gallery._id }));
-let images = $derived(imagesQuery.data ?? []);
+let images = $derived((imagesQuery.data ?? []) as GalleryImage[]);
 let liveGallery = $derived(galleryQuery.data ?? gallery);
 
 let tab = $state<"images" | "settings">("images");
@@ -64,6 +64,36 @@ function handleUploadBatchChange(summary: UploadBatchSummary) {
 	uploadBatch = summary.totalCount > 0 ? summary : null;
 }
 
+async function readResponseError(response: Response, fallback: string): Promise<string> {
+	const detail = await response.text().catch(() => "");
+	return detail || fallback;
+}
+
+async function deleteGalleryFiles(r2Keys: string[]): Promise<void> {
+	if (r2Keys.length === 0) return;
+
+	const bulkResponse = await fetch("/api/admin/galleries/bulk-delete", {
+		method: "POST",
+		headers: { "Content-Type": "application/json" },
+		body: JSON.stringify({ keys: r2Keys }),
+	});
+	if (bulkResponse.ok) return;
+	if (bulkResponse.status !== 404) {
+		throw new Error(await readResponseError(bulkResponse, "Failed to delete gallery files"));
+	}
+
+	for (const r2Key of r2Keys) {
+		const response = await fetch("/api/admin/galleries/delete", {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({ r2Key }),
+		});
+		if (!response.ok) {
+			throw new Error(await readResponseError(response, "Failed to delete gallery files"));
+		}
+	}
+}
+
 async function handleSaveSettings() {
 	saving = true;
 	try {
@@ -87,18 +117,8 @@ async function handleDelete() {
 	if (!confirm("Delete this gallery and all its images? This cannot be undone.")) return;
 	deleting = true;
 	try {
-		// Clean up R2 files
-		for (const image of images) {
-			try {
-				await fetch("/api/admin/galleries/delete", {
-					method: "POST",
-					headers: { "Content-Type": "application/json" },
-					body: JSON.stringify({ r2Key: image.r2Key }),
-				});
-			} catch {
-				// Non-fatal — R2 cleanup best-effort
-			}
-		}
+		await deleteGalleryFiles(images.map((image) => image.r2Key));
+
 		// Hard delete gallery + images + downloads from Convex
 		await client.mutation(galleryApi.remove, { id: toId(gallery._id) });
 		onclose();

@@ -370,7 +370,7 @@ setServerConfig(adminServerConfig);
 export const POST = createGalleryPresignHandler();
 ```
 
-Repeat for `createGalleryUploadSessionHandler` (POST), `createGalleryUploadHandler` (PUT), `createGalleryProcessHandler` (POST), and `createGalleryDeleteHandler` (POST).
+Repeat for `createGalleryUploadSessionHandler` (POST), `createGalleryUploadHandler` (PUT), `createGalleryProcessHandler` (POST), `createGalleryDeleteHandler` (POST), and `createGalleryBulkDeleteHandler` (POST).
 
 If `galleryWorkerUrl` is not set in the config, the gallery delivery tab is hidden automatically — the portfolio tab still works.
 
