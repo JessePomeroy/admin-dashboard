@@ -71,9 +71,17 @@ function setInputFiles(input: HTMLInputElement, files: File[]): void {
 describe("GalleryUploader", () => {
 	beforeEach(() => {
 		mocks.mutation.mockClear();
-		for (const method of Object.values(mocks.storage)) {
-			method.mockClear();
-		}
+		mocks.storage.startUploadSession.mockReset().mockResolvedValue({
+			token: "session-token",
+			expiresAt: Date.now() + 600_000,
+		});
+		mocks.storage.presign.mockReset().mockImplementation(async ({ filename }: { filename: string }) => ({
+			r2Key: `site/gallery/original/${filename}`,
+			uploadUrl: `/upload/${filename}`,
+		}));
+		mocks.storage.uploadFile.mockReset().mockResolvedValue(undefined);
+		mocks.storage.process.mockReset().mockResolvedValue(undefined);
+		mocks.storage.delete.mockReset().mockResolvedValue(undefined);
 
 		Object.defineProperty(URL, "createObjectURL", {
 			value: vi.fn(() => "blob:test"),
@@ -156,6 +164,103 @@ describe("GalleryUploader", () => {
 			totalSizeBytes: 3,
 			hasErrors: false,
 		});
+
+		unmount(component);
+	});
+
+	it("wires retry all through to retryable upload failures only", async () => {
+		mocks.storage.presign
+			.mockRejectedValueOnce(new Error("temporary presign failure"))
+			.mockResolvedValueOnce({
+				r2Key: "site/gallery/original/photo.jpg",
+				uploadUrl: "/upload/photo.jpg",
+			});
+
+		const component = mount(GalleryUploader, {
+			target: document.body,
+			props: {
+				galleryId: "gallery",
+				adminSession: {
+					status: "authorized",
+					email: "admin@example.com",
+					tier: "full",
+					isCreator: true,
+				},
+				onupload: vi.fn(),
+			},
+		});
+
+		const input = document.querySelector("input[type='file']") as HTMLInputElement;
+		setInputFiles(input, [
+			new File(["a"], "photo.jpg", { type: "image/jpeg" }),
+			new File(["b"], "notes.txt", { type: "text/plain" }),
+		]);
+
+		await vi.waitFor(() => {
+			expect(document.body.textContent).toContain("retry all (1)");
+		});
+
+		getButton("retry all (1)").click();
+
+		await vi.waitFor(() => {
+			expect(document.body.textContent).toContain("1/2 uploaded");
+		});
+		expect(mocks.storage.presign).toHaveBeenCalledTimes(2);
+		expect(document.body.textContent).toContain("File type not allowed");
+		expect(document.body.textContent).not.toContain("retry all (1)");
+
+		unmount(component);
+	});
+
+	it("wires select all and delete selected through to in-flight storage cleanup", async () => {
+		mocks.storage.uploadFile
+			.mockImplementationOnce(async () => new Promise(() => {}))
+			.mockImplementationOnce(async () => new Promise(() => {}));
+
+		const component = mount(GalleryUploader, {
+			target: document.body,
+			props: {
+				galleryId: "gallery",
+				adminSession: {
+					status: "authorized",
+					email: "admin@example.com",
+					tier: "full",
+					isCreator: true,
+				},
+				onupload: vi.fn(),
+			},
+		});
+
+		const input = document.querySelector("input[type='file']") as HTMLInputElement;
+		setInputFiles(input, [
+			new File(["a"], "one.jpg", { type: "image/jpeg" }),
+			new File(["b"], "two.jpg", { type: "image/jpeg" }),
+		]);
+
+		await vi.waitFor(() => {
+			expect(mocks.storage.uploadFile).toHaveBeenCalledTimes(2);
+			expect(document.querySelectorAll(".delete-checkbox")).toHaveLength(2);
+		});
+
+		(document.querySelector(".select-all-control input") as HTMLInputElement).click();
+		await tick();
+		expect(document.body.textContent).toContain("delete selected (2)");
+
+		getButton("delete selected (2)").click();
+
+		await vi.waitFor(() => {
+			expect(mocks.storage.delete).toHaveBeenCalledTimes(2);
+		});
+		expect(mocks.storage.delete).toHaveBeenCalledWith({
+			r2Key: "site/gallery/original/one.jpg",
+			uploadSessionToken: "session-token",
+		});
+		expect(mocks.storage.delete).toHaveBeenCalledWith({
+			r2Key: "site/gallery/original/two.jpg",
+			uploadSessionToken: "session-token",
+		});
+		expect(document.body.textContent).not.toContain("one.jpg");
+		expect(document.body.textContent).not.toContain("two.jpg");
 
 		unmount(component);
 	});
