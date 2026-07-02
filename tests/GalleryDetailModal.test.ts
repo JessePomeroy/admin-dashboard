@@ -6,6 +6,15 @@ import type { Gallery, GalleryImage } from "../src/lib/types";
 
 const mocks = vi.hoisted(() => {
 	const mutation = vi.fn(async () => undefined);
+	const query = vi.fn(async () => ({
+		keys: [
+			"site.example/gallery-1/original/one.jpg",
+			"site.example/gallery-1/original/two.jpg",
+			"site.example/gallery-1/original/hidden.jpg",
+		],
+		isDone: true,
+		continueCursor: null,
+	}));
 	const gallery = {
 		_id: "gallery-1",
 		_creationTime: 1,
@@ -50,7 +59,7 @@ const mocks = vi.hoisted(() => {
 			downloadCount: 0,
 		},
 	];
-	return { mutation, gallery, images };
+	return { mutation, query, gallery, images };
 });
 
 vi.mock("convex-svelte", () => ({
@@ -59,11 +68,11 @@ vi.mock("convex-svelte", () => ({
 		if (ref.name === "galleryDelivery:get") return { data: mocks.gallery };
 		return { data: undefined };
 	},
-	useConvexClient: () => ({ mutation: mocks.mutation }),
+	useConvexClient: () => ({ mutation: mocks.mutation, query: mocks.query }),
 }));
 
 vi.mock("../src/lib/adminClient", () => ({
-	useAdminClient: () => ({ mutation: mocks.mutation }),
+	useAdminClient: () => ({ mutation: mocks.mutation, query: mocks.query }),
 }));
 
 vi.mock("../src/lib/config", () => ({
@@ -82,6 +91,7 @@ vi.mock("../src/lib/config", () => ({
 				removeImage: { name: "galleryDelivery:removeImage" },
 				reorderImages: { name: "galleryDelivery:reorderImages" },
 				addImage: { name: "galleryDelivery:addImage" },
+				listImageStorageKeys: { name: "galleryDelivery:listImageStorageKeys" },
 			},
 			portal: {
 				createToken: { name: "portal:createToken" },
@@ -130,9 +140,29 @@ async function openSettingsTab() {
 	await tick();
 }
 
+function deferred<T>() {
+	let resolve!: (value: T) => void;
+	let reject!: (reason?: unknown) => void;
+	const promise = new Promise<T>((promiseResolve, promiseReject) => {
+		resolve = promiseResolve;
+		reject = promiseReject;
+	});
+	return { promise, resolve, reject };
+}
+
 describe("GalleryDetailModal", () => {
 	beforeEach(() => {
 		mocks.mutation.mockClear();
+		mocks.query.mockClear();
+		mocks.query.mockResolvedValue({
+			keys: [
+				"site.example/gallery-1/original/one.jpg",
+				"site.example/gallery-1/original/two.jpg",
+				"site.example/gallery-1/original/hidden.jpg",
+			],
+			isDone: true,
+			continueCursor: null,
+		});
 		vi.stubGlobal("confirm", vi.fn(() => true));
 	});
 
@@ -143,7 +173,8 @@ describe("GalleryDetailModal", () => {
 
 	it("bulk deletes gallery files before deleting Convex metadata", async () => {
 		const onclose = vi.fn();
-		const fetchMock = vi.fn(async () => new Response(null, { status: 204 }));
+		const cleanup = deferred<Response>();
+		const fetchMock = vi.fn(() => cleanup.promise);
 		vi.stubGlobal("fetch", fetchMock);
 
 		const component = mountModal({ onclose });
@@ -152,32 +183,52 @@ describe("GalleryDetailModal", () => {
 		getButton("delete gallery").click();
 
 		await vi.waitFor(() => {
+			expect(mocks.query).toHaveBeenCalledWith(
+				{ name: "galleryDelivery:listImageStorageKeys" },
+				{
+					galleryId: "gallery-1",
+					paginationOpts: { numItems: 500, cursor: null },
+				},
+			);
 			expect(fetchMock).toHaveBeenCalledWith("/api/admin/galleries/bulk-delete", {
 				method: "POST",
 				headers: { "Content-Type": "application/json" },
 				body: JSON.stringify({
-					keys: (mocks.images as GalleryImage[]).map((image) => image.r2Key),
+					keys: [
+						...(mocks.images as GalleryImage[]).map((image) => image.r2Key),
+						"site.example/gallery-1/original/hidden.jpg",
+					],
 				}),
 			});
+		});
+		expect(mocks.mutation).not.toHaveBeenCalledWith(
+			{ name: "galleryDelivery:remove" },
+			expect.anything(),
+		);
+
+		cleanup.resolve(new Response(null, { status: 204 }));
+
+		await vi.waitFor(() => {
 			expect(mocks.mutation).toHaveBeenCalledWith(
 				{ name: "galleryDelivery:remove" },
 				{ id: "gallery-1" },
 			);
 		});
-		expect(fetchMock.mock.invocationCallOrder[0]).toBeLessThan(
-			mocks.mutation.mock.invocationCallOrder[0],
-		);
 		expect(onclose).toHaveBeenCalledTimes(1);
 
 		unmount(component);
 	});
 
-	it("keeps metadata when gallery file cleanup fails", async () => {
+	it("falls back to per-file cleanup before deleting Convex metadata", async () => {
 		const onclose = vi.fn();
-		vi.stubGlobal(
-			"fetch",
-			vi.fn(async () => new Response("worker unavailable", { status: 503 })),
-		);
+		const finalCleanup = deferred<Response>();
+		const fetchMock = vi
+			.fn()
+			.mockResolvedValueOnce(new Response("not found", { status: 404 }))
+			.mockResolvedValueOnce(new Response(null, { status: 204 }))
+			.mockResolvedValueOnce(new Response(null, { status: 204 }))
+			.mockReturnValueOnce(finalCleanup.promise);
+		vi.stubGlobal("fetch", fetchMock);
 
 		const component = mountModal({ onclose });
 		await openSettingsTab();
@@ -185,8 +236,60 @@ describe("GalleryDetailModal", () => {
 		getButton("delete gallery").click();
 
 		await vi.waitFor(() => {
-			expect(document.body.textContent).toContain("delete gallery");
+			expect(fetchMock).toHaveBeenCalledTimes(4);
 		});
+		expect(fetchMock).toHaveBeenNthCalledWith(2, "/api/admin/galleries/delete", {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({ r2Key: "site.example/gallery-1/original/one.jpg" }),
+		});
+		expect(fetchMock).toHaveBeenNthCalledWith(3, "/api/admin/galleries/delete", {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({ r2Key: "site.example/gallery-1/original/two.jpg" }),
+		});
+		expect(fetchMock).toHaveBeenNthCalledWith(4, "/api/admin/galleries/delete", {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({ r2Key: "site.example/gallery-1/original/hidden.jpg" }),
+		});
+		expect(mocks.mutation).not.toHaveBeenCalledWith(
+			{ name: "galleryDelivery:remove" },
+			expect.anything(),
+		);
+
+		finalCleanup.resolve(new Response(null, { status: 204 }));
+
+		await vi.waitFor(() => {
+			expect(mocks.mutation).toHaveBeenCalledWith(
+				{ name: "galleryDelivery:remove" },
+				{ id: "gallery-1" },
+			);
+		});
+		expect(onclose).toHaveBeenCalledTimes(1);
+
+		unmount(component);
+	});
+
+	it("keeps metadata when gallery file cleanup fails", async () => {
+		const onclose = vi.fn();
+		const cleanup = deferred<Response>();
+		const fetchMock = vi.fn(() => cleanup.promise);
+		vi.stubGlobal("fetch", fetchMock);
+
+		const component = mountModal({ onclose });
+		await openSettingsTab();
+
+		getButton("delete gallery").click();
+
+		await vi.waitFor(() => {
+			expect(fetchMock).toHaveBeenCalledTimes(1);
+		});
+		cleanup.resolve(new Response("worker unavailable", { status: 503 }));
+		await vi.waitFor(() => {
+			expect(getButton("delete gallery")).toBeTruthy();
+		});
+
 		expect(mocks.mutation).not.toHaveBeenCalledWith(
 			{ name: "galleryDelivery:remove" },
 			expect.anything(),

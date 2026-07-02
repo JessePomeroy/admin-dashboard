@@ -17,6 +17,14 @@ interface UploadBatchSummary {
 	hasErrors: boolean;
 }
 
+interface GalleryStorageKeyPage {
+	keys: string[];
+	isDone: boolean;
+	continueCursor?: string | null;
+}
+
+const CLEANUP_KEY_PAGE_SIZE = 500;
+
 let { gallery, adminSession, onclose }: {
 	gallery: Gallery & { clientName: string };
 	adminSession: TenantAdminServerSession;
@@ -94,6 +102,29 @@ async function deleteGalleryFiles(r2Keys: string[]): Promise<void> {
 	}
 }
 
+async function loadGalleryFileKeys(): Promise<string[]> {
+	if (!galleryApi.listImageStorageKeys) {
+		return images.map((image) => image.r2Key);
+	}
+
+	const keys: string[] = [];
+	let cursor: string | null = null;
+	do {
+		const page = (await client.query(galleryApi.listImageStorageKeys, {
+			galleryId: toId(gallery._id),
+			paginationOpts: {
+				numItems: CLEANUP_KEY_PAGE_SIZE,
+				cursor,
+			},
+		})) as GalleryStorageKeyPage;
+		keys.push(...page.keys);
+		cursor = page.continueCursor ?? null;
+		if (page.isDone) break;
+	} while (cursor !== null);
+
+	return keys;
+}
+
 async function handleSaveSettings() {
 	saving = true;
 	try {
@@ -117,7 +148,8 @@ async function handleDelete() {
 	if (!confirm("Delete this gallery and all its images? This cannot be undone.")) return;
 	deleting = true;
 	try {
-		await deleteGalleryFiles(images.map((image) => image.r2Key));
+		const r2Keys = await loadGalleryFileKeys();
+		await deleteGalleryFiles(r2Keys);
 
 		// Hard delete gallery + images + downloads from Convex
 		await client.mutation(galleryApi.remove, { id: toId(gallery._id) });
