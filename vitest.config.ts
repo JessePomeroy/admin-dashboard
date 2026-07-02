@@ -1,9 +1,29 @@
 import { defineConfig } from "vitest/config";
+import { svelte } from "@sveltejs/vite-plugin-svelte";
 
 export default defineConfig({
 	test: {
-		include: ["tests/**/*.test.ts"],
-		environment: "node",
 		globals: true,
+		projects: [
+			{
+				test: {
+					name: "node",
+					include: ["tests/**/*.test.ts"],
+					exclude: ["tests/GalleryUploader.test.ts"],
+					environment: "node",
+				},
+			},
+			{
+				plugins: [svelte()],
+				resolve: {
+					conditions: ["browser"],
+				},
+				test: {
+					name: "components",
+					include: ["tests/GalleryUploader.test.ts"],
+					environment: "jsdom",
+				},
+			},
+		],
 	},
 });
