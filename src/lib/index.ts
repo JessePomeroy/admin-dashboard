@@ -84,4 +84,5 @@ export {
 	createGalleryUploadHandler,
 	createGalleryProcessHandler,
 	createGalleryDeleteHandler,
+	createGalleryBulkDeleteHandler,
 } from "./server/handlers/galleryPresign";
