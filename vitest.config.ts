@@ -9,7 +9,7 @@ export default defineConfig({
 				test: {
 					name: "node",
 					include: ["tests/**/*.test.ts"],
-					exclude: ["tests/GalleryUploader.test.ts"],
+					exclude: ["tests/Gallery*.test.ts"],
 					environment: "node",
 				},
 			},
@@ -20,7 +20,7 @@ export default defineConfig({
 				},
 				test: {
 					name: "components",
-					include: ["tests/GalleryUploader.test.ts"],
+					include: ["tests/Gallery*.test.ts"],
 					environment: "jsdom",
 				},
 			},
