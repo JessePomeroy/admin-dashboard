@@ -42,6 +42,12 @@ let uploadState = $state<GalleryUploadSnapshot>({
 	completedCount: 0,
 	totalSizeBytes: 0,
 	hasErrors: false,
+	sourceFileCount: 0,
+	sourceSizeBytes: 0,
+	acceptedFileCount: 0,
+	acceptedSizeBytes: 0,
+	rejectedFileCount: 0,
+	rejectedSizeBytes: 0,
 	retryableErrorCount: 0,
 	selectableCount: 0,
 	selectedCount: 0,
@@ -76,10 +82,85 @@ const uploadController = createGalleryUploadController({
 });
 uploadState = uploadController.getSnapshot();
 
-function handleDrop(e: DragEvent) {
+interface DroppedFileSystemEntry {
+	isFile: boolean;
+	isDirectory: boolean;
+	file?: (success: (file: File) => void, error?: (error: DOMException) => void) => void;
+	createReader?: () => {
+		readEntries: (
+			success: (entries: DroppedFileSystemEntry[]) => void,
+			error?: (error: DOMException) => void,
+		) => void;
+	};
+}
+
+interface DroppedDataTransferItem {
+	webkitGetAsEntry?: () => DroppedFileSystemEntry | null;
+}
+
+function readDroppedFile(entry: DroppedFileSystemEntry): Promise<File> {
+	return new Promise((resolve, reject) => {
+		if (!entry.file) {
+			reject(new Error("Dropped file entry is missing a file reader"));
+			return;
+		}
+		entry.file(resolve, reject);
+	});
+}
+
+function readDirectoryEntries(entry: DroppedFileSystemEntry): Promise<DroppedFileSystemEntry[]> {
+	if (!entry.createReader) return Promise.resolve([]);
+	const reader = entry.createReader();
+	if (!reader) return Promise.resolve([]);
+	const entries: DroppedFileSystemEntry[] = [];
+
+	return new Promise((resolve, reject) => {
+		function readBatch() {
+			reader.readEntries((batch) => {
+				if (batch.length === 0) {
+					resolve(entries);
+					return;
+				}
+				entries.push(...batch);
+				readBatch();
+			}, reject);
+		}
+		readBatch();
+	});
+}
+
+async function collectDroppedEntryFiles(entry: DroppedFileSystemEntry): Promise<File[]> {
+	if (entry.isFile) return [await readDroppedFile(entry)];
+	if (!entry.isDirectory) return [];
+
+	const entries = await readDirectoryEntries(entry);
+	const nested = await Promise.all(entries.map((child) => collectDroppedEntryFiles(child)));
+	return nested.flat();
+}
+
+async function collectDroppedFiles(dataTransfer: DataTransfer): Promise<File[]> {
+	const items = Array.from(dataTransfer.items ?? []) as DroppedDataTransferItem[];
+	const entries = items
+		.map((item) => item.webkitGetAsEntry?.())
+		.filter((entry): entry is DroppedFileSystemEntry => !!entry);
+
+	if (entries.length === 0) return Array.from(dataTransfer.files ?? []);
+
+	try {
+		const nested = await Promise.all(entries.map((entry) => collectDroppedEntryFiles(entry)));
+		const files = nested.flat();
+		return files.length > 0 ? files : Array.from(dataTransfer.files ?? []);
+	} catch (err) {
+		logger.warn("Failed to traverse dropped gallery folder:", err);
+		return Array.from(dataTransfer.files ?? []);
+	}
+}
+
+async function handleDrop(e: DragEvent) {
 	e.preventDefault();
 	dragging = false;
-	if (e.dataTransfer?.files) uploadController.addFiles(e.dataTransfer.files);
+	if (!e.dataTransfer) return;
+	uploadController.addFiles(await collectDroppedFiles(e.dataTransfer));
 }
 
 function handleFileInput(e: Event) {
@@ -109,6 +190,12 @@ let completedCount = $derived(uploadState.completedCount);
 let totalCount = $derived(uploadState.totalCount);
 let totalSizeBytes = $derived(uploadState.totalSizeBytes);
 let hasErrors = $derived(uploadState.hasErrors);
+let sourceFileCount = $derived(uploadState.sourceFileCount);
+let sourceSizeBytes = $derived(uploadState.sourceSizeBytes);
+let acceptedFileCount = $derived(uploadState.acceptedFileCount);
+let acceptedSizeBytes = $derived(uploadState.acceptedSizeBytes);
+let rejectedFileCount = $derived(uploadState.rejectedFileCount);
+let rejectedSizeBytes = $derived(uploadState.rejectedSizeBytes);
 let retryableErrorCount = $derived(uploadState.retryableErrorCount);
 let selectableCount = $derived(uploadState.selectableCount);
 let selectedCount = $derived(uploadState.selectedCount);
@@ -120,12 +207,20 @@ $effect(() => {
 		completedCount,
 		totalSizeBytes,
 		hasErrors,
+		sourceFileCount,
+		sourceSizeBytes,
+		acceptedFileCount,
+		acceptedSizeBytes,
+		rejectedFileCount,
+		rejectedSizeBytes,
 	});
 });
 
 function formatFileSize(bytes: number): string {
-	if (bytes >= 1024 * 1024) return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
-	return `${(bytes / 1024).toFixed(0)} KB`;
+	if (bytes >= 1024 * 1024 * 1024) return `${(bytes / 1024 / 1024 / 1024).toFixed(1)} gb`;
+	if (bytes >= 1024 * 1024) return `${(bytes / 1024 / 1024).toFixed(1)} mb`;
+	if (bytes >= 1024) return `${(bytes / 1024).toFixed(0)} kb`;
+	return `${bytes} b`;
 }
 </script>
 
@@ -193,6 +288,13 @@ function formatFileSize(bytes: number): string {
 						<button class="clear-btn" onclick={() => uploadController.clearCompleted()}>clear done</button>
 					{/if}
 				</div>
+			</div>
+			<div class="upload-summary" aria-label="upload batch summary">
+				<span>selected {sourceFileCount} file{sourceFileCount !== 1 ? "s" : ""} — {formatFileSize(sourceSizeBytes)}</span>
+				<span>uploadable {acceptedFileCount} — {formatFileSize(acceptedSizeBytes)}</span>
+				{#if rejectedFileCount > 0}
+					<span class="error-text">skipped {rejectedFileCount} — {formatFileSize(rejectedSizeBytes)}</span>
+				{/if}
 			</div>
 
 			{#each files as f (f.id)}
@@ -310,6 +412,15 @@ function formatFileSize(bytes: number): string {
 		flex-wrap: wrap;
 		gap: 8px;
 		min-width: 0;
+	}
+
+	.upload-summary {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 8px 14px;
+		margin: -4px 0 10px;
+		font-size: 0.72rem;
+		color: var(--admin-text-subtle);
 	}
 
 	.delete-action-slot {
