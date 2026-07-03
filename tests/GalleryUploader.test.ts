@@ -113,6 +113,12 @@ describe("GalleryUploader", () => {
 			completedCount: number;
 			totalSizeBytes: number;
 			hasErrors: boolean;
+			sourceFileCount: number;
+			sourceSizeBytes: number;
+			acceptedFileCount: number;
+			acceptedSizeBytes: number;
+			rejectedFileCount: number;
+			rejectedSizeBytes: number;
 		}> = [];
 		const onupload = vi.fn();
 		const component = mount(GalleryUploader, {
@@ -145,7 +151,15 @@ describe("GalleryUploader", () => {
 			completedCount: 2,
 			totalSizeBytes: 3,
 			hasErrors: false,
+			sourceFileCount: 2,
+			sourceSizeBytes: 3,
+			acceptedFileCount: 2,
+			acceptedSizeBytes: 3,
+			rejectedFileCount: 0,
+			rejectedSizeBytes: 0,
 		});
+		expect(document.body.textContent).toContain("selected 2 files — 3 b");
+		expect(document.body.textContent).toContain("uploadable 2 — 3 b");
 
 		const firstCheckbox = document.querySelector(".delete-checkbox") as HTMLInputElement;
 		firstCheckbox.click();
@@ -163,6 +177,95 @@ describe("GalleryUploader", () => {
 			completedCount: 2,
 			totalSizeBytes: 3,
 			hasErrors: false,
+			sourceFileCount: 2,
+			sourceSizeBytes: 3,
+			acceptedFileCount: 2,
+			acceptedSizeBytes: 3,
+			rejectedFileCount: 0,
+			rejectedSizeBytes: 0,
+		});
+
+		unmount(component);
+	});
+
+	it("shows selected, uploadable, and skipped batch diagnostics", async () => {
+		const component = mount(GalleryUploader, {
+			target: document.body,
+			props: {
+				galleryId: "gallery",
+				adminSession: {
+					status: "authorized",
+					email: "admin@example.com",
+					tier: "full",
+					isCreator: true,
+				},
+				onupload: vi.fn(),
+			},
+		});
+
+		const input = document.querySelector("input[type='file']") as HTMLInputElement;
+		setInputFiles(input, [
+			new File(["a"], "photo.jpg", { type: "image/jpeg" }),
+			new File(["bb"], "notes.txt", { type: "text/plain" }),
+		]);
+
+		await vi.waitFor(() => {
+			expect(document.body.textContent).toContain("selected 2 files — 3 b");
+			expect(document.body.textContent).toContain("uploadable 1 — 1 b");
+			expect(document.body.textContent).toContain("skipped 1 — 2 b");
+		});
+
+		unmount(component);
+	});
+
+	it("traverses dropped browser folder entries before queueing uploads", async () => {
+		const component = mount(GalleryUploader, {
+			target: document.body,
+			props: {
+				galleryId: "gallery",
+				adminSession: {
+					status: "authorized",
+					email: "admin@example.com",
+					tier: "full",
+					isCreator: true,
+				},
+				onupload: vi.fn(),
+			},
+		});
+
+		const photo = new File(["a"], "folder-photo.jpg", { type: "image/jpeg" });
+		const raw = new File(["bb"], "folder-raw.raf", { type: "image/x-fuji-raf" });
+		const fileEntry = (file: File) => ({
+			isFile: true,
+			isDirectory: false,
+			file: (success: (value: File) => void) => success(file),
+		});
+		let readCount = 0;
+		const directoryEntry = {
+			isFile: false,
+			isDirectory: true,
+			createReader: () => ({
+				readEntries: (success: (entries: unknown[]) => void) => {
+					readCount += 1;
+					success(readCount === 1 ? [fileEntry(photo), fileEntry(raw)] : []);
+				},
+			}),
+		};
+		const drop = new Event("drop", { bubbles: true, cancelable: true });
+		Object.defineProperty(drop, "dataTransfer", {
+			value: {
+				files: [],
+				items: [{ webkitGetAsEntry: () => directoryEntry }],
+			},
+		});
+
+		document.querySelector(".uploader")?.dispatchEvent(drop);
+
+		await vi.waitFor(() => {
+			expect(mocks.storage.presign).toHaveBeenCalledTimes(2);
+			expect(document.body.textContent).toContain("selected 2 files — 3 b");
+			expect(document.body.textContent).toContain("folder-photo.jpg");
+			expect(document.body.textContent).toContain("folder-raw.raf");
 		});
 
 		unmount(component);

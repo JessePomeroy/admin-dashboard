@@ -14,11 +14,18 @@ export interface GalleryUploadBatchSummary {
 	completedCount: number;
 	totalSizeBytes: number;
 	hasErrors: boolean;
+	sourceFileCount: number;
+	sourceSizeBytes: number;
+	acceptedFileCount: number;
+	acceptedSizeBytes: number;
+	rejectedFileCount: number;
+	rejectedSizeBytes: number;
 }
 
 export interface GalleryUploadFile {
 	file: File;
 	id: string;
+	intakeStatus: "accepted" | "rejected";
 	status: "pending" | "uploading" | "processing" | "done" | "error";
 	progress: number;
 	error?: string;
@@ -91,6 +98,12 @@ export function createGalleryUploadController(
 	let uploadSessionPromise: Promise<GalleryUploadSession> | null = null;
 	let batchTotalCount = 0;
 	let batchTotalSizeBytes = 0;
+	let batchSourceFileCount = 0;
+	let batchSourceSizeBytes = 0;
+	let batchAcceptedFileCount = 0;
+	let batchAcceptedSizeBytes = 0;
+	let batchRejectedFileCount = 0;
+	let batchRejectedSizeBytes = 0;
 	let clearedCompletedCount = 0;
 
 	const maxConcurrent = options.maxConcurrent ?? DEFAULT_MAX_CONCURRENT;
@@ -127,6 +140,12 @@ export function createGalleryUploadController(
 			completedCount,
 			totalSizeBytes: batchTotalSizeBytes,
 			hasErrors,
+			sourceFileCount: batchSourceFileCount,
+			sourceSizeBytes: batchSourceSizeBytes,
+			acceptedFileCount: batchAcceptedFileCount,
+			acceptedSizeBytes: batchAcceptedSizeBytes,
+			rejectedFileCount: batchRejectedFileCount,
+			rejectedSizeBytes: batchRejectedSizeBytes,
 			retryableErrorCount,
 			selectableCount,
 			selectedCount,
@@ -160,39 +179,58 @@ export function createGalleryUploadController(
 		if (files.length === 0) {
 			batchTotalCount = 0;
 			batchTotalSizeBytes = 0;
+			batchSourceFileCount = 0;
+			batchSourceSizeBytes = 0;
+			batchAcceptedFileCount = 0;
+			batchAcceptedSizeBytes = 0;
+			batchRejectedFileCount = 0;
+			batchRejectedSizeBytes = 0;
 			clearedCompletedCount = 0;
 		}
 
 		const newFiles: GalleryUploadFile[] = [];
-		for (const file of Array.from(fileList)) {
+		const sourceFiles = Array.from(fileList);
+		batchSourceFileCount += sourceFiles.length;
+		batchSourceSizeBytes += sourceFiles.reduce((sum, file) => sum + file.size, 0);
+
+		for (const file of sourceFiles) {
 			if (!isAllowedGalleryFile(file)) {
 				newFiles.push({
 					file,
 					id: randomId(),
+					intakeStatus: "rejected",
 					status: "error",
 					progress: 0,
 					error: "File type not allowed",
 					retryable: false,
 				});
+				batchRejectedFileCount += 1;
+				batchRejectedSizeBytes += file.size;
 				continue;
 			}
 			if (file.size > GALLERY_MAX_FILE_SIZE_BYTES) {
 				newFiles.push({
 					file,
 					id: randomId(),
+					intakeStatus: "rejected",
 					status: "error",
 					progress: 0,
 					error: `File is over ${GALLERY_MAX_FILE_SIZE_LABEL}`,
 					retryable: false,
 				});
+				batchRejectedFileCount += 1;
+				batchRejectedSizeBytes += file.size;
 				continue;
 			}
 			newFiles.push({
 				file,
 				id: randomId(),
+				intakeStatus: "accepted",
 				status: "pending",
 				progress: 0,
 			});
+			batchAcceptedFileCount += 1;
+			batchAcceptedSizeBytes += file.size;
 		}
 
 		batchTotalCount += newFiles.length;
@@ -386,6 +424,17 @@ export function createGalleryUploadController(
 				0,
 				batchTotalSizeBytes - selectedFiles.reduce((sum, file) => sum + file.file.size, 0),
 			);
+			for (const file of selectedFiles) {
+				batchSourceFileCount = Math.max(0, batchSourceFileCount - 1);
+				batchSourceSizeBytes = Math.max(0, batchSourceSizeBytes - file.file.size);
+				if (file.intakeStatus === "rejected") {
+					batchRejectedFileCount = Math.max(0, batchRejectedFileCount - 1);
+					batchRejectedSizeBytes = Math.max(0, batchRejectedSizeBytes - file.file.size);
+				} else {
+					batchAcceptedFileCount = Math.max(0, batchAcceptedFileCount - 1);
+					batchAcceptedSizeBytes = Math.max(0, batchAcceptedSizeBytes - file.file.size);
+				}
+			}
 			selectedFileIds = selectedFileIds.filter((id) => !selectedIds.has(id));
 			emitChange();
 			options.onupload?.();

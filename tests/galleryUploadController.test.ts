@@ -80,6 +80,12 @@ describe("createGalleryUploadController", () => {
 		const snapshot = controller.getSnapshot();
 		expect(snapshot.totalCount).toBe(2);
 		expect(snapshot.completedCount).toBe(1);
+		expect(snapshot.sourceFileCount).toBe(2);
+		expect(snapshot.sourceSizeBytes).toBe(8);
+		expect(snapshot.acceptedFileCount).toBe(1);
+		expect(snapshot.acceptedSizeBytes).toBe(4);
+		expect(snapshot.rejectedFileCount).toBe(1);
+		expect(snapshot.rejectedSizeBytes).toBe(4);
 		expect(snapshot.hasErrors).toBe(true);
 		expect(snapshot.retryableErrorCount).toBe(0);
 		expect(snapshot.files.map((upload) => [upload.id, upload.status, upload.retryable])).toEqual([
@@ -161,6 +167,9 @@ describe("createGalleryUploadController", () => {
 		expect(snapshot.completedCount).toBe(2);
 		expect(snapshot.totalCount).toBe(2);
 		expect(snapshot.totalSizeBytes).toBe(8);
+		expect(snapshot.sourceFileCount).toBe(2);
+		expect(snapshot.acceptedFileCount).toBe(2);
+		expect(snapshot.rejectedFileCount).toBe(0);
 	});
 
 	it("deletes selected uploaded files from Convex and storage", async () => {
@@ -182,6 +191,31 @@ describe("createGalleryUploadController", () => {
 		});
 		expect(controller.getSnapshot().files).toHaveLength(0);
 		expect(controller.getSnapshot().totalCount).toBe(0);
+		expect(controller.getSnapshot().sourceFileCount).toBe(0);
+		expect(controller.getSnapshot().acceptedFileCount).toBe(0);
+		expect(controller.getSnapshot().acceptedSizeBytes).toBe(0);
+		expect(controller.getSnapshot().rejectedFileCount).toBe(0);
+	});
+
+	it("removes rejected selected files from batch diagnostics", async () => {
+		const { controller } = createController();
+
+		controller.addFiles([file("photo.jpg", 4), file("notes.txt", 6, "text/plain")]);
+
+		await vi.waitFor(() => {
+			expect(controller.getSnapshot().files.some((upload) => upload.status === "done")).toBe(true);
+		});
+		const rejected = controller.getSnapshot().files.find((upload) => upload.retryable === false);
+		expect(rejected).toBeTruthy();
+		controller.toggleSelected(rejected!.id);
+		await controller.deleteSelectedFiles();
+
+		const snapshot = controller.getSnapshot();
+		expect(snapshot.sourceFileCount).toBe(1);
+		expect(snapshot.sourceSizeBytes).toBe(4);
+		expect(snapshot.acceptedFileCount).toBe(1);
+		expect(snapshot.rejectedFileCount).toBe(0);
+		expect(snapshot.rejectedSizeBytes).toBe(0);
 	});
 
 	it("aborts and deletes storage when deleting during a direct upload", async () => {
@@ -210,7 +244,11 @@ describe("createGalleryUploadController", () => {
 			r2Key: "site/gallery/original/photo.jpg",
 			uploadSessionToken: "session-token",
 		});
-		expect(controller.getSnapshot().files).toHaveLength(0);
+		const snapshot = controller.getSnapshot();
+		expect(snapshot.files).toHaveLength(0);
+		expect(snapshot.acceptedFileCount).toBe(0);
+		expect(snapshot.acceptedSizeBytes).toBe(0);
+		expect(snapshot.rejectedFileCount).toBe(0);
 		uploadGate.resolve();
 	});
 
