@@ -177,6 +177,11 @@ function getDeletedCount(result: unknown): number {
 	return typeof deleted === "number" ? deleted : 0;
 }
 
+function isGalleryKeyForConfiguredSite(key: string, siteUrl: string): boolean {
+	const normalizedSiteUrl = siteUrl.replace(/\/+$/, "");
+	return key.startsWith(`${normalizedSiteUrl}/`);
+}
+
 export function createGalleryUploadSessionHandler() {
 	return async ({ request }: { request: Request }) => {
 		await requireAdmin(request);
@@ -351,6 +356,9 @@ export function createGalleryBulkDeleteHandler() {
 			throw error(400, "keys must be strings");
 		}
 		const stringKeys = keys as string[];
+		if (stringKeys.some((key) => !isGalleryKeyForConfiguredSite(key, config.siteUrl))) {
+			throw error(403, "Bulk delete keys must belong to this site");
+		}
 
 		try {
 			let deleted = 0;
