@@ -292,6 +292,75 @@ describe("createGalleryBulkDeleteHandler", () => {
 		expect(fetchMock).not.toHaveBeenCalled();
 	});
 
+	it("rejects bulk-delete keys for another site before contacting the worker", async () => {
+		configureServerConfig();
+		const fetchMock = vi.fn();
+		vi.stubGlobal("fetch", fetchMock);
+		const handler = createGalleryBulkDeleteHandler();
+
+		await expect(
+			handler({
+				request: makeJsonRequest("/api/admin/galleries/bulk-delete", {
+					keys: ["https://other.example/gallery-1/original/photo.jpg"],
+				}),
+			}),
+		).rejects.toMatchObject({ status: 403 });
+		expect(fetchMock).not.toHaveBeenCalled();
+	});
+
+	it("rejects bulk-delete keys that only prefix-match the configured site", async () => {
+		configureServerConfig();
+		const fetchMock = vi.fn();
+		vi.stubGlobal("fetch", fetchMock);
+		const handler = createGalleryBulkDeleteHandler();
+
+		await expect(
+			handler({
+				request: makeJsonRequest("/api/admin/galleries/bulk-delete", {
+					keys: ["https://tenant.example.evil/gallery-1/original/photo.jpg"],
+				}),
+			}),
+		).rejects.toMatchObject({ status: 403 });
+		expect(fetchMock).not.toHaveBeenCalled();
+	});
+
+	it("accepts bare-domain configured site keys", async () => {
+		configureServerConfig({ siteUrl: "tenant.example" });
+		const fetchMock = vi.fn(async () => Response.json({ success: true, deleted: 3 }));
+		vi.stubGlobal("fetch", fetchMock);
+		const handler = createGalleryBulkDeleteHandler();
+
+		const response = await handler({
+			request: makeJsonRequest("/api/admin/galleries/bulk-delete", {
+				keys: ["tenant.example/gallery-1/original/photo.jpg"],
+			}),
+		});
+
+		await expect(response.json()).resolves.toEqual({ success: true, deleted: 3, chunks: 1 });
+		expect(fetchMock).toHaveBeenCalledWith(
+			"https://gallery.example/admin/bulk-delete",
+			expect.objectContaining({
+				body: JSON.stringify({ keys: ["tenant.example/gallery-1/original/photo.jpg"] }),
+			}),
+		);
+	});
+
+	it("accepts configured site keys when the config has a trailing slash", async () => {
+		configureServerConfig({ siteUrl: "tenant.example/" });
+		const fetchMock = vi.fn(async () => Response.json({ success: true, deleted: 3 }));
+		vi.stubGlobal("fetch", fetchMock);
+		const handler = createGalleryBulkDeleteHandler();
+
+		const response = await handler({
+			request: makeJsonRequest("/api/admin/galleries/bulk-delete", {
+				keys: ["tenant.example/gallery-1/original/photo.jpg"],
+			}),
+		});
+
+		await expect(response.json()).resolves.toEqual({ success: true, deleted: 3, chunks: 1 });
+		expect(fetchMock).toHaveBeenCalledTimes(1);
+	});
+
 	it("surfaces worker failures without masking the worker status", async () => {
 		configureServerConfig();
 		const fetchMock = vi.fn(async () => new Response("worker failed", { status: 502 }));
