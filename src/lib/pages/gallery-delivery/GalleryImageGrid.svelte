@@ -10,10 +10,11 @@ import {
 	isBrowserPreviewableGalleryFile,
 } from "../../galleryUploadPolicy";
 
-let { images, galleryId, coverImageKey, onchange }: {
+let { images, galleryId, coverImageKey, knownImageCount, onchange }: {
 	images: GalleryImage[];
 	galleryId: string;
 	coverImageKey?: string;
+	knownImageCount?: number;
 	onchange: () => void;
 } = $props();
 
@@ -90,7 +91,11 @@ async function handleDelete(image: GalleryImage) {
 </script>
 
 {#if images.length === 0}
-	<p class="empty">no images uploaded yet</p>
+	<p class="empty">
+		{knownImageCount && knownImageCount > 0
+			? `loading ${knownImageCount} uploaded image${knownImageCount !== 1 ? "s" : ""}...`
+			: "no images uploaded yet"}
+	</p>
 {:else}
 	<div
 		class="grid"

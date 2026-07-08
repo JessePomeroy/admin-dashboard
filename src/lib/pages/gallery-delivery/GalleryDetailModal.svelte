@@ -229,6 +229,7 @@ async function handleShare() {
 					{images}
 					galleryId={gallery._id as string}
 					coverImageKey={liveGallery.coverImageKey}
+					knownImageCount={liveGallery.imageCount}
 					onchange={() => {}}
 				/>
 			</div>
