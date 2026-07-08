@@ -1,6 +1,6 @@
 {
   "name": "@jessepomeroy/admin",
-  "version": "2.3.8",
+  "version": "2.3.11",
   "packageManager": "pnpm@9.15.9",
   "type": "module",
   "svelte": "./dist/index.js",

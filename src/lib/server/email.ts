@@ -24,9 +24,7 @@ export function replaceTemplateVariables(
 	template: string,
 	variables: Record<string, string>,
 ): string {
-	let result = template;
-	for (const [key, value] of Object.entries(variables)) {
-		result = result.replaceAll(`{{${key}}}`, value);
-	}
-	return result;
+	return template.replace(/\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g, (match, key) =>
+		Object.prototype.hasOwnProperty.call(variables, key) ? variables[key] : match,
+	);
 }

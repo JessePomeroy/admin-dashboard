@@ -4,12 +4,33 @@ import { createEmailSendHandler, formatCurrency } from "./createEmailSendHandler
 
 /** Subset of the Convex Invoice document the send handler needs. */
 interface InvoiceDoc extends Record<string, unknown> {
+	_id: string;
+	clientId: string;
 	clientEmail?: string;
 	clientName?: string;
 	invoiceNumber: string;
 	items: { description: string; quantity: number; unitPrice: number }[];
 	taxPercent?: number;
 	dueDate?: string;
+}
+
+function normalizePortalBaseUrl(siteUrl: string): string {
+	const trimmed = siteUrl.trim().replace(/\/$/, "");
+	if (/^https?:\/\//i.test(trimmed)) return trimmed;
+	return `https://${trimmed}`;
+}
+
+function appendPortalLinkIfMissing(
+	body: string,
+	vars: Record<string, string>,
+): string {
+	if (!vars.portalUrl || body.includes(vars.portalUrl)) return body;
+	const linkHtml = `<p><a href="${vars.portalUrl}" style="display: inline-block; margin: 12px 0 4px; padding: 12px 18px; background: #111; color: #fff; text-decoration: none; border-radius: 6px;">view and pay invoice</a></p>
+<p style="color: #666; font-size: 0.9em;">or copy this link: ${vars.portalUrl}</p>`;
+	if (/^\s*<[a-zA-Z!]/.test(body)) {
+		return `${body}\n${linkHtml}`;
+	}
+	return `${body.trimEnd()}\n\nview and pay your invoice here:\n${vars.portalUrl}`;
 }
 
 function buildDefaultInvoiceHtml(
@@ -49,6 +70,8 @@ ${vars.taxLine ? `<tr><td colspan="3" style="padding: 8px 0; text-align: right; 
 </tr>
 </tfoot>
 </table>
+${vars.portalUrl ? `<p><a href="${vars.portalUrl}" style="display: inline-block; margin: 12px 0 4px; padding: 12px 18px; background: #111; color: #fff; text-decoration: none; border-radius: 6px;">view and pay invoice</a></p>
+<p style="color: #666; font-size: 0.9em;">or copy this link: ${vars.portalUrl}</p>` : ""}
 <p>please reach out if you have any questions.</p>
 <p style="color: #999; font-size: 0.85em; margin-top: 32px;">${escapeHtml(siteName)}</p>
 </div>`;
@@ -97,6 +120,16 @@ export function createInvoiceSendHandler() {
 		},
 		buildDefaultHtml: buildDefaultInvoiceHtml,
 		defaultSubject: (doc) => `invoice ${doc.invoiceNumber}`,
+		finalizeRenderedBody: appendPortalLinkIfMissing,
+		createPortalUrl: async (api, convex, doc, siteUrl) => {
+			const token = await convex.mutation(api.portal.createToken, {
+				siteUrl,
+				type: "invoice",
+				documentId: doc._id,
+				clientId: toId(doc.clientId),
+			});
+			return escapeHtml(`${normalizePortalBaseUrl(siteUrl)}/portal/${token}`);
+		},
 		markSent: (api, convex, id, siteUrl) =>
 			convex.mutation(api.invoices.markSent, { invoiceId: toId(id), siteUrl }),
 		fallbackCategories: ["reminder", "custom"],

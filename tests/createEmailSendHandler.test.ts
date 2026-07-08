@@ -26,6 +26,7 @@ vi.mock("../src/lib/server/email", async () => {
 
 // Imports AFTER mocks so the module graph uses them
 import { setServerConfig } from "../src/lib/config";
+import { sendEmail } from "../src/lib/server/email";
 import { createEmailSendHandler } from "../src/lib/server/handlers/createEmailSendHandler";
 import type { EmailCategory } from "../src/lib/types";
 
@@ -176,5 +177,78 @@ describe("createEmailSendHandler template fallback cascade", () => {
 			(c) => c[0] === "create",
 		);
 		expect(logCall?.[1].subject).toBe("default subject");
+	});
+
+	it("renders custom subject/body variables and optional portal URLs before sending", async () => {
+		const handler = createEmailSendHandler({
+			docType: "invoice",
+			fetchDocument: async () => ({
+				_id: "invoice-1",
+				clientEmail: "client@example.com",
+				invoiceNumber: "INV-1",
+			}),
+			getClientEmail: (doc) => doc.clientEmail,
+			extractVars: (doc) => ({
+				invoiceNumber: doc.invoiceNumber,
+			}),
+			buildDefaultHtml: () => "<p>default</p>",
+			defaultSubject: () => "default subject",
+			createPortalUrl: async () => "https://example.com/portal/token-1",
+			markSent: async () => {},
+			fallbackCategories: [],
+		});
+
+		await handler(
+			makeEvent({
+				customSubject: "invoice {{ invoiceNumber }}",
+				customBody: "pay here: {{portalUrl}}",
+			}),
+		);
+
+		expect(vi.mocked(sendEmail)).toHaveBeenLastCalledWith(
+			expect.objectContaining({
+				subject: "invoice INV-1",
+				html: expect.stringContaining("https://example.com/portal/token-1"),
+			}),
+		);
+	});
+
+	it("finalizes rendered custom bodies after variable replacement", async () => {
+		const handler = createEmailSendHandler({
+			docType: "invoice",
+			fetchDocument: async () => ({
+				clientEmail: "client@example.com",
+				invoiceNumber: "INV-1",
+			}),
+			getClientEmail: (doc) => doc.clientEmail,
+			extractVars: (doc) => ({
+				invoiceNumber: doc.invoiceNumber,
+			}),
+			buildDefaultHtml: () => "<p>default</p>",
+			defaultSubject: () => "default subject",
+			createPortalUrl: async () => "https://example.com/portal/token-1",
+			finalizeRenderedBody: (body, vars) => `${body}\n${vars.portalUrl}`,
+			markSent: async () => {},
+			fallbackCategories: [],
+		});
+
+		await handler(
+			makeEvent({
+				customSubject: "invoice {{invoiceNumber}}",
+				customBody: "custom invoice body",
+			}),
+		);
+
+		expect(vi.mocked(sendEmail)).toHaveBeenLastCalledWith(
+			expect.objectContaining({
+				subject: "invoice INV-1",
+				html: expect.stringContaining("custom invoice body"),
+			}),
+		);
+		expect(vi.mocked(sendEmail)).toHaveBeenLastCalledWith(
+			expect.objectContaining({
+				html: expect.stringContaining("https://example.com/portal/token-1"),
+			}),
+		);
 	});
 });

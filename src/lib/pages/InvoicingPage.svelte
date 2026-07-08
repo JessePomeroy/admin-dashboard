@@ -85,6 +85,35 @@ let stats = $derived({
 		.length,
 });
 
+function sleep(ms: number) {
+	return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function sendInvoiceEmailRequest(
+	invoiceId: string,
+	body: Record<string, unknown>,
+	options: { retries?: number } = {},
+) {
+	const retries = options.retries ?? 0;
+	let lastError = "";
+	for (let attempt = 0; attempt <= retries; attempt += 1) {
+		const res = await fetch(`/api/admin/invoicing/${invoiceId}/send`, {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify(body),
+		});
+		if (res.ok) return;
+		const responseText = await res.text().catch(() => "");
+		lastError = responseText ? `${res.status}: ${responseText}` : `${res.status}`;
+		if (attempt < retries && (res.status === 404 || res.status >= 500)) {
+			await sleep(300 * (attempt + 1));
+			continue;
+		}
+		break;
+	}
+	throw new Error(`Failed to send invoice email (${lastError || "unknown error"})`);
+}
+
 async function handleCreate(body: Record<string, unknown>) {
 	await client.mutation(api.invoices.create, {
 		siteUrl: config.siteUrl,
@@ -123,11 +152,11 @@ async function saveAndSendInvoice(body: Record<string, unknown> & { templateId?:
 		milestoneIndex: invoiceBody.milestoneIndex as number | undefined,
 		parentInvoiceId: toId(invoiceBody.parentInvoiceId as string),
 	});
-	await fetch(`/api/admin/invoicing/${invoiceId}/send`, {
-		method: "POST",
-		headers: { "Content-Type": "application/json" },
-		body: JSON.stringify({ templateId, customSubject: emailSubject, customBody: emailBody }),
-	});
+	await sendInvoiceEmailRequest(
+		invoiceId as string,
+		{ templateId, customSubject: emailSubject, customBody: emailBody },
+		{ retries: 2 },
+	);
 	showCreateModal = false;
 }
 
@@ -172,12 +201,7 @@ async function handleAction(action: string) {
 
 async function handleSendEmail(templateId?: string, changeNote?: string) {
 	if (!selectedInvoice) return;
-	const res = await fetch(`/api/admin/invoicing/${selectedInvoice._id}/send`, {
-		method: "POST",
-		headers: { "Content-Type": "application/json" },
-		body: JSON.stringify({ templateId, changeNote }),
-	});
-	if (!res.ok) throw new Error("Failed to send");
+	await sendInvoiceEmailRequest(selectedInvoice._id as string, { templateId, changeNote });
 	selectedInvoice = { ...selectedInvoice, status: "sent" } as Invoice;
 }
 

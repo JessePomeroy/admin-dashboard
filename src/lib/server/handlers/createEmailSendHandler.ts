@@ -53,6 +53,18 @@ export interface EmailSendConfig<
 	) => string;
 	/** Build the default subject line. */
 	defaultSubject: (doc: TDoc) => string;
+	/** Optionally create a client-facing portal URL for this document before send. */
+	createPortalUrl?: (
+		api: AdminAPI,
+		convex: ConvexHttpClient,
+		doc: TDoc,
+		siteUrl: string,
+	) => Promise<string | null>;
+	/** Optionally adjust rendered custom/template body content before email wrapping. */
+	finalizeRenderedBody?: (
+		body: string,
+		vars: Record<string, string>,
+	) => string;
 	/** Mark the document as sent after email is delivered. */
 	markSent: (api: AdminAPI, convex: ConvexHttpClient, id: string, siteUrl: string) => Promise<void>;
 	/**
@@ -100,13 +112,24 @@ export function createEmailSendHandler<
 
 			let subject: string;
 			let html: string;
+			const vars = config.extractVars(doc, changeNote || "");
+			const portalUrl = config.createPortalUrl
+				? await config.createPortalUrl(api, convex, doc, siteUrl)
+				: null;
+			if (portalUrl) {
+				vars.portalUrl = portalUrl;
+				vars.paymentUrl = portalUrl;
+			}
 
 			if (customSubject && customBody) {
-				subject = customSubject;
-				html = wrapPlainText(customBody);
+				subject = replaceTemplateVariables(customSubject, vars);
+				const renderedBody = replaceTemplateVariables(customBody, vars);
+				html = wrapPlainText(
+					config.finalizeRenderedBody
+						? config.finalizeRenderedBody(renderedBody, vars)
+						: renderedBody,
+				);
 			} else {
-				const vars = config.extractVars(doc, changeNote || "");
-
 				let template = null;
 				if (templateId) {
 					template = await convex.query(api.emailTemplates.get, { templateId });
@@ -122,7 +145,12 @@ export function createEmailSendHandler<
 
 				if (template) {
 					subject = replaceTemplateVariables(template.subject, vars);
-					html = wrapPlainText(replaceTemplateVariables(template.body, vars));
+					const renderedBody = replaceTemplateVariables(template.body, vars);
+					html = wrapPlainText(
+						config.finalizeRenderedBody
+							? config.finalizeRenderedBody(renderedBody, vars)
+							: renderedBody,
+					);
 				} else {
 					subject = config.defaultSubject(doc);
 					html = config.buildDefaultHtml(vars, siteName);

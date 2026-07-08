@@ -36,6 +36,17 @@ describe("replaceTemplateVariables", () => {
 		expect(result).toBe("Hello Jane, {{unknown}}");
 	});
 
+	it("replaces placeholders with whitespace inside braces", () => {
+		const result = replaceTemplateVariables(
+			"Hello {{ name }}, invoice {{ invoiceNumber }}",
+			{
+				name: "Jane",
+				invoiceNumber: "INV-001",
+			},
+		);
+		expect(result).toBe("Hello Jane, invoice INV-001");
+	});
+
 	it("handles empty variables object", () => {
 		const result = replaceTemplateVariables("Hello {{name}}", {});
 		expect(result).toBe("Hello {{name}}");

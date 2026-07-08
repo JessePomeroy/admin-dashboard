@@ -69,6 +69,9 @@ const defaultEmailBody = `hi {{clientName}},
 
 a new invoice has been created for you.
 
+view and pay your invoice here:
+{{portalUrl}}
+
 please reach out if you have any questions.
 
 angel's rest`;

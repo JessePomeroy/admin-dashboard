@@ -185,7 +185,10 @@ export async function copyPortalLink(
 		documentId,
 		clientId: toId(clientId),
 	});
-	const url = `https://${siteUrl}/portal/${token}`;
+	const baseUrl = /^https?:\/\//i.test(siteUrl)
+		? siteUrl.replace(/\/$/, "")
+		: `https://${siteUrl.replace(/\/$/, "")}`;
+	const url = `${baseUrl}/portal/${token}`;
 	await navigator.clipboard.writeText(url);
 	return url;
 }
