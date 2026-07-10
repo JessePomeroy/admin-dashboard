@@ -1,67 +1,94 @@
 # AGENTS.md — @jessepomeroy/admin
 
-Rules for working on this Svelte 5 admin-dashboard library package.
+Canonical rules for the shared Svelte 5 admin package.
 
-## Project Context
+## Role and boundaries
 
-- **Package name:** `@jessepomeroy/admin`
-- **Current version:** see `package.json`; publish before consumers bump their deps.
-- **Purpose:** Shared admin dashboard UI for multi-tenant photographer CRM platform. Consumed by `angelsrest` (creator's site) and `reflecting-pool` (first client template), with more to come.
-- **Stack:** Svelte 5 (runes) + Convex client + Better Auth (via consumer). No server runtime — pure client library.
+- The package provides shared admin UI **and** SvelteKit server adapters.
+- It does not own authentication configuration, a Convex deployment, tenant
+  data, email credentials, or gallery storage.
+- Hosts provide generated Convex API references and enforce site/creator
+  authorization.
+- Client exports belong at `@jessepomeroy/admin`; server-only exports belong at
+  `@jessepomeroy/admin/server`.
+
+See `ARCHITECTURE.md` before changing configuration, auth, mutation transport,
+or server handlers.
 
 ## Package architecture
 
-- Entry: `src/lib/index.ts` — re-exports everything public.
-- Consumers set `AdminConfig` via `setAdminConfig(config)` in their `+layout.svelte`. All pages read it via `getAdminConfig()` (Svelte context under the hood).
-- API refs (`config.api`) are typed opaquely (`FnRef = any`) — consumer passes their generated `api` object. Typing is enforced at the consumer boundary, not inside this package.
+- `src/lib/index.ts`: public Svelte/client surface
+- `src/lib/server.ts`: public server-only surface
+- `src/lib/config.ts`: host contracts and Svelte/server configuration
+- `src/lib/adminClient.ts`: mutation-transport proxy
+- `src/lib/adminSession.ts`: normalized server/client session shapes
+- `src/lib/pages/`: page-level UI
+- `src/lib/components/`: reusable UI
+- `src/lib/server/`: auth, Convex, email, gallery, and error adapters
 
-## Mutation transport — READ THIS BEFORE TOUCHING MUTATIONS
+## Svelte conventions
 
-The package supports two mutation transports via `AdminConfig.mutationTransport`:
+- Use Svelte 5 runes and context. Do not introduce a second config store.
+- Every mutation call uses `useAdminClient()`. Queries may use `useQuery`.
+- Page components consume host-provided data/config; they do not import a
+  consumer's generated API or environment.
+- Keep Convex function references opaque (`FnRef`) inside this cross-project
+  package. Consumer-generated types remain authoritative at the host boundary.
+- Preserve the lowercase, CSS-variable-driven admin design system.
 
-- `"websocket"` (default): `client.mutation(...)` fires over the authenticated Convex WebSocket. Requires the consumer to wire auth into the Convex client.
-- `"http"`: `client.mutation(...)` POSTs to `AdminConfig.mutationEndpoint` (default `/api/admin/mutation`). The consumer must implement that route as a server-side proxy that holds the auth cookie and forwards via `ConvexHttpClient`.
+## Authentication and authorization
 
-**Every admin page calls `useAdminClient()` (from `src/lib/adminClient.ts`), NOT `useConvexClient()` directly.** `useAdminClient` is a `Proxy` over the raw Convex client — it intercepts `.mutation()` when transport is `"http"` and passes through everything else (queries, actions, connection state). This means:
+- `createAdminAuthValidator` proves a token maps to a Convex identity.
+- Identity validity alone is not tenant or creator authorization.
+- Server handler factories call the configured verifier, but the host must
+  supply a verifier appropriate for the side effect.
+- Do not silently make `verifyAdmin` optional on a newly destructive handler.
+- Do not expose server helpers through browser imports; use the `/server`
+  export.
 
-- New pages **must** use `useAdminClient()`, not `useConvexClient()`.
-- Mutation call sites look identical regardless of transport: `await client.mutation(api.foo.bar, args)`.
-- Why the indirection: older Better Auth Svelte wiring could pause the Convex WebSocket on SvelteKit client-side navigation. Consumers can route mutations through an HTTP proxy when they want server-cookie-backed mutation auth independent of the browser WebSocket lifecycle.
+## Mutation transport
 
-## Svelte conventions (in this package)
+- `"websocket"` is supported for hosts with a stable authenticated Convex
+  browser connection.
+- `"http"` routes mutations through the universal SvelteKit proxy and a fresh
+  authenticated Convex HTTP client.
+- New mutations must work through `useAdminClient` without transport-specific
+  call-site branches.
+- Do not add per-mutation consumer endpoints when the universal proxy suffices.
 
-- Svelte 5 runes everywhere: `$state`, `$derived`, `$effect`, `$props`. No `writable()` stores except where Better Auth nanostores cross the boundary.
-- Context for shared config (`setAdminConfig`/`getAdminConfig`), not stores.
-- Page components accept `{ data }` from SvelteKit page loaders.
-- `useXxx()` naming for context-reading helpers — matches `convex-svelte` (`useConvexClient`, `useQuery`). Slightly React-flavored but locally consistent.
-- Keep `FnRef = any` for Convex API references (see `src/lib/config.ts` note). Tight typing is impractical across the consumer boundary and typing is enforced at the consumer's generated `api`.
+## Gallery delivery
 
-## Running checks
+- Keep R2 key parsing and upload policy in the existing gallery modules.
+- Host handlers must scope requests to the configured site before calling the
+  Worker.
+- Preserve streaming request/response bodies; do not buffer large images in the
+  package.
+- Changes to handler contracts require coordinated verification in Angels Rest,
+  Reflecting Pool, and `gallery-worker`.
+
+## Checks
 
 ```bash
-cd ~/Documents/work/admin-dashboard
-pnpm build      # svelte-package -> dist/
-pnpm check      # svelte-check
-pnpm test       # vitest
+pnpm check
+pnpm test
+pnpm build
 ```
 
-## Releasing
+The build writes `dist/`; tests/checks should pass before release.
 
-- Bump `package.json` version per semver:
-  - new public API / config field → minor (1.1.0 → 1.2.0)
-  - behavior change / rename → major
-- `pnpm build` regenerates `dist/`.
-- `pnpm publish` (requires npm auth).
-- Consumers (`angelsrest`, `reflecting-pool`, etc.) then bump their dep from `^1.X.Y` and `pnpm install`.
-- For local dev before publishing, consumers should use `"@jessepomeroy/admin": "link:../admin-dashboard"`.
+## Release rules
 
-## Consumer list (keep in sync on breaking changes)
+- Patch: compatible bug fix.
+- Minor: additive public API/config/handler.
+- Major: breaking public API, behavior, or required host migration.
+- Publish before changing consumer version ranges.
+- Do not commit, publish, or update consumers without explicit permission.
+- Do not add AI-assistant co-author trailers.
 
-- `~/Documents/work/angelsrest` — on `mutationTransport: "http"` pattern as of 2026-04-23.
-- `~/Documents/work/reflecting-pool` — needs the same migration (see catch-up prompt in the Obsidian note).
+## Consumers
 
-## Don't
+- `../angelsrest`: creator hub, HTTP mutations, manually authenticated queries
+- `../reflecting-pool`: tenant spoke, HTTP mutations, manually authenticated
+  queries
 
-- Don't re-wire the browser Convex WebSocket to Better Auth (`createSvelteAuthClient`) without consulting the pause-bug note. It's a known trap.
-- Don't add per-mutation `+server.ts` endpoints in consumers — the universal `/api/admin/mutation/+server.ts` handles any mutation by name. Keep the pattern uniform.
-- Don't add emojis to files unless the user explicitly asks.
+Treat both as required integration surfaces for auth, page, and handler changes.

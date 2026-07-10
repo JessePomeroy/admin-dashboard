@@ -227,27 +227,10 @@ async function quickStatusUpdate(
 			<span class="client-count">{totalClients}</span>
 		</div>
 		<!--
-			"Add Client" button disabled 2026-04-25 for Option A migration.
-
-			The original flow (`handleSaveNewClient`, below) calls
-			`api.platform.createClient` and `authClient.signUp.email` against
-			the super-admin's own Convex deployment. In the pre-Option-A
-			shared-deployment world that worked because every spoke talked
-			to the same Convex. Under Option A each client has their own
-			Convex project, so this flow silently creates rows + users on
-			the WRONG deployment and the spoke site never sees them.
-
-			Client onboarding is now operator-driven via the Phase 6 CLI
-			runbook (angelsrest/convex/platform.ts:seedClient + a direct
-			curl to the spoke site's Better Auth sign-up endpoint). See
-			~/Documents/quilt/02_reference/projects/reflecting pool/
-			option-a-migration.md (Phase 6) and photographer_crm/
-			migration-execution-order.md.
-
-			Re-enable this button only after the page is reworked to
-			(a) read the cross-spoke roster from `clientAggregates`
-			(Option A Phase 4), and (b) either generate CLI commands for
-			the operator OR make authenticated cross-deployment calls.
+			Client creation remains disabled because this package cannot safely
+			provision accounts in a tenant's Convex deployment. Onboarding is an
+			operator-run process until a cross-deployment provisioning contract
+			exists.
 		-->
 		<!-- <button class="btn-add" onclick={openAddModal}>
 			<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>

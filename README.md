@@ -1,419 +1,162 @@
 # @jessepomeroy/admin
 
-A pre-built admin dashboard for SvelteKit + Convex applications. Provides 12 page-level components, auth scaffolding, feature-tier gating, and server-side handlers for email, gallery uploads, and client portals.
+Shared Svelte 5 admin UI and SvelteKit server adapters for the Angels Rest
+photographer platform. The package is consumed by the Angels Rest hub and
+client spoke sites such as Reflecting Pool.
 
-## Install
+## Package boundaries
+
+| Import | Responsibility |
+|---|---|
+| `@jessepomeroy/admin` | Svelte pages/components, session helpers, feature gates, configuration, and `useAdminClient` |
+| `@jessepomeroy/admin/server` | Auth/token factories, HTTP mutation proxy, email handlers, gallery Worker handlers, and server configuration |
+
+The package does not own a Convex deployment, Better Auth configuration,
+tenant database, Resend account, or R2 bucket. Each host supplies those through
+configuration and generated Convex references.
+
+See [ARCHITECTURE.md](ARCHITECTURE.md) for the full host/package boundary.
+
+## Installation
 
 ```bash
 pnpm add @jessepomeroy/admin
 ```
 
-Published to GitHub Packages. Your `.npmrc` needs:
+The package is published to GitHub Packages. Configure the scope without
+committing a token:
 
-```
+```ini
 @jessepomeroy:registry=https://npm.pkg.github.com
-//npm.pkg.github.com/:_authToken=${NPM_TOKEN}
 ```
 
-### Peer dependencies
+Put a `read:packages` token in user or hosted npm configuration before install.
 
-```
-convex-svelte               ^0.14.0
-@sveltejs/kit               ^2.0.0
-convex                      ^1.30.0
-resend                      ^6.0.0
-svelte                      ^5.0.0
-svelte-dnd-action           ^0.9.0
-```
+## Host integration checklist
 
-## Quick start
+1. Create an `AdminConfig` with the tenant identity, generated Convex `api`,
+   auth client, theme, and optional gallery Worker URL.
+2. Create an `AdminServerConfig` with Convex/Resend/Worker credentials plus the
+   host's request verifier and Convex token reader.
+3. Validate the Better Auth session and tenant/creator membership in the host's
+   server layout before returning `getTenantAdminLayoutData(...)`.
+4. Initialize `setupConvex`/`setupAuth` in the browser layout for reactive
+   authenticated queries.
+5. Choose a mutation transport. Current platform hosts use the HTTP proxy with
+   a fresh authenticated `ConvexHttpClient` per request.
+6. Mount thin route wrappers around the shared page components.
+7. Mount only the server handlers required by enabled features.
 
-### 1. Create your admin config
+Reference integrations live in `../angelsrest/src/routes/admin/` and
+`../reflecting-pool/src/routes/admin/`.
+
+## Client configuration
 
 ```ts
-// src/lib/config/admin.ts
 import type { AdminConfig } from "@jessepomeroy/admin";
 import { api } from "$convex/api";
 
 export const adminConfig: AdminConfig = {
-  siteUrl: "mysite.com",
-  siteName: "My Site",
-  fromEmail: "My Site <noreply@mysite.com>",
-  isCreator: false, // true = platform owner, false = client tenant
+  siteUrl: "client.example",
+  siteName: "client studio",
+  fromEmail: "Client Studio <noreply@client.example>",
+  isCreator: false,
   api,
+  authClient,
+  mutationTransport: "http",
+  mutationEndpoint: "/api/admin/mutation",
+  sanityStudioUrl: "https://client.sanity.studio",
+  galleryWorkerUrl: "https://gallery-worker.example.workers.dev",
 };
 ```
 
-### 2. Create the server config
+If the host's generated Convex module name differs from `AdminAPI`—for example,
+`galleries` versus `galleryDelivery`—use a Proxy alias. Never spread Convex's
+`api` Proxy; it has no enumerable function namespaces.
+
+## Server configuration
 
 ```ts
-// src/lib/config/admin.server.ts
 import type { AdminServerConfig } from "@jessepomeroy/admin/server";
-import { env as privateEnv } from "$env/dynamic/private";
-import { env as publicEnv } from "$env/dynamic/public";
-import { adminConfig } from "./admin";
 
 export const adminServerConfig: AdminServerConfig = {
   ...adminConfig,
   convexUrl: publicEnv.PUBLIC_CONVEX_URL ?? "",
   resendApiKey: privateEnv.RESEND_API_KEY ?? "",
-  // Optional — only needed if using gallery delivery:
-  // galleryAdminSecret: privateEnv.GALLERY_ADMIN_SECRET ?? "",
-};
-```
-
-### 3. Return the admin session from the server layout
-
-```ts
-// src/routes/admin/+layout.server.ts
-import {
-  getTenantAdminLayoutData,
-  type TenantAdminServerSession,
-} from "@jessepomeroy/admin";
-
-export async function load({ locals }) {
-  const adminSession: TenantAdminServerSession = locals.admin
-    ? {
-        status: "authorized",
-        email: locals.admin.email,
-        tier: locals.admin.tier,
-        isCreator: locals.admin.isCreator,
-      }
-    : { status: "unauthenticated" };
-
-  return getTenantAdminLayoutData(adminSession);
-}
-```
-
-### 4. Wire up the admin layout
-
-```svelte
-<!-- src/routes/admin/+layout.svelte -->
-<script lang="ts">
-  import { AdminLayout, AuthGuard, setAdminConfig } from "@jessepomeroy/admin";
-  import { adminConfig } from "$lib/config/admin";
-
-  // If using Better Auth:
-  // import type { AdminAuthClient } from "@jessepomeroy/admin";
-  // setAdminConfig({ ...adminConfig, authClient: yourAuthClient as AdminAuthClient });
-
-  setAdminConfig(adminConfig);
-
-  let { data, children } = $props();
-</script>
-
-<AuthGuard>
-  <AdminLayout {data}>
-    {@render children()}
-  </AdminLayout>
-</AuthGuard>
-```
-
-```ts
-// src/routes/admin/+layout.ts
-export const ssr = false;
-```
-
-### 5. Add page routes
-
-Each admin page is a thin wrapper:
-
-```svelte
-<!-- src/routes/admin/+page.svelte -->
-<script lang="ts">
-  import { DashboardPage } from "@jessepomeroy/admin";
-
-  let { data } = $props();
-</script>
-
-<DashboardPage {data} />
-```
-
-```svelte
-<!-- src/routes/admin/orders/+page.svelte -->
-<script lang="ts">
-  import { OrdersPage } from "@jessepomeroy/admin";
-
-  let { data } = $props();
-</script>
-
-<OrdersPage {data} />
-```
-
-## Pages
-
-| Page | Route | Tier | Description |
-|------|-------|------|-------------|
-| `DashboardPage` | `/admin` | basic | Revenue, orders, invoices, quotes overview |
-| `OrdersPage` | `/admin/orders` | basic | Print order tracking and fulfillment |
-| `InquiriesPage` | `/admin/inquiries` | basic | Contact form submissions |
-| `GalleriesPage` | `/admin/galleries` | basic | Photo gallery management |
-| `CrmPage` | `/admin/crm` | full | Client database with tags and activity |
-| `BoardPage` | `/admin/board` | full | Kanban board for project management |
-| `InvoicingPage` | `/admin/invoicing` | full | Invoice creation, tracking, payments |
-| `QuotesPage` | `/admin/quotes` | full | Quote generation with preset packages |
-| `ContractsPage` | `/admin/contracts` | full | Contract templates and e-signatures |
-| `EmailsPage` | `/admin/emails` | full | Email template management |
-| `MessagesPage` | `/admin/messages` | full | Client messaging threads |
-| `PlatformPage` | `/admin/platform` | full | Multi-tenant client management |
-
-## Feature tiers
-
-Pages are gated by the server-provided `adminSession`. The `FeatureGate` component and `hasFeature()` function control access:
-
-- **basic** — dashboard, orders, inquiries, galleries
-- **full** — everything above plus CRM, board, invoicing, quotes, contracts, emails, messages, gallery delivery
-
-The `AdminLayout` sidebar automatically hides pages the current session can't access. Use `UpgradeBanner` to prompt upgrades.
-
-## AdminConfig reference
-
-```ts
-interface AdminConfig {
-  siteUrl: string;           // Domain identifier (e.g. "mysite.com")
-  siteName: string;          // Display name
-  fromEmail: string;         // Sender for emails (e.g. "Name <noreply@...>")
-  isCreator: boolean;        // true = platform owner sees everything
-  api: AdminAPI;             // Convex function references (see below)
-  sanityStudioUrl?: string;  // Link to Sanity studio
-  authClient?: AdminAuthClient; // Better Auth client for login/signup
-  galleryWorkerUrl?: string; // Cloudflare Worker URL for gallery uploads
-  theme?: {
-    dark?: AdminTheme;
-    light?: AdminTheme;
-  };
-}
-
-interface AdminServerConfig extends AdminConfig {
-  convexUrl: string;         // Convex deployment URL
-  resendApiKey: string;      // Resend API key for sending emails
-  galleryAdminSecret?: string; // Bearer token for gallery worker
-  verifyAdmin?: (request: Request) => Promise<boolean>; // Auth check for handlers
-  getConvexToken?: (request: Request) => Promise<string | null>; // Convex auth token
-}
-```
-
-## AdminAPI
-
-The `api` field maps your Convex function references to the admin package. Pass your Convex `api` object directly — it must export the expected module namespaces.
-
-**Required modules:** `activityLog`, `contracts`, `crm`, `emailLog`, `emailTemplates`, `invoices`, `kanban`, `messages`, `orders`, `platform`, `portal`, `quotes`, `tags`
-
-**Optional modules:** `adminAuth`, `galleryDelivery`, `notifications`
-
-If your Convex module names differ from the expected keys (e.g. `galleries` instead of `galleryDelivery`), use a Proxy wrapper:
-
-```ts
-const apiWithAlias = new Proxy(api, {
-  get(target, prop, receiver) {
-    if (prop === "galleryDelivery") return target.galleries;
-    return Reflect.get(target, prop, receiver);
-  },
-});
-```
-
-> **Warning:** Never spread `api` with `{ ...api }` — Convex's `anyApi` is a Proxy with no own enumerable properties. Spreading it silently drops every namespace.
-
-## Theming
-
-The admin dashboard supports light and dark modes with CSS custom properties. Override any token in your theme config:
-
-```ts
-const adminConfig: AdminConfig = {
-  // ...
-  theme: {
-    dark: {
-      "admin-bg": "#0a0a0f",
-      "admin-accent": "#8b7cf7",
-    },
-    light: {
-      "admin-bg": "#fafafa",
-      "admin-accent": "#6b5ce7",
-    },
-  },
-};
-```
-
-Available tokens: `admin-bg`, `admin-surface`, `admin-surface-raised`, `admin-border`, `admin-border-strong`, `admin-heading`, `admin-text`, `admin-text-muted`, `admin-text-subtle`, `admin-accent`, `admin-accent-hover`, `admin-active`, `status-slate`, `status-amber`, `status-lavender`, `status-peach`, `status-sage`, `status-rose`.
-
-## Server handlers
-
-The package exports factory functions for common server-side operations. Wire them into your SvelteKit `+server.ts` routes:
-
-```ts
-// src/routes/api/admin/send-invoice/+server.ts
-import { createInvoiceSendHandler, setServerConfig } from "@jessepomeroy/admin/server";
-import { adminServerConfig } from "$lib/config/admin.server";
-
-setServerConfig(adminServerConfig);
-
-export const POST = createInvoiceSendHandler();
-```
-
-**Available handlers:**
-
-| Handler | Method | Description |
-|---------|--------|-------------|
-| `createInvoiceSendHandler()` | POST | Send invoice email to client |
-| `createContractSendHandler()` | POST | Send contract for e-signature |
-| `createQuoteSendHandler()` | POST | Send quote email to client |
-| `createPortalTokenHandler()` | POST | Generate client portal access token |
-| `createGalleryUploadSessionHandler()` | POST | Issue a short-lived gallery upload-session token |
-| `createGalleryPresignHandler()` | POST | Get presigned URL for gallery upload |
-| `createGalleryUploadHandler()` | PUT | Stream file to gallery worker |
-| `createGalleryProcessHandler()` | POST | Trigger image processing (preview/thumb) |
-| `createGalleryDeleteHandler()` | POST | Delete image and all size variants |
-
-### Authentication
-
-Use `createAdminAuthValidator()` to centralize server-side admin auth. The host app still injects its Better Auth token reader, Convex URL, and generated `api.adminAuth.whoami` reference; the package owns the fail-closed validation flow.
-
-```ts
-// src/lib/server/adminAuth.ts
-import {
-  createAdminAuthValidator,
-  createAdminTokenHandler,
-} from "@jessepomeroy/admin/server";
-import { getToken } from "@mmailaender/convex-better-auth-svelte/sveltekit";
-import { api } from "$convex/api";
-import { env as publicEnv } from "$env/dynamic/public";
-
-export const adminAuth = createAdminAuthValidator({
-  getToken,
-  getConvexUrl: () => publicEnv.PUBLIC_CONVEX_URL,
-  whoami: api.adminAuth.whoami,
-});
-
-export const { requireAuth, requireAuthWithIdentity } = adminAuth;
-export const adminTokenHandler = createAdminTokenHandler({ getToken });
-```
-
-The token route can then stay tiny:
-
-```ts
-// src/routes/api/admin/token/+server.ts
-import { adminTokenHandler } from "$lib/server/adminAuth";
-
-export const GET = adminTokenHandler;
-```
-
-All server handlers call `verifyAdmin(request)` before processing. Wire the shared validator into your server config:
-
-```ts
-import { type AdminServerConfig } from "@jessepomeroy/admin/server";
-import { adminAuth } from "$lib/server/adminAuth";
-
-export const adminServerConfig: AdminServerConfig = {
-  ...adminConfig,
-  convexUrl: publicEnv.PUBLIC_CONVEX_URL ?? "",
-  resendApiKey: privateEnv.RESEND_API_KEY ?? "",
+  galleryAdminSecret: privateEnv.GALLERY_ADMIN_SECRET ?? "",
   verifyAdmin: adminAuth.verifyRequest,
   getConvexToken: adminAuth.getTokenFromRequest,
 };
 ```
 
-If `verifyAdmin` is not provided, handlers skip the auth check — your SvelteKit route middleware or layout guards are responsible for protecting admin endpoints.
+`createAdminAuthValidator` validates that the Better Auth JWT maps to a Convex
+identity. That is authentication, not tenant or creator authorization. Hosts
+must check stored membership for the data or external side effect being
+requested.
 
-`cookiesFromRequest(request)` is also available as a lower-level read-only adapter for callbacks that only receive a standard `Request` and only need `cookies.get()` / `cookies.getAll()`. Import server-only helpers from `@jessepomeroy/admin/server`; keep the package root for SvelteKit/bundled app code. Use SvelteKit's real `event.cookies` object when you need to set or delete cookies.
+## Query and mutation transport
 
-The `authClient` field on `AdminConfig` powers the client-side login/signup UI. It expects a Better Auth-compatible client with `signIn`, `signUp`, `signOut`, `changePassword`, and `useSession` methods. If not provided:
-- The login page won't render
-- The sidebar won't show sign out, change password, or the user email
-- The `AuthGuard` component will still render its children (no blocking)
+Every package mutation must use `useAdminClient()`, not `useConvexClient()`.
 
-For non-Better Auth setups, implement the `AdminAuthClient` interface with your own provider.
+- `"websocket"` sends mutations through the browser Convex connection and
+  requires that connection to be authenticated.
+- `"http"` POSTs `{ name, args }` to the configured mutation endpoint. The
+  supplied `createAdminMutationHandler` authenticates the request, resolves the
+  generated function reference, creates a fresh Convex HTTP client, and forwards
+  the mutation.
 
-## Gallery delivery setup
+Queries always use `convex-svelte`'s reactive WebSocket path. Current hosts
+manually wire `setupAuth` to avoid a historical session-pause race during
+SvelteKit client navigation.
 
-Gallery delivery requires a Cloudflare Worker that handles image uploads to R2. The admin package communicates with this worker via `galleryWorkerUrl` and `galleryAdminSecret`.
+## Pages and tiers
 
-### Worker endpoints
+| Page | Basic | Full | Creator-only behavior |
+|---|:---:|:---:|---|
+| Dashboard, orders, inquiries, galleries | Yes | Yes | Platform-wide summaries where configured |
+| CRM, board, invoices, quotes, contracts, emails, messages | No | Yes | Cross-tenant capabilities remain separately gated |
+| Platform | No | No | Yes |
 
-Your worker must implement these endpoints, all authenticated via `Authorization: Bearer <ADMIN_SECRET>`:
+Exported page components are `DashboardPage`, `OrdersPage`, `InquiriesPage`,
+`GalleriesPage`, `CrmPage`, `BoardPage`, `InvoicingPage`, `QuotesPage`,
+`ContractsPage`, `EmailsPage`, `MessagesPage`, and `PlatformPage`.
 
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/upload/presign` | POST | Generate a presigned upload URL |
-| `/upload/put` | PUT | Stream a file to R2 |
-| `/upload/process` | POST | Generate preview + thumbnail variants |
-| `/upload/delete` | POST | Delete original + all variants |
+## Server handlers
 
-### Configuration
+`@jessepomeroy/admin/server` exports factories for:
 
-```ts
-// src/lib/config/admin.ts
-export const adminConfig: AdminConfig = {
-  // ...
-  galleryWorkerUrl: "https://your-gallery-worker.workers.dev",
-};
+- invoice, quote, and contract email delivery
+- portal-token creation
+- the universal admin mutation proxy
+- Better Auth JWT validation and browser token delivery
+- gallery upload-session, presign, upload, process, delete, and bulk-delete
+  routes
 
-// src/lib/config/admin.server.ts
-export const adminServerConfig: AdminServerConfig = {
-  // ...
-  galleryAdminSecret: privateEnv.GALLERY_ADMIN_SECRET ?? "",
-};
+Gallery handlers bridge the host to `gallery-worker`. The host owns tenant
+authorization; the Worker owns R2 key validation, upload tokens, object access,
+and portal-token verification.
+
+## Development
+
+```bash
+pnpm check
+pnpm test
+pnpm build
 ```
 
-### Server routes
+`pnpm build` writes the publishable `dist/` package.
 
-Wire the gallery handlers into your SvelteKit routes:
+## Release
 
-```ts
-// src/routes/api/admin/galleries/presign/+server.ts
-import {
-  createGalleryPresignHandler,
-  setServerConfig,
-} from "@jessepomeroy/admin/server";
-import { adminServerConfig } from "$lib/config/admin.server";
+Releases are currently manual:
 
-setServerConfig(adminServerConfig);
-export const POST = createGalleryPresignHandler();
-```
+1. Choose a semver bump: patch for fixes, minor for additive public API, major
+   for breaking behavior or types.
+2. Update `package.json` and build.
+3. Run the full checks.
+4. Publish to GitHub Packages with `pnpm publish`.
+5. Update consumers only after the package is available.
 
-Repeat for `createGalleryUploadSessionHandler` (POST), `createGalleryUploadHandler` (PUT), `createGalleryProcessHandler` (POST), `createGalleryDeleteHandler` (POST), and `createGalleryBulkDeleteHandler` (POST).
-
-If `galleryWorkerUrl` is not set in the config, the gallery delivery tab is hidden automatically — the portfolio tab still works.
-
-### File validation
-
-The presign handler validates uploaded filenames: max 255 characters, no path traversal (`..`, `/`, `\`), and gallery image extensions only. The allowlist mirrors `GalleryUploader`: jpg/jpeg, png, webp, tif/tiff, and common camera RAW formats including raf, cr2/cr3, dng, nef, arw, orf, rw2, and related RAW extensions.
-
-## Shared components
-
-Beyond page components, the package exports reusable UI primitives:
-
-- `AdminModal` — Modal dialog
-- `NotificationWidget` — Floating unread notification badge (auto-mounted in AdminLayout)
-- `EmailPreview` — Side-by-side email template preview
-- `FeatureGate` — Conditionally render content from `adminSession`
-- `FilterBar` — Data table filtering controls
-- `LoadingState` — Loading spinner
-- `PageHeader` — Page title with optional breadcrumb
-- `StatusDot` — Color-coded status indicator
-- `UpgradeBanner` — Tier upgrade prompt
-- `addToast()` — Trigger toast notifications
-
-## Deep linking
-
-All document pages support auto-opening a detail modal via the `?open=` query parameter:
-
-```
-/admin/invoicing?open=<invoiceId>
-/admin/quotes?open=<quoteId>
-/admin/contracts?open=<contractId>
-/admin/orders?open=<orderId>
-```
-
-The dashboard activity feed and CRM activity timeline use this to navigate directly to a document's detail view when clicked.
-
-## Build warning classification
-
-Host app builds may emit non-fatal optional dependency resolution warnings involving Sentry, Babel, or `debug`. The admin package does not import those modules directly. Treat those warnings as non-blocking when the build exits successfully and admin routes render; investigate them only if they become runtime import failures or the build exits non-zero.
-
-## Convex schema
-
-Your Convex backend needs to implement the functions referenced by `AdminAPI`. See the [reflecting-pool](https://github.com/JessePomeroy/reflecting-pool) repo for a minimal reference implementation, or [angelsrest](https://github.com/JessePomeroy/angelsrest) for a full-featured setup with gallery delivery, notifications, and admin auth.
-
-## License
-
-MIT
+For unpublished cross-repo work, consumers may temporarily use
+`link:../admin-dashboard`; do not commit that link unless the change explicitly
+requires a coordinated local-development branch.

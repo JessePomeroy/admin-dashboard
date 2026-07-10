@@ -2,8 +2,9 @@ import { error } from "@sveltejs/kit";
 import { getServerConfig } from "../config.js";
 
 /**
- * Verify the request is from an authenticated admin.
- * Uses the `verifyAdmin` callback from AdminServerConfig if provided.
+ * Run the host-provided request verifier.
+ * The host decides whether identity, tenant membership, or creator role is
+ * required for its route.
  * Throws 401 if verification fails.
  */
 export async function requireAdmin(request: Request): Promise<void> {
