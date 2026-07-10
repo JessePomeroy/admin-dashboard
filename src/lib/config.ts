@@ -256,9 +256,9 @@ export interface AdminConfig {
 	 *   (e.g. via `createSvelteAuthClient`).
 	 * - `"http"`: routes each mutation through a SvelteKit `+server.ts`
 	 *   endpoint that holds the Better Auth cookie and calls Convex via
-	 *   the HTTP client. Use this when the browser Convex WebSocket is
-	 *   intentionally unauthenticated (e.g. to avoid the WebSocket-pause
-	 *   bug in older Better Auth Svelte auth wiring on SvelteKit nav).
+	 *   a fresh HTTP client. This keeps mutation auth independent of the
+	 *   browser WebSocket lifecycle; queries may still use an authenticated
+	 *   socket.
 	 *
 	 * Default: `"websocket"`.
 	 */
