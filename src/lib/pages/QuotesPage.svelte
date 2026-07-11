@@ -22,18 +22,18 @@ let { data } = $props();
 const client = useAdminClient();
 const quotesQuery = useQuery(api.quotes.list, { siteUrl: config.siteUrl });
 const clientsQuery = useQuery(api.crm.listClients, { siteUrl: config.siteUrl });
-const nextNumberQuery = useQuery(api.quotes.getNextNumber, { siteUrl: config.siteUrl });
+const numberPreviewQuery = useQuery(api.quotes.getNextNumber, { siteUrl: config.siteUrl });
 const presetsQuery = useQuery(api.quotes.listPresets, { siteUrl: config.siteUrl });
-const nextInvoiceNumberQuery = useQuery(api.invoices.getNextNumber, { siteUrl: config.siteUrl });
+const invoiceNumberPreviewQuery = useQuery(api.invoices.getNextNumber, { siteUrl: config.siteUrl });
 const emailTemplatesQuery = useQuery(api.emailTemplates.list, { siteUrl: config.siteUrl });
 
 let quotes = $derived(quotesQuery.data ?? []);
 let clients = $derived(clientsQuery.data ?? []);
-let nextNumber = $derived(nextNumberQuery.data ?? "QT-001");
+let numberPreview = $derived(numberPreviewQuery.data ?? "QT-001");
 let presets = $derived(presetsQuery.data ?? []);
-let nextInvoiceNumber = $derived(nextInvoiceNumberQuery.data ?? "INV-001");
+let invoiceNumberPreview = $derived(invoiceNumberPreviewQuery.data ?? "INV-001");
 let emailTemplates = $derived(emailTemplatesQuery.data ?? []);
-let isLoading = $derived(quotesQuery.isLoading || clientsQuery.isLoading || nextNumberQuery.isLoading || presetsQuery.isLoading || nextInvoiceNumberQuery.isLoading);
+let isLoading = $derived(quotesQuery.isLoading || clientsQuery.isLoading || numberPreviewQuery.isLoading || presetsQuery.isLoading || invoiceNumberPreviewQuery.isLoading);
 
 // Tab state
 let activeTab = $state<"quotes" | "presets">("quotes");
@@ -97,7 +97,6 @@ let stats = $derived({
 // --- API handlers ---
 
 async function saveNewQuote(formData: {
-	quoteNumber: string;
 	clientId: string;
 	category: string;
 	packages: {
@@ -119,7 +118,6 @@ async function saveNewQuote(formData: {
 		}));
 		await client.mutation(api.quotes.create, {
 			siteUrl: config.siteUrl,
-			quoteNumber: formData.quoteNumber,
 			clientId: toId(formData.clientId),
 			category: formData.category as "photography" | "web" | undefined,
 			packages,
@@ -136,7 +134,6 @@ async function saveNewQuote(formData: {
 }
 
 async function saveAndSendQuote(formData: {
-	quoteNumber: string;
 	clientId: string;
 	category: string;
 	packages: {
@@ -161,7 +158,6 @@ async function saveAndSendQuote(formData: {
 		}));
 		const quoteId = await client.mutation(api.quotes.create, {
 			siteUrl: config.siteUrl,
-			quoteNumber: formData.quoteNumber,
 			clientId: toId(formData.clientId),
 			category: formData.category as "photography" | "web" | undefined,
 			packages,
@@ -341,7 +337,6 @@ async function deleteQuote() {
 }
 
 async function convertToInvoice(convertData: {
-	invoiceNumber: string;
 	invoiceType: string;
 	dueDate: string;
 	notes: string;
@@ -352,7 +347,6 @@ async function convertToInvoice(convertData: {
 		const invoiceId = await client.mutation(api.quotes.convertToInvoice, {
 			quoteId: toId(selectedQuote._id),
 			siteUrl: config.siteUrl,
-			invoiceNumber: convertData.invoiceNumber,
 			invoiceType: convertData.invoiceType as "one-time" | "recurring" | "deposit" | "package" | "milestone",
 			dueDate: convertData.dueDate || undefined,
 			notes: convertData.notes || undefined,
@@ -560,7 +554,7 @@ function closePresetModal() {
 	<QuoteCreateModal
 		{clients}
 		{presets}
-		{nextNumber}
+		{numberPreview}
 		{saving}
 		{emailTemplates}
 		onsave={saveNewQuote}
@@ -573,7 +567,7 @@ function closePresetModal() {
 {#if selectedQuote}
 	<QuoteDetailModal
 		quote={selectedQuote}
-		{nextInvoiceNumber}
+		{invoiceNumberPreview}
 		{saving}
 		{sending}
 		{shareLinkCopied}
