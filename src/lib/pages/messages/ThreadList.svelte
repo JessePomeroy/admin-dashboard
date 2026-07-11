@@ -25,9 +25,20 @@ interface Props {
 	selectedClientId: string | null;
 	mobileHidden: boolean;
 	onselect: (thread: Thread) => void;
+	canLoadMore: boolean;
+	loadingMore: boolean;
+	onloadmore: () => void;
 }
 
-let { threads, selectedClientId, mobileHidden, onselect }: Props = $props();
+let {
+	threads,
+	selectedClientId,
+	mobileHidden,
+	onselect,
+	canLoadMore,
+	loadingMore,
+	onloadmore,
+}: Props = $props();
 
 function formatTime(timestamp: number): string {
 	const date = new Date(timestamp);
@@ -79,6 +90,15 @@ function truncate(text: string, max: number): string {
 			</div>
 		</button>
 	{/each}
+	{#if canLoadMore || loadingMore}
+		<button
+			class="load-more"
+			onclick={onloadmore}
+			disabled={loadingMore}
+		>
+			{loadingMore ? "loading conversations..." : "load more conversations"}
+		</button>
+	{/if}
 </div>
 
 <style>
@@ -168,6 +188,29 @@ function truncate(text: string, max: number): string {
 		white-space: nowrap;
 		overflow: hidden;
 		text-overflow: ellipsis;
+	}
+
+	.load-more {
+		width: 100%;
+		padding: 12px 16px;
+		background: none;
+		border: none;
+		border-bottom: 1px solid var(--admin-border);
+		color: var(--admin-text-muted);
+		font-family: "Synonym", system-ui, sans-serif;
+		font-size: 0.76rem;
+		text-transform: lowercase;
+		cursor: pointer;
+	}
+
+	.load-more:hover:not(:disabled) {
+		color: var(--admin-heading);
+		background: var(--admin-active);
+	}
+
+	.load-more:disabled {
+		cursor: wait;
+		opacity: 0.65;
 	}
 
 	@media (max-width: 768px) {

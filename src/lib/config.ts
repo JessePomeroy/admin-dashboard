@@ -98,7 +98,9 @@ export interface AdminAPI {
 		send: FnRef;
 		markRead: FnRef;
 		list: FnRef;
+		listPaginated: FnRef;
 		allThreads: FnRef;
+		allThreadsPaginated: FnRef;
 	};
 	notifications?: {
 		getUnreadFlags: FnRef;

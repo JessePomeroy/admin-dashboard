@@ -1,5 +1,5 @@
 <script lang="ts">
-import { useQuery } from "convex-svelte";
+import { usePaginatedQuery, useQuery } from "convex-svelte";
 import { useAdminClient } from "../adminClient";
 import { getAdminCapabilitiesForLayout } from "../capabilities";
 import { getAdminConfig } from "../config";
@@ -11,6 +11,15 @@ import LoadingState from "../components/LoadingState.svelte";
 import ConversationView from "./messages/ConversationView.svelte";
 import ThreadList from "./messages/ThreadList.svelte";
 
+interface Message {
+	_id: string;
+	siteUrl: string;
+	sender: "client" | "creator";
+	content: string;
+	read: boolean;
+	_creationTime: number;
+}
+
 interface Thread {
 	client: {
 		_id: string;
@@ -18,14 +27,7 @@ interface Thread {
 		siteUrl: string;
 	};
 	unreadCount: number;
-	latestMessage: {
-		_id: string;
-		siteUrl: string;
-		sender: "client" | "creator";
-		content: string;
-		read: boolean;
-		_creationTime: number;
-	} | null;
+	latestMessage: Message | null;
 }
 
 const config = getAdminConfig();
@@ -40,14 +42,16 @@ const capabilities = $derived(
 const canUseMessages = $derived(
 	capabilities.hasFeature("messages"),
 );
-const threadsQuery = useQuery(api.messages.allThreads, () =>
-	canUseMessages ? {} : "skip",
+const threadsQuery = usePaginatedQuery(
+	api.messages.allThreadsPaginated,
+	() => (canUseMessages ? {} : "skip"),
+	{ initialNumItems: 50 },
 );
 const platformClientsQuery = useQuery(api.platform.listAll, () =>
 	canUseMessages ? {} : "skip",
 );
 
-let threads = $derived((threadsQuery.data ?? []) as Thread[]);
+let threads = $derived(threadsQuery.results as Thread[]);
 let platformClients = $derived((platformClientsQuery.data ?? []) as PlatformClient[]);
 let clientsWithoutThreads = $derived(
 	platformClients.filter((pc: PlatformClient) => !threads.some((t: Thread) => t.client.siteUrl === pc.siteUrl))
@@ -55,10 +59,19 @@ let clientsWithoutThreads = $derived(
 
 let selectedThread = $state<Thread | null>(null);
 let selectedSiteUrl = $state<string | null>(null);
-const messagesQuery = useQuery(api.messages.list, () =>
-	canUseMessages && selectedSiteUrl ? { siteUrl: selectedSiteUrl } : "skip",
+const messagesQuery = usePaginatedQuery(
+	api.messages.listPaginated,
+	() =>
+		canUseMessages && selectedSiteUrl
+			? { siteUrl: selectedSiteUrl }
+			: "skip",
+	{ initialNumItems: 50 },
 );
-let messages = $derived(messagesQuery.data ?? []);
+let messages = $derived([...(messagesQuery.results as Message[])].reverse());
+let canLoadMoreThreads = $derived(threadsQuery.status === "CanLoadMore");
+let loadingMoreThreads = $derived(threadsQuery.status === "LoadingMore");
+let canLoadEarlierMessages = $derived(messagesQuery.status === "CanLoadMore");
+let loadingEarlierMessages = $derived(messagesQuery.status === "LoadingMore");
 let messageInput = $state("");
 let sending = $state(false);
 let mobileShowConversation = $state(false);
@@ -131,7 +144,7 @@ function handleNewMessageKeydown(e: KeyboardEvent) {
 	feature="messages"
 	adminSession={data.adminSession}
 >
-{#if threadsQuery.isLoading}
+{#if threadsQuery.status === "LoadingFirstPage"}
 	<LoadingState />
 {:else}
 <div class="messages-page">
@@ -157,7 +170,7 @@ function handleNewMessageKeydown(e: KeyboardEvent) {
 		{/if}
 	</header>
 
-	{#if threads.length === 0 && !selectedThread}
+	{#if threads.length === 0 && !selectedThread && !canLoadMoreThreads}
 		<div class="empty-state">
 			<p class="empty-text">no conversations yet — start one with the "new message" button</p>
 		</div>
@@ -168,12 +181,18 @@ function handleNewMessageKeydown(e: KeyboardEvent) {
 				selectedClientId={selectedThread?.client._id ?? null}
 				mobileHidden={mobileShowConversation}
 				onselect={selectThread}
+				canLoadMore={canLoadMoreThreads}
+				loadingMore={loadingMoreThreads}
+				onloadmore={() => threadsQuery.loadMore(50)}
 			/>
 
 			<ConversationView
 				thread={selectedThread}
 				{messages}
-				loading={messagesQuery.isLoading}
+				loading={messagesQuery.status === "LoadingFirstPage"}
+				canLoadEarlier={canLoadEarlierMessages}
+				loadingEarlier={loadingEarlierMessages}
+				onloadearlier={() => messagesQuery.loadMore(50)}
 				{sending}
 				mobileHidden={!mobileShowConversation}
 				oninput={handleMessageInput}
