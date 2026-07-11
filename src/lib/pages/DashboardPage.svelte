@@ -4,6 +4,7 @@ import { useQuery } from "convex-svelte";
 import { getAdminConfig } from "../config";
 import LoadingState from "../components/LoadingState.svelte";
 import type { Invoice, InvoiceItem, Quote } from "../types";
+import { getOrderStatsPresentation } from "./dashboard/orderStatsPresentation";
 import {
 	formatCents,
 	formatDate,
@@ -42,7 +43,18 @@ let isLoading = $derived(
 
 // Order stats
 const orderStatsData = $derived(orderStatsQuery.data);
-const stats = $derived(orderStatsData?.stats ?? { todayRevenue: 0, weekRevenue: 0, monthRevenue: 0, allTimeRevenue: 0, totalOrders: 0 });
+const stats = $derived(
+	orderStatsData?.stats ?? {
+		todayRevenue: 0,
+		weekRevenue: 0,
+		monthRevenue: 0,
+		allTimeRevenue: 0,
+		totalOrders: 0,
+		isTruncated: false,
+		scanLimit: 0,
+	},
+);
+const orderStatsPresentation = $derived(getOrderStatsPresentation(stats));
 const dailyRevenue = $derived(orderStatsData?.dailyRevenue ?? []);
 const recentOrders = $derived(orderStatsData?.recentOrders ?? []);
 
@@ -171,7 +183,10 @@ let sparklineArea = $derived(() => {
 	</header>
 
 	<!-- Stats as inline text -->
-	<div class="stats-line">
+	<div
+		class="stats-line"
+		class:has-completeness-note={orderStatsPresentation.completenessNote !== null}
+	>
 		<span class="stat-item">
 			<span class="stat-label">today</span>
 			<span class="stat-value">{formatCents(stats.todayRevenue)}</span>
@@ -188,11 +203,14 @@ let sparklineArea = $derived(() => {
 		</span>
 		<span class="stat-sep">&middot;</span>
 		<span class="stat-item">
-			<span class="stat-label">all time</span>
+			<span class="stat-label">{orderStatsPresentation.scopeLabel}</span>
 			<span class="stat-value">{formatCents(stats.allTimeRevenue)}</span>
-			<span class="stat-sub">{stats.totalOrders} orders</span>
+			<span class="stat-sub">{orderStatsPresentation.orderCountLabel}</span>
 		</span>
 	</div>
+	{#if orderStatsPresentation.completenessNote}
+		<p class="stats-completeness-note">{orderStatsPresentation.completenessNote}</p>
+	{/if}
 
 	<!-- Sparkline chart -->
 	<div class="chart-section">
@@ -362,6 +380,16 @@ let sparklineArea = $derived(() => {
 		margin-bottom: 48px;
 		padding-bottom: 32px;
 		border-bottom: 1px solid var(--admin-border);
+	}
+
+	.stats-line.has-completeness-note {
+		margin-bottom: 12px;
+	}
+
+	.stats-completeness-note {
+		margin: 0 0 48px;
+		font-size: 0.78rem;
+		color: var(--admin-text-subtle);
 	}
 
 	.stat-item {
