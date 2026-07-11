@@ -24,11 +24,14 @@ interface Props {
 	thread: Thread | null;
 	messages: Message[];
 	loading: boolean;
+	canLoadEarlier: boolean;
+	loadingEarlier: boolean;
 	sending: boolean;
 	mobileHidden: boolean;
 	oninput: (value: string) => void;
 	onsend: () => void;
 	onback: () => void;
+	onloadearlier: () => void;
 	inputValue: string;
 }
 
@@ -36,11 +39,14 @@ let {
 	thread,
 	messages,
 	loading,
+	canLoadEarlier,
+	loadingEarlier,
 	sending,
 	mobileHidden,
 	oninput,
 	onsend,
 	onback,
+	onloadearlier,
 	inputValue,
 }: Props = $props();
 
@@ -77,6 +83,15 @@ function handleKeydown(e: KeyboardEvent) {
 			{:else if messages.length === 0}
 				<div class="no-messages">no messages yet — start the conversation</div>
 			{:else}
+				{#if canLoadEarlier || loadingEarlier}
+					<button
+						class="load-earlier"
+						onclick={onloadearlier}
+						disabled={loadingEarlier}
+					>
+						{loadingEarlier ? "loading earlier messages..." : "load earlier messages"}
+					</button>
+				{/if}
 				{#each messages as msg (msg._id)}
 					<div class="message" class:message-creator={msg.sender === "creator"} class:message-client={msg.sender === "client"}>
 						<div class="message-bubble" class:bubble-creator={msg.sender === "creator"} class:bubble-client={msg.sender === "client"}>
@@ -188,6 +203,30 @@ function handleKeydown(e: KeyboardEvent) {
 
 	.no-thread-selected p {
 		margin: 0;
+	}
+
+	.load-earlier {
+		align-self: center;
+		padding: 6px 12px;
+		margin-bottom: 8px;
+		background: transparent;
+		border: 1px solid var(--admin-border-strong);
+		border-radius: 6px;
+		color: var(--admin-text-muted);
+		font-family: "Synonym", system-ui, sans-serif;
+		font-size: 0.74rem;
+		text-transform: lowercase;
+		cursor: pointer;
+	}
+
+	.load-earlier:hover:not(:disabled) {
+		color: var(--admin-heading);
+		border-color: var(--admin-text-muted);
+	}
+
+	.load-earlier:disabled {
+		cursor: wait;
+		opacity: 0.65;
 	}
 
 	.message {
