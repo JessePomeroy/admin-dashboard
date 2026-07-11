@@ -15,10 +15,9 @@ interface EditablePackage {
 interface Props {
 	clients: Client[];
 	presets: QuotePreset[];
-	nextNumber: string;
+	numberPreview: string;
 	emailTemplates: EmailTemplate[];
 	onsave: (data: {
-		quoteNumber: string;
 		clientId: string;
 		category: string;
 		packages: EditablePackage[];
@@ -26,7 +25,6 @@ interface Props {
 		notes: string;
 	}) => Promise<void>;
 	onsaveandsend: (data: {
-		quoteNumber: string;
 		clientId: string;
 		category: string;
 		packages: EditablePackage[];
@@ -48,7 +46,7 @@ interface Props {
 let {
 	clients,
 	presets,
-	nextNumber,
+	numberPreview,
 	emailTemplates,
 	onsave,
 	onsaveandsend,
@@ -57,7 +55,6 @@ let {
 	saving,
 }: Props = $props();
 
-let formNumber = $state("");
 let formClientId = $state("");
 let formCategory = $state<"photography" | "web">("photography");
 let formValidUntil = $state("");
@@ -70,21 +67,13 @@ let formPresetId = $state("");
 let selectedTemplateId = $state<string>("");
 let editedSubject = $state("");
 let editedBody = $state("");
-let initializedNumber = false;
-
-$effect(() => {
-	if (initializedNumber) return;
-	formNumber = nextNumber;
-	initializedNumber = true;
-});
-
 let selectedClientName = $derived(
 	clients.find((c) => c._id === formClientId)?.name ?? "",
 );
 
 let emailVariables = $derived<Record<string, string>>({
 	clientName: selectedClientName,
-	quoteNumber: formNumber,
+	quoteNumber: "assigned on save",
 	validUntil: formValidUntil,
 });
 
@@ -118,9 +107,8 @@ function loadPreset() {
 }
 
 async function handleSave() {
-	if (!formNumber || !formClientId || formPackages.length === 0) return;
+	if (!formClientId || formPackages.length === 0) return;
 	await onsave({
-		quoteNumber: formNumber,
 		clientId: formClientId,
 		category: formCategory,
 		packages: formPackages,
@@ -130,9 +118,8 @@ async function handleSave() {
 }
 
 async function handleSaveAndSend() {
-	if (!formNumber || !formClientId || formPackages.length === 0) return;
+	if (!formClientId || formPackages.length === 0) return;
 	await onsaveandsend({
-		quoteNumber: formNumber,
 		clientId: formClientId,
 		category: formCategory,
 		packages: formPackages,
@@ -160,8 +147,9 @@ async function handleSaveAsPreset() {
 	<form class="modal-form" onsubmit={(e) => { e.preventDefault(); handleSave(); }}>
 		<div class="form-row">
 			<div class="form-group">
-				<label class="form-label" for="create-number">quote # <span class="required">*</span></label>
-				<input id="create-number" class="form-input" type="text" bind:value={formNumber} required />
+				<label class="form-label" for="create-number">quote # preview</label>
+				<input id="create-number" class="form-input" type="text" value={numberPreview} readonly />
+				<span class="field-note">final number is assigned when saved</span>
 			</div>
 			<div class="form-group">
 				<label class="form-label" for="create-client">client <span class="required">*</span></label>
@@ -222,10 +210,10 @@ async function handleSaveAsPreset() {
 
 		<div class="modal-actions">
 			<button type="button" class="btn-cancel" onclick={onclose}>cancel</button>
-			<button type="submit" class="btn-save-draft" disabled={saving || !formNumber || !formClientId || formPackages.length === 0}>
+			<button type="submit" class="btn-save-draft" disabled={saving || !formClientId || formPackages.length === 0}>
 				{saving ? "saving..." : "save as draft"}
 			</button>
-			<button type="button" class="btn-save" onclick={handleSaveAndSend} disabled={saving || !formNumber || !formClientId || formPackages.length === 0}>
+			<button type="button" class="btn-save" onclick={handleSaveAndSend} disabled={saving || !formClientId || formPackages.length === 0}>
 				{saving ? "sending..." : "save & send"}
 			</button>
 		</div>
@@ -292,6 +280,11 @@ async function handleSaveAsPreset() {
 		color: var(--admin-text-muted);
 		font-weight: 400;
 		letter-spacing: 0.02em;
+	}
+
+	.field-note {
+		font-size: 0.72rem;
+		color: var(--admin-text-subtle);
 	}
 
 	.required {

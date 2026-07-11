@@ -22,14 +22,14 @@ import LineItemEditor from "./LineItemEditor.svelte";
 interface Props {
 	clients: Client[];
 	invoices: Invoice[];
-	nextNumber: string;
+	numberPreview: string;
 	emailTemplates: EmailTemplate[];
 	oncreate: (body: Record<string, unknown>) => Promise<void>;
 	onsaveandsend: (body: Record<string, unknown> & { templateId?: string; emailSubject?: string; emailBody?: string }) => Promise<void>;
 	onclose: () => void;
 }
 
-let { clients, invoices, nextNumber, emailTemplates, oncreate, onsaveandsend, onclose }: Props = $props();
+let { clients, invoices, numberPreview, emailTemplates, oncreate, onsaveandsend, onclose }: Props = $props();
 
 let saving = $state(false);
 let selectedTemplateId = $state<string>("");
@@ -37,7 +37,6 @@ let editedSubject = $state("");
 let editedBody = $state("");
 
 // Form state
-let formNumber = $state("");
 let formClientId = $state("");
 let formType = $state<InvoiceType>("one-time");
 let formItems = $state<InvoiceItem[]>([
@@ -46,21 +45,13 @@ let formItems = $state<InvoiceItem[]>([
 let formTaxPercent = $state(0);
 let formDueDate = $state("");
 let formNotes = $state("");
-let initializedNumber = false;
-
-$effect(() => {
-	if (initializedNumber) return;
-	formNumber = nextNumber;
-	initializedNumber = true;
-});
-
 let selectedClientName = $derived(
 	clients.find((c) => c._id === formClientId)?.name ?? "",
 );
 
 let emailVariables = $derived<Record<string, string>>({
 	clientName: selectedClientName,
-	invoiceNumber: formNumber,
+	invoiceNumber: "assigned on save",
 	dueDate: formDueDate,
 });
 
@@ -116,7 +107,6 @@ function buildInvoiceBody(): Record<string, unknown> {
 		unitPrice: dollarsToCents(item.unitPrice),
 	}));
 	const body: Record<string, unknown> = {
-		invoiceNumber: formNumber,
 		clientId: formClientId,
 		invoiceType: formType,
 		items,
@@ -148,7 +138,7 @@ function buildInvoiceBody(): Record<string, unknown> {
 }
 
 async function handleSubmit() {
-	if (!formNumber || !formClientId || formItems.length === 0) return;
+	if (!formClientId || formItems.length === 0) return;
 	saving = true;
 	try {
 		await oncreate(buildInvoiceBody());
@@ -161,7 +151,7 @@ async function handleSubmit() {
 }
 
 async function handleSaveAndSend() {
-	if (!formNumber || !formClientId || formItems.length === 0) return;
+	if (!formClientId || formItems.length === 0) return;
 	saving = true;
 	try {
 		await onsaveandsend({
@@ -199,16 +189,15 @@ async function handleSaveAndSend() {
 
 		<div class="form-row">
 			<div class="form-group">
-				<label class="form-label" for="create-number"
-					>invoice # <span class="required">*</span></label
-				>
+				<label class="form-label" for="create-number">invoice # preview</label>
 				<input
 					id="create-number"
 					class="form-input"
 					type="text"
-					bind:value={formNumber}
-					required
+					value={numberPreview}
+					readonly
 				/>
+				<span class="field-note">final number is assigned when saved</span>
 			</div>
 			<div class="form-group">
 				<label class="form-label" for="create-client"
@@ -435,7 +424,6 @@ async function handleSaveAndSend() {
 				type="submit"
 				class="btn-save-draft"
 				disabled={saving ||
-					!formNumber ||
 					!formClientId ||
 					formItems.length === 0}
 			>
@@ -446,7 +434,6 @@ async function handleSaveAndSend() {
 				class="btn-save"
 				onclick={handleSaveAndSend}
 				disabled={saving ||
-					!formNumber ||
 					!formClientId ||
 					formItems.length === 0}
 			>
@@ -516,6 +503,11 @@ async function handleSaveAndSend() {
 		color: var(--admin-text-muted);
 		font-weight: 400;
 		letter-spacing: 0.02em;
+	}
+
+	.field-note {
+		font-size: 0.72rem;
+		color: var(--admin-text-subtle);
 	}
 
 	.required {

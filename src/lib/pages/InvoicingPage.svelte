@@ -23,14 +23,14 @@ let { data } = $props();
 const client = useAdminClient();
 const invoicesQuery = useQuery(api.invoices.list, { siteUrl: config.siteUrl });
 const clientsQuery = useQuery(api.crm.listClients, { siteUrl: config.siteUrl });
-const nextNumberQuery = useQuery(api.invoices.getNextNumber, { siteUrl: config.siteUrl });
+const numberPreviewQuery = useQuery(api.invoices.getNextNumber, { siteUrl: config.siteUrl });
 const templatesQuery = useQuery(api.emailTemplates.list, { siteUrl: config.siteUrl });
 
 let invoices = $derived(invoicesQuery.data ?? []);
 let clients = $derived(clientsQuery.data ?? []);
-let nextNumber = $derived(nextNumberQuery.data ?? "INV-001");
+let numberPreview = $derived(numberPreviewQuery.data ?? "INV-001");
 let emailTemplates = $derived(templatesQuery.data ?? []);
-let isLoading = $derived(invoicesQuery.isLoading || clientsQuery.isLoading || nextNumberQuery.isLoading);
+let isLoading = $derived(invoicesQuery.isLoading || clientsQuery.isLoading || numberPreviewQuery.isLoading);
 
 let statusFilter = $state("all");
 let searchQuery = $state("");
@@ -117,7 +117,6 @@ async function sendInvoiceEmailRequest(
 async function handleCreate(body: Record<string, unknown>) {
 	await client.mutation(api.invoices.create, {
 		siteUrl: config.siteUrl,
-		invoiceNumber: body.invoiceNumber as string,
 		clientId: toId(body.clientId as string),
 		invoiceType: body.invoiceType as "one-time" | "recurring" | "deposit" | "package" | "milestone",
 		items: body.items as { description: string; quantity: number; unitPrice: number }[],
@@ -138,7 +137,6 @@ async function saveAndSendInvoice(body: Record<string, unknown> & { templateId?:
 	const { templateId, emailSubject, emailBody, ...invoiceBody } = body;
 	const invoiceId = await client.mutation(api.invoices.create, {
 		siteUrl: config.siteUrl,
-		invoiceNumber: invoiceBody.invoiceNumber as string,
 		clientId: toId(invoiceBody.clientId as string),
 		invoiceType: invoiceBody.invoiceType as "one-time" | "recurring" | "deposit" | "package" | "milestone",
 		items: invoiceBody.items as { description: string; quantity: number; unitPrice: number }[],
@@ -315,7 +313,7 @@ async function handleShareLink() {
 		<InvoiceCreateModal
 			{clients}
 			{invoices}
-			{nextNumber}
+			{numberPreview}
 			{emailTemplates}
 			oncreate={handleCreate}
 			onsaveandsend={saveAndSendInvoice}

@@ -22,7 +22,7 @@ interface EditablePackage {
 
 interface Props {
 	quote: Quote;
-	nextInvoiceNumber: string;
+	invoiceNumberPreview: string;
 	saving: boolean;
 	sending: boolean;
 	templates: EmailTemplate[];
@@ -38,7 +38,6 @@ interface Props {
 	ondeletequote: () => Promise<void>;
 	oncopysharelink: () => Promise<void>;
 	onconverttoinvoice: (data: {
-		invoiceNumber: string;
 		invoiceType: string;
 		dueDate: string;
 		notes: string;
@@ -52,7 +51,7 @@ interface Props {
 
 let {
 	quote,
-	nextInvoiceNumber,
+	invoiceNumberPreview,
 	saving,
 	sending,
 	onclose,
@@ -85,7 +84,6 @@ let editCategory = $state<"photography" | "web">("photography");
 let editNewIncludedItem = $state<Record<number, string>>({});
 
 // Convert to invoice state
-let convertInvoiceNumber = $state("");
 let convertInvoiceType = $state("one-time");
 let convertDueDate = $state("");
 let convertNotes = $state("");
@@ -94,7 +92,6 @@ let loadedConvertQuoteId = $state<string | null>(null);
 $effect(() => {
 	if (loadedConvertQuoteId === quote._id) return;
 	loadedConvertQuoteId = quote._id;
-	convertInvoiceNumber = nextInvoiceNumber;
 	convertNotes = quote.notes || "";
 });
 
@@ -171,9 +168,7 @@ async function handleSendEmail(templateId?: string, changeNote?: string) {
 }
 
 async function handleConvert() {
-	if (!convertInvoiceNumber) return;
 	await onconverttoinvoice({
-		invoiceNumber: convertInvoiceNumber,
 		invoiceType: convertInvoiceType,
 		dueDate: convertDueDate,
 		notes: convertNotes,
@@ -369,8 +364,9 @@ async function handleConvert() {
 						<form class="convert-form" onsubmit={(e) => { e.preventDefault(); handleConvert(); }}>
 							<div class="form-row">
 								<div class="form-group">
-									<label class="form-label" for="convert-number">invoice number</label>
-									<input id="convert-number" class="form-input" type="text" bind:value={convertInvoiceNumber} required />
+									<label class="form-label" for="convert-number">invoice # preview</label>
+									<input id="convert-number" class="form-input" type="text" value={invoiceNumberPreview} readonly />
+									<span class="field-note">final number is assigned when converted</span>
 								</div>
 								<div class="form-group">
 									<label class="form-label" for="convert-type">invoice type</label>
@@ -393,7 +389,7 @@ async function handleConvert() {
 							</div>
 							<div class="convert-actions">
 								<button type="button" class="btn-cancel" onclick={() => { showConvertForm = false; }}>cancel</button>
-								<button type="submit" class="btn-save" disabled={converting || !convertInvoiceNumber}>
+								<button type="submit" class="btn-save" disabled={converting}>
 									{converting ? "creating..." : "create invoice"}
 								</button>
 							</div>
@@ -509,6 +505,11 @@ async function handleConvert() {
 		display: flex;
 		flex-direction: column;
 		gap: 12px;
+	}
+
+	.field-note {
+		font-size: 0.72rem;
+		color: var(--admin-text-subtle);
 	}
 
 	.convert-actions {
