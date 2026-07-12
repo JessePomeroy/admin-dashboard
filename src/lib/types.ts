@@ -306,7 +306,7 @@ export interface Gallery extends ConvexDocument<"galleries"> {
 	coverImageKey?: string;
 	imageCount: number;
 	totalSizeBytes: number;
-	password?: string;
+	passwordProtected: boolean;
 	expiresAt?: number;
 	downloadEnabled: boolean;
 	favoritesEnabled: boolean;

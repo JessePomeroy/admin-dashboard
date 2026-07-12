@@ -57,6 +57,8 @@ let editName = $state("");
 let editDownloadEnabled = $state(false);
 let editFavoritesEnabled = $state(false);
 let editPassword = $state("");
+let removePasswordProtection = $state(false);
+let settingsError = $state("");
 let loadedGalleryId = $state<string | null>(null);
 
 $effect(() => {
@@ -65,7 +67,8 @@ $effect(() => {
 	editName = gallery.name;
 	editDownloadEnabled = gallery.downloadEnabled;
 	editFavoritesEnabled = gallery.favoritesEnabled;
-	editPassword = gallery.password ?? "";
+	editPassword = "";
+	removePasswordProtection = false;
 });
 
 function handleUploadBatchChange(summary: UploadBatchSummary) {
@@ -127,6 +130,7 @@ async function loadGalleryFileKeys(): Promise<string[]> {
 
 async function handleSaveSettings() {
 	saving = true;
+	settingsError = "";
 	try {
 		await client.mutation(galleryApi.update, {
 			id: toId(gallery._id),
@@ -134,11 +138,23 @@ async function handleSaveSettings() {
 			name: editName,
 			downloadEnabled: editDownloadEnabled,
 			favoritesEnabled: editFavoritesEnabled,
-			password: editPassword || undefined,
 		});
+		if (removePasswordProtection && liveGallery.passwordProtected) {
+			await client.action(galleryApi.setPassword, {
+				galleryId: toId(gallery._id),
+				siteUrl: config.siteUrl,
+				password: null,
+			});
+		} else if (editPassword) {
+			await client.action(galleryApi.setPassword, {
+				galleryId: toId(gallery._id),
+				siteUrl: config.siteUrl,
+				password: editPassword,
+			});
+		}
 		onclose();
-	} catch {
-		// stay open on error
+	} catch (error) {
+		settingsError = error instanceof Error ? error.message : "Failed to save gallery settings";
 	} finally {
 		saving = false;
 	}
@@ -253,9 +269,32 @@ async function handleShare() {
 					</div>
 
 					<div class="field">
-						<label for="edit-password">password</label>
-						<input id="edit-password" type="text" bind:value={editPassword} placeholder="leave blank for token-only" />
+						<label for="edit-password">
+							{liveGallery.passwordProtected ? "change password" : "add password protection"}
+						</label>
+						<input
+							id="edit-password"
+							type="password"
+							bind:value={editPassword}
+							placeholder={liveGallery.passwordProtected ? "leave blank to keep the current password" : "at least 8 characters"}
+							minlength="8"
+							maxlength="128"
+							autocomplete="new-password"
+							disabled={removePasswordProtection}
+						/>
+						<span class="field-hint">passwords are hashed; the current password is never displayed</span>
 					</div>
+
+					{#if liveGallery.passwordProtected}
+						<label class="toggle danger-toggle">
+							<input type="checkbox" bind:checked={removePasswordProtection} />
+							<span>remove password protection</span>
+						</label>
+					{/if}
+
+					{#if settingsError}
+						<p class="settings-error" role="alert">{settingsError}</p>
+					{/if}
 
 					<div class="actions">
 						<button class="delete-btn" type="button" onclick={handleDelete}>
@@ -370,6 +409,7 @@ async function handleShare() {
 	.settings-form { display: flex; flex-direction: column; gap: 18px; }
 	.field { display: flex; flex-direction: column; gap: 5px; }
 	.field label { font-size: 0.78rem; color: var(--admin-text-muted); }
+	.field-hint { font-size: 0.7rem; color: var(--admin-text-subtle); }
 	.field input {
 		padding: 8px 12px;
 		border: 1px solid var(--admin-border);
@@ -386,6 +426,8 @@ async function handleShare() {
 		font-size: 0.82rem; color: var(--admin-text); cursor: pointer;
 	}
 	.toggle input { accent-color: var(--admin-accent); }
+	.danger-toggle { color: var(--status-rose); }
+	.settings-error { margin: 0; color: var(--status-rose); font-size: 0.8rem; }
 
 	.actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 8px; }
 	.save-btn {

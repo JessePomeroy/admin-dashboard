@@ -63,6 +63,7 @@ export interface AdminAPI {
 	};
 	galleryDelivery?: {
 		create: FnRef;
+		setPassword: FnRef;
 		update: FnRef;
 		remove: FnRef;
 		get: FnRef;

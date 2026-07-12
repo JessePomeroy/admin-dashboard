@@ -4,6 +4,7 @@ import { setServerConfig, type AdminServerConfig } from "../src/lib/config";
 import {
 	createGalleryBulkDeleteHandler,
 	createGalleryDeleteHandler,
+	createGalleryImageHandler,
 	createGalleryProcessHandler,
 	createGalleryUploadSessionHandler,
 } from "../src/lib/server/handlers/galleryPresign";
@@ -74,6 +75,32 @@ async function issueUploadSessionToken(): Promise<string> {
 
 afterEach(() => {
 	vi.unstubAllGlobals();
+});
+
+describe("createGalleryImageHandler", () => {
+	it("streams a tenant-scoped image through the Worker admin route", async () => {
+		configureServerConfig({ siteUrl: "tenant.example" });
+		const fetchMock = vi.fn(async () => new Response("image-bytes", {
+			headers: { "Content-Type": "image/jpeg", ETag: "test-etag" },
+		}));
+		vi.stubGlobal("fetch", fetchMock);
+		const request = new Request(
+			"https://tenant.example/api/admin/galleries/image?key=tenant.example%2Fgallery-1%2Fthumb%2Fphoto.jpg",
+			{ headers: { cookie: "session=admin-token" } },
+		);
+
+		const response = await createGalleryImageHandler()({
+			request,
+			url: new URL(request.url),
+		});
+
+		expect(await response.text()).toBe("image-bytes");
+		expect(response.headers.get("Content-Type")).toBe("image/jpeg");
+		expect(fetchMock).toHaveBeenCalledWith(
+			"https://gallery.example/admin/image/tenant.example%2Fgallery-1%2Fthumb%2Fphoto.jpg",
+			{ headers: { Authorization: "Bearer gallery-secret" } },
+		);
+	});
 });
 
 describe("createGalleryUploadSessionHandler", () => {

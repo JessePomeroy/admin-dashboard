@@ -380,3 +380,35 @@ export function createGalleryBulkDeleteHandler() {
 		}
 	};
 }
+
+/**
+ * Stream one gallery thumbnail through the authenticated host. The browser
+ * never receives the Worker admin secret, and the host never buffers image
+ * bytes. Customer-facing image routes use portal access grants instead.
+ */
+export function createGalleryImageHandler() {
+	return async ({ request, url }: { request: Request; url: URL }) => {
+		const config = requireWorkerConfig();
+		await requireAdmin(request);
+		const key = url.searchParams.get("key");
+		if (!key) throw error(400, "key is required");
+		if (!isGalleryKeyForConfiguredSite(key, config.siteUrl)) {
+			throw error(403, "Image key must belong to this site");
+		}
+
+		try {
+			const res = await fetch(
+				`${config.galleryWorkerUrl}/admin/image/${encodeURIComponent(key)}`,
+				{ headers: { Authorization: `Bearer ${config.galleryAdminSecret}` } },
+			);
+			if (!res.ok) throw error(res.status, await res.text());
+			return new Response(res.body, {
+				status: res.status,
+				statusText: res.statusText,
+				headers: res.headers,
+			});
+		} catch (err) {
+			handleServerError(err, "Failed to load gallery image");
+		}
+	};
+}

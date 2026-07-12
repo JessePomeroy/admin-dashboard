@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { mount, unmount } from "svelte";
+import { mount, tick, unmount } from "svelte";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import GalleryImageGrid from "../src/lib/pages/gallery-delivery/GalleryImageGrid.svelte";
 
@@ -65,6 +65,31 @@ describe("GalleryImageGrid", () => {
 		expect(document.body.textContent).toContain("loading 593 uploaded images...");
 		expect(document.body.textContent).not.toContain("no images uploaded yet");
 
+		unmount(component);
+	});
+
+	it("loads gallery thumbnails through the authenticated host proxy", async () => {
+		const component = mountGrid({
+			images: [{
+				_id: "image-1",
+				_creationTime: 1,
+				siteUrl: "site.example",
+				galleryId: "gallery-1",
+				r2Key: "site.example/gallery-1/original/photo.jpg",
+				filename: "photo.jpg",
+				sizeBytes: 100,
+				width: 100,
+				height: 100,
+				order: 0,
+				isFavorite: false,
+				downloadCount: 0,
+			}],
+		});
+		await tick();
+
+		expect(document.querySelector("img")?.getAttribute("src")).toBe(
+			"/api/admin/galleries/image?key=site.example%2Fgallery-1%2Fthumb%2Fphoto.jpg",
+		);
 		unmount(component);
 	});
 });

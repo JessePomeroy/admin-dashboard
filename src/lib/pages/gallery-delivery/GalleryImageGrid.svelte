@@ -33,7 +33,7 @@ $effect(() => {
 
 function thumbUrl(image: GalleryImage): string {
 	const thumbKey = image.r2Key.replace("/original/", "/thumb/");
-	return `${config.galleryWorkerUrl}/image/${thumbKey}`;
+	return `/api/admin/galleries/image?key=${encodeURIComponent(thumbKey)}`;
 }
 
 function canPreview(image: GalleryImage): boolean {
