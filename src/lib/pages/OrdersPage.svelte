@@ -17,25 +17,10 @@ import { formatCents, getStatusColor, ORDER_STATUS_COLORS, toId } from "../utils
 import LoadingState from "../components/LoadingState.svelte";
 import OrderDetailModal from "./orders/OrderDetailModal.svelte";
 import OrderTable from "./orders/OrderTable.svelte";
-
-// UI-facing order shape used by this page and the orders/* components.
-// Unlike the Convex `Order` type, the Convex `_creationTime: number` is
-// projected to `createdAt: string` (ISO), `currency` is always "usd", and
-// nullable/optional fields are normalized to defaults.
-interface OrderUI {
-	_id: string;
-	orderNumber: string;
-	createdAt: string;
-	customerEmail: string;
-	customerName: string;
-	total: number;
-	stripeFees?: number;
-	status: OrderStatus;
-	currency: string;
-	items: Order["items"];
-	shippingAddress: NonNullable<Order["shippingAddress"]> | null;
-	notes: string;
-}
+import {
+	buildOrdersCsv,
+	type AdminOrder,
+} from "./orders/orderPresentation";
 
 let { data } = $props();
 
@@ -46,14 +31,19 @@ const ordersQuery = useQuery(api.orders.list, { siteUrl: config.siteUrl });
 
 // Map Convex format to match what the orders page expects
 let orders = $derived(
-	((ordersQuery.data ?? []) as Order[]).map((order: Order): OrderUI => ({
+	((ordersQuery.data ?? []) as Order[]).map((order: Order): AdminOrder => ({
 		_id: order._id,
 		orderNumber: order.orderNumber,
 		createdAt: new Date(order._creationTime).toISOString(),
 		customerEmail: order.customerEmail,
 		customerName: order.customerName || "",
 		total: order.total,
-		stripeFees: order.stripeFees || 0,
+		stripeFees: order.stripeFees,
+		stripeFeeCaptureStatus: order.stripeFeeCaptureStatus,
+		stripeFeeCaptureAttempts: order.stripeFeeCaptureAttempts,
+		stripeFeeCaptureLastAttemptAt: order.stripeFeeCaptureLastAttemptAt,
+		stripeFeeCaptureNextAttemptAt: order.stripeFeeCaptureNextAttemptAt,
+		stripeFeeCaptureError: order.stripeFeeCaptureError,
 		status: order.status,
 		currency: "usd",
 		items: order.items,
@@ -69,7 +59,7 @@ let yearFilter = $state("all");
 let periodFilter = $state("all"); // all, today, week, month
 
 // Modal state - for the order details popup
-let selectedOrder = $state<OrderUI | null>(null);
+let selectedOrder = $state<AdminOrder | null>(null);
 let notesValue = $state("");
 let notesSaving = $state(false);
 
@@ -79,7 +69,7 @@ $effect(() => {
 	if (openHandled || orders.length === 0) return;
 	const openId = $page.url.searchParams.get("open");
 	if (openId) {
-		const match = orders.find((o: OrderUI) => o._id === openId);
+		const match = orders.find((o: AdminOrder) => o._id === openId);
 		if (match) {
 			selectedOrder = match;
 			openHandled = true;
@@ -102,7 +92,7 @@ let availableYears = $derived(
 	(
 		[
 			...new Set(
-				orders.map((o: OrderUI) => new Date(o.createdAt).getFullYear()),
+				orders.map((o: AdminOrder) => new Date(o.createdAt).getFullYear()),
 			),
 		] as number[]
 	).sort((a, b) => b - a),
@@ -140,7 +130,7 @@ function getDateRange(period: string): { start: Date; end: Date } | null {
 
 // Filter orders
 let filteredOrders = $derived(
-	orders.filter((order: OrderUI) => {
+	orders.filter((order: AdminOrder) => {
 		const orderDate = new Date(order.createdAt);
 
 		// Period filter (today/week/month)
@@ -178,13 +168,13 @@ let filteredOrders = $derived(
 
 let totalRevenue = $derived(
 	filteredOrders.reduce(
-		(sum: number, order: OrderUI) => sum + (order.total || 0),
+		(sum: number, order: AdminOrder) => sum + (order.total || 0),
 		0,
 	),
 );
 
 let allTimeRevenue = $derived(
-	orders.reduce((sum: number, order: OrderUI) => sum + (order.total || 0), 0),
+	orders.reduce((sum: number, order: AdminOrder) => sum + (order.total || 0), 0),
 );
 
 async function updateStatus(orderId: string, newStatus: string) {
@@ -202,7 +192,7 @@ async function updateStatus(orderId: string, newStatus: string) {
 	}
 }
 
-function openOrderDetails(order: OrderUI) {
+function openOrderDetails(order: AdminOrder) {
 	selectedOrder = order;
 	notesValue = order.notes || "";
 }
@@ -230,46 +220,7 @@ async function saveNotes(orderId: string, notes: string) {
 }
 
 function exportCSV() {
-	const headers = [
-		"Order Number",
-		"Date",
-		"Customer Name",
-		"Customer Email",
-		"Items",
-		"Gross Revenue",
-		"Stripe Fees",
-		"Net Revenue",
-		"Status",
-		"Notes",
-	];
-
-	const rows = filteredOrders.map((order: OrderUI) => {
-		const gross = (order.total || 0) / 100;
-		const fees = (order.stripeFees || 0) / 100;
-		const net = gross - fees;
-
-		return [
-			order.orderNumber || "",
-			new Date(order.createdAt).toLocaleDateString("en-US"),
-			order.customerName || "",
-			order.customerEmail || "",
-			(order.items || [])
-				.map((i: OrderUI["items"][number]) => `${i.productName} x${i.quantity}`)
-				.join("; "),
-			gross.toFixed(2),
-			fees.toFixed(2),
-			net.toFixed(2),
-			order.status || "",
-			order.notes || "",
-		];
-	});
-
-	const csvContent = [
-		headers.join(","),
-		...rows.map((row: (string | number)[]) =>
-			row.map((cell: string | number) => `"${String(cell).replace(/"/g, '""')}"`).join(","),
-		),
-	].join("\n");
+	const csvContent = buildOrdersCsv(filteredOrders);
 
 	const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
 	const url = URL.createObjectURL(blob);
