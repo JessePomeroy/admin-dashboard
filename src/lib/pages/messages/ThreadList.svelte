@@ -17,6 +17,7 @@ interface ThreadMessage {
 interface Thread {
 	client: ThreadClient;
 	unreadCount: number;
+	unreadCountIsTruncated?: boolean;
 	latestMessage: ThreadMessage | null;
 }
 
@@ -81,7 +82,14 @@ function truncate(text: string, max: number): string {
 				<div class="thread-bottom">
 					<span class="thread-url">{thread.client.siteUrl}</span>
 					{#if thread.unreadCount > 0}
-						<span class="unread-badge">{thread.unreadCount}</span>
+						<span
+							class="unread-badge"
+							aria-label={thread.unreadCountIsTruncated
+								? `${thread.unreadCount} or more unread messages`
+								: `${thread.unreadCount} unread messages`}
+						>
+							{thread.unreadCount}{thread.unreadCountIsTruncated ? "+" : ""}
+						</span>
 					{/if}
 				</div>
 				{#if thread.latestMessage}
