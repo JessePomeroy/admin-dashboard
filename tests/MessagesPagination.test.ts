@@ -10,7 +10,8 @@ const thread = {
 		name: "Test client",
 		siteUrl: "client.example",
 	},
-	unreadCount: 0,
+	unreadCount: 500,
+	unreadCountIsTruncated: true,
 	latestMessage: {
 		_id: "message-2",
 		siteUrl: "client.example",
@@ -43,6 +44,10 @@ describe("message pagination controls", () => {
 
 		const button = document.querySelector<HTMLButtonElement>(".load-more");
 		expect(button?.textContent).toContain("load more conversations");
+		expect(document.querySelector(".unread-badge")?.textContent).toBe("500+");
+		expect(document.querySelector(".unread-badge")?.getAttribute("aria-label")).toBe(
+			"500 or more unread messages",
+		);
 		button?.click();
 		expect(onloadmore).toHaveBeenCalledOnce();
 

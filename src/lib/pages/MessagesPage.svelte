@@ -27,6 +27,7 @@ interface Thread {
 		siteUrl: string;
 	};
 	unreadCount: number;
+	unreadCountIsTruncated?: boolean;
 	latestMessage: Message | null;
 }
 
