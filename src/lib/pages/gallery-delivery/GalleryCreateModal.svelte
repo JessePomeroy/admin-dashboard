@@ -23,6 +23,7 @@ let password = $state("");
 let expiryDays = $state("");
 let saving = $state(false);
 let errorMsg = $state("");
+let createdGalleryId = $state<string | null>(null);
 
 let slug = $derived(name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, ""));
 
@@ -40,20 +41,30 @@ async function handleCreate() {
 			? Date.now() + parseInt(expiryDays) * 24 * 60 * 60 * 1000
 			: undefined;
 
-		await client.mutation(galleryApi.create, {
-			siteUrl: config.siteUrl,
-			clientId: toId(selectedClientId),
-			name: name.trim(),
-			slug,
-			downloadEnabled,
-			favoritesEnabled,
-			password: password || undefined,
-			expiresAt,
-		});
+		if (!createdGalleryId) {
+			createdGalleryId = await client.mutation(galleryApi.create, {
+				siteUrl: config.siteUrl,
+				clientId: toId(selectedClientId),
+				name: name.trim(),
+				slug,
+				downloadEnabled,
+				favoritesEnabled,
+				expiresAt,
+			}) as string;
+		}
+		if (password) {
+			await client.action(galleryApi.setPassword, {
+				galleryId: toId(createdGalleryId),
+				siteUrl: config.siteUrl,
+				password,
+			});
+		}
 
 		onclose();
 	} catch (err) {
-		errorMsg = err instanceof Error ? err.message : "Failed to create gallery";
+		errorMsg = createdGalleryId
+			? "The draft was created, but password protection failed. Retry to finish protecting it."
+			: err instanceof Error ? err.message : "Failed to create gallery";
 	} finally {
 		saving = false;
 	}
@@ -93,7 +104,16 @@ async function handleCreate() {
 
 		<div class="field">
 			<label for="password">password (optional)</label>
-			<input id="password" type="text" bind:value={password} placeholder="leave blank for token-only access" />
+			<input
+				id="password"
+				type="password"
+				bind:value={password}
+				placeholder="at least 8 characters"
+				minlength="8"
+				maxlength="128"
+				autocomplete="new-password"
+			/>
+			<span class="field-hint">stored as a salted hash; visitors receive a temporary access grant</span>
 		</div>
 
 		<div class="field">
@@ -119,6 +139,7 @@ async function handleCreate() {
 
 	.field { display: flex; flex-direction: column; gap: 5px; }
 	.field label { font-size: 0.78rem; color: var(--admin-text-muted); }
+	.field-hint { font-size: 0.7rem; color: var(--admin-text-subtle); }
 	.field input, .field select {
 		padding: 8px 12px;
 		border: 1px solid var(--admin-border);

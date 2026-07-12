@@ -6,6 +6,7 @@ import type { Gallery, GalleryImage } from "../src/lib/types";
 
 const mocks = vi.hoisted(() => {
 	const mutation = vi.fn(async () => undefined);
+	const action = vi.fn(async () => ({ passwordProtected: true }));
 	const query = vi.fn(async () => ({
 		keys: [
 			"site.example/gallery-1/original/one.jpg",
@@ -28,6 +29,7 @@ const mocks = vi.hoisted(() => {
 		totalSizeBytes: 300,
 		downloadEnabled: true,
 		favoritesEnabled: true,
+		passwordProtected: false,
 	};
 	const images = [
 		{
@@ -59,7 +61,7 @@ const mocks = vi.hoisted(() => {
 			downloadCount: 0,
 		},
 	];
-	return { mutation, query, gallery, images };
+	return { mutation, action, query, gallery, images };
 });
 
 vi.mock("convex-svelte", () => ({
@@ -68,11 +70,11 @@ vi.mock("convex-svelte", () => ({
 		if (ref.name === "galleryDelivery:get") return { data: mocks.gallery };
 		return { data: undefined };
 	},
-	useConvexClient: () => ({ mutation: mocks.mutation, query: mocks.query }),
+	useConvexClient: () => ({ action: mocks.action, mutation: mocks.mutation, query: mocks.query }),
 }));
 
 vi.mock("../src/lib/adminClient", () => ({
-	useAdminClient: () => ({ mutation: mocks.mutation, query: mocks.query }),
+	useAdminClient: () => ({ action: mocks.action, mutation: mocks.mutation, query: mocks.query }),
 }));
 
 vi.mock("../src/lib/config", () => ({
@@ -85,6 +87,7 @@ vi.mock("../src/lib/config", () => ({
 		api: {
 			galleryDelivery: {
 				get: { name: "galleryDelivery:get" },
+				setPassword: { name: "galleryDelivery:setPassword" },
 				getImages: { name: "galleryDelivery:getImages" },
 				remove: { name: "galleryDelivery:remove" },
 				update: { name: "galleryDelivery:update" },
@@ -153,7 +156,9 @@ function deferred<T>() {
 describe("GalleryDetailModal", () => {
 	beforeEach(() => {
 		mocks.mutation.mockClear();
+		mocks.action.mockClear();
 		mocks.query.mockClear();
+		mocks.gallery.passwordProtected = false;
 		mocks.query.mockResolvedValue({
 			keys: [
 				"site.example/gallery-1/original/one.jpg",
@@ -169,6 +174,57 @@ describe("GalleryDetailModal", () => {
 	afterEach(() => {
 		vi.unstubAllGlobals();
 		document.body.innerHTML = "";
+	});
+
+	it("sets a new password through the server action without sending plaintext to update", async () => {
+		const component = mountModal();
+		await openSettingsTab();
+		const input = document.querySelector<HTMLInputElement>("#edit-password");
+		expect(input?.type).toBe("password");
+		if (!input) throw new Error("Password input not found");
+		input.value = "secure-passphrase";
+		input.dispatchEvent(new Event("input", { bubbles: true }));
+
+		getButton("save settings").click();
+		await vi.waitFor(() => {
+			expect(mocks.action).toHaveBeenCalledWith(
+				{ name: "galleryDelivery:setPassword" },
+				{
+					galleryId: "gallery-1",
+					siteUrl: "site.example",
+					password: "secure-passphrase",
+				},
+			);
+		});
+		expect(mocks.mutation).toHaveBeenCalledWith(
+			{ name: "galleryDelivery:update" },
+			expect.not.objectContaining({ password: expect.anything() }),
+		);
+
+		unmount(component);
+	});
+
+	it("can explicitly remove password protection", async () => {
+		mocks.gallery.passwordProtected = true;
+		const component = mountModal();
+		await openSettingsTab();
+		const remove = document.querySelector<HTMLInputElement>(".danger-toggle input");
+		if (!remove) throw new Error("Remove protection control not found");
+		remove.click();
+
+		getButton("save settings").click();
+		await vi.waitFor(() => {
+			expect(mocks.action).toHaveBeenCalledWith(
+				{ name: "galleryDelivery:setPassword" },
+				{
+					galleryId: "gallery-1",
+					siteUrl: "site.example",
+					password: null,
+				},
+			);
+		});
+
+		unmount(component);
 	});
 
 	it("bulk deletes gallery files before deleting Convex metadata", async () => {
