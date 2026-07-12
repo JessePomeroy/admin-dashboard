@@ -1,40 +1,11 @@
 <script lang="ts">
 import type { OrderStatus } from "../../types";
+import type { AdminOrder } from "./orderPresentation";
 import { formatCents, formatDateTime, getStatusColor, ORDER_STATUS_COLORS } from "../../utils";
 
-interface OrderItem {
-	productName: string;
-	quantity: number;
-	price: number;
-}
-
-interface ShippingAddress {
-	line1: string;
-	line2?: string;
-	city: string;
-	state: string;
-	postalCode: string;
-	country: string;
-}
-
-export interface OrderData {
-	_id: string;
-	orderNumber: string;
-	createdAt: string;
-	customerName: string;
-	customerEmail: string;
-	total: number;
-	currency: string;
-	status: OrderStatus;
-	items: OrderItem[];
-	shippingAddress: ShippingAddress | null;
-	notes: string;
-	stripeFees?: number;
-}
-
 interface Props {
-	orders: OrderData[];
-	onorderclick: (order: OrderData) => void;
+	orders: AdminOrder[];
+	onorderclick: (order: AdminOrder) => void;
 	onupdatestatus: (orderId: string, newStatus: string) => void;
 }
 

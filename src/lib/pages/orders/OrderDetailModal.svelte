@@ -1,46 +1,21 @@
 <script lang="ts">
 import AdminModal from "../../components/AdminModal.svelte";
-import { formatCents, formatDateTime } from "../../utils";
+import { formatCents, formatDateTime, formatTimestamp } from "../../utils";
 import type { OrderStatus } from "../../types";
-
-interface OrderItem {
-	productName: string;
-	quantity: number;
-	price: number;
-}
-
-interface ShippingAddress {
-	line1: string;
-	line2?: string;
-	city: string;
-	state: string;
-	postalCode: string;
-	country: string;
-}
-
-interface OrderData {
-	_id: string;
-	orderNumber: string;
-	createdAt: string;
-	customerName: string;
-	customerEmail: string;
-	total: number;
-	currency: string;
-	status: OrderStatus;
-	items: OrderItem[];
-	shippingAddress: ShippingAddress | null;
-	notes: string;
-	stripeFees?: number;
-}
+import {
+	getStripeFeeCapturePresentation,
+	type AdminOrder,
+} from "./orderPresentation";
 
 interface Props {
-	order: OrderData;
+	order: AdminOrder;
 	onclose: () => void;
 	onupdatestatus: (orderId: string, newStatus: string) => void;
 	onsavenotes: (orderId: string, notes: string) => Promise<void>;
 }
 
 let { order, onclose, onupdatestatus, onsavenotes }: Props = $props();
+let stripeFee = $derived(getStripeFeeCapturePresentation(order));
 
 const statuses: OrderStatus[] = [
 	"new",
@@ -117,6 +92,24 @@ async function saveNotes() {
 				{/each}
 			</ul>
 			<p class="items-total">total: {formatCents(order.total, order.currency)}</p>
+		</div>
+
+		<div class="modal-section fee-section">
+			<h3 class="section-label">stripe fee capture</h3>
+			<p class="fee-status fee-status--{stripeFee.tone}">{stripeFee.label}</p>
+			<p class="section-text-muted">{stripeFee.detail}</p>
+			{#if stripeFee.feeCents !== null}
+				<p class="fee-amounts">
+					fee: {formatCents(stripeFee.feeCents, order.currency)}
+					<span aria-hidden="true">&middot;</span>
+					net: {formatCents(stripeFee.netRevenueCents ?? 0, order.currency)}
+				</p>
+			{/if}
+			{#if stripeFee.nextAttemptAt !== null}
+				<p class="fee-timestamp">next attempt: {formatTimestamp(stripeFee.nextAttemptAt)}</p>
+			{:else if stripeFee.lastAttemptAt !== null}
+				<p class="fee-timestamp">last attempt: {formatTimestamp(stripeFee.lastAttemptAt)}</p>
+			{/if}
 		</div>
 
 		<div class="modal-field">
@@ -210,6 +203,49 @@ async function saveNotes() {
 		font-weight: 500;
 		font-size: 0.9rem;
 		color: var(--admin-heading);
+	}
+
+	.fee-section {
+		display: flex;
+		flex-direction: column;
+		align-items: flex-start;
+		gap: 6px;
+	}
+
+	.fee-status {
+		margin: 0;
+		padding: 3px 8px;
+		border: 1px solid var(--admin-border-strong);
+		border-radius: 999px;
+		font-size: 0.76rem;
+	}
+
+	.fee-status--pending {
+		color: var(--status-amber);
+	}
+
+	.fee-status--captured {
+		color: var(--status-sage);
+	}
+
+	.fee-status--failed {
+		color: var(--status-rose);
+	}
+
+	.fee-status--legacy {
+		color: var(--admin-text-muted);
+	}
+
+	.fee-amounts,
+	.fee-timestamp {
+		margin: 0;
+		font-size: 0.8rem;
+		color: var(--admin-text-muted);
+	}
+
+	.fee-amounts {
+		display: flex;
+		gap: 6px;
 	}
 
 	.form-input {

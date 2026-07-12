@@ -186,6 +186,11 @@ export interface Order extends ConvexDocument<"orders"> {
 	subtotal?: number;
 	total: number;
 	stripeFees?: number;
+	stripeFeeCaptureStatus?: StripeFeeCaptureStatus;
+	stripeFeeCaptureAttempts?: number;
+	stripeFeeCaptureLastAttemptAt?: number;
+	stripeFeeCaptureNextAttemptAt?: number;
+	stripeFeeCaptureError?: StripeFeeCaptureError;
 	couponCode?: string;
 	discountAmount?: number;
 	fulfillmentType: "lumaprints" | "self" | "digital";
@@ -198,6 +203,12 @@ export interface Order extends ConvexDocument<"orders"> {
 	notes?: string;
 }
 export type OrderId = GenericId<"orders">;
+export type StripeFeeCaptureStatus = "pending" | "captured" | "failed";
+export type StripeFeeCaptureError =
+	| "balance_transaction_not_ready"
+	| "stripe_api_error"
+	| "stripe_secret_key_missing"
+	| "payment_intent_missing";
 export type OrderStatus =
 	| "new"
 	| "printing"

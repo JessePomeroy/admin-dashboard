@@ -9,7 +9,11 @@ export default defineConfig({
 				test: {
 					name: "node",
 					include: ["tests/**/*.test.ts"],
-					exclude: ["tests/Gallery*.test.ts", "tests/Messages*.test.ts"],
+					exclude: [
+						"tests/Gallery*.test.ts",
+						"tests/Messages*.test.ts",
+						"tests/**/*.component.test.ts",
+					],
 					environment: "node",
 				},
 			},
@@ -20,7 +24,11 @@ export default defineConfig({
 				},
 				test: {
 					name: "components",
-					include: ["tests/Gallery*.test.ts", "tests/Messages*.test.ts"],
+					include: [
+						"tests/Gallery*.test.ts",
+						"tests/Messages*.test.ts",
+						"tests/**/*.component.test.ts",
+					],
 					environment: "jsdom",
 				},
 			},
