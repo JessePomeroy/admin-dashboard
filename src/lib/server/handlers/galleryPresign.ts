@@ -1,7 +1,12 @@
 import { error, json } from "@sveltejs/kit";
 import { getServerConfig } from "../../config.js";
 import { handleServerError } from "../handleError.js";
-import { isGalleryOriginalKeyForSession } from "../galleryStorageKeys.js";
+import {
+	canonicalGallerySiteUrl,
+	isGalleryOriginalKeyForSession,
+	isGalleryStorageSegment,
+	parseGalleryStorageKey,
+} from "../galleryStorageKeys.js";
 import { getRequiredAdminVerifier, requireAdmin } from "../requireAdmin.js";
 import { validateFilename } from "../validation.js";
 
@@ -24,6 +29,62 @@ function requireWorkerConfig() {
 		throw error(500, "Gallery worker not configured");
 	}
 	return config;
+}
+
+function requireConfiguredGallerySite(configuredSiteUrl: string): string {
+	const siteUrl = canonicalGallerySiteUrl(configuredSiteUrl);
+	if (!siteUrl) throw error(500, "Gallery site not configured");
+	return siteUrl;
+}
+
+function requireMatchingGallerySite(
+	siteUrl: unknown,
+	configuredSiteUrl: string,
+): string {
+	if (typeof siteUrl !== "string" || !siteUrl) {
+		throw error(400, "siteUrl is required");
+	}
+	const configuredSite = requireConfiguredGallerySite(configuredSiteUrl);
+	if (canonicalGallerySiteUrl(siteUrl) !== configuredSite) {
+		throw error(403, "Gallery site must match the configured host");
+	}
+	return configuredSite;
+}
+
+function requireGalleryId(galleryId: unknown): string {
+	if (!isGalleryStorageSegment(galleryId)) {
+		throw error(400, "galleryId must be one storage-key segment");
+	}
+	return galleryId;
+}
+
+function requireGalleryKeyForConfiguredSite(
+	r2Key: unknown,
+	configuredSiteUrl: string,
+	options: { originalOnly?: boolean } = {},
+): string {
+	if (typeof r2Key !== "string" || !r2Key) {
+		throw error(400, "Invalid gallery object key");
+	}
+	const parsed = parseGalleryStorageKey(r2Key);
+	if (!parsed || !isGalleryStorageSegment(parsed.galleryId)) {
+		throw error(400, "Invalid gallery object key");
+	}
+	if (
+		canonicalGallerySiteUrl(parsed.siteUrl)
+		!== requireConfiguredGallerySite(configuredSiteUrl)
+	) {
+		throw error(403, "Gallery object key must belong to the configured host");
+	}
+	if (options.originalOnly && parsed.kind !== "original") {
+		throw error(400, "An original gallery object key is required");
+	}
+	return r2Key;
+}
+
+function optionalUploadSessionToken(value: unknown): string | null | undefined {
+	if (value === null || value === undefined || typeof value === "string") return value;
+	throw error(400, "uploadSessionToken must be a string");
 }
 
 function base64UrlEncode(input: string | ArrayBuffer): string {
@@ -126,11 +187,31 @@ async function requireGalleryUploadAccess(
 	// must never make missing host authorization configuration fail open.
 	getRequiredAdminVerifier();
 	const config = requireWorkerConfig();
+	const configuredSite = requireConfiguredGallerySite(config.siteUrl);
+	if (constraints.siteUrl !== undefined) {
+		requireMatchingGallerySite(constraints.siteUrl, configuredSite);
+	}
+	if (constraints.galleryId !== undefined) {
+		requireGalleryId(constraints.galleryId);
+	}
+	if (constraints.r2Key !== undefined) {
+		requireGalleryKeyForConfiguredSite(constraints.r2Key, configuredSite);
+	}
 	const token = constraints.uploadSessionToken ?? request.headers.get("X-Gallery-Upload-Session");
 	const session = await verifyUploadSessionToken(config.galleryAdminSecret!, token);
 
 	if (session) {
-		if (constraints.siteUrl && session.siteUrl !== constraints.siteUrl) throw error(403, "Upload session site mismatch");
+		if (canonicalGallerySiteUrl(session.siteUrl) !== configuredSite) {
+			throw error(403, "Upload session is not valid for this host");
+		}
+		if (!isGalleryStorageSegment(session.galleryId)) {
+			throw error(403, "Upload session gallery is invalid");
+		}
+		if (
+			constraints.siteUrl
+			&& canonicalGallerySiteUrl(session.siteUrl)
+			!== canonicalGallerySiteUrl(constraints.siteUrl)
+		) throw error(403, "Upload session site mismatch");
 		if (constraints.galleryId && session.galleryId !== constraints.galleryId) throw error(403, "Upload session gallery mismatch");
 		if (constraints.r2Key && !isGalleryOriginalKeyForSession(constraints.r2Key, session)) {
 			throw error(403, "Upload session cannot access this file");
@@ -180,34 +261,29 @@ function getDeletedCount(result: unknown): number {
 	return typeof deleted === "number" ? deleted : 0;
 }
 
-function isGalleryKeyForConfiguredSite(key: string, siteUrl: string): boolean {
-	const normalizedSiteUrl = siteUrl.replace(/\/+$/, "");
-	return key.startsWith(`${normalizedSiteUrl}/`);
-}
-
 export function createGalleryUploadSessionHandler() {
 	return async ({ request }: { request: Request }) => {
 		await requireAdmin(request);
 		const config = requireWorkerConfig();
 
-		let data;
+		let data: unknown;
 		try {
 			data = await request.json();
 		} catch {
 			throw error(400, "Invalid JSON body");
 		}
 
-		if (!data.siteUrl || !data.galleryId) {
+		if (!data || typeof data !== "object" || Array.isArray(data)) {
 			throw error(400, "siteUrl and galleryId are required");
 		}
-		if (data.siteUrl !== config.siteUrl) {
-			throw error(403, "Upload session site mismatch");
-		}
+		const input = data as { siteUrl?: unknown; galleryId?: unknown };
+		const siteUrl = requireMatchingGallerySite(input.siteUrl, config.siteUrl);
+		const galleryId = requireGalleryId(input.galleryId);
 
 		const { token, expiresAt } = await createUploadSessionToken(
 			config.galleryAdminSecret!,
-			data.siteUrl,
-			data.galleryId,
+			siteUrl,
+			galleryId,
 		);
 
 		return json({ uploadSessionToken: token, expiresAt });
@@ -218,24 +294,39 @@ export function createGalleryPresignHandler() {
 	return async ({ request }: { request: Request }) => {
 		const config = requireWorkerConfig();
 
-		let data;
+		let data: unknown;
 		try {
 			data = await request.json();
 		} catch {
 			throw error(400, "Invalid JSON body");
 		}
 
-		if (!data.siteUrl || !data.galleryId || !data.filename || !data.contentType) {
+		if (!data || typeof data !== "object" || Array.isArray(data)) {
 			throw error(400, "siteUrl, galleryId, filename, and contentType are required");
 		}
+		const input = data as {
+			siteUrl?: unknown;
+			galleryId?: unknown;
+			filename?: unknown;
+			contentType?: unknown;
+			uploadSessionToken?: unknown;
+		};
+		if (typeof input.filename !== "string" || !input.filename
+			|| typeof input.contentType !== "string" || !input.contentType) {
+			throw error(400, "siteUrl, galleryId, filename, and contentType are required");
+		}
+		const siteUrl = requireMatchingGallerySite(input.siteUrl, config.siteUrl);
+		const galleryId = requireGalleryId(input.galleryId);
+		const uploadSessionToken = optionalUploadSessionToken(input.uploadSessionToken);
 		await requireGalleryUploadAccess(request, {
-			siteUrl: data.siteUrl,
-			galleryId: data.galleryId,
-			uploadSessionToken: data.uploadSessionToken,
+			siteUrl,
+			galleryId,
+			uploadSessionToken,
 		});
 
+		let filename: string;
 		try {
-			data.filename = validateFilename(data.filename);
+			filename = validateFilename(input.filename);
 		} catch (err) {
 			throw error(400, (err as Error).message);
 		}
@@ -244,7 +335,12 @@ export function createGalleryPresignHandler() {
 			const res = await fetch(`${config.galleryWorkerUrl}/upload/presign`, {
 				method: "POST",
 				headers: workerHeaders(config.galleryAdminSecret!),
-				body: JSON.stringify(data),
+				body: JSON.stringify({
+					siteUrl,
+					galleryId,
+					filename,
+					contentType: input.contentType,
+				}),
 			});
 
 			if (!res.ok) throw error(res.status, await res.text());
@@ -262,7 +358,9 @@ export function createGalleryUploadHandler() {
 		const url = new URL(request.url);
 		const key = url.searchParams.get("key");
 		if (!key) throw error(400, "Missing key parameter");
+		requireGalleryKeyForConfiguredSite(key, config.siteUrl);
 		await requireGalleryUploadAccess(request, { r2Key: key });
+		requireGalleryKeyForConfiguredSite(key, config.siteUrl, { originalOnly: true });
 
 		try {
 			const res = await fetch(
@@ -291,18 +389,20 @@ export function createGalleryProcessHandler() {
 	return async ({ request }: { request: Request }) => {
 		const config = requireWorkerConfig();
 
-		const data = await request.json();
-		if (!data.r2Key) throw error(400, "r2Key is required");
+		const data = await request.json() as { r2Key?: unknown; uploadSessionToken?: unknown };
+		const r2Key = requireGalleryKeyForConfiguredSite(data?.r2Key, config.siteUrl);
+		const uploadSessionToken = optionalUploadSessionToken(data?.uploadSessionToken);
 		await requireGalleryUploadAccess(request, {
-			r2Key: data.r2Key,
-			uploadSessionToken: data.uploadSessionToken,
+			r2Key,
+			uploadSessionToken,
 		});
+		requireGalleryKeyForConfiguredSite(r2Key, config.siteUrl, { originalOnly: true });
 
 		try {
 			const res = await fetch(`${config.galleryWorkerUrl}/upload/process`, {
 				method: "POST",
 				headers: workerHeaders(config.galleryAdminSecret!),
-				body: JSON.stringify(data),
+				body: JSON.stringify({ r2Key }),
 			});
 
 			if (!res.ok) throw error(res.status, await res.text());
@@ -317,9 +417,11 @@ export function createGalleryDeleteHandler() {
 	return async ({ request }: { request: Request }) => {
 		const config = requireWorkerConfig();
 
-		const { r2Key, uploadSessionToken } = await request.json();
-		if (!r2Key) throw error(400, "r2Key is required");
+		const data = await request.json() as { r2Key?: unknown; uploadSessionToken?: unknown };
+		const r2Key = requireGalleryKeyForConfiguredSite(data?.r2Key, config.siteUrl);
+		const uploadSessionToken = optionalUploadSessionToken(data?.uploadSessionToken);
 		await requireGalleryUploadAccess(request, { r2Key, uploadSessionToken });
+		requireGalleryKeyForConfiguredSite(r2Key, config.siteUrl, { originalOnly: true });
 
 		try {
 			const res = await fetch(`${config.galleryWorkerUrl}/upload/delete`, {
@@ -359,9 +461,7 @@ export function createGalleryBulkDeleteHandler() {
 			throw error(400, "keys must be strings");
 		}
 		const stringKeys = keys as string[];
-		if (stringKeys.some((key) => !isGalleryKeyForConfiguredSite(key, config.siteUrl))) {
-			throw error(403, "Bulk delete keys must belong to this site");
-		}
+		for (const key of stringKeys) requireGalleryKeyForConfiguredSite(key, config.siteUrl);
 
 		try {
 			let deleted = 0;
@@ -395,9 +495,7 @@ export function createGalleryImageHandler() {
 		await requireAdmin(request);
 		const key = url.searchParams.get("key");
 		if (!key) throw error(400, "key is required");
-		if (!isGalleryKeyForConfiguredSite(key, config.siteUrl)) {
-			throw error(403, "Image key must belong to this site");
-		}
+		requireGalleryKeyForConfiguredSite(key, config.siteUrl);
 
 		try {
 			const res = await fetch(
