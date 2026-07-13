@@ -5,12 +5,14 @@ import { page } from "$app/stores";
 import { useQuery } from "convex-svelte";
 import { useAdminClient } from "../adminClient";
 import { getAdminCapabilitiesForLayout } from "../capabilities";
-import type { Feature } from "../features";
 import { isDark } from "../theme";
 import { getAdminConfig } from "../config";
 import { logger } from "../logger";
 import NotificationWidget from "./NotificationWidget.svelte";
 import Toast from "./Toast.svelte";
+import AdminNavIcon from "./AdminNavIcon.svelte";
+import ChangePasswordForm from "./ChangePasswordForm.svelte";
+import { adminNavItems, hrefToNotificationKey, isAdminRouteActive } from "./adminNavigation";
 import "../theme.css";
 
 const config = getAdminConfig();
@@ -105,21 +107,11 @@ if (notificationsRef) {
 	});
 }
 
-const hrefToFlagKey: Record<string, string> = {
-	"/admin/orders": "orders",
-	"/admin/inquiries": "inquiries",
-	"/admin/messages": "messages",
-	"/admin/crm": "crm",
-	"/admin/quotes": "quotes",
-	"/admin/invoicing": "invoices",
-	"/admin/contracts": "contracts",
-};
-
 // Mark page as seen when navigating (only after notifications query has returned)
 let lastMarkedPath = $state("");
 $effect(() => {
 	const pathname = $page.url.pathname;
-	const pageKey = hrefToFlagKey[pathname];
+	const pageKey = hrefToNotificationKey[pathname];
 	if (pageKey && pageKey !== lastMarkedPath && api.notifications?.markSeen && notificationsReady) {
 		lastMarkedPath = pageKey;
 		convexClient.mutation(api.notifications.markSeen, {
@@ -129,110 +121,7 @@ $effect(() => {
 	}
 });
 
-// Change password state
 let showPasswordForm = $state(false);
-let currentPassword = $state("");
-let newPassword = $state("");
-let passwordError = $state("");
-let passwordSuccess = $state(false);
-let passwordSaving = $state(false);
-
-async function handleChangePassword(e: Event) {
-	e.preventDefault();
-	if (!config.authClient) return;
-	passwordError = "";
-	passwordSaving = true;
-	try {
-		const result = await config.authClient.changePassword({
-			currentPassword,
-			newPassword,
-		});
-		if (result?.error) {
-			passwordError = result.error.message || "Password change failed";
-		} else {
-			passwordSuccess = true;
-			currentPassword = "";
-			newPassword = "";
-			setTimeout(() => {
-				showPasswordForm = false;
-				passwordSuccess = false;
-			}, 1500);
-		}
-	} catch (err: unknown) {
-		passwordError =
-			err instanceof Error ? err.message : "Failed to change password";
-	} finally {
-		passwordSaving = false;
-	}
-}
-
-const navItems: {
-	href: string;
-	label: string;
-	icon: string;
-	feature?: Feature;
-	separator?: boolean;
-	creatorOnly?: boolean;
-}[] = [
-	// Site operations
-	{ href: "/admin", label: "dashboard", icon: "grid", feature: "dashboard" },
-	{
-		href: "/admin/inquiries",
-		label: "inquiries",
-		icon: "mail",
-		feature: "inquiries",
-	},
-	{
-		href: "/admin/orders",
-		label: "orders",
-		icon: "package",
-		feature: "orders",
-	},
-	{
-		href: "/admin/galleries",
-		label: "galleries",
-		icon: "image",
-		feature: "galleries",
-	},
-	// CRM workflow
-	{ href: "/admin/crm", label: "clients", icon: "clients", feature: "crm", separator: true },
-	{ href: "/admin/board", label: "board", icon: "board", feature: "board" },
-	{ href: "/admin/quotes", label: "quotes", icon: "quotes", feature: "quotes" },
-	{
-		href: "/admin/contracts",
-		label: "contracts",
-		icon: "contracts",
-		feature: "contracts",
-	},
-	{
-		href: "/admin/invoicing",
-		label: "invoicing",
-		icon: "invoicing",
-		feature: "invoicing",
-	},
-	// Support tools
-	{ href: "/admin/emails", label: "emails", icon: "emails", feature: "emails", separator: true },
-	{
-		href: "/admin/messages",
-		label: "messages",
-		icon: "messages",
-		feature: "messages",
-		creatorOnly: true,
-	},
-	{
-		href: "/admin/platform",
-		label: "platform",
-		icon: "platform",
-		separator: true,
-		creatorOnly: true,
-	},
-];
-
-function isActive(href: string, pathname: string): boolean {
-	if (href === "/admin") return pathname === "/admin";
-	return pathname.startsWith(href);
-}
-
 function closeMobileMenu() {
 	mobileMenuOpen = false;
 }
@@ -261,7 +150,7 @@ function closeMobileMenu() {
 		</div>
 
 		<nav class="sidebar-nav" aria-label="Main navigation">
-			{#each navItems as item}
+			{#each adminNavItems as item}
 				{@const locked = item.feature ? !capabilities.hasFeature(item.feature) : false}
 				{@const hidden = item.creatorOnly && !capabilities.isCreator}
 				{#if hidden}
@@ -273,39 +162,13 @@ function closeMobileMenu() {
 				<a
 					href={locked ? "#" : item.href}
 					class="nav-item"
-					class:active={!locked && isActive(item.href, $page.url.pathname)}
+					class:active={!locked && isAdminRouteActive(item.href, $page.url.pathname)}
 					class:locked
 					onclick={(e) => { if (locked) e.preventDefault(); closeMobileMenu(); }}
 				>
-					<svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-						{#if item.icon === "grid"}
-							<rect x="3" y="3" width="7" height="7" /><rect x="14" y="3" width="7" height="7" /><rect x="3" y="14" width="7" height="7" /><rect x="14" y="14" width="7" height="7" />
-						{:else if item.icon === "package"}
-							<path d="M16.5 9.4l-9-5.19M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z" /><polyline points="3.27 6.96 12 12.01 20.73 6.96" /><line x1="12" y1="22.08" x2="12" y2="12" />
-						{:else if item.icon === "mail"}
-							<path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" /><polyline points="22,6 12,13 2,6" />
-						{:else if item.icon === "image"}
-							<rect x="3" y="3" width="18" height="18" rx="2" ry="2" /><circle cx="8.5" cy="8.5" r="1.5" /><polyline points="21 15 16 10 5 21" />
-						{:else if item.icon === "clients"}
-							<path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/>
-						{:else if item.icon === "board"}
-							<rect x="3" y="3" width="5" height="14" rx="1"/><rect x="10" y="3" width="5" height="10" rx="1"/><rect x="17" y="3" width="5" height="18" rx="1"/>
-						{:else if item.icon === "invoicing"}
-							<path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/>
-						{:else if item.icon === "quotes"}
-						<path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/>
-					{:else if item.icon === "contracts"}
-							<path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/>
-						{:else if item.icon === "emails"}
-							<rect x="2" y="4" width="20" height="16" rx="2"/><path d="M22 7l-10 7L2 7"/>
-						{:else if item.icon === "messages"}
-							<path d="M21 11.5a8.38 8.38 0 01-.9 3.8 8.5 8.5 0 01-7.6 4.7 8.38 8.38 0 01-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 01-.9-3.8 8.5 8.5 0 014.7-7.6 8.38 8.38 0 013.8-.9h.5a8.48 8.48 0 018 8v.5z"/>
-						{:else if item.icon === "platform"}
-							<circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z"/>
-						{/if}
-					</svg>
+					<AdminNavIcon icon={item.icon} />
 					<span>{item.label}</span>
-					{#if hrefToFlagKey[item.href] && unreadFlags[hrefToFlagKey[item.href]] && !isActive(item.href, $page.url.pathname)}
+					{#if hrefToNotificationKey[item.href] && unreadFlags[hrefToNotificationKey[item.href]] && !isAdminRouteActive(item.href, $page.url.pathname)}
 						<span class="nav-dot" aria-label="new content"></span>
 					{/if}
 					{#if locked}
@@ -323,42 +186,17 @@ function closeMobileMenu() {
 					<div class="user-info">
 						<span class="user-email">{authUserEmail}</span>
 					</div>
-					<button class="theme-toggle" onclick={() => { showPasswordForm = !showPasswordForm; passwordError = ""; passwordSuccess = false; currentPassword = ""; newPassword = ""; }}>
+					<button class="theme-toggle" onclick={() => (showPasswordForm = !showPasswordForm)}>
 						<svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
 							<rect x="3" y="11" width="18" height="11" rx="2" ry="2" /><path d="M7 11V7a5 5 0 0110 0v4" />
 						</svg>
 						<span>change password</span>
 					</button>
 					{#if showPasswordForm}
-						<form class="pw-form" onsubmit={handleChangePassword}>
-							{#if passwordError}
-								<p class="pw-error" role="alert">{passwordError}</p>
-							{/if}
-							{#if passwordSuccess}
-								<p class="pw-success" role="status">password updated</p>
-							{:else}
-								<input
-									type="password"
-									class="pw-input"
-									placeholder="current password"
-									aria-label="Current password"
-									bind:value={currentPassword}
-									required
-								/>
-								<input
-									type="password"
-									class="pw-input"
-									placeholder="new password (8+ chars)"
-									aria-label="New password"
-									bind:value={newPassword}
-									required
-									minlength="8"
-								/>
-								<button type="submit" class="pw-submit" disabled={passwordSaving}>
-									{passwordSaving ? "..." : "update"}
-								</button>
-							{/if}
-						</form>
+						<ChangePasswordForm
+							changePassword={(input) => config.authClient!.changePassword(input)}
+							onSuccess={() => (showPasswordForm = false)}
+						/>
 					{/if}
 					<button class="theme-toggle" onclick={() => config.authClient?.signOut()}>
 						<svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -533,10 +371,6 @@ function closeMobileMenu() {
 		opacity: 0.7;
 	}
 
-	.nav-item.active .nav-icon {
-		opacity: 1;
-	}
-
 	.nav-item.locked {
 		opacity: 0.35;
 		cursor: default;
@@ -595,60 +429,6 @@ function closeMobileMenu() {
 		text-overflow: ellipsis;
 		white-space: nowrap;
 		display: block;
-	}
-
-	.pw-form {
-		display: flex;
-		flex-direction: column;
-		gap: 6px;
-		padding: 8px 12px;
-	}
-
-	.pw-input {
-		background: var(--admin-surface);
-		border: 1px solid var(--admin-border);
-		border-radius: 4px;
-		padding: 7px 10px;
-		font-size: 0.8rem;
-		color: var(--admin-heading);
-		font-family: "Synonym", system-ui, sans-serif;
-		outline: none;
-	}
-
-	.pw-input:focus {
-		border-color: var(--admin-accent);
-	}
-
-	.pw-input::placeholder {
-		color: var(--admin-text-subtle);
-	}
-
-	.pw-submit {
-		background: var(--admin-accent);
-		color: var(--admin-bg);
-		border: none;
-		border-radius: 4px;
-		padding: 7px 12px;
-		font-size: 0.8rem;
-		font-family: "Synonym", system-ui, sans-serif;
-		cursor: pointer;
-		margin-top: 2px;
-	}
-
-	.pw-submit:disabled {
-		opacity: 0.5;
-	}
-
-	.pw-error {
-		color: rgb(248, 113, 113);
-		font-size: 0.78rem;
-		margin: 0;
-	}
-
-	.pw-success {
-		color: rgb(74, 222, 128);
-		font-size: 0.78rem;
-		margin: 0;
 	}
 
 	.theme-toggle {
