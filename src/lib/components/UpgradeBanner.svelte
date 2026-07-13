@@ -3,20 +3,15 @@ import type { Feature } from "../features";
 
 interface Props {
 	feature: Feature;
+	/** @deprecated Self-service checkout is retired; retained for source compatibility. */
 	platformUrl?: string;
+	/** @deprecated Self-service checkout is retired; retained for source compatibility. */
 	siteUrl?: string;
+	/** @deprecated Self-service checkout is retired; retained for source compatibility. */
 	clientEmail?: string;
 }
 
-let {
-	feature,
-	platformUrl = "",
-	siteUrl = "",
-	clientEmail = "",
-}: Props = $props();
-
-let loading = $state(false);
-let error = $state("");
+let { feature }: Props = $props();
 
 const featureLabels: Record<Feature, string> = {
 	dashboard: "dashboard",
@@ -32,27 +27,6 @@ const featureLabels: Record<Feature, string> = {
 	emails: "email templates",
 	messages: "messaging",
 };
-
-async function handleUpgrade() {
-	loading = true;
-	error = "";
-	try {
-		const base = platformUrl || "";
-		const res = await fetch(`${base}/api/platform/create-checkout`, {
-			method: "POST",
-			headers: { "Content-Type": "application/json" },
-			body: JSON.stringify({ clientEmail: clientEmail, siteUrl: siteUrl }),
-		});
-		if (!res.ok) {
-			throw new Error("failed to create checkout session");
-		}
-		const { url } = await res.json();
-		window.location.href = url;
-	} catch (e) {
-		error = "something went wrong. please try again.";
-		loading = false;
-	}
-}
 </script>
 
 <div class="upgrade-banner">
@@ -62,16 +36,11 @@ async function handleUpgrade() {
 			<path d="M2 17l10 5 10-5" />
 			<path d="M2 12l10 5 10-5" />
 		</svg>
-		<h3 class="upgrade-title">unlock {featureLabels[feature]}</h3>
+		<h3 class="upgrade-title">{featureLabels[feature]} access</h3>
 		<p class="upgrade-description">
-			upgrade to full crm for client management, invoicing, quotes, contracts, and more.
+			access to this feature is managed by the platform. contact your platform administrator for
+			details.
 		</p>
-		{#if error}
-			<p class="upgrade-error" role="alert">{error}</p>
-		{/if}
-		<button class="upgrade-button" onclick={handleUpgrade} disabled={loading}>
-			{loading ? "redirecting..." : "upgrade to full crm"}
-		</button>
 	</div>
 </div>
 
@@ -109,35 +78,6 @@ async function handleUpgrade() {
 		font-size: 0.88rem;
 		color: var(--admin-text-muted);
 		line-height: 1.6;
-		margin: 0 0 28px;
-	}
-
-	.upgrade-error {
-		font-size: 0.82rem;
-		color: var(--status-rose);
-		margin: 0 0 16px;
-	}
-
-	.upgrade-button {
-		background: var(--admin-accent);
-		color: #fff;
-		border: none;
-		padding: 10px 28px;
-		border-radius: 6px;
-		font-family: "Synonym", system-ui, sans-serif;
-		font-size: 0.88rem;
-		font-weight: 500;
-		cursor: pointer;
-		transition: opacity 0.15s;
-		text-transform: lowercase;
-	}
-
-	.upgrade-button:hover:not(:disabled) {
-		opacity: 0.85;
-	}
-
-	.upgrade-button:disabled {
-		opacity: 0.5;
-		cursor: not-allowed;
+		margin: 0;
 	}
 </style>
