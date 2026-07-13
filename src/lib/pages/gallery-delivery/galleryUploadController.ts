@@ -1,9 +1,9 @@
 import {
-	GALLERY_MAX_FILE_SIZE_BYTES,
 	GALLERY_MAX_FILE_SIZE_LABEL,
 	galleryFileContentType,
 	isAllowedGalleryFile,
 } from "../../galleryUploadPolicy";
+import { isValidGalleryUploadSize } from "../../galleryUploadSize";
 import type { GalleryStoragePort, GalleryUploadSession } from "./galleryStoragePort";
 
 const DEFAULT_MAX_CONCURRENT = 3;
@@ -208,14 +208,16 @@ export function createGalleryUploadController(
 				batchRejectedSizeBytes += file.size;
 				continue;
 			}
-			if (file.size > GALLERY_MAX_FILE_SIZE_BYTES) {
+			if (!isValidGalleryUploadSize(file.size)) {
 				newFiles.push({
 					file,
 					id: randomId(),
 					intakeStatus: "rejected",
 					status: "error",
 					progress: 0,
-					error: `File is over ${GALLERY_MAX_FILE_SIZE_LABEL}`,
+					error: file.size <= 0
+						? "File is empty"
+						: `File is over ${GALLERY_MAX_FILE_SIZE_LABEL}`,
 					retryable: false,
 				});
 				batchRejectedFileCount += 1;
@@ -251,11 +253,12 @@ export function createGalleryUploadController(
 			const uploadSessionToken = await ensureUploadSession();
 			throwIfCanceled(signal);
 
-			const { r2Key, uploadUrl } = await options.storage.presign({
+			const { r2Key, uploadUrl, uploadToken } = await options.storage.presign({
 				siteUrl: options.siteUrl,
 				galleryId: getGalleryId(),
 				filename: next.file.name,
 				contentType,
+				sizeBytes: next.file.size,
 				uploadSessionToken,
 				signal,
 			});
@@ -268,6 +271,7 @@ export function createGalleryUploadController(
 				file: next.file,
 				r2Key,
 				uploadUrl,
+				uploadToken,
 				contentType,
 				uploadSessionToken,
 				signal,

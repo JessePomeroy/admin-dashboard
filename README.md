@@ -149,6 +149,13 @@ server adapter parses the Worker's right-to-left storage-key shape and requires
 its exact site namespace to match the host's configured `siteUrl`. Upload-session
 grants are bound to that same receiving host and to one single-segment gallery
 ID. Only trailing slashes are canonicalized; site identity stays case-sensitive.
+New gallery presigns carry the exact positive file size and retain the Worker's
+short-lived upload capability separately from its URL. Direct browser PUT and
+same-origin host fallback send that same capability; the host proxy preserves
+the streamed length and does not replace upload authority with the global
+Worker admin bearer. Host-provider request limits still apply: Vercel currently
+limits inbound function bodies to 4.5 MB, so larger gallery files require the
+direct browser-to-Worker path.
 
 ## Development
 

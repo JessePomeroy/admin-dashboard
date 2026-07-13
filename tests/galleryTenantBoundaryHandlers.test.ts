@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { setServerConfig, type AdminServerConfig } from "../src/lib/config";
+import { GALLERY_MAX_FILE_SIZE_BYTES } from "../src/lib/galleryUploadPolicy";
 import {
 	createGalleryBulkDeleteHandler,
 	createGalleryDeleteHandler,
@@ -46,15 +47,29 @@ function jsonRequest(
 	});
 }
 
-function uploadRequest(key: string, uploadSessionToken?: string): Request {
+function uploadRequest(
+	key: string,
+	uploadSessionToken?: string,
+	options: {
+		uploadToken?: string | null;
+		contentLength?: string | null;
+		body?: Blob | null;
+	} = {},
+): Request {
+	const uploadToken = options.uploadToken === undefined
+		? "worker-upload-token"
+		: options.uploadToken;
+	const contentLength = options.contentLength === undefined ? "5" : options.contentLength;
 	return new Request(
 		`https://tenant.example/api/admin/galleries/upload?key=${encodeURIComponent(key)}`,
 		{
 			method: "PUT",
-			body: new Blob(["image"]),
+			body: options.body === undefined ? new Blob(["image"]) : options.body,
 			headers: {
 				"Content-Type": "image/jpeg",
 				cookie: "session=admin-token",
+				...(uploadToken ? { "X-Gallery-Upload-Token": uploadToken } : {}),
+				...(contentLength ? { "Content-Length": contentLength } : {}),
 				...(uploadSessionToken
 					? { "X-Gallery-Upload-Session": uploadSessionToken }
 					: {}),
@@ -95,6 +110,69 @@ describe("gallery tenant boundary", () => {
 		expect(fetchMock).not.toHaveBeenCalled();
 	});
 
+	it.each([null, 0, 1.5, GALLERY_MAX_FILE_SIZE_BYTES + 1])(
+		"rejects invalid present presign size %s before contacting the Worker",
+		async (sizeBytes) => {
+			configureServer();
+			const fetchMock = vi.fn();
+			vi.stubGlobal("fetch", fetchMock);
+
+			await expect(createGalleryPresignHandler()({
+				request: jsonRequest("/api/admin/galleries/presign", {
+					siteUrl: "tenant.example",
+					galleryId: "gallery-1",
+					filename: "photo.jpg",
+					contentType: "image/jpeg",
+					sizeBytes,
+				}),
+			})).rejects.toMatchObject({ status: 400 });
+			expect(fetchMock).not.toHaveBeenCalled();
+		},
+	);
+
+	it("retains missing-size v1 presign compatibility for old browser bundles", async () => {
+		configureServer();
+		const fetchMock = vi.fn(async () => Response.json({
+			r2Key: "tenant.example/gallery-1/original/photo.jpg",
+			uploadUrl: "/upload/put?key=photo&token=legacy-token",
+			uploadToken: "legacy-token",
+		}));
+		vi.stubGlobal("fetch", fetchMock);
+
+		const response = await createGalleryPresignHandler()({
+			request: jsonRequest("/api/admin/galleries/presign", {
+				siteUrl: "tenant.example",
+				galleryId: "gallery-1",
+				filename: "photo.jpg",
+				contentType: "image/jpeg",
+			}),
+		});
+
+		expect(response.status).toBe(200);
+		expect(JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body)))
+			.not.toHaveProperty("sizeBytes");
+		expect(await response.json()).toMatchObject({ uploadToken: "legacy-token" });
+	});
+
+	it("fails closed when a size-aware Worker presign omits its capability", async () => {
+		configureServer();
+		const fetchMock = vi.fn(async () => Response.json({
+			r2Key: "tenant.example/gallery-1/original/photo.jpg",
+			uploadUrl: "/upload/put?key=tenant.example%2Fgallery-1%2Foriginal%2Fphoto.jpg",
+		}));
+		vi.stubGlobal("fetch", fetchMock);
+
+		await expect(createGalleryPresignHandler()({
+			request: jsonRequest("/api/admin/galleries/presign", {
+				siteUrl: "tenant.example",
+				galleryId: "gallery-1",
+				filename: "photo.jpg",
+				contentType: "image/jpeg",
+				sizeBytes: 5,
+			}),
+		})).rejects.toMatchObject({ status: 502 });
+	});
+
 	it("rejects a foreign upload without a grant before forwarding its stream", async () => {
 		configureServer();
 		const fetchMock = vi.fn();
@@ -104,6 +182,52 @@ describe("gallery tenant boundary", () => {
 			request: uploadRequest("other.example/gallery-1/original/photo.jpg"),
 		})).rejects.toMatchObject({ status: 403 });
 		expect(fetchMock).not.toHaveBeenCalled();
+	});
+
+	it.each([
+		["a capability", { uploadToken: null }, 400],
+		["Content-Length", { contentLength: null }, 411],
+		["a valid Content-Length", { contentLength: "1.5" }, 400],
+		["a body", { body: null }, 400],
+	] as const)("requires %s before proxying a same-site upload", async (
+		_label,
+		options,
+		expectedStatus,
+	) => {
+		configureServer();
+		const fetchMock = vi.fn();
+		vi.stubGlobal("fetch", fetchMock);
+
+		await expect(createGalleryUploadHandler()({
+			request: uploadRequest(
+				"tenant.example/gallery-1/original/photo.jpg",
+				undefined,
+				options,
+			),
+		})).rejects.toMatchObject({ status: expectedStatus });
+		expect(fetchMock).not.toHaveBeenCalled();
+	});
+
+	it("uses native FixedLengthStream when the host runtime provides it", async () => {
+		configureServer();
+		const observedSizes: number[] = [];
+		class TestFixedLengthStream extends TransformStream<Uint8Array, Uint8Array> {
+			constructor(sizeBytes: number) {
+				observedSizes.push(sizeBytes);
+				super();
+			}
+		}
+		vi.stubGlobal("FixedLengthStream", TestFixedLengthStream);
+		const fetchMock = vi.fn(async () => Response.json({ success: true }));
+		vi.stubGlobal("fetch", fetchMock);
+
+		const response = await createGalleryUploadHandler()({
+			request: uploadRequest("tenant.example/gallery-1/original/photo.jpg"),
+		});
+
+		expect(response.status).toBe(200);
+		expect(observedSizes).toEqual([5]);
+		expect(fetchMock.mock.calls[0]?.[1]?.body).toBeInstanceOf(ReadableStream);
 	});
 
 	it("does not let an invalid grant fall back into a foreign process request", async () => {
@@ -176,7 +300,8 @@ describe("gallery tenant boundary", () => {
 			if (String(input).endsWith("/upload/presign")) {
 				return Response.json({
 					r2Key: "tenant.example/gallery-1/original/photo.jpg",
-					uploadUrl: "/upload/put",
+					uploadUrl: "/upload/put?key=tenant.example%2Fgallery-1%2Foriginal%2Fphoto.jpg",
+					uploadToken: "worker-upload-token",
 				});
 			}
 			return Response.json({ success: true });
@@ -189,6 +314,7 @@ describe("gallery tenant boundary", () => {
 				galleryId: "gallery-1",
 				filename: "photo.jpg",
 				contentType: "image/jpeg",
+				sizeBytes: 5,
 				uploadSessionToken,
 			}),
 		});
@@ -224,7 +350,18 @@ describe("gallery tenant boundary", () => {
 			galleryId: "gallery-1",
 			filename: "photo.jpg",
 			contentType: "image/jpeg",
+			sizeBytes: 5,
 		});
+		const uploadCall = fetchMock.mock.calls.find(([input]) =>
+			String(input).startsWith("https://gallery.example/upload/put?")
+		);
+		expect(uploadCall?.[1]?.headers).toEqual({
+			"Content-Type": "image/jpeg",
+			"Content-Length": "5",
+			"X-Gallery-Upload-Token": "worker-upload-token",
+		});
+		expect(uploadCall?.[1]?.headers).not.toHaveProperty("Authorization");
+		expect(uploadCall?.[1]?.headers).not.toHaveProperty("X-Gallery-Upload-Session");
 		expect(JSON.parse(String(processCall?.[1]?.body))).toEqual({
 			r2Key: "tenant.example/gallery-1/original/photo.jpg",
 		});
@@ -252,6 +389,8 @@ describe("gallery tenant boundary", () => {
 		const uploadSessionToken = await issueUploadSessionToken("tenant.example/");
 		const fetchMock = vi.fn(async () => Response.json({
 			r2Key: "tenant.example/gallery-1/original/photo.jpg",
+			uploadUrl: "/upload/put?key=tenant.example%2Fgallery-1%2Foriginal%2Fphoto.jpg",
+			uploadToken: "worker-upload-token",
 		}));
 		vi.stubGlobal("fetch", fetchMock);
 
@@ -261,6 +400,7 @@ describe("gallery tenant boundary", () => {
 				galleryId: "gallery-1",
 				filename: "photo.jpg",
 				contentType: "image/jpeg",
+				sizeBytes: 5,
 				uploadSessionToken,
 			}),
 		});

@@ -80,6 +80,19 @@ canonicalization) before either an upload-session grant or request-level admin
 authorization can permit a Worker call. A grant is valid only on its receiving
 host and for one single-segment gallery ID.
 
+Upload authority remains Worker-owned across both browser transports. The
+controller sends the exact `File.size` during presign and retains the returned
+short-lived capability separately from the upload URL. A direct PUT sends that
+capability to the Worker; if the browser must fall back through the host, the
+same capability accompanies the host-scoped upload-session grant. The host
+validates tenant/key scope and preserves the body as a fixed-length stream, but
+does not substitute the global Worker admin bearer for PUT authority. Current
+Vercel/Node hosts use the validated `Content-Length` with streaming `fetch`;
+Cloudflare runtimes use native `FixedLengthStream` when available. Neither path
+buffers image bytes in the package. Provider request-body limits still apply to
+the fallback: Vercel currently limits inbound function bodies to 4.5 MB, so
+larger gallery files must use the direct browser-to-Worker PUT path.
+
 This boundary spans three repositories and must be verified end-to-end:
 
 - `admin-dashboard`
