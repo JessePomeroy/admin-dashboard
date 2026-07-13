@@ -1,5 +1,6 @@
 import { error, json } from "@sveltejs/kit";
 import { getServerConfig } from "../../config.js";
+import { isValidGalleryUploadSize } from "../../galleryUploadSize.js";
 import { handleServerError } from "../handleError.js";
 import {
 	canonicalGallerySiteUrl,
@@ -13,6 +14,7 @@ import { validateFilename } from "../validation.js";
 const UPLOAD_SESSION_SCOPE = "gallery-upload-session";
 const DEFAULT_UPLOAD_SESSION_TTL_MS = 4 * 60 * 60 * 1000;
 const BULK_DELETE_KEYS_PER_WORKER_REQUEST = 150;
+const UPLOAD_CAPABILITY_HEADER = "X-Gallery-Upload-Token";
 
 interface GalleryUploadSessionPayload {
 	scope: typeof UPLOAD_SESSION_SCOPE;
@@ -85,6 +87,43 @@ function requireGalleryKeyForConfiguredSite(
 function optionalUploadSessionToken(value: unknown): string | null | undefined {
 	if (value === null || value === undefined || typeof value === "string") return value;
 	throw error(400, "uploadSessionToken must be a string");
+}
+
+function optionalGalleryUploadSize(value: unknown): number | undefined {
+	if (value === undefined) return undefined;
+	if (!isValidGalleryUploadSize(value)) {
+		throw error(400, "sizeBytes must be a positive supported upload size");
+	}
+	return value;
+}
+
+function requireUploadContentLength(request: Request): number {
+	const value = request.headers.get("Content-Length");
+	if (!value) throw error(411, "Content-Length is required");
+	if (!/^\d+$/.test(value)) throw error(400, "Invalid Content-Length");
+	const sizeBytes = Number(value);
+	if (!isValidGalleryUploadSize(sizeBytes)) {
+		throw error(400, "Invalid Content-Length");
+	}
+	return sizeBytes;
+}
+
+type FixedLengthStreamConstructor = new(
+	expectedLength: number,
+) => TransformStream<Uint8Array, Uint8Array>;
+
+function fixedLengthUploadBody(
+	body: ReadableStream<Uint8Array>,
+	sizeBytes: number,
+): ReadableStream<Uint8Array> {
+	const FixedLengthStream = (
+		globalThis as typeof globalThis & {
+			FixedLengthStream?: FixedLengthStreamConstructor;
+		}
+	).FixedLengthStream;
+	return typeof FixedLengthStream === "function"
+		? body.pipeThrough(new FixedLengthStream(sizeBytes))
+		: body;
 }
 
 function base64UrlEncode(input: string | ArrayBuffer): string {
@@ -247,6 +286,52 @@ async function parseWorkerJson(res: Response): Promise<unknown> {
 	return res.json();
 }
 
+function requireV2WorkerPresignResult(
+	value: unknown,
+	options: {
+		workerUrl: string;
+		siteUrl: string;
+		galleryId: string;
+	},
+): { r2Key: string; uploadUrl: string; uploadToken: string } {
+	if (!value || typeof value !== "object" || Array.isArray(value)) {
+		throw error(502, "Gallery worker returned an invalid upload capability");
+	}
+	const { r2Key, uploadUrl, uploadToken } = value as Record<string, unknown>;
+	if (
+		typeof r2Key !== "string"
+		|| typeof uploadUrl !== "string"
+		|| typeof uploadToken !== "string"
+		|| !uploadToken
+		|| uploadToken !== uploadToken.trim()
+	) throw error(502, "Gallery worker returned an invalid upload capability");
+
+	const parsedKey = parseGalleryStorageKey(r2Key);
+	if (
+		!parsedKey
+		|| parsedKey.kind !== "original"
+		|| canonicalGallerySiteUrl(parsedKey.siteUrl) !== options.siteUrl
+		|| parsedKey.galleryId !== options.galleryId
+	) throw error(502, "Gallery worker returned an invalid upload capability");
+
+	try {
+		const worker = new URL(options.workerUrl);
+		const endpoint = new URL(uploadUrl, worker);
+		const queryNames = [...endpoint.searchParams.keys()];
+		if (
+			endpoint.origin !== worker.origin
+			|| endpoint.pathname !== "/upload/put"
+			|| endpoint.searchParams.get("key") !== r2Key
+			|| endpoint.searchParams.has("token")
+			|| queryNames.some((name) => name !== "key")
+		) throw new Error("invalid endpoint");
+	} catch {
+		throw error(502, "Gallery worker returned an invalid upload capability");
+	}
+
+	return { r2Key, uploadUrl, uploadToken };
+}
+
 function chunkKeys(keys: string[]): string[][] {
 	const chunks: string[][] = [];
 	for (let i = 0; i < keys.length; i += BULK_DELETE_KEYS_PER_WORKER_REQUEST) {
@@ -309,6 +394,7 @@ export function createGalleryPresignHandler() {
 			galleryId?: unknown;
 			filename?: unknown;
 			contentType?: unknown;
+			sizeBytes?: unknown;
 			uploadSessionToken?: unknown;
 		};
 		if (typeof input.filename !== "string" || !input.filename
@@ -317,6 +403,7 @@ export function createGalleryPresignHandler() {
 		}
 		const siteUrl = requireMatchingGallerySite(input.siteUrl, config.siteUrl);
 		const galleryId = requireGalleryId(input.galleryId);
+		const sizeBytes = optionalGalleryUploadSize(input.sizeBytes);
 		const uploadSessionToken = optionalUploadSessionToken(input.uploadSessionToken);
 		await requireGalleryUploadAccess(request, {
 			siteUrl,
@@ -340,11 +427,19 @@ export function createGalleryPresignHandler() {
 					galleryId,
 					filename,
 					contentType: input.contentType,
+					...(sizeBytes === undefined ? {} : { sizeBytes }),
 				}),
 			});
 
 			if (!res.ok) throw error(res.status, await res.text());
-			return json(await parseWorkerJson(res));
+			const result = await parseWorkerJson(res);
+			return json(sizeBytes === undefined
+				? result
+				: requireV2WorkerPresignResult(result, {
+					workerUrl: config.galleryWorkerUrl!,
+					siteUrl,
+					galleryId,
+				}));
 		} catch (err) {
 			handleServerError(err, "Failed to generate upload URL");
 		}
@@ -361,6 +456,11 @@ export function createGalleryUploadHandler() {
 		requireGalleryKeyForConfiguredSite(key, config.siteUrl);
 		await requireGalleryUploadAccess(request, { r2Key: key });
 		requireGalleryKeyForConfiguredSite(key, config.siteUrl, { originalOnly: true });
+		const uploadToken = request.headers.get(UPLOAD_CAPABILITY_HEADER);
+		if (!uploadToken) throw error(400, "Upload capability is required");
+		const sizeBytes = requireUploadContentLength(request);
+		if (!request.body) throw error(400, "Upload body is required");
+		const body = fixedLengthUploadBody(request.body, sizeBytes);
 
 		try {
 			const res = await fetch(
@@ -369,9 +469,10 @@ export function createGalleryUploadHandler() {
 					method: "PUT",
 					headers: {
 						"Content-Type": request.headers.get("Content-Type") ?? "application/octet-stream",
-						Authorization: `Bearer ${config.galleryAdminSecret}`,
+						"Content-Length": String(sizeBytes),
+						[UPLOAD_CAPABILITY_HEADER]: uploadToken,
 					},
-					body: request.body,
+					body,
 					// @ts-expect-error — duplex is required for streaming request bodies but missing from TypeScript's RequestInit
 					duplex: "half",
 				},

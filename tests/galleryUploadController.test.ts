@@ -94,6 +94,45 @@ describe("createGalleryUploadController", () => {
 		]);
 	});
 
+	it("rejects empty files locally instead of requesting a legacy presign", async () => {
+		const { controller, storage } = createController();
+
+		controller.addFiles([file("empty.jpg", 0)]);
+
+		const snapshot = controller.getSnapshot();
+		expect(snapshot.files).toHaveLength(1);
+		expect(snapshot.files[0]).toMatchObject({
+			status: "error",
+			error: "File is empty",
+			retryable: false,
+		});
+		expect(storage.startUploadSession).not.toHaveBeenCalled();
+		expect(storage.presign).not.toHaveBeenCalled();
+	});
+
+	it("threads exact File.size and the returned Worker capability through upload", async () => {
+		const storage = createStorage({
+			presign: vi.fn(async () => ({
+				r2Key: "site/gallery/original/photo.jpg",
+				uploadUrl: "/upload/put?key=photo",
+				uploadToken: "worker-upload-token",
+			})),
+		});
+		const { controller } = createController({ storage });
+
+		controller.addFiles([file("photo.jpg", 7)]);
+
+		await vi.waitFor(() => {
+			expect(storage.uploadFile).toHaveBeenCalledTimes(1);
+		});
+		expect(storage.presign).toHaveBeenCalledWith(expect.objectContaining({
+			sizeBytes: 7,
+		}));
+		expect(storage.uploadFile).toHaveBeenCalledWith(expect.objectContaining({
+			uploadToken: "worker-upload-token",
+		}));
+	});
+
 	it("runs no more than the configured number of uploads at once", async () => {
 		const firstPresign = deferred<{ r2Key: string; uploadUrl: string }>();
 		const secondPresign = deferred<{ r2Key: string; uploadUrl: string }>();

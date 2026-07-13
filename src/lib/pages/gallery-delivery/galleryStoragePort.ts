@@ -1,7 +1,10 @@
+import { isValidGalleryUploadSize } from "../../galleryUploadSize";
+
 const PRESIGN_TIMEOUT_MS = 15_000;
 const UPLOAD_TIMEOUT_MS = 10 * 60_000;
 const PROCESS_TIMEOUT_MS = 60_000;
 const DIRECT_UPLOAD_FALLBACK_STATUSES = new Set([401, 403, 404]);
+const UPLOAD_CAPABILITY_HEADER = "X-Gallery-Upload-Token";
 
 export interface GalleryUploadSession {
 	token: string;
@@ -11,6 +14,7 @@ export interface GalleryUploadSession {
 export interface GalleryPresignResult {
 	r2Key: string;
 	uploadUrl?: string;
+	uploadToken?: string;
 }
 
 export interface GalleryStoragePort {
@@ -24,6 +28,7 @@ export interface GalleryStoragePort {
 		galleryId: string;
 		filename: string;
 		contentType: string;
+		sizeBytes?: number;
 		uploadSessionToken: string;
 		signal?: AbortSignal;
 	}): Promise<GalleryPresignResult>;
@@ -31,6 +36,7 @@ export interface GalleryStoragePort {
 		file: Blob;
 		r2Key: string;
 		uploadUrl?: string;
+		uploadToken?: string;
 		contentType: string;
 		uploadSessionToken: string;
 		signal?: AbortSignal;
@@ -102,7 +108,22 @@ async function parseJsonObject(res: Response, fallback: string): Promise<Record<
 
 function directEndpoint(uploadUrl: string, galleryWorkerUrl?: string): string | null {
 	if (!galleryWorkerUrl) return null;
-	return new URL(uploadUrl, galleryWorkerUrl).toString();
+	try {
+		const worker = new URL(galleryWorkerUrl);
+		const endpoint = new URL(uploadUrl, worker);
+		return endpoint.origin === worker.origin ? endpoint.toString() : null;
+	} catch {
+		return null;
+	}
+}
+
+function isV2UploadUrl(value: unknown): value is string {
+	if (typeof value !== "string" || !value) return false;
+	try {
+		return !new URL(value, "https://gallery-upload.invalid").searchParams.has("token");
+	} catch {
+		return false;
+	}
 }
 
 export function createGalleryStoragePort(
@@ -130,7 +151,18 @@ export function createGalleryStoragePort(
 			return { token: data.uploadSessionToken, expiresAt: data.expiresAt };
 		},
 
-		async presign({ siteUrl, galleryId, filename, contentType, uploadSessionToken, signal }) {
+		async presign({
+			siteUrl,
+			galleryId,
+			filename,
+			contentType,
+			sizeBytes,
+			uploadSessionToken,
+			signal,
+		}) {
+			if (!isValidGalleryUploadSize(sizeBytes)) {
+				throw new Error("A positive upload size is required");
+			}
 			const res = await fetchWithTimeout(
 				fetcher,
 				"/api/admin/galleries/presign",
@@ -142,6 +174,7 @@ export function createGalleryStoragePort(
 						galleryId,
 						filename,
 						contentType,
+						sizeBytes,
 						uploadSessionToken,
 					}),
 				},
@@ -149,20 +182,38 @@ export function createGalleryStoragePort(
 				signal,
 			);
 			const data = await parseJsonObject(res, "Failed to get upload URL");
-			if (typeof data.r2Key !== "string") {
+			if (
+				typeof data.r2Key !== "string"
+				|| typeof data.uploadToken !== "string"
+				|| !data.uploadToken
+				|| (data.uploadUrl !== undefined && !isV2UploadUrl(data.uploadUrl))
+			) {
 				throw new Error("Presign response was invalid");
 			}
 			return {
 				r2Key: data.r2Key,
 				uploadUrl: typeof data.uploadUrl === "string" ? data.uploadUrl : undefined,
+				uploadToken: data.uploadToken,
 			};
 		},
 
-		async uploadFile({ file, r2Key, uploadUrl, contentType, uploadSessionToken, signal }) {
+		async uploadFile({
+			file,
+			r2Key,
+			uploadUrl,
+			uploadToken,
+			contentType,
+			uploadSessionToken,
+			signal,
+		}) {
+			if (!uploadToken) throw new Error("Upload capability is required");
 			const proxyEndpoint = `/api/admin/galleries/upload?key=${encodeURIComponent(r2Key)}`;
 			const requestInit = {
 				method: "PUT",
-				headers: { "Content-Type": contentType },
+				headers: {
+					"Content-Type": contentType,
+					[UPLOAD_CAPABILITY_HEADER]: uploadToken,
+				},
 				body: file,
 			};
 			const endpoint = uploadUrl ? directEndpoint(uploadUrl, options.galleryWorkerUrl) : null;
