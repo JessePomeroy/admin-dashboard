@@ -282,12 +282,13 @@ export interface AdminServerConfig extends AdminConfig {
 	resendApiKey: string;
 	galleryAdminSecret?: string;
 	/**
-	 * Verify that a request comes from an authenticated admin.
-	 * Called by all server handlers before processing. Throw or return
-	 * false to reject the request with 401. If not provided, handlers
-	 * skip the check (consumer is responsible for route-level auth).
+	 * Verify that a request comes from an authorized admin for the host-owned
+	 * tenant or creator scope. Every shared side-effect handler requires this
+	 * before external work. A scoped upload-session grant may replace a repeated
+	 * call after this verifier authorized issuance. Throw or return false to
+	 * reject the request.
 	 */
-	verifyAdmin?: (request: Request) => Promise<boolean>;
+	verifyAdmin: (request: Request) => Promise<boolean>;
 	/**
 	 * Extract a Convex auth token from the incoming request.
 	 * Called by server handlers before making Convex mutations that

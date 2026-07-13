@@ -41,7 +41,11 @@ tenant, billing-identity, or redirect authority in the browser.
 `setServerConfig` stores the server adapter configuration for SvelteKit handler
 factories. Server modules may create authenticated Convex HTTP clients, send
 Resend email, and forward gallery operations, but credentials and authorization
-decisions remain host-owned.
+decisions remain host-owned. A host-supplied `verifyAdmin` callback is required;
+shared side-effect handlers fail closed at runtime if it is missing. A scoped
+gallery upload-session grant may replace a repeated request-level check after
+authorized issuance, but the package still requires verifier configuration
+before accepting that grant or contacting the Worker.
 
 Import server factories from `@jessepomeroy/admin/server` so browser bundles do
 not traverse server dependencies.
@@ -57,7 +61,10 @@ Authentication and authorization are separate:
 4. The browser WebSocket receives a short-lived token for queries.
 5. HTTP mutations receive a fresh authenticated Convex client.
 
-The package cannot infer tenant membership from a valid identity alone.
+The package cannot infer tenant membership from a valid identity alone. Every
+shared email, portal, and gallery side-effect factory therefore depends on the
+required verifier (directly or through an authorized scoped upload grant)
+rather than treating route mounting as authorization.
 
 ## Gallery boundary
 

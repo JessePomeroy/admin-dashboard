@@ -104,6 +104,20 @@ describe("createGalleryImageHandler", () => {
 });
 
 describe("createGalleryUploadSessionHandler", () => {
+	it("does not issue an upload-session grant without authorization configuration", async () => {
+		configureServerConfig({ verifyAdmin: undefined });
+		const handler = createGalleryUploadSessionHandler();
+
+		await expect(
+			handler({
+				request: makeRequest({
+					siteUrl: "https://tenant.example",
+					galleryId: "gallery-1",
+				}),
+			}),
+		).rejects.toMatchObject({ status: 500 });
+	});
+
 	it("rejects unauthenticated requests before issuing upload sessions", async () => {
 		configureServerConfig({
 			verifyAdmin: vi.fn(async () => {
@@ -168,6 +182,24 @@ describe("createGalleryUploadSessionHandler", () => {
 		).rejects.toMatchObject({ status: 403 });
 	});
 
+	it("does not accept a valid upload grant after verifier configuration is removed", async () => {
+		configureServerConfig();
+		const uploadSessionToken = await issueUploadSessionToken();
+		configureServerConfig({ verifyAdmin: undefined });
+		const fetchMock = vi.fn();
+		vi.stubGlobal("fetch", fetchMock);
+
+		await expect(
+			createGalleryDeleteHandler()({
+				request: makeJsonRequest("/api/admin/galleries/delete", {
+					r2Key: "https://tenant.example/gallery-1/original/photo.jpg",
+					uploadSessionToken,
+				}),
+			}),
+		).rejects.toMatchObject({ status: 500 });
+		expect(fetchMock).not.toHaveBeenCalled();
+	});
+
 	it("rejects upload-session access to prefix matches that are not gallery object keys", async () => {
 		configureServerConfig();
 		const uploadSessionToken = await issueUploadSessionToken();
@@ -211,6 +243,21 @@ describe("createGalleryUploadSessionHandler", () => {
 });
 
 describe("createGalleryBulkDeleteHandler", () => {
+	it("rejects missing authorization configuration before contacting the worker", async () => {
+		configureServerConfig({ verifyAdmin: undefined });
+		const fetchMock = vi.fn();
+		vi.stubGlobal("fetch", fetchMock);
+
+		await expect(
+			createGalleryBulkDeleteHandler()({
+				request: makeJsonRequest("/api/admin/galleries/bulk-delete", {
+					keys: ["https://tenant.example/gallery-1/original/photo.jpg"],
+				}),
+			}),
+		).rejects.toMatchObject({ status: 500 });
+		expect(fetchMock).not.toHaveBeenCalled();
+	});
+
 	it("forwards admin bulk-delete requests to the gallery worker", async () => {
 		configureServerConfig();
 		const fetchMock = vi.fn(async () => Response.json({ success: true, deleted: 3 }));
