@@ -12,13 +12,10 @@ import {
 	QUOTE_STATUS_COLORS,
 } from "../../utils";
 import PackageEditor from "./PackageEditor.svelte";
-
-interface EditablePackage {
-	name: string;
-	description: string;
-	price: number;
-	included: string[];
-}
+import {
+	type EditableQuotePackage,
+	toEditableQuotePackages,
+} from "./quotePackages";
 
 interface Props {
 	quote: Quote;
@@ -28,7 +25,7 @@ interface Props {
 	templates: EmailTemplate[];
 	onclose: () => void;
 	onsaveedit: (data: {
-		packages: EditablePackage[];
+		packages: EditableQuotePackage[];
 		category: "photography" | "web";
 		validUntil: string;
 		notes: string;
@@ -77,7 +74,7 @@ let lastChangeNote = $state("");
 let showConvertForm = $state(false);
 
 // Edit form state
-let editPackages = $state<EditablePackage[]>([]);
+let editPackages = $state<EditableQuotePackage[]>([]);
 let editValidUntil = $state("");
 let editNotes = $state("");
 let editCategory = $state<"photography" | "web">("photography");
@@ -102,12 +99,7 @@ let detailTotal = $derived(
 let editTotal = $derived(editPackages.reduce((sum, pkg) => sum + pkg.price, 0));
 
 function startEdit() {
-	editPackages = quote.packages.map((pkg: QuotePackage) => ({
-		name: pkg.name || "",
-		description: pkg.description || "",
-		price: pkg.price / 100,
-		included: [...(pkg.included || [])],
-	}));
+	editPackages = toEditableQuotePackages(quote.packages);
 	editValidUntil = quote.validUntil || "";
 	editNotes = quote.notes || "";
 	editCategory = (quote.category as "photography" | "web") || "photography";

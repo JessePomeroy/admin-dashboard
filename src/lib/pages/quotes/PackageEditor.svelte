@@ -1,16 +1,11 @@
 <script lang="ts">
-interface EditablePackage {
-	name: string;
-	description: string;
-	price: number;
-	included: string[];
-}
+import type { EditableQuotePackage } from "./quotePackages";
 
 interface Props {
-	packages: EditablePackage[];
+	packages: EditableQuotePackage[];
 	newIncludedItem: Record<number, string>;
 	priceLabel?: string;
-	onpackageschange: (packages: EditablePackage[]) => void;
+	onpackageschange: (packages: EditableQuotePackage[]) => void;
 	onnewincludeditemchange: (items: Record<number, string>) => void;
 }
 

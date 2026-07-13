@@ -6,13 +6,17 @@ import { getAdminConfig } from "../config";
 import FeatureGate from "../components/FeatureGate.svelte";
 import LoadingState from "../components/LoadingState.svelte";
 import type { Quote, QuotePreset } from "../types";
-import { copyPortalLink, dollarsToCents, toId } from "../utils";
+import { copyPortalLink, toId } from "../utils";
 import { addToast } from "../toast";
 import { logger } from "../logger";
 import PresetManager from "./quotes/PresetManager.svelte";
 import QuoteCreateModal from "./quotes/QuoteCreateModal.svelte";
 import QuoteDetailModal from "./quotes/QuoteDetailModal.svelte";
 import QuoteTable from "./quotes/QuoteTable.svelte";
+import {
+	type EditableQuotePackage,
+	normalizeEditableQuotePackages,
+} from "./quotes/quotePackages";
 
 const config = getAdminConfig();
 const { api } = config;
@@ -99,23 +103,13 @@ let stats = $derived({
 async function saveNewQuote(formData: {
 	clientId: string;
 	category: string;
-	packages: {
-		name: string;
-		description: string;
-		price: number;
-		included: string[];
-	}[];
+	packages: EditableQuotePackage[];
 	validUntil: string;
 	notes: string;
 }) {
 	saving = true;
 	try {
-		const packages = formData.packages.map((pkg) => ({
-			name: pkg.name,
-			description: pkg.description || undefined,
-			price: dollarsToCents(pkg.price),
-			included: pkg.included.length > 0 ? pkg.included : undefined,
-		}));
+		const packages = normalizeEditableQuotePackages(formData.packages);
 		await client.mutation(api.quotes.create, {
 			siteUrl: config.siteUrl,
 			clientId: toId(formData.clientId),
@@ -136,12 +130,7 @@ async function saveNewQuote(formData: {
 async function saveAndSendQuote(formData: {
 	clientId: string;
 	category: string;
-	packages: {
-		name: string;
-		description: string;
-		price: number;
-		included: string[];
-	}[];
+	packages: EditableQuotePackage[];
 	validUntil: string;
 	notes: string;
 	templateId?: string;
@@ -150,12 +139,7 @@ async function saveAndSendQuote(formData: {
 }) {
 	saving = true;
 	try {
-		const packages = formData.packages.map((pkg) => ({
-			name: pkg.name,
-			description: pkg.description || undefined,
-			price: dollarsToCents(pkg.price),
-			included: pkg.included.length > 0 ? pkg.included : undefined,
-		}));
+		const packages = normalizeEditableQuotePackages(formData.packages);
 		const quoteId = await client.mutation(api.quotes.create, {
 			siteUrl: config.siteUrl,
 			clientId: toId(formData.clientId),
@@ -185,21 +169,11 @@ async function saveAndSendQuote(formData: {
 async function saveAsPreset(presetData: {
 	name: string;
 	category: string;
-	packages: {
-		name: string;
-		description: string;
-		price: number;
-		included: string[];
-	}[];
+	packages: EditableQuotePackage[];
 }) {
 	saving = true;
 	try {
-		const packages = presetData.packages.map((pkg) => ({
-			name: pkg.name,
-			description: pkg.description || undefined,
-			price: dollarsToCents(pkg.price),
-			included: pkg.included.length > 0 ? pkg.included : undefined,
-		}));
+		const packages = normalizeEditableQuotePackages(presetData.packages);
 		await client.mutation(api.quotes.createPreset, {
 			siteUrl: config.siteUrl,
 			name: presetData.name,
@@ -215,12 +189,7 @@ async function saveAsPreset(presetData: {
 }
 
 async function saveQuoteEdit(editData: {
-	packages: {
-		name: string;
-		description: string;
-		price: number;
-		included: string[];
-	}[];
+	packages: EditableQuotePackage[];
 	category: "photography" | "web";
 	validUntil: string;
 	notes: string;
@@ -228,12 +197,7 @@ async function saveQuoteEdit(editData: {
 	if (!selectedQuote) return;
 	saving = true;
 	try {
-		const packages = editData.packages.map((pkg) => ({
-			name: pkg.name,
-			description: pkg.description || undefined,
-			price: dollarsToCents(pkg.price),
-			included: pkg.included.length > 0 ? pkg.included : undefined,
-		}));
+		const packages = normalizeEditableQuotePackages(editData.packages);
 		await client.mutation(api.quotes.update, {
 			quoteId: toId(selectedQuote._id),
 			siteUrl: config.siteUrl,
@@ -382,21 +346,11 @@ async function copyShareLink() {
 async function saveNewPreset(presetData: {
 	name: string;
 	category: "photography" | "web" | "";
-	packages: {
-		name: string;
-		description: string;
-		price: number;
-		included: string[];
-	}[];
+	packages: EditableQuotePackage[];
 }) {
 	saving = true;
 	try {
-		const packages = presetData.packages.map((pkg) => ({
-			name: pkg.name,
-			description: pkg.description || undefined,
-			price: pkg.price,
-			included: pkg.included.length > 0 ? pkg.included : undefined,
-		}));
+		const packages = normalizeEditableQuotePackages(presetData.packages);
 		await client.mutation(api.quotes.createPreset, {
 			siteUrl: config.siteUrl,
 			name: presetData.name,
@@ -415,21 +369,11 @@ async function savePresetEdit(editData: {
 	presetId: string;
 	name: string;
 	category: "photography" | "web" | "";
-	packages: {
-		name: string;
-		description: string;
-		price: number;
-		included: string[];
-	}[];
+	packages: EditableQuotePackage[];
 }) {
 	saving = true;
 	try {
-		const packages = editData.packages.map((pkg) => ({
-			name: pkg.name,
-			description: pkg.description || undefined,
-			price: pkg.price,
-			included: pkg.included.length > 0 ? pkg.included : undefined,
-		}));
+		const packages = normalizeEditableQuotePackages(editData.packages);
 		await client.mutation(api.quotes.updatePreset, {
 			presetId: toId(editData.presetId),
 			siteUrl: config.siteUrl,
