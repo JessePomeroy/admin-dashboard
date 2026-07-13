@@ -1,15 +1,12 @@
 <script lang="ts">
 import AdminModal from "../../components/AdminModal.svelte";
 import type { QuotePackage, QuotePreset } from "../../types";
-import { dollarsToCents, formatCents, formatDollars } from "../../utils";
+import { formatCents, formatDollars } from "../../utils";
 import PackageEditor from "./PackageEditor.svelte";
-
-interface EditablePackage {
-	name: string;
-	description: string;
-	price: number;
-	included: string[];
-}
+import {
+	type EditableQuotePackage,
+	toEditableQuotePackages,
+} from "./quotePackages";
 
 interface Props {
 	presets: QuotePreset[];
@@ -21,13 +18,13 @@ interface Props {
 	onsavenew: (data: {
 		name: string;
 		category: "photography" | "web" | "";
-		packages: EditablePackage[];
+		packages: EditableQuotePackage[];
 	}) => Promise<void>;
 	onsaveedit: (data: {
 		presetId: string;
 		name: string;
 		category: "photography" | "web" | "";
-		packages: EditablePackage[];
+		packages: EditableQuotePackage[];
 	}) => Promise<void>;
 	ondelete: (presetId: string) => Promise<void>;
 }
@@ -47,7 +44,7 @@ let {
 let presetEditMode = $state(false);
 let presetName = $state("");
 let presetCategory = $state<"photography" | "web" | "">("photography");
-let presetPackages = $state<EditablePackage[]>([]);
+let presetPackages = $state<EditableQuotePackage[]>([]);
 let presetNewIncludedItem = $state<Record<number, string>>({});
 let confirmDeletePreset = $state(false);
 
@@ -60,12 +57,7 @@ $effect(() => {
 		presetName = selectedPreset.name;
 		presetCategory =
 			(selectedPreset.category as "photography" | "web" | "") || "";
-		presetPackages = selectedPreset.packages.map((pkg: QuotePackage) => ({
-			name: pkg.name || "",
-			description: pkg.description || "",
-			price: pkg.price / 100,
-			included: [...(pkg.included || [])],
-		}));
+		presetPackages = toEditableQuotePackages(selectedPreset.packages);
 		presetEditMode = false;
 		presetNewIncludedItem = {};
 		confirmDeletePreset = false;
@@ -84,12 +76,7 @@ function startPresetEdit() {
 	presetName = selectedPreset.name;
 	presetCategory =
 		(selectedPreset.category as "photography" | "web" | "") || "";
-	presetPackages = selectedPreset.packages.map((pkg: QuotePackage) => ({
-		name: pkg.name || "",
-		description: pkg.description || "",
-		price: pkg.price / 100,
-		included: [...(pkg.included || [])],
-	}));
+	presetPackages = toEditableQuotePackages(selectedPreset.packages);
 	presetNewIncludedItem = {};
 	presetEditMode = true;
 }
@@ -102,25 +89,19 @@ function handleClose() {
 
 async function handleSave() {
 	if (!presetName || presetPackages.length === 0) return;
-	const packages = presetPackages.map((pkg) => ({
-		name: pkg.name,
-		description: pkg.description || "",
-		price: dollarsToCents(pkg.price),
-		included: pkg.included,
-	}));
 	if (selectedPreset) {
 		await onsaveedit({
 			presetId: selectedPreset._id as string,
 			name: presetName,
 			category: presetCategory,
-			packages,
+			packages: presetPackages,
 		});
 		presetEditMode = false;
 	} else {
 		await onsavenew({
 			name: presetName,
 			category: presetCategory,
-			packages,
+			packages: presetPackages,
 		});
 		handleClose();
 	}

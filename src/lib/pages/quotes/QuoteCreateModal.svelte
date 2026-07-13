@@ -2,15 +2,12 @@
 import AdminModal from "../../components/AdminModal.svelte";
 import EmailPreview from "../../components/EmailPreview.svelte";
 import type { Client, EmailTemplate, QuotePreset } from "../../types";
-import { dollarsToCents, formatDollars } from "../../utils";
+import { formatDollars } from "../../utils";
 import PackageEditor from "./PackageEditor.svelte";
-
-interface EditablePackage {
-	name: string;
-	description: string;
-	price: number;
-	included: string[];
-}
+import {
+	type EditableQuotePackage,
+	toEditableQuotePackages,
+} from "./quotePackages";
 
 interface Props {
 	clients: Client[];
@@ -20,14 +17,14 @@ interface Props {
 	onsave: (data: {
 		clientId: string;
 		category: string;
-		packages: EditablePackage[];
+		packages: EditableQuotePackage[];
 		validUntil: string;
 		notes: string;
 	}) => Promise<void>;
 	onsaveandsend: (data: {
 		clientId: string;
 		category: string;
-		packages: EditablePackage[];
+		packages: EditableQuotePackage[];
 		validUntil: string;
 		notes: string;
 		templateId?: string;
@@ -37,7 +34,7 @@ interface Props {
 	onsaveaspreset: (data: {
 		name: string;
 		category: string;
-		packages: EditablePackage[];
+		packages: EditableQuotePackage[];
 	}) => Promise<void>;
 	onclose: () => void;
 	saving: boolean;
@@ -59,7 +56,7 @@ let formClientId = $state("");
 let formCategory = $state<"photography" | "web">("photography");
 let formValidUntil = $state("");
 let formNotes = $state("");
-let formPackages = $state<EditablePackage[]>([
+let formPackages = $state<EditableQuotePackage[]>([
 	{ name: "", description: "", price: 0, included: [] },
 ]);
 let newIncludedItem = $state<Record<number, string>>({});
@@ -94,12 +91,7 @@ function loadPreset() {
 	if (!formPresetId) return;
 	const preset = presets.find((p) => p._id === formPresetId);
 	if (!preset) return;
-	formPackages = preset.packages.map((pkg) => ({
-		name: pkg.name || "",
-		description: pkg.description || "",
-		price: pkg.price / 100,
-		included: [...(pkg.included || [])],
-	}));
+	formPackages = toEditableQuotePackages(preset.packages);
 	if (preset.category) {
 		formCategory = preset.category as "photography" | "web";
 	}
