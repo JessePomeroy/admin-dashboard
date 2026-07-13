@@ -66,4 +66,14 @@ describe("requireAdmin", () => {
 		await expect(requireAdmin(request)).resolves.toBeUndefined();
 		expect(verifyAdmin).toHaveBeenCalledWith(request);
 	});
+
+	it("preserves the config receiver for a method-style verifier", async () => {
+		const verifyAdmin = vi.fn(async function (this: AdminServerConfig) {
+			return this.siteName === "tenant";
+		});
+		configure(verifyAdmin);
+
+		await expect(requireAdmin(request)).resolves.toBeUndefined();
+		expect(verifyAdmin).toHaveBeenCalledWith(request);
+	});
 });

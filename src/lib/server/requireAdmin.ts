@@ -6,11 +6,13 @@ import { getServerConfig } from "../config.js";
  * or casted consumer omits the required runtime configuration.
  */
 export function getRequiredAdminVerifier() {
-	const verifier = getServerConfig().verifyAdmin;
+	const config = getServerConfig();
+	const verifier = config.verifyAdmin;
 	if (typeof verifier !== "function") {
 		throw error(500, "Admin authorization verifier not configured");
 	}
-	return verifier;
+	// Preserve the receiver for hosts that provide a method-style verifier.
+	return verifier.bind(config);
 }
 
 /**
