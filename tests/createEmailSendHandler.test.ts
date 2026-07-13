@@ -25,7 +25,7 @@ vi.mock("../src/lib/server/email", async () => {
 });
 
 // Imports AFTER mocks so the module graph uses them
-import { setServerConfig } from "../src/lib/config";
+import { setServerConfig, type AdminServerConfig } from "../src/lib/config";
 import { sendEmail } from "../src/lib/server/email";
 import { createEmailSendHandler } from "../src/lib/server/handlers/createEmailSendHandler";
 import type { EmailCategory } from "../src/lib/types";
@@ -72,6 +72,7 @@ describe("createEmailSendHandler template fallback cascade", () => {
 		mockQuery.mockReset();
 		mockMutation.mockReset();
 		mockMutation.mockResolvedValue(undefined);
+		vi.mocked(sendEmail).mockClear();
 
 		setServerConfig({
 			api: {
@@ -86,7 +87,25 @@ describe("createEmailSendHandler template fallback cascade", () => {
 			siteName: "Example",
 			convexUrl: "https://convex.example.com",
 			resendApiKey: "re_test",
+			verifyAdmin: vi.fn(async () => true),
 		});
+	});
+
+	it("rejects missing authorization configuration before provider work", async () => {
+		setServerConfig({
+			api: {},
+			siteUrl: "https://example.com",
+			siteName: "Example",
+			convexUrl: "https://convex.example.com",
+			resendApiKey: "re_test",
+			// Exercise the runtime boundary used by JavaScript or casted consumers.
+			verifyAdmin: undefined,
+		} as unknown as AdminServerConfig);
+
+		await expect(makeHandler([])(makeEvent())).rejects.toMatchObject({ status: 500 });
+		expect(mockQuery).not.toHaveBeenCalled();
+		expect(mockMutation).not.toHaveBeenCalled();
+		expect(sendEmail).not.toHaveBeenCalled();
 	});
 
 	it("tries fallback categories in order and stops at the first match", async () => {

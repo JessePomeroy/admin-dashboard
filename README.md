@@ -92,7 +92,12 @@ export const adminServerConfig: AdminServerConfig = {
 `createAdminAuthValidator` validates that the Better Auth JWT maps to a Convex
 identity. That is authentication, not tenant or creator authorization. Hosts
 must check stored membership for the data or external side effect being
-requested.
+requested. `verifyAdmin` is therefore required: shared side-effect handlers fail
+closed before Convex, Resend, or Gallery Worker work if runtime configuration
+omits it. Gallery upload-session grants may replace repeated cookie checks only
+after this verifier authorized grant issuance; they still fail closed if the
+verifier is later removed. Return `false` or throw to reject a request; do not
+substitute route-presence or identity validity for tenant-aware authorization.
 
 ## Query and mutation transport
 
@@ -153,13 +158,14 @@ pnpm build
 
 ## Release
 
-Releases are currently manual:
+Releases use a dedicated version-only PR after the implementation has merged:
 
 1. Choose a semver bump: patch for fixes, minor for additive public API, major
    for breaking behavior or types.
-2. Update `package.json` and build.
-3. Run the full checks.
-4. Publish to GitHub Packages with `pnpm publish`.
+2. Change only the version in `package.json` and run the full checks.
+3. Merge only after PR CI passes. The main-branch publish workflow builds and
+   publishes to GitHub Packages; do not also publish locally.
+4. Verify the registry version and publish workflow.
 5. Update consumers only after the package is available.
 
 For unpublished cross-repo work, consumers may temporarily use

@@ -2,7 +2,7 @@ import { error, json } from "@sveltejs/kit";
 import { getServerConfig } from "../../config.js";
 import { handleServerError } from "../handleError.js";
 import { isGalleryOriginalKeyForSession } from "../galleryStorageKeys.js";
-import { requireAdmin } from "../requireAdmin.js";
+import { getRequiredAdminVerifier, requireAdmin } from "../requireAdmin.js";
 import { validateFilename } from "../validation.js";
 
 const UPLOAD_SESSION_SCOPE = "gallery-upload-session";
@@ -122,6 +122,9 @@ async function requireGalleryUploadAccess(
 		uploadSessionToken?: string | null;
 	},
 ): Promise<void> {
+	// A scoped upload grant can replace a repeated cookie/session check, but it
+	// must never make missing host authorization configuration fail open.
+	getRequiredAdminVerifier();
 	const config = requireWorkerConfig();
 	const token = constraints.uploadSessionToken ?? request.headers.get("X-Gallery-Upload-Session");
 	const session = await verifyUploadSessionToken(config.galleryAdminSecret!, token);
