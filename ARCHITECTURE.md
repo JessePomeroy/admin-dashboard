@@ -73,6 +73,13 @@ handlers validate request shape, site/key scope, and authentication before
 forwarding to the Worker. The Worker owns upload tokens, R2 operations, portal
 token validation, downloads, and prepared archives.
 
+Storage keys are parsed from the right as
+`<siteUrl>/<galleryId>/<kind>/<filename>`. The host adapter compares the parsed
+site exactly with its configured site (apart from trailing-slash
+canonicalization) before either an upload-session grant or request-level admin
+authorization can permit a Worker call. A grant is valid only on its receiving
+host and for one single-segment gallery ID.
+
 This boundary spans three repositories and must be verified end-to-end:
 
 - `admin-dashboard`

@@ -212,7 +212,7 @@ describe("createGalleryUploadSessionHandler", () => {
 					uploadSessionToken,
 				}),
 			}),
-		).rejects.toMatchObject({ status: 403 });
+		).rejects.toMatchObject({ status: 400 });
 	});
 
 	it("allows upload sessions to delete owned original keys", async () => {

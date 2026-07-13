@@ -144,7 +144,11 @@ CRM subscription onboarding and access changes are operator-run processes.
 
 Gallery handlers bridge the host to `gallery-worker`. The host owns tenant
 authorization; the Worker owns R2 key validation, upload tokens, object access,
-and portal-token verification.
+and portal-token verification. Before forwarding any gallery operation, the
+server adapter parses the Worker's right-to-left storage-key shape and requires
+its exact site namespace to match the host's configured `siteUrl`. Upload-session
+grants are bound to that same receiving host and to one single-segment gallery
+ID. Only trailing slashes are canonicalized; site identity stays case-sensitive.
 
 ## Development
 
