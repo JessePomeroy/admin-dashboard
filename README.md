@@ -121,6 +121,11 @@ Exported page components are `DashboardPage`, `OrdersPage`, `InquiriesPage`,
 `GalleriesPage`, `CrmPage`, `BoardPage`, `InvoicingPage`, `QuotesPage`,
 `ContractsPage`, `EmailsPage`, `MessagesPage`, and `PlatformPage`.
 
+Locked features show operator-contact guidance. Feature gates present the
+host-supplied tier and role state; the package does not initiate subscription
+checkout or accept browser-selected tenant, billing, or redirect authority.
+CRM subscription onboarding and access changes are operator-run processes.
+
 ## Server handlers
 
 `@jessepomeroy/admin/server` exports factories for:

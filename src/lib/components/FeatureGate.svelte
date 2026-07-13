@@ -8,13 +8,16 @@ import UpgradeBanner from "./UpgradeBanner.svelte";
 interface Props {
 	feature: Feature;
 	adminSession: TenantAdminServerSession;
+	/** @deprecated Self-service checkout is retired; retained for source compatibility. */
 	platformUrl?: string;
+	/** @deprecated Self-service checkout is retired; retained for source compatibility. */
 	siteUrl?: string;
+	/** @deprecated Self-service checkout is retired; retained for source compatibility. */
 	clientEmail?: string;
 	children: Snippet;
 }
 
-let { feature, adminSession, platformUrl, siteUrl, clientEmail, children }: Props = $props();
+let { feature, adminSession, children }: Props = $props();
 let capability = $derived(getAdminSessionCapabilityInput(adminSession));
 let unlocked = $derived(
 	hasFeature(capability.tier, feature, {
@@ -26,5 +29,5 @@ let unlocked = $derived(
 {#if unlocked}
 	{@render children()}
 {:else}
-	<UpgradeBanner {feature} {platformUrl} {siteUrl} {clientEmail} />
+	<UpgradeBanner {feature} />
 {/if}

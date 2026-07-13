@@ -32,6 +32,10 @@ the concrete generated types.
 Reactive queries use `convex-svelte`. `useAdminClient` wraps the raw client and
 only intercepts mutations when HTTP transport is selected.
 
+Feature gates present the host-supplied tier and role state. A locked state may
+offer operator-contact guidance, but it must not initiate billing or choose
+tenant, billing-identity, or redirect authority in the browser.
+
 ## Server surface
 
 `setServerConfig` stores the server adapter configuration for SvelteKit handler
