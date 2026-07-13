@@ -53,5 +53,10 @@
   },
   "publishConfig": {
     "registry": "https://npm.pkg.github.com"
+  },
+  "pnpm": {
+    "overrides": {
+      "cookie@<0.7.0": "0.7.2"
+    }
   }
 }
