@@ -12,8 +12,10 @@ import NotificationWidget from "./NotificationWidget.svelte";
 import Toast from "./Toast.svelte";
 import AdminNavIcon from "./AdminNavIcon.svelte";
 import ChangePasswordForm from "./ChangePasswordForm.svelte";
-import { adminNavItems, hrefToNotificationKey, isAdminRouteActive } from "./adminNavigation";
+import EditorNavigation from "./EditorNavigation.svelte";
+import { getAdminNavItems, hrefToNotificationKey, isAdminRouteActive } from "./adminNavigation";
 import "../theme.css";
+import "../styles/editor-shell.css";
 
 const config = getAdminConfig();
 const { api } = config;
@@ -69,6 +71,11 @@ let capabilities = $derived(
 		boardProjectTypes: config.boardProjectTypes,
 	}),
 );
+let editorEnabled = $derived(Boolean(config.editor?.siteSettings && api.siteEditor));
+let editorActive = $derived(
+	editorEnabled && isAdminRouteActive("/admin/editor", $page.url.pathname),
+);
+let navItems = $derived(getAdminNavItems({ editorEnabled }));
 let mobileMenuOpen = $state(false);
 
 // Auth session state (subscribe to nanostore)
@@ -144,13 +151,13 @@ function closeMobileMenu() {
 	{/if}
 
 	<!-- Sidebar -->
-	<aside class="sidebar" class:sidebar-open={mobileMenuOpen} aria-label="Admin navigation">
+	<aside class="sidebar" class:sidebar-open={mobileMenuOpen} class:editor-compact={editorActive} aria-label="Admin navigation">
 		<div class="sidebar-brand">
 			<span class="brand-text">{config.siteName}</span>
 		</div>
 
 		<nav class="sidebar-nav" aria-label="Main navigation">
-			{#each adminNavItems as item}
+			{#each navItems as item}
 				{@const locked = item.feature ? !capabilities.hasFeature(item.feature) : false}
 				{@const hidden = item.creatorOnly && !capabilities.isCreator}
 				{#if hidden}
@@ -164,6 +171,8 @@ function closeMobileMenu() {
 					class="nav-item"
 					class:active={!locked && isAdminRouteActive(item.href, $page.url.pathname)}
 					class:locked
+					aria-label={editorActive ? item.label : undefined}
+					title={editorActive ? item.label : undefined}
 					onclick={(e) => { if (locked) e.preventDefault(); closeMobileMenu(); }}
 				>
 					<AdminNavIcon icon={item.icon} />
@@ -180,13 +189,16 @@ function closeMobileMenu() {
 				{/if}
 			{/each}
 		</nav>
+		{#if editorActive}
+			<EditorNavigation pathname={$page.url.pathname} mobile />
+		{/if}
 
 		<div class="sidebar-footer">
 			{#if config.authClient && authUserEmail}
 					<div class="user-info">
 						<span class="user-email">{authUserEmail}</span>
 					</div>
-					<button class="theme-toggle" onclick={() => (showPasswordForm = !showPasswordForm)}>
+					<button class="theme-toggle" onclick={() => (showPasswordForm = !showPasswordForm)} aria-label="change password" title={editorActive ? "change password" : undefined}>
 						<svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
 							<rect x="3" y="11" width="18" height="11" rx="2" ry="2" /><path d="M7 11V7a5 5 0 0110 0v4" />
 						</svg>
@@ -198,14 +210,14 @@ function closeMobileMenu() {
 							onSuccess={() => (showPasswordForm = false)}
 						/>
 					{/if}
-					<button class="theme-toggle" onclick={() => config.authClient?.signOut()}>
+					<button class="theme-toggle" onclick={() => config.authClient?.signOut()} aria-label="sign out" title={editorActive ? "sign out" : undefined}>
 						<svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
 							<path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>
 						</svg>
 						<span>sign out</span>
 					</button>
 			{/if}
-			<button class="theme-toggle" onclick={toggleTheme}>
+			<button class="theme-toggle" onclick={toggleTheme} aria-label={dark ? "switch to light mode" : "switch to dark mode"} title={editorActive ? (dark ? "light mode" : "dark mode") : undefined}>
 				<svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
 					{#if dark}
 						<circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
@@ -215,7 +227,7 @@ function closeMobileMenu() {
 				</svg>
 				<span>{dark ? "light mode" : "dark mode"}</span>
 			</button>
-			<a href="/" class="back-link">
+			<a href="/" class="back-link" aria-label="back to site" title={editorActive ? "back to site" : undefined}>
 				<svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
 					<line x1="19" y1="12" x2="5" y2="12" /><polyline points="12 19 5 12 12 5" />
 				</svg>
@@ -224,8 +236,12 @@ function closeMobileMenu() {
 		</div>
 	</aside>
 
+	{#if editorActive}
+		<EditorNavigation pathname={$page.url.pathname} />
+	{/if}
+
 	<!-- Main content -->
-	<main class="admin-main">
+	<main class="admin-main" class:editor-active={editorActive}>
 		{@render children()}
 	</main>
 
@@ -241,7 +257,7 @@ function closeMobileMenu() {
 		min-height: 100vh;
 		background: var(--admin-bg);
 		color: var(--admin-text);
-		font-family: "Synonym", system-ui, sans-serif;
+		font-family: var(--admin-font-body);
 		text-transform: lowercase;
 	}
 
@@ -262,7 +278,7 @@ function closeMobileMenu() {
 	}
 
 	.mobile-brand {
-		font-family: "Chillax", sans-serif;
+		font-family: var(--admin-font-display);
 		font-size: 1.05rem;
 		font-weight: 500;
 		color: var(--admin-heading);
@@ -327,7 +343,7 @@ function closeMobileMenu() {
 	}
 
 	.brand-text {
-		font-family: "Chillax", sans-serif;
+		font-family: var(--admin-font-display);
 		font-size: 1.15rem;
 		font-weight: 500;
 		color: var(--admin-heading);
@@ -348,7 +364,7 @@ function closeMobileMenu() {
 		border-radius: 6px;
 		color: var(--admin-text-muted);
 		text-decoration: none;
-		font-family: "Synonym", system-ui, sans-serif;
+		font-family: var(--admin-font-body);
 		font-size: 0.88rem;
 		font-weight: 400;
 		letter-spacing: 0.01em;
@@ -440,7 +456,7 @@ function closeMobileMenu() {
 		color: var(--admin-text-subtle);
 		background: none;
 		border: none;
-		font-family: "Synonym", system-ui, sans-serif;
+		font-family: var(--admin-font-body);
 		font-size: 0.82rem;
 		cursor: pointer;
 		transition: color 0.15s;
@@ -460,7 +476,7 @@ function closeMobileMenu() {
 		border-radius: 6px;
 		color: var(--admin-text-subtle);
 		text-decoration: none;
-		font-family: "Synonym", system-ui, sans-serif;
+		font-family: var(--admin-font-body);
 		font-size: 0.82rem;
 		transition: color 0.15s;
 	}
@@ -502,5 +518,6 @@ function closeMobileMenu() {
 			padding-top: 56px;
 			max-width: 100vw;
 		}
+
 	}
 </style>

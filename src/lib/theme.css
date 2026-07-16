@@ -15,6 +15,9 @@
 [data-admin] {
 	--_dark: var(--admin-dark-rgb, 30, 41, 59);
 	--_light: var(--admin-light-rgb, 255, 255, 255);
+	--admin-font-body: "Synonym", system-ui, sans-serif;
+	--admin-font-display: "Chillax", system-ui, sans-serif;
+	--admin-font-mono: ui-monospace, monospace;
 
 	--admin-bg: rgb(var(--_dark));
 	--admin-surface: rgba(var(--_light), 0.03);

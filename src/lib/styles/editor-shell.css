@@ -1,0 +1,91 @@
+[data-admin] .sidebar.editor-compact {
+	width: 64px;
+}
+
+[data-admin] .sidebar.editor-compact .sidebar-brand {
+	padding-inline: 12px;
+	text-align: center;
+}
+
+[data-admin] .sidebar.editor-compact .brand-text {
+	display: block;
+	overflow: hidden;
+	width: 28px;
+	white-space: nowrap;
+	font-size: 0;
+}
+
+[data-admin] .sidebar.editor-compact .brand-text::first-letter {
+	font-size: 1.15rem;
+}
+
+[data-admin] .sidebar.editor-compact .nav-item {
+	justify-content: center;
+	padding-inline: 0;
+}
+
+[data-admin] .sidebar.editor-compact .nav-item > span:not(.nav-dot),
+[data-admin] .sidebar.editor-compact .sidebar-footer span,
+[data-admin] .sidebar.editor-compact .lock-icon {
+	display: none;
+}
+
+[data-admin] .sidebar.editor-compact .sidebar-footer {
+	padding-inline: 8px;
+}
+
+[data-admin] .sidebar.editor-compact .theme-toggle,
+[data-admin] .sidebar.editor-compact .back-link {
+	justify-content: center;
+	padding-inline: 0;
+}
+
+[data-admin] .admin-main.editor-active {
+	margin-left: 284px;
+	max-width: calc(100vw - 284px);
+}
+
+@media (max-width: 768px) {
+	[data-admin] .sidebar.editor-compact {
+		width: 220px;
+	}
+
+	[data-admin] .sidebar.editor-compact .sidebar-brand {
+		padding: 28px 24px 24px;
+		text-align: left;
+	}
+
+	[data-admin] .sidebar.editor-compact .brand-text {
+		width: auto;
+		font-size: 1.15rem;
+	}
+
+	[data-admin] .sidebar.editor-compact .brand-text::first-letter {
+		font-size: inherit;
+	}
+
+	[data-admin] .sidebar.editor-compact .nav-item,
+	[data-admin] .sidebar.editor-compact .theme-toggle,
+	[data-admin] .sidebar.editor-compact .back-link {
+		justify-content: flex-start;
+		padding-inline: 12px;
+	}
+
+	[data-admin] .sidebar.editor-compact .nav-item > span:not(.nav-dot),
+	[data-admin] .sidebar.editor-compact .sidebar-footer span,
+	[data-admin] .sidebar.editor-compact .lock-icon {
+		display: initial;
+	}
+
+	[data-admin] .admin-main.editor-active {
+		margin-left: 0;
+		max-width: 100vw;
+	}
+}
+
+@media (prefers-reduced-motion: no-preference) {
+	[data-admin] .sidebar,
+	[data-admin] .admin-main {
+		transition: width 0.2s ease, margin-left 0.2s ease, max-width 0.2s ease;
+	}
+}

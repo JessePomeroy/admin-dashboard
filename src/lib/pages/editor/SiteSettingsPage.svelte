@@ -1,0 +1,385 @@
+<script lang="ts">
+import { browser } from "$app/environment";
+import { onMount } from "svelte";
+import { useQuery } from "convex-svelte";
+import { useAdminClient } from "../../adminClient";
+import {
+	getAdminConfig,
+	type SiteSettingsDraftPayload,
+	type SiteSettingsEditorState,
+} from "../../config";
+import {
+	copySiteSettingsDraft,
+	emptySiteSettingsDraft,
+	hasSiteSettingsErrors,
+	serializeSiteSettingsDraft,
+	type SiteSettingsFieldErrors,
+	validateSiteSettingsForPublish,
+} from "../../siteSettings";
+
+type SaveState =
+	| "loading"
+	| "saved"
+	| "dirty"
+	| "saving"
+	| "offline"
+	| "syncing"
+	| "error"
+	| "conflict";
+
+const config = getAdminConfig();
+if (!config.api.siteEditor || !config.editor?.siteSettings) {
+	throw new Error("Site editor is not configured for this host");
+}
+const editorApi = config.api.siteEditor;
+const siteSettingsConfig = config.editor.siteSettings;
+
+const client = useAdminClient();
+const editorQuery = useQuery(editorApi.getSiteSettingsEditorState, {
+	siteUrl: config.siteUrl,
+});
+const storageKey = `admin:site-editor:site-settings:${config.siteUrl}`;
+
+let form = $state<SiteSettingsDraftPayload>(emptySiteSettingsDraft());
+let published = $state<SiteSettingsDraftPayload>(emptySiteSettingsDraft());
+let serverDraft = $state<SiteSettingsDraftPayload>(emptySiteSettingsDraft());
+let baseRevisionId = $state<string | undefined>(undefined);
+let initialized = $state(false);
+let online = $state(true);
+let saveState = $state<SaveState>("loading");
+let saveError = $state("");
+let fieldErrors = $state<SiteSettingsFieldErrors>({});
+let lastSavedJson = $state("");
+let lastAttemptedJson = $state("");
+let saveTimer: ReturnType<typeof setTimeout> | undefined;
+let currentJson = $derived(serializeSiteSettingsDraft(form));
+let hasPendingWork = $derived(
+	["dirty", "saving", "offline", "syncing", "error", "conflict"].includes(
+		saveState,
+	),
+);
+
+function persistLocalDraft() {
+	if (!browser) return;
+	localStorage.setItem(
+		storageKey,
+		JSON.stringify({
+			schemaVersion: 1,
+			baseRevisionId: baseRevisionId ?? null,
+			payload: copySiteSettingsDraft(form),
+		}),
+	);
+}
+
+function clearLocalDraft() {
+	if (browser) localStorage.removeItem(storageKey);
+}
+
+function restoreLocalDraft(serverJson: string) {
+	if (!browser) return false;
+	const value = localStorage.getItem(storageKey);
+	if (!value) return false;
+	try {
+		const local = JSON.parse(value) as {
+			schemaVersion: number;
+			baseRevisionId: string | null;
+			payload: SiteSettingsDraftPayload;
+		};
+		if (local.schemaVersion !== 1) return false;
+		form = copySiteSettingsDraft(local.payload);
+		if ((local.baseRevisionId ?? undefined) !== baseRevisionId) {
+			saveState = "conflict";
+			saveError = "The server changed while this device had unsynchronized work. Review or discard this draft before publishing.";
+			return true;
+		}
+		saveState = serializeSiteSettingsDraft(form) === serverJson ? "saved" : "dirty";
+		return true;
+	} catch {
+		clearLocalDraft();
+		return false;
+	}
+}
+
+$effect(() => {
+	const state = editorQuery.data as SiteSettingsEditorState | null | undefined;
+	if (state === undefined || initialized) return;
+	baseRevisionId = state?.draft?.revisionId;
+	published = copySiteSettingsDraft(state?.published?.payload);
+	serverDraft = copySiteSettingsDraft(state?.draft?.payload ?? state?.published?.payload);
+	form = copySiteSettingsDraft(serverDraft);
+	lastSavedJson = serializeSiteSettingsDraft(form);
+	saveState = "saved";
+	restoreLocalDraft(lastSavedJson);
+	initialized = true;
+});
+
+async function saveNow() {
+	if (saveTimer) {
+		clearTimeout(saveTimer);
+		saveTimer = undefined;
+	}
+	if (!initialized || saveState === "conflict") return false;
+	if (currentJson === lastSavedJson) {
+		saveState = "saved";
+		clearLocalDraft();
+		return true;
+	}
+	if (!online) {
+		saveState = "offline";
+		persistLocalDraft();
+		return false;
+	}
+
+	const snapshot = copySiteSettingsDraft(form);
+	const snapshotJson = serializeSiteSettingsDraft(snapshot);
+	saveState = saveState === "offline" ? "syncing" : "saving";
+	saveError = "";
+	try {
+		const mutationArgs = {
+			siteUrl: config.siteUrl,
+			payload: snapshot,
+			...(baseRevisionId
+				? { expectedDraftRevisionId: baseRevisionId }
+				: {}),
+		};
+		const result = (await client.mutation(
+			editorApi.saveSiteSettingsDraft,
+			mutationArgs,
+		)) as { revisionId: string };
+		baseRevisionId = result.revisionId;
+		serverDraft = copySiteSettingsDraft(snapshot);
+		lastSavedJson = snapshotJson;
+		lastAttemptedJson = "";
+		if (currentJson === snapshotJson) {
+			saveState = "saved";
+			clearLocalDraft();
+		} else {
+			saveState = "dirty";
+			persistLocalDraft();
+		}
+		return true;
+	} catch (error) {
+		const message = error instanceof Error ? error.message : "Could not save";
+		saveState = message.toLowerCase().includes("conflict") ? "conflict" : "error";
+		saveError = message;
+		lastAttemptedJson = snapshotJson;
+		persistLocalDraft();
+		return false;
+	}
+}
+
+$effect(() => {
+	const changedJson = currentJson;
+	if (!initialized || changedJson === lastSavedJson || saveState === "conflict") return;
+	if (saveState === "error" && changedJson === lastAttemptedJson) return;
+	persistLocalDraft();
+	saveState = online ? "dirty" : "offline";
+	if (saveTimer) clearTimeout(saveTimer);
+	saveTimer = setTimeout(() => void saveNow(), 900);
+});
+
+onMount(() => {
+	online = navigator.onLine;
+	const handleOnline = () => {
+		online = true;
+		if (hasPendingWork && saveState !== "conflict") void saveNow();
+	};
+	const handleOffline = () => {
+		online = false;
+		if (hasPendingWork) saveState = "offline";
+	};
+	const warnBeforeUnload = (event: BeforeUnloadEvent) => {
+		if (!hasPendingWork) return;
+		event.preventDefault();
+		event.returnValue = "";
+	};
+	window.addEventListener("online", handleOnline);
+	window.addEventListener("offline", handleOffline);
+	window.addEventListener("beforeunload", warnBeforeUnload);
+	return () => {
+		if (saveTimer) clearTimeout(saveTimer);
+		window.removeEventListener("online", handleOnline);
+		window.removeEventListener("offline", handleOffline);
+		window.removeEventListener("beforeunload", warnBeforeUnload);
+	};
+});
+
+async function publish() {
+	fieldErrors = validateSiteSettingsForPublish(form);
+	if (hasSiteSettingsErrors(fieldErrors)) {
+		saveError = "Complete the highlighted fields before publishing.";
+		return;
+	}
+	if (!(await saveNow()) || !baseRevisionId) return;
+	try {
+		await client.mutation(editorApi.publishSiteSettings, {
+			siteUrl: config.siteUrl,
+			draftRevisionId: baseRevisionId,
+		});
+		published = copySiteSettingsDraft(form);
+		baseRevisionId = undefined;
+		lastSavedJson = currentJson;
+		saveState = "saved";
+		saveError = "";
+		clearLocalDraft();
+	} catch (error) {
+		saveState = "error";
+		saveError = error instanceof Error ? error.message : "Could not publish";
+	}
+}
+
+async function discard() {
+	if (saveState === "conflict") {
+		if (!confirm("Discard this device's unsynchronized changes and load the newer server draft?")) return;
+		form = copySiteSettingsDraft(serverDraft);
+		lastSavedJson = serializeSiteSettingsDraft(form);
+		lastAttemptedJson = "";
+		fieldErrors = {};
+		saveError = "";
+		saveState = "saved";
+		clearLocalDraft();
+		return;
+	}
+	if (!confirm("Discard this draft and return to the currently published settings?")) return;
+	if (baseRevisionId) {
+		await client.mutation(editorApi.discardSiteSettingsDraft, {
+			siteUrl: config.siteUrl,
+			draftRevisionId: baseRevisionId,
+		});
+	}
+	form = copySiteSettingsDraft(published);
+	baseRevisionId = undefined;
+	lastSavedJson = serializeSiteSettingsDraft(form);
+	lastAttemptedJson = "";
+	fieldErrors = {};
+	saveError = "";
+	saveState = "saved";
+	clearLocalDraft();
+}
+
+function addSocialLink() {
+	form.socialLinks = [...(form.socialLinks ?? []), { platform: "", url: "" }];
+}
+
+function removeSocialLink(index: number) {
+	form.socialLinks = (form.socialLinks ?? []).filter((_, itemIndex) => itemIndex !== index);
+}
+
+function moveSocialLink(index: number, direction: -1 | 1) {
+	const links = [...(form.socialLinks ?? [])];
+	const destination = index + direction;
+	if (destination < 0 || destination >= links.length) return;
+	[links[index], links[destination]] = [links[destination], links[index]];
+	form.socialLinks = links;
+}
+</script>
+
+<svelte:head><title>Site settings — {config.siteName}</title></svelte:head>
+
+<div class="settings-page">
+	<header class="settings-header">
+		<div>
+			<h1>site settings</h1>
+			<p class="description">Identity, social links, and default search information shared across the public site.</p>
+		</div>
+		<div class="actions">
+			<span class="save-state" aria-live="polite">{saveState === "offline" ? "offline — saved on this device" : saveState}</span>
+			{#if siteSettingsConfig.previewHref}
+				<a href={siteSettingsConfig.previewHref} target="_blank" rel="noopener">preview</a>
+			{/if}
+			<button type="button" class="secondary" onclick={() => void discard()} disabled={!initialized || (!baseRevisionId && !hasPendingWork)}>{saveState === "conflict" ? "reload server draft" : "discard draft"}</button>
+			<button type="button" class="secondary" onclick={() => void saveNow()} disabled={!initialized || saveState === "saving" || saveState === "conflict"}>save now</button>
+			<button type="button" class="primary" onclick={() => void publish()} disabled={!initialized || saveState === "saving" || saveState === "syncing" || saveState === "offline" || saveState === "conflict"}>publish</button>
+		</div>
+	</header>
+
+	{#if saveError}
+		<div class="alert" role="alert">{saveError}</div>
+	{/if}
+
+	{#if !initialized}
+		<p class="loading" role="status">loading site settings…</p>
+	{:else}
+		<form onsubmit={(event) => { event.preventDefault(); void publish(); }}>
+			<section aria-labelledby="identity-heading">
+				<div class="section-heading"><span>01</span><div><h2 id="identity-heading">site identity</h2><p>The public name and short description of this site.</p></div></div>
+				<div class="fields two-column">
+					<label>artist or business name<input maxlength="120" bind:value={form.artistName} aria-invalid={Boolean(fieldErrors.artistName)} />{#if fieldErrors.artistName}<small class="field-error">{fieldErrors.artistName}</small>{/if}</label>
+					<label>browser and site title<input maxlength="120" bind:value={form.siteTitle} aria-invalid={Boolean(fieldErrors.siteTitle)} />{#if fieldErrors.siteTitle}<small class="field-error">{fieldErrors.siteTitle}</small>{/if}</label>
+					<label class="wide">tagline<textarea rows="3" maxlength="300" bind:value={form.tagline} aria-invalid={Boolean(fieldErrors.tagline)}></textarea>{#if fieldErrors.tagline}<small class="field-error">{fieldErrors.tagline}</small>{/if}</label>
+				</div>
+			</section>
+
+			<section aria-labelledby="social-heading">
+				<div class="section-heading"><span>02</span><div><h2 id="social-heading">social links</h2><p>Shown in the deliberate order below.</p></div><button type="button" class="text-action" onclick={addSocialLink} disabled={(form.socialLinks?.length ?? 0) >= 20}>add link</button></div>
+				<div class="social-list">
+					{#each form.socialLinks ?? [] as link, index}
+						<div class="social-row">
+							<label>platform<input maxlength="50" bind:value={link.platform} aria-invalid={Boolean(fieldErrors[`socialLinks.${index}.platform`])} />{#if fieldErrors[`socialLinks.${index}.platform`]}<small class="field-error">{fieldErrors[`socialLinks.${index}.platform`]}</small>{/if}</label>
+							<label>public URL<input type="url" maxlength="2048" bind:value={link.url} aria-invalid={Boolean(fieldErrors[`socialLinks.${index}.url`])} />{#if fieldErrors[`socialLinks.${index}.url`]}<small class="field-error">{fieldErrors[`socialLinks.${index}.url`]}</small>{/if}</label>
+							<div class="row-actions" aria-label={`Reorder ${link.platform || `social link ${index + 1}`}`}>
+								<button type="button" onclick={() => moveSocialLink(index, -1)} disabled={index === 0} aria-label="Move link up">↑</button>
+								<button type="button" onclick={() => moveSocialLink(index, 1)} disabled={index === (form.socialLinks?.length ?? 0) - 1} aria-label="Move link down">↓</button>
+								<button type="button" onclick={() => removeSocialLink(index)} aria-label="Remove link">remove</button>
+							</div>
+						</div>
+					{/each}
+					{#if (form.socialLinks?.length ?? 0) === 0}<p class="empty">No social links yet.</p>{/if}
+				</div>
+			</section>
+
+			<section aria-labelledby="seo-heading">
+				<div class="section-heading"><span>03</span><div><h2 id="seo-heading">search defaults</h2><p>Used when an individual page does not provide a more specific description.</p></div></div>
+				<label>default SEO description<textarea rows="4" maxlength="320" bind:value={form.seoDescription} placeholder="For example: Detroit-based photographer creating…" aria-describedby="seo-help" aria-invalid={Boolean(fieldErrors.seoDescription)}></textarea><small id="seo-help">Describe who the site belongs to, what they create, and where they work in one or two natural sentences.</small>{#if fieldErrors.seoDescription}<small class="field-error">{fieldErrors.seoDescription}</small>{/if}</label>
+			</section>
+		</form>
+	{/if}
+</div>
+
+<style>
+	.settings-page { max-width: 1040px; padding: 48px 40px 96px; }
+	.settings-header { display: flex; justify-content: space-between; gap: 32px; align-items: flex-start; margin-bottom: 36px; }
+	h1 { margin: 0; color: var(--admin-heading); font-family: var(--admin-font-display); font-size: 1.8rem; font-weight: 500; }
+	.description { max-width: 560px; margin: 8px 0 0; color: var(--admin-text-muted); line-height: 1.6; }
+	.actions { display: flex; align-items: center; justify-content: flex-end; gap: 8px; flex-wrap: wrap; }
+	.save-state { color: var(--admin-text-subtle); font-size: .74rem; margin-right: 4px; }
+	.actions a, button { border: 1px solid var(--admin-border-strong); border-radius: 6px; padding: 9px 13px; background: transparent; color: var(--admin-text); font: inherit; font-size: .78rem; text-decoration: none; cursor: pointer; }
+	button:disabled { opacity: .4; cursor: default; }
+	.primary { background: var(--admin-accent); color: var(--admin-bg); border-color: transparent; }
+	.alert { margin-bottom: 24px; padding: 12px 14px; border: 1px solid color-mix(in srgb, var(--status-rose) 45%, transparent); color: var(--status-rose); border-radius: 6px; }
+	.loading, .empty { color: var(--admin-text-muted); }
+	form { display: flex; flex-direction: column; gap: 20px; }
+	section { padding: 28px; border: 1px solid var(--admin-border); border-radius: 10px; background: var(--admin-surface); }
+	.section-heading { display: flex; gap: 14px; align-items: flex-start; margin-bottom: 24px; }
+	.section-heading > span { color: var(--admin-text-subtle); font-size: .72rem; padding-top: 4px; }
+	.section-heading div { flex: 1; }
+	h2 { margin: 0; color: var(--admin-heading); font-size: 1rem; font-weight: 500; }
+	.section-heading p { margin: 5px 0 0; color: var(--admin-text-muted); font-size: .82rem; }
+	.fields { display: grid; gap: 18px; }
+	.two-column { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+	.wide { grid-column: 1 / -1; }
+	label { display: flex; flex-direction: column; gap: 7px; color: var(--admin-text-muted); font-size: .78rem; }
+	input, textarea { width: 100%; box-sizing: border-box; border: 1px solid var(--admin-border-strong); border-radius: 6px; background: var(--admin-bg); color: var(--admin-heading); padding: 11px 12px; font: inherit; text-transform: none; }
+	input:focus, textarea:focus, button:focus-visible, a:focus-visible { outline: 2px solid var(--admin-accent); outline-offset: 2px; }
+	[aria-invalid="true"] { border-color: var(--status-rose); }
+	small { color: var(--admin-text-subtle); line-height: 1.45; }
+	.field-error { color: var(--status-rose); }
+	.social-list { display: flex; flex-direction: column; gap: 12px; }
+	.social-row { display: grid; grid-template-columns: minmax(140px, .55fr) minmax(220px, 1fr) auto; gap: 12px; align-items: start; }
+	.row-actions { display: flex; gap: 5px; padding-top: 23px; }
+	.row-actions button { padding: 8px 9px; }
+	.text-action { margin-left: auto; padding: 7px 10px; }
+	@media (max-width: 900px) {
+		.settings-header { flex-direction: column; }
+		.actions { justify-content: flex-start; }
+		.social-row { grid-template-columns: 1fr; }
+		.row-actions { padding-top: 0; }
+	}
+	@media (max-width: 768px) {
+		.settings-page { padding: 28px 20px 72px; }
+		.two-column { grid-template-columns: 1fr; }
+		.wide { grid-column: auto; }
+		section { padding: 20px; }
+		.actions { position: sticky; bottom: 0; z-index: 5; width: 100%; padding: 10px 0; background: var(--admin-bg); }
+	}
+</style>
