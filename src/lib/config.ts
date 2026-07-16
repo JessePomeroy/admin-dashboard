@@ -205,6 +205,8 @@ export interface AdminEditorConfig {
 		baseHref?: string;
 		/** Same-origin host endpoint that issues and completes CMS media uploads. */
 		uploadEndpoint?: string;
+		/** Same-origin host endpoint that issues short-lived real-site draft previews. */
+		previewEndpoint?: string;
 	};
 }
 

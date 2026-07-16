@@ -5,6 +5,7 @@ import {
 	mergePortfolioMediaAssets,
 	movePortfolioPlacement,
 	portfolioMediaUrl,
+	resolvePortfolioPreviewUrl,
 	copyPortfolioGalleryDraft,
 	newPortfolioPlacement,
 	serializePortfolioGalleryDraft,
@@ -91,6 +92,18 @@ describe("portfolio editor presentation", () => {
 			assetId: "convex-media-id",
 			decorative: false,
 		});
+	});
+
+	it("accepts only same-origin preview URLs", () => {
+		expect(resolvePortfolioPreviewUrl(
+			"/gallery?preview=portfolio",
+			"https://tenant.example/admin/editor",
+		)).toBe("https://tenant.example/gallery?preview=portfolio");
+		expect(() => resolvePortfolioPreviewUrl(
+			"https://attacker.example/collect",
+			"https://tenant.example",
+		)).toThrow(/unsafe/);
+		expect(() => resolvePortfolioPreviewUrl(null, "https://tenant.example")).toThrow(/invalid/);
 	});
 
 	it("does not let an old reactive query overwrite a just-saved draft", () => {

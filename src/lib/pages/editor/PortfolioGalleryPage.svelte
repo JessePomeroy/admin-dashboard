@@ -8,6 +8,7 @@ import {
 	copyPortfolioGalleryDraft,
 	newPortfolioPlacement,
 	mergePortfolioMediaAssets,
+	resolvePortfolioPreviewUrl,
 	serializePortfolioGalleryDraft,
 	shouldLoadPortfolioServerRevision,
 	type PortfolioGalleryDraftForm,
@@ -44,6 +45,7 @@ const publishPortfolioGallery = portfolioApi.publish;
 const listMediaAssets = portfolioApi.listMediaAssets;
 const getPlacedMediaAssets = portfolioApi.getPlacedMediaAssets;
 const portfolioBaseHref = portfolioConfig.baseHref ?? "/admin/editor/portfolio";
+const previewEndpoint = portfolioConfig.previewEndpoint;
 let storageKey = $derived(`admin:portfolio-editor:${config.siteUrl}:${galleryId}`);
 
 const client = useAdminClient();
@@ -66,6 +68,7 @@ let saveState = $state<SaveState>("loading");
 let saveError = $state("");
 let publishMessage = $state("");
 let publishing = $state(false);
+let previewing = $state(false);
 let reviewRequested = $state(false);
 let pickerOpen = $state(false);
 let uploadedAssets = $state<PortfolioMediaAsset[]>([]);
@@ -304,6 +307,47 @@ async function publish() {
 	}
 }
 
+async function preview() {
+	if (!browser || !previewEndpoint) return;
+	const previewWindow = window.open("about:blank", "portfolio-preview");
+	if (!previewWindow) {
+		saveError = "Allow pop-ups for this site to open the draft preview.";
+		return;
+	}
+	previewWindow.opener = null;
+	previewing = true;
+	saveError = "";
+	try {
+		if (!(await saveNow()) || !baseRevisionId) {
+			previewWindow.close();
+			return;
+		}
+		const response = await fetch(previewEndpoint, {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({ galleryId, draftRevisionId: baseRevisionId }),
+		});
+		const result = await response.json().catch(() => null) as {
+			previewUrl?: unknown;
+			error?: unknown;
+		} | null;
+		if (!response.ok) {
+			throw new Error(typeof result?.error === "string"
+				? result.error
+				: "Could not create the draft preview.");
+		}
+		previewWindow.location.href = resolvePortfolioPreviewUrl(
+			result?.previewUrl,
+			window.location.origin,
+		);
+	} catch (error) {
+		previewWindow.close();
+		saveError = error instanceof Error ? error.message : "Could not create the draft preview.";
+	} finally {
+		previewing = false;
+	}
+}
+
 function addAsset(asset: PortfolioMediaAsset) {
 	if (selectedAssetIds.has(asset._id)) return;
 	form.placements = [...form.placements, newPortfolioPlacement(asset)];
@@ -342,6 +386,9 @@ function reloadServerDraft() {
 					<button type="button" class="secondary" onclick={reloadServerDraft}>reload server draft</button>
 				{:else}
 					<button type="button" class="secondary" onclick={() => void saveNow()} disabled={!dirty || saveState === "saving" || saveState === "syncing"}>save now</button>
+				{/if}
+				{#if previewEndpoint}
+					<button type="button" class="secondary" onclick={() => void preview()} disabled={previewing || saveState === "saving" || saveState === "syncing" || saveState === "offline" || saveState === "conflict"}>{previewing ? "preparing preview…" : "preview"}</button>
 				{/if}
 				<button type="button" onclick={() => void publish()} disabled={publicationCurrent || publishing || saveState === "saving" || saveState === "syncing" || saveState === "offline" || saveState === "conflict"}>{publishing ? "publishing…" : "publish"}</button>
 			</div>
