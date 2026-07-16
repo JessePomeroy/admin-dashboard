@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 
 describe("package server subpath Node import", () => {
 	it("loads server helpers from the packaged ESM server subpath", () => {
-		execFileSync("pnpm", ["build"], {
+		execFileSync("corepack", ["pnpm", "build"], {
 			cwd: process.cwd(),
 			stdio: "pipe",
 		});
