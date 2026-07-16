@@ -6,6 +6,7 @@ import {
 	type PortfolioPlacementDraft,
 	type PortfolioPublishIssue,
 } from "../../portfolioEditor";
+import PortfolioMediaUploader from "./PortfolioMediaUploader.svelte";
 
 let {
 	placements,
@@ -15,6 +16,8 @@ let {
 	reviewRequested,
 	onChange,
 	onChooseMedia,
+	uploadEndpoint,
+	onUploadReady,
 }: {
 	placements: PortfolioPlacementDraft[];
 	mediaById: Map<string, PortfolioMediaAsset>;
@@ -23,6 +26,8 @@ let {
 	reviewRequested: boolean;
 	onChange: (placements: PortfolioPlacementDraft[]) => void;
 	onChooseMedia: () => void;
+	uploadEndpoint?: string;
+	onUploadReady: (asset: PortfolioMediaAsset) => void;
 } = $props();
 
 function removePlacement(index: number) {
@@ -46,9 +51,12 @@ function setDecorative(index: number, decorative: boolean) {
 		<div><h2 id="gallery-images-heading" tabindex="-1">images</h2><p>{placements.length} {placements.length === 1 ? "image" : "images"} in this draft. Use the arrow controls to set their public order.</p></div>
 		<button type="button" class="secondary" onclick={onChooseMedia}>choose from media</button>
 	</div>
+	{#if uploadEndpoint}
+		<PortfolioMediaUploader endpoint={uploadEndpoint} onReady={onUploadReady} />
+	{/if}
 
 	{#if placements.length === 0}
-		<div class="empty"><strong>No images selected.</strong><p>Choose a ready image from the shared site media library.</p></div>
+		<div class="empty"><strong>No images selected.</strong><p>Upload new images here or choose a ready image from the shared site media library.</p></div>
 	{:else}
 		<ol>
 			{#each placements as placement, index (placement.key)}

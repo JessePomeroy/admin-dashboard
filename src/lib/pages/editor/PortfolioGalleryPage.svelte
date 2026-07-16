@@ -68,6 +68,7 @@ let publishMessage = $state("");
 let publishing = $state(false);
 let reviewRequested = $state(false);
 let pickerOpen = $state(false);
+let uploadedAssets = $state<PortfolioMediaAsset[]>([]);
 let saveTimer: ReturnType<typeof setTimeout> | undefined;
 let locallySavedRevisionIds: string[] = [];
 let editorState = $derived(editorQuery.data as PortfolioGalleryEditorState | undefined);
@@ -79,7 +80,10 @@ const placedMediaQuery = useQuery(getPlacedMediaAssets, () => ({
 }));
 let placedAssets = $derived((placedMediaQuery.data ?? []) as PortfolioMediaAsset[]);
 let readyAssets = $derived((mediaPage?.page ?? []).filter((asset) => asset.status === "ready"));
-let mediaById = $derived(mergePortfolioMediaAssets(mediaPage?.page ?? [], placedAssets));
+let mediaById = $derived(mergePortfolioMediaAssets(
+	[...(mediaPage?.page ?? []), ...uploadedAssets],
+	placedAssets,
+));
 let selectedAssetIds = $derived(new Set(form.placements.map((placement) => placement.assetId)));
 let currentJson = $derived(serializePortfolioGalleryDraft(form));
 let dirty = $derived(initialized && currentJson !== savedJson);
@@ -306,6 +310,11 @@ function addAsset(asset: PortfolioMediaAsset) {
 	pickerOpen = false;
 }
 
+function addUploadedAsset(asset: PortfolioMediaAsset) {
+	uploadedAssets = [asset, ...uploadedAssets.filter((item) => item._id !== asset._id)];
+	addAsset(asset);
+}
+
 function reloadServerDraft() {
 	if (!editorState || saveState !== "conflict") return;
 	if (!confirm("Discard this device's changes and load the newer server draft?")) return;
@@ -358,8 +367,10 @@ function reloadServerDraft() {
 			mediaBaseUrl={portfolioConfig.mediaBaseUrl}
 			{publishIssues}
 			{reviewRequested}
+			uploadEndpoint={portfolioConfig.uploadEndpoint}
 			onChange={(placements) => (form.placements = placements)}
 			onChooseMedia={() => (pickerOpen = true)}
+			onUploadReady={addUploadedAsset}
 		/>
 	</div>
 {/if}

@@ -62,6 +62,7 @@ export * from "./capabilities";
 export * from "./features";
 export * from "./galleryUploadPolicy";
 export * from "./portfolioEditor";
+export * from "./cmsMediaUpload";
 export * from "./siteSettings";
 export type * from "./types";
 export * from "./utils";
@@ -97,3 +98,7 @@ export {
 	createGalleryBulkDeleteHandler,
 	createGalleryImageHandler,
 } from "./server/handlers/galleryPresign";
+export {
+	createCmsMediaCapabilityHandler,
+	createCmsMediaProcessHandler,
+} from "./server/handlers/cmsMedia";

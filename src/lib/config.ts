@@ -57,6 +57,7 @@ export interface AdminAPI {
 		reorder: FnRef;
 		listMediaAssets: FnRef;
 		getPlacedMediaAssets: FnRef;
+		registerReadyWebAsset: FnRef;
 	};
 	crm: {
 		createClient: FnRef;
@@ -202,6 +203,8 @@ export interface AdminEditorConfig {
 		mediaBaseUrl: string;
 		/** Shared workspace route; defaults to `/admin/editor/portfolio`. */
 		baseHref?: string;
+		/** Same-origin host endpoint that issues and completes CMS media uploads. */
+		uploadEndpoint?: string;
 	};
 }
 
@@ -344,6 +347,10 @@ export interface AdminServerConfig extends AdminConfig {
 	convexUrl: string;
 	resendApiKey: string;
 	galleryAdminSecret?: string;
+	/** Server-only base URL for the isolated public CMS media Worker. */
+	cmsMediaWorkerUrl?: string;
+	/** Server-only bearer scoped to this config's exact siteUrl. */
+	cmsMediaTenantSecret?: string;
 	/**
 	 * Verify that a request comes from an authorized admin for the host-owned
 	 * tenant or creator scope. Every shared side-effect handler requires this
