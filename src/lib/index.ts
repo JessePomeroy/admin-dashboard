@@ -51,6 +51,7 @@ export { default as InvoicingPage } from "./pages/InvoicingPage.svelte";
 export { default as MessagesPage } from "./pages/MessagesPage.svelte";
 export { default as OrdersPage } from "./pages/OrdersPage.svelte";
 export { default as SiteSettingsPage } from "./pages/editor/SiteSettingsPage.svelte";
+export { default as PortfolioGalleriesPage } from "./pages/editor/PortfolioGalleriesPage.svelte";
 export { default as PlatformPage } from "./pages/PlatformPage.svelte";
 export { default as QuotesPage } from "./pages/QuotesPage.svelte";
 
@@ -59,6 +60,7 @@ export * from "./adminSession";
 export * from "./capabilities";
 export * from "./features";
 export * from "./galleryUploadPolicy";
+export * from "./portfolioEditor";
 export * from "./siteSettings";
 export type * from "./types";
 export * from "./utils";

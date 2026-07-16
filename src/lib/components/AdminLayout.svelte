@@ -71,7 +71,13 @@ let capabilities = $derived(
 		boardProjectTypes: config.boardProjectTypes,
 	}),
 );
-let editorEnabled = $derived(Boolean(config.editor?.siteSettings && api.siteEditor));
+let siteSettingsEditorEnabled = $derived(
+	Boolean(config.editor?.siteSettings && api.siteEditor),
+);
+let portfolioEditorEnabled = $derived(
+	Boolean(config.editor?.portfolio && api.portfolioEditor),
+);
+let editorEnabled = $derived(siteSettingsEditorEnabled || portfolioEditorEnabled);
 let editorActive = $derived(
 	editorEnabled && isAdminRouteActive("/admin/editor", $page.url.pathname),
 );
@@ -190,7 +196,12 @@ function closeMobileMenu() {
 			{/each}
 		</nav>
 		{#if editorActive}
-			<EditorNavigation pathname={$page.url.pathname} mobile />
+			<EditorNavigation
+				pathname={$page.url.pathname}
+				siteSettingsEnabled={siteSettingsEditorEnabled}
+				portfolioEnabled={portfolioEditorEnabled}
+				mobile
+			/>
 		{/if}
 
 		<div class="sidebar-footer">
@@ -237,7 +248,11 @@ function closeMobileMenu() {
 	</aside>
 
 	{#if editorActive}
-		<EditorNavigation pathname={$page.url.pathname} />
+		<EditorNavigation
+			pathname={$page.url.pathname}
+			siteSettingsEnabled={siteSettingsEditorEnabled}
+			portfolioEnabled={portfolioEditorEnabled}
+		/>
 	{/if}
 
 	<!-- Main content -->

@@ -49,6 +49,10 @@ export interface AdminAPI {
 		publishSiteSettings: FnRef;
 		discardSiteSettingsDraft: FnRef;
 	};
+	portfolioEditor?: {
+		listForEditor: FnRef;
+		saveDraft: FnRef;
+	};
 	crm: {
 		createClient: FnRef;
 		updateClient: FnRef;
@@ -187,6 +191,8 @@ export interface AdminEditorConfig {
 		/** Public URL used by the optional Preview action. */
 		previewHref?: string;
 	};
+	/** Enables public Portfolio authoring; private client galleries stay separate. */
+	portfolio?: Record<string, never>;
 }
 
 export interface AdminTheme {

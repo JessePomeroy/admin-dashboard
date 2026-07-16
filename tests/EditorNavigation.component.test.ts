@@ -10,7 +10,7 @@ describe("EditorNavigation", () => {
 	it("announces the workspace and marks Site settings as current", () => {
 		const component = mount(EditorNavigation, {
 			target: document.body,
-			props: { pathname: "/admin/editor" },
+			props: { pathname: "/admin/editor", siteSettingsEnabled: true },
 		});
 
 		expect(document.querySelector("aside")?.getAttribute("aria-label")).toBe(
@@ -18,6 +18,27 @@ describe("EditorNavigation", () => {
 		);
 		expect(document.querySelector('a[aria-current="page"]')?.textContent).toContain(
 			"site settings",
+		);
+		unmount(component);
+	});
+
+	it("shows only configured modules and marks Portfolio as current", () => {
+		const component = mount(EditorNavigation, {
+			target: document.body,
+			props: {
+				pathname: "/admin/editor/portfolio",
+				siteSettingsEnabled: true,
+				portfolioEnabled: true,
+			},
+		});
+
+		expect(Array.from(document.querySelectorAll("a"), (item) => item.textContent?.trim())).toEqual([
+			"site settings",
+			"portfolio",
+		]);
+		expect(document.querySelectorAll('a[aria-current="page"]')).toHaveLength(1);
+		expect(document.querySelector('a[aria-current="page"]')?.textContent).toContain(
+			"portfolio",
 		);
 		unmount(component);
 	});
