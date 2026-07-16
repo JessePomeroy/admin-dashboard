@@ -12,9 +12,11 @@ interface UploadItem {
 let {
 	endpoint,
 	onReady,
+	contextLabel = "gallery",
 }: {
 	endpoint: string;
 	onReady: (asset: PortfolioMediaAsset) => void;
+	contextLabel?: string;
 } = $props();
 
 let input: HTMLInputElement;
@@ -89,12 +91,12 @@ function remove(id: string) {
 function statusLabel(status: CmsMediaUploadStatus) {
 	if (status === "authorizing") return "preparing";
 	if (status === "processing") return "scaling for the site";
-	if (status === "done") return "added to this gallery";
+	if (status === "done") return `added to this ${contextLabel}`;
 	return status;
 }
 </script>
 
-<div class="uploader" role="group" aria-label="Upload new gallery images" ondragover={(event) => event.preventDefault()} ondrop={handleDrop}>
+<div class="uploader" role="group" aria-label={`Upload new ${contextLabel} images`} ondragover={(event) => event.preventDefault()} ondrop={handleDrop}>
 	<div>
 		<strong>upload new images</strong>
 		<p>Drop images here or choose them from this device. JPEG, PNG, or WebP up to 20 MB. Originals are privately normalized and the site receives responsive WebP copies.</p>
