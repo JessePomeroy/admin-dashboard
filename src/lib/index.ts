@@ -52,6 +52,7 @@ export { default as MessagesPage } from "./pages/MessagesPage.svelte";
 export { default as OrdersPage } from "./pages/OrdersPage.svelte";
 export { default as SiteSettingsPage } from "./pages/editor/SiteSettingsPage.svelte";
 export { default as PortfolioGalleriesPage } from "./pages/editor/PortfolioGalleriesPage.svelte";
+export { default as PortfolioGalleryPage } from "./pages/editor/PortfolioGalleryPage.svelte";
 export { default as PlatformPage } from "./pages/PlatformPage.svelte";
 export { default as QuotesPage } from "./pages/QuotesPage.svelte";
 

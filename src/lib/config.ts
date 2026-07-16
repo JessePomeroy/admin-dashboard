@@ -51,7 +51,10 @@ export interface AdminAPI {
 	};
 	portfolioEditor?: {
 		listForEditor: FnRef;
+		getEditorState: FnRef;
 		saveDraft: FnRef;
+		listMediaAssets: FnRef;
+		getPlacedMediaAssets: FnRef;
 	};
 	crm: {
 		createClient: FnRef;
@@ -192,7 +195,12 @@ export interface AdminEditorConfig {
 		previewHref?: string;
 	};
 	/** Enables public Portfolio authoring; private client galleries stay separate. */
-	portfolio?: Record<string, never>;
+	portfolio?: {
+		/** Public origin for immutable CMS image derivatives, without a trailing slash. */
+		mediaBaseUrl: string;
+		/** Shared workspace route; defaults to `/admin/editor/portfolio`. */
+		baseHref?: string;
+	};
 }
 
 export interface AdminTheme {

@@ -8,6 +8,59 @@ export interface PortfolioRevisionSummary {
 	createdAt: number;
 }
 
+export interface PortfolioPlacementDraft {
+	key: string;
+	assetId: string;
+	order?: number;
+	altText?: string | null;
+	decorative: boolean;
+	caption?: string | null;
+	focalPoint?: { x: number; y: number } | null;
+}
+
+export interface PortfolioRevisionEditorState extends PortfolioRevisionSummary {
+	placements: PortfolioPlacementDraft[];
+}
+
+export interface PortfolioGalleryEditorState {
+	galleryId: string;
+	slug: string;
+	portfolioOrder: number;
+	isPublished: boolean;
+	draft: PortfolioRevisionEditorState | null;
+	published: PortfolioRevisionEditorState | null;
+	updatedAt: number;
+	publishedAt: number | null;
+}
+
+export interface PortfolioMediaAsset {
+	_id: string;
+	assetId: string;
+	originalFilename: string;
+	status: "ready" | "deleting";
+	source: { contentType: string; sizeBytes: number; width: number; height: number };
+	derivatives: {
+		thumb: { key: string; width: number; height: number };
+		card: { key: string; width: number; height: number };
+	};
+	createdAt: number;
+}
+
+export interface PortfolioMediaPage {
+	page: PortfolioMediaAsset[];
+	isDone: boolean;
+	continueCursor: string;
+}
+
+export function mergePortfolioMediaAssets(
+	libraryAssets: PortfolioMediaAsset[],
+	placedAssets: PortfolioMediaAsset[],
+) {
+	return new Map(
+		[...libraryAssets, ...placedAssets].map((asset) => [asset._id, asset]),
+	);
+}
+
 export interface PortfolioGalleryEditorSummary {
 	galleryId: string;
 	slug: string;
@@ -56,4 +109,31 @@ export function validateNewPortfolioGallery(title: string, slug: string) {
 		errors.slug = "Use lowercase letters, numbers, and single hyphens.";
 	}
 	return errors;
+}
+
+export function portfolioMediaUrl(baseUrl: string, key: string) {
+	const base = baseUrl.replace(/\/+$/, "");
+	const path = key.split("/").map(encodeURIComponent).join("/");
+	return `${base}/${path}`;
+}
+
+export function newPortfolioPlacement(asset: PortfolioMediaAsset): PortfolioPlacementDraft {
+	return {
+		key: `asset-${asset.assetId}`,
+		assetId: asset._id,
+		altText: "",
+		decorative: false,
+		caption: "",
+		focalPoint: null,
+	};
+}
+
+export function shouldLoadPortfolioServerRevision(input: {
+	initialized: boolean;
+	dirty: boolean;
+	serverRevisionId: string | undefined;
+	loadedServerRevisionId: string | undefined;
+}) {
+	if (input.initialized && input.dirty) return false;
+	return !input.initialized || input.serverRevisionId !== input.loadedServerRevisionId;
 }
