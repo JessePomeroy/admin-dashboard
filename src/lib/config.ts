@@ -52,6 +52,10 @@ export interface AdminAPI {
 		saveHomepageQuoteDraft: FnRef;
 		publishHomepageQuote: FnRef;
 		discardHomepageQuoteDraft: FnRef;
+		getContactPageEditorState: FnRef;
+		saveContactPageDraft: FnRef;
+		publishContactPage: FnRef;
+		discardContactPageDraft: FnRef;
 	};
 	portfolioEditor?: {
 		listForEditor: FnRef;
@@ -217,6 +221,37 @@ export interface HomepageQuoteEditorState {
 	publishedAt: number | null;
 }
 
+export interface ContactPageDraftPayload {
+	heading?: string;
+	intro?: string;
+	email?: string;
+	phone?: string;
+	availability?: string;
+	responseTime?: string;
+	confirmationMessage?: string;
+	bookingEnabled?: boolean;
+	bookingUrl?: string;
+	bookingLabel?: string;
+	bookingIntro?: string;
+	inquiryChoices?: string[];
+}
+
+export interface ContactPageRevisionState {
+	revisionId: string;
+	schemaVersion: 1;
+	payload: ContactPageDraftPayload;
+	source: "admin" | "sanityImport" | "restore";
+	createdAt: number;
+}
+
+export interface ContactPageEditorState {
+	documentId: string;
+	draft: ContactPageRevisionState | null;
+	published: ContactPageRevisionState | null;
+	updatedAt: number;
+	publishedAt: number | null;
+}
+
 export interface AdminEditorConfig {
 	siteSettings?: {
 		/** Public URL used by the optional Preview action. */
@@ -229,6 +264,15 @@ export interface AdminEditorConfig {
 		/** Shared workspace route; defaults to `/admin/editor/pages/homepage-quote`. */
 		baseHref?: string;
 		/** Same-origin host endpoint that issues a short-lived real-Homepage draft preview. */
+		previewEndpoint?: string;
+	};
+	/** Enables the client-managed Contact & Booking content surface. */
+	contactPage?: {
+		/** Current host-owned content used to initialize the first unpublished draft. */
+		initialPayload: ContactPageDraftPayload;
+		/** Shared workspace route; defaults to `/admin/editor/pages/contact`. */
+		baseHref?: string;
+		/** Same-origin endpoint for the later real-page draft preview. */
 		previewEndpoint?: string;
 	};
 	/** Enables public Portfolio authoring; private client galleries stay separate. */

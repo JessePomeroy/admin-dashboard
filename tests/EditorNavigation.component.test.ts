@@ -28,7 +28,7 @@ describe("EditorNavigation", () => {
 			props: {
 				pathname: "/admin/editor/pages/homepage-quote",
 				siteSettingsEnabled: true,
-				homepageQuoteEnabled: true,
+				pagesEnabled: true,
 				portfolioEnabled: true,
 			},
 		});
