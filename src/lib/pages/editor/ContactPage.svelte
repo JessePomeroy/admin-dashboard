@@ -12,6 +12,7 @@ import {
 	copyContactPageDraft,
 	emptyContactPageDraft,
 	hasContactPageErrors,
+	resolveContactPagePreviewUrl,
 	serializeContactPageDraft,
 	type ContactPageFieldErrors,
 	validateContactPageForPublish,
@@ -26,6 +27,7 @@ if (!config.api.siteEditor || !config.editor?.contactPage) {
 }
 const editorApi = config.api.siteEditor;
 const contactConfig = config.editor.contactPage;
+const previewEndpoint = contactConfig.previewEndpoint;
 const client = useAdminClient();
 const editorQuery = useQuery(editorApi.getContactPageEditorState, { siteUrl: config.siteUrl });
 const storageKey = `admin:site-editor:contact-page:${config.siteUrl}`;
@@ -38,6 +40,7 @@ let serverRevisionId = $state<string | undefined>();
 let initialized = $state(false);
 let setupRequired = $state(false);
 let setupStatus = $state<"idle" | "saving">("idle");
+let previewing = $state(false);
 let online = $state(true);
 let saveState = $state<SaveState>("loading");
 let saveError = $state("");
@@ -242,6 +245,47 @@ async function publish() {
 	}
 }
 
+async function preview() {
+	if (!browser || !previewEndpoint) return;
+	const previewWindow = window.open("about:blank", "contact-page-preview");
+	if (!previewWindow) {
+		saveError = "Allow pop-ups for this site to open the draft preview.";
+		return;
+	}
+	previewWindow.opener = null;
+	previewing = true;
+	saveError = "";
+	try {
+		if (!(await saveNow()) || !baseRevisionId) {
+			previewWindow.close();
+			return;
+		}
+		const response = await fetch(previewEndpoint, {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({ draftRevisionId: baseRevisionId }),
+		});
+		const result = await response.json().catch(() => null) as {
+			previewUrl?: unknown;
+			error?: unknown;
+		} | null;
+		if (!response.ok) {
+			throw new Error(typeof result?.error === "string"
+				? result.error
+				: "Could not create the draft preview.");
+		}
+		previewWindow.location.href = resolveContactPagePreviewUrl(
+			result?.previewUrl,
+			window.location.origin,
+		);
+	} catch (error) {
+		previewWindow.close();
+		saveError = error instanceof Error ? error.message : "Could not create the draft preview.";
+	} finally {
+		previewing = false;
+	}
+}
+
 async function discard() {
 	if (saveState === "conflict") {
 		if (!confirm("Discard this device's changes and load the newer server draft?")) return;
@@ -305,6 +349,7 @@ function moveChoice(index: number, offset: -1 | 1) {
 				<span class="save-state" aria-live="polite">{saveState === "offline" ? "offline — saved on this device" : saveState}</span>
 				<button type="button" onclick={() => void discard()} disabled={!baseRevisionId && !hasPendingWork}>{saveState === "conflict" ? "reload server draft" : "discard draft"}</button>
 				<button type="button" onclick={() => void saveNow()} disabled={saveState === "saving" || saveState === "conflict"}>save now</button>
+				{#if previewEndpoint}<button type="button" onclick={() => void preview()} disabled={previewing || saveState === "saving" || saveState === "syncing" || saveState === "offline" || saveState === "conflict"}>{previewing ? "preparing preview…" : "preview"}</button>{/if}
 				<button type="button" class="primary" onclick={() => void publish()} disabled={saveState === "saving" || saveState === "syncing" || saveState === "offline" || saveState === "conflict"}>publish</button>
 			</div>
 		{/if}

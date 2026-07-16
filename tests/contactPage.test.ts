@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
 	copyContactPageDraft,
 	hasContactPageErrors,
+	resolveContactPagePreviewUrl,
 	serializeContactPageDraft,
 	validateContactPageForPublish,
 } from "../src/lib/contactPage";
@@ -51,5 +52,17 @@ describe("Contact & Booking editor helpers", () => {
 			bookingUrl: "not a URL",
 		});
 		expect(errors.bookingUrl).toBeUndefined();
+	});
+
+	it("accepts only same-origin Contact preview URLs", () => {
+		expect(resolveContactPagePreviewUrl(
+			"/preview/about",
+			"https://tenant.example/admin/editor/pages/contact",
+		)).toBe("https://tenant.example/preview/about");
+		expect(() => resolveContactPagePreviewUrl(
+			"https://attacker.example/collect",
+			"https://tenant.example",
+		)).toThrow(/unsafe/);
+		expect(() => resolveContactPagePreviewUrl(null, "https://tenant.example")).toThrow(/invalid/);
 	});
 });
