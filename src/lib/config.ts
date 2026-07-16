@@ -53,6 +53,8 @@ export interface AdminAPI {
 		listForEditor: FnRef;
 		getEditorState: FnRef;
 		saveDraft: FnRef;
+		publish: FnRef;
+		reorder: FnRef;
 		listMediaAssets: FnRef;
 		getPlacedMediaAssets: FnRef;
 	};

@@ -3,11 +3,15 @@ import {
 	portfolioGalleryLabel,
 	portfolioGalleryStatus,
 	mergePortfolioMediaAssets,
+	movePortfolioPlacement,
 	portfolioMediaUrl,
+	copyPortfolioGalleryDraft,
 	newPortfolioPlacement,
+	serializePortfolioGalleryDraft,
 	slugifyPortfolioTitle,
 	shouldLoadPortfolioServerRevision,
 	type PortfolioGalleryEditorSummary,
+	validatePortfolioGalleryForPublish,
 	validateNewPortfolioGallery,
 } from "../src/lib/portfolioEditor";
 
@@ -108,6 +112,22 @@ describe("portfolio editor presentation", () => {
 			serverRevisionId: "new-server-revision",
 			loadedServerRevisionId: "old-server-revision",
 		})).toBe(false);
+		expect(shouldLoadPortfolioServerRevision({
+			initialized: true,
+			dirty: false,
+			serverRevisionId: "first-local-save",
+			loadedServerRevisionId: "old-server-revision",
+			currentDraftRevisionId: "second-local-save",
+			locallySavedRevisionIds: ["first-local-save", "second-local-save"],
+		})).toBe(false);
+		expect(shouldLoadPortfolioServerRevision({
+			initialized: true,
+			dirty: false,
+			serverRevisionId: "remote-save",
+			loadedServerRevisionId: "old-server-revision",
+			currentDraftRevisionId: "second-local-save",
+			locallySavedRevisionIds: ["first-local-save", "second-local-save"],
+		})).toBe(true);
 	});
 
 	it("keeps placed assets visible when they fall outside the newest library page", () => {
@@ -125,5 +145,60 @@ describe("portfolio editor presentation", () => {
 		};
 		const merged = mergePortfolioMediaAssets([], [asset]);
 		expect(merged.get("older-asset")?.originalFilename).toBe("older.jpg");
+	});
+
+	it("copies and serializes gallery drafts without sharing placement objects", () => {
+		const original = {
+			title: "Selected work",
+			description: "Portraits",
+			slug: "selected-work",
+			placements: [{
+				key: "image-1",
+				assetId: "asset-1",
+				altText: "A portrait",
+				decorative: false,
+			}],
+		};
+		const copy = copyPortfolioGalleryDraft(original);
+		copy.placements[0].altText = "Changed";
+		expect(original.placements[0].altText).toBe("A portrait");
+		expect(serializePortfolioGalleryDraft(copy)).toContain('"altText":"Changed"');
+	});
+
+	it("reorders placements without mutating the source list", () => {
+		const placements = [
+			{ key: "a", assetId: "asset-a", decorative: true },
+			{ key: "b", assetId: "asset-b", decorative: true },
+		];
+		expect(movePortfolioPlacement(placements, 1, -1).map(({ key }) => key)).toEqual(["b", "a"]);
+		expect(placements.map(({ key }) => key)).toEqual(["a", "b"]);
+		expect(movePortfolioPlacement(placements, 0, -1)).toBe(placements);
+	});
+
+	it("guides publication through required title, image, and accessibility review", () => {
+		expect(validatePortfolioGalleryForPublish({
+			title: "",
+			description: "",
+			slug: "Selected Work",
+			placements: [],
+		})).toEqual([
+			{ fieldId: "gallery-title", message: "Add a gallery name." },
+			{ fieldId: "gallery-slug", message: "Use a valid lowercase public URL." },
+			{ fieldId: "gallery-images-heading", message: "Add at least one image." },
+		]);
+		expect(validatePortfolioGalleryForPublish({
+			title: "Selected work",
+			description: "",
+			slug: "selected-work",
+			placements: [
+				{ key: "one", assetId: "asset-one", altText: "", decorative: false },
+				{ key: "two", assetId: "asset-two", altText: "", decorative: true },
+			],
+		})).toEqual([
+			{
+				fieldId: "placement-one-alt",
+				message: "Image 1 needs alt text or must be marked decorative.",
+			},
+		]);
 	});
 });
