@@ -1,9 +1,32 @@
 <script lang="ts">
 import { isAdminRouteActive } from "./adminNavigation";
 
-let { pathname, mobile = false }: { pathname: string; mobile?: boolean } = $props();
+let {
+	pathname,
+	siteSettingsEnabled = false,
+	portfolioEnabled = false,
+	mobile = false,
+}: {
+	pathname: string;
+	siteSettingsEnabled?: boolean;
+	portfolioEnabled?: boolean;
+	mobile?: boolean;
+} = $props();
 
-const items = [{ href: "/admin/editor", label: "site settings" }];
+let items = $derived([
+	...(siteSettingsEnabled
+		? [{ href: "/admin/editor", label: "site settings" }]
+		: []),
+	...(portfolioEnabled
+		? [{ href: "/admin/editor/portfolio", label: "portfolio" }]
+		: []),
+]);
+
+function isCurrent(href: string) {
+	return href === "/admin/editor"
+		? pathname === href
+		: isAdminRouteActive(href, pathname);
+}
 </script>
 
 <aside class="editor-navigation" class:mobile aria-label="Site editor navigation">
@@ -13,7 +36,7 @@ const items = [{ href: "/admin/editor", label: "site settings" }];
 	</div>
 	<nav>
 		{#each items as item}
-			<a href={item.href} class:active={isAdminRouteActive(item.href, pathname)} aria-current={isAdminRouteActive(item.href, pathname) ? "page" : undefined}>
+			<a href={item.href} class:active={isCurrent(item.href)} aria-current={isCurrent(item.href) ? "page" : undefined}>
 				{item.label}
 			</a>
 		{/each}
