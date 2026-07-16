@@ -3,6 +3,7 @@ import {
 	copyHomepageQuoteDraft,
 	emptyHomepageQuoteDraft,
 	hasHomepageQuoteErrors,
+	resolveHomepageQuotePreviewUrl,
 	serializeHomepageQuoteDraft,
 	validateHomepageQuoteForPublish,
 } from "../src/lib/homepageQuote";
@@ -38,5 +39,17 @@ describe("Homepage Quote editor presentation", () => {
 				validateHomepageQuoteForPublish({ text: "Quote", attribution: "Artist" }),
 			),
 		).toBe(false);
+	});
+
+	it("accepts only same-origin Homepage preview URLs", () => {
+		expect(resolveHomepageQuotePreviewUrl(
+			"/preview/homepage",
+			"https://tenant.example/admin/editor/pages/homepage-quote",
+		)).toBe("https://tenant.example/preview/homepage");
+		expect(() => resolveHomepageQuotePreviewUrl(
+			"https://attacker.example/collect",
+			"https://tenant.example",
+		)).toThrow(/unsafe/);
+		expect(() => resolveHomepageQuotePreviewUrl(null, "https://tenant.example")).toThrow(/invalid/);
 	});
 });
