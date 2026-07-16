@@ -15,6 +15,7 @@ let { feature }: Props = $props();
 
 const featureLabels: Record<Feature, string> = {
 	dashboard: "dashboard",
+	editor: "site editor",
 	orders: "orders",
 	inquiries: "inquiries",
 	galleries: "galleries",

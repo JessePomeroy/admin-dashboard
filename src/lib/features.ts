@@ -1,6 +1,7 @@
 export const FEATURES = {
 	// Basic tier — included for all
 	dashboard: "basic",
+	editor: "basic",
 	orders: "basic",
 	inquiries: "basic",
 	galleries: "basic",

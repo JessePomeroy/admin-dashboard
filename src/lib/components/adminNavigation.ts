@@ -2,6 +2,7 @@ import type { Feature } from "../features";
 
 export type AdminNavIcon =
 	| "grid"
+	| "editor"
 	| "mail"
 	| "package"
 	| "image"
@@ -23,11 +24,11 @@ export type AdminNavItem = {
 	creatorOnly?: boolean;
 };
 
-export const adminNavItems: AdminNavItem[] = [
+const baseAdminNavItems: AdminNavItem[] = [
 	{ href: "/admin", label: "dashboard", icon: "grid", feature: "dashboard" },
 	{ href: "/admin/inquiries", label: "inquiries", icon: "mail", feature: "inquiries" },
 	{ href: "/admin/orders", label: "orders", icon: "package", feature: "orders" },
-	{ href: "/admin/galleries", label: "galleries", icon: "image", feature: "galleries" },
+	{ href: "/admin/galleries", label: "client galleries", icon: "image", feature: "galleries" },
 	{ href: "/admin/crm", label: "clients", icon: "clients", feature: "crm", separator: true },
 	{ href: "/admin/board", label: "board", icon: "board", feature: "board" },
 	{ href: "/admin/quotes", label: "quotes", icon: "quotes", feature: "quotes" },
@@ -49,6 +50,18 @@ export const adminNavItems: AdminNavItem[] = [
 		creatorOnly: true,
 	},
 ];
+
+export function getAdminNavItems({ editorEnabled = false } = {}): AdminNavItem[] {
+	if (!editorEnabled) return baseAdminNavItems;
+	return [
+		baseAdminNavItems[0],
+		{ href: "/admin/editor", label: "editor", icon: "editor", feature: "editor" },
+		...baseAdminNavItems.slice(1),
+	];
+}
+
+/** Backward-compatible default for tests and consumers without Editor config. */
+export const adminNavItems = getAdminNavItems();
 
 export const hrefToNotificationKey: Record<string, string> = {
 	"/admin/orders": "orders",

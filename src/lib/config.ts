@@ -43,6 +43,12 @@ export interface AdminAPI {
 		updateTemplate: FnRef;
 		removeTemplate: FnRef;
 	};
+	siteEditor?: {
+		getSiteSettingsEditorState: FnRef;
+		saveSiteSettingsDraft: FnRef;
+		publishSiteSettings: FnRef;
+		discardSiteSettingsDraft: FnRef;
+	};
 	crm: {
 		createClient: FnRef;
 		updateClient: FnRef;
@@ -147,7 +153,46 @@ export interface AdminAPI {
 	};
 }
 
+export interface SiteSettingsSocialLink {
+	platform: string;
+	url: string;
+}
+
+export interface SiteSettingsDraftPayload {
+	artistName?: string;
+	siteTitle?: string;
+	tagline?: string;
+	socialLinks?: SiteSettingsSocialLink[];
+	seoDescription?: string;
+}
+
+export interface SiteSettingsRevisionState {
+	revisionId: string;
+	schemaVersion: 1;
+	payload: SiteSettingsDraftPayload;
+	source: "admin" | "sanityImport" | "restore";
+	createdAt: number;
+}
+
+export interface SiteSettingsEditorState {
+	documentId: string;
+	draft: SiteSettingsRevisionState | null;
+	published: SiteSettingsRevisionState | null;
+	updatedAt: number;
+	publishedAt: number | null;
+}
+
+export interface AdminEditorConfig {
+	siteSettings?: {
+		/** Public URL used by the optional Preview action. */
+		previewHref?: string;
+	};
+}
+
 export interface AdminTheme {
+	"admin-font-body"?: string;
+	"admin-font-display"?: string;
+	"admin-font-mono"?: string;
 	"admin-bg"?: string;
 	"admin-surface"?: string;
 	"admin-surface-raised"?: string;
@@ -227,6 +272,8 @@ export interface AdminConfig {
 	isCreator: boolean;
 	sanityStudioUrl?: string;
 	api: AdminAPI;
+	/** Enables the expanding Site editor workspace and its declared modules. */
+	editor?: AdminEditorConfig;
 	authClient?: AdminAuthClient;
 	/**
 	 * Route to load after a successful auth flow.
