@@ -17,6 +17,7 @@ if (!portfolioApi || !config.editor?.portfolio) {
 }
 const listPortfolioGalleries = portfolioApi.listForEditor;
 const savePortfolioDraft = portfolioApi.saveDraft;
+const portfolioBaseHref = config.editor.portfolio.baseHref ?? "/admin/editor/portfolio";
 
 const client = useAdminClient();
 const galleriesQuery = useQuery(listPortfolioGalleries, {
@@ -116,6 +117,7 @@ function formatUpdatedAt(value: number) {
 								</div>
 								<p>/{gallery.slug} · {gallery.draft?.placementCount ?? gallery.published?.placementCount ?? 0} images · updated {formatUpdatedAt(gallery.updatedAt)}</p>
 							</div>
+							<a class="open-link" href={`${portfolioBaseHref}/${gallery.galleryId}`} aria-label={`Open ${portfolioGalleryLabel(gallery)}`}>open</a>
 						</li>
 					{/each}
 				</ol>
@@ -160,10 +162,11 @@ function formatUpdatedAt(value: number) {
 	h3 { font-size: .94rem; }
 	.section-heading p, .create-panel > p { margin: 6px 0 0; color: var(--admin-text-muted); font-size: .82rem; line-height: 1.5; }
 	ol { margin: 0; padding: 0; list-style: none; border-top: 1px solid var(--admin-border); }
-	li { display: grid; grid-template-columns: 38px 1fr; gap: 14px; padding: 18px 0; border-bottom: 1px solid var(--admin-border); }
+	li { display: grid; grid-template-columns: 38px 1fr auto; gap: 14px; align-items: center; padding: 18px 0; border-bottom: 1px solid var(--admin-border); }
 	.order { padding-top: 2px; color: var(--admin-text-subtle); font-size: .7rem; }
 	.gallery-title { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
 	.gallery-summary p { margin: 7px 0 0; color: var(--admin-text-subtle); font-size: .74rem; }
+	.open-link { border: 1px solid var(--admin-border-strong); border-radius: 6px; padding: 8px 11px; color: var(--admin-text); font-size: .72rem; text-decoration: none; }
 	.status { border: 1px solid var(--admin-border-strong); border-radius: 999px; padding: 4px 8px; color: var(--admin-text-muted); font-size: .66rem; white-space: nowrap; }
 	.status.published { border-color: color-mix(in srgb, var(--status-sage) 55%, transparent); color: var(--status-sage); }
 	.status.draft { border-color: color-mix(in srgb, var(--status-amber) 55%, transparent); color: var(--status-amber); }
@@ -174,7 +177,7 @@ function formatUpdatedAt(value: number) {
 	label { display: flex; flex-direction: column; gap: 7px; color: var(--admin-text-muted); font-size: .78rem; }
 	input { width: 100%; box-sizing: border-box; border: 1px solid var(--admin-border-strong); border-radius: 6px; background: var(--admin-bg); color: var(--admin-heading); padding: 11px 12px; font: inherit; text-transform: none; }
 	.slug-field { display: grid; grid-template-columns: auto 1fr; align-items: center; gap: 7px; color: var(--admin-text-subtle); }
-	input:focus, button:focus-visible { outline: 2px solid var(--admin-accent); outline-offset: 2px; }
+	input:focus, button:focus-visible, .open-link:focus-visible { outline: 2px solid var(--admin-accent); outline-offset: 2px; }
 	[aria-invalid="true"] { border-color: var(--status-rose); }
 	small { color: var(--admin-text-subtle); line-height: 1.45; }
 	.field-error, .message.error { color: var(--status-rose); }
@@ -190,6 +193,8 @@ function formatUpdatedAt(value: number) {
 		header { align-items: flex-start; flex-direction: column; }
 		.gallery-list, .create-panel { padding: 20px; }
 		.gallery-title { align-items: flex-start; flex-direction: column; gap: 8px; }
+		li { grid-template-columns: 30px 1fr; }
+		.open-link { grid-column: 2; justify-self: start; min-height: 44px; box-sizing: border-box; display: inline-flex; align-items: center; }
 		button { min-height: 44px; }
 	}
 </style>
