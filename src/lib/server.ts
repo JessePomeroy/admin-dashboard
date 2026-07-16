@@ -41,3 +41,7 @@ export {
 	createGalleryBulkDeleteHandler,
 	createGalleryImageHandler,
 } from "./server/handlers/galleryPresign.js";
+export {
+	createCmsMediaCapabilityHandler,
+	createCmsMediaProcessHandler,
+} from "./server/handlers/cmsMedia.js";
