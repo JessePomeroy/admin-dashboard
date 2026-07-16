@@ -17,6 +17,7 @@ if (!portfolioApi || !config.editor?.portfolio) {
 }
 const listPortfolioGalleries = portfolioApi.listForEditor;
 const savePortfolioDraft = portfolioApi.saveDraft;
+const reorderPortfolioGalleries = portfolioApi.reorder;
 const portfolioBaseHref = config.editor.portfolio.baseHref ?? "/admin/editor/portfolio";
 
 const client = useAdminClient();
@@ -24,15 +25,27 @@ const galleriesQuery = useQuery(listPortfolioGalleries, {
 	siteUrl: config.siteUrl,
 });
 
-let galleries = $derived(
+let serverGalleries = $derived(
 	galleriesQuery.data as PortfolioGalleryEditorSummary[] | undefined,
 );
+let galleries = $state<PortfolioGalleryEditorSummary[] | undefined>(undefined);
+let pendingOrderJson = $state<string | null>(null);
+let reorderState = $state<"idle" | "saving" | "error">("idle");
+let reorderMessage = $state("");
 let title = $state("");
 let slug = $state("");
 let slugWasEdited = $state(false);
 let errors = $state<{ title?: string; slug?: string }>({});
 let createState = $state<"idle" | "saving" | "error">("idle");
 let createMessage = $state("");
+
+$effect(() => {
+	if (!serverGalleries) return;
+	const serverOrderJson = JSON.stringify(serverGalleries.map(({ galleryId }) => galleryId));
+	if (pendingOrderJson && pendingOrderJson !== serverOrderJson) return;
+	galleries = serverGalleries;
+	if (pendingOrderJson === serverOrderJson) pendingOrderJson = null;
+});
 
 function updateTitle(event: Event) {
 	title = (event.currentTarget as HTMLInputElement).value;
@@ -70,6 +83,33 @@ async function createGallery() {
 	}
 }
 
+async function moveGallery(index: number, direction: -1 | 1) {
+	if (!galleries || reorderState === "saving") return;
+	const destination = index + direction;
+	if (destination < 0 || destination >= galleries.length) return;
+	const previous = galleries;
+	const reordered = [...galleries];
+	[reordered[index], reordered[destination]] = [reordered[destination], reordered[index]];
+	const galleryIds = reordered.map(({ galleryId }) => galleryId);
+	galleries = reordered;
+	pendingOrderJson = JSON.stringify(galleryIds);
+	reorderState = "saving";
+	reorderMessage = "saving gallery order…";
+	try {
+		await client.mutation(reorderPortfolioGalleries, {
+			siteUrl: config.siteUrl,
+			galleryIds,
+		});
+		reorderState = "idle";
+		reorderMessage = "gallery order saved";
+	} catch (error) {
+		pendingOrderJson = null;
+		galleries = previous;
+		reorderState = "error";
+		reorderMessage = error instanceof Error ? error.message : "Could not save gallery order.";
+	}
+}
+
 function formatUpdatedAt(value: number) {
 	return new Intl.DateTimeFormat(undefined, {
 		month: "short",
@@ -95,6 +135,7 @@ function formatUpdatedAt(value: number) {
 			<div class="section-heading">
 				<h2 id="gallery-list-heading">gallery collection</h2>
 				<p>The public site follows this deliberate order.</p>
+				{#if reorderMessage}<span class:error={reorderState === "error"} role={reorderState === "error" ? "alert" : "status"}>{reorderMessage}</span>{/if}
 			</div>
 
 			{#if galleries === undefined}
@@ -117,7 +158,11 @@ function formatUpdatedAt(value: number) {
 								</div>
 								<p>/{gallery.slug} · {gallery.draft?.placementCount ?? gallery.published?.placementCount ?? 0} images · updated {formatUpdatedAt(gallery.updatedAt)}</p>
 							</div>
-							<a class="open-link" href={`${portfolioBaseHref}/${gallery.galleryId}`} aria-label={`Open ${portfolioGalleryLabel(gallery)}`}>open</a>
+							<div class="gallery-actions" role="group" aria-label={`Actions for ${portfolioGalleryLabel(gallery)}`}>
+								<button type="button" class="order-button" onclick={() => void moveGallery(index, -1)} disabled={index === 0 || reorderState === "saving"} aria-label="Move gallery earlier">↑</button>
+								<button type="button" class="order-button" onclick={() => void moveGallery(index, 1)} disabled={index === galleries.length - 1 || reorderState === "saving"} aria-label="Move gallery later">↓</button>
+								<a class="open-link" href={`${portfolioBaseHref}/${gallery.galleryId}`} aria-label={`Open ${portfolioGalleryLabel(gallery)}`}>open</a>
+							</div>
 						</li>
 					{/each}
 				</ol>
@@ -157,6 +202,8 @@ function formatUpdatedAt(value: number) {
 	.gallery-list { min-height: 360px; padding: 28px; }
 	.create-panel { position: sticky; top: 28px; padding: 24px; }
 	.section-heading { margin-bottom: 22px; }
+	.section-heading span { display: block; margin-top: 8px; color: var(--status-sage); font-size: .72rem; }
+	.section-heading span.error { color: var(--status-rose); }
 	h2, h3 { margin: 0; color: var(--admin-heading); font-weight: 500; }
 	h2 { font-size: 1rem; }
 	h3 { font-size: .94rem; }
@@ -167,6 +214,8 @@ function formatUpdatedAt(value: number) {
 	.gallery-title { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
 	.gallery-summary p { margin: 7px 0 0; color: var(--admin-text-subtle); font-size: .74rem; }
 	.open-link { border: 1px solid var(--admin-border-strong); border-radius: 6px; padding: 8px 11px; color: var(--admin-text); font-size: .72rem; text-decoration: none; }
+	.gallery-actions { display: flex; align-items: center; gap: 6px; }
+	.order-button { min-width: 36px; border-color: var(--admin-border-strong); padding: 8px; background: transparent; color: var(--admin-text); }
 	.status { border: 1px solid var(--admin-border-strong); border-radius: 999px; padding: 4px 8px; color: var(--admin-text-muted); font-size: .66rem; white-space: nowrap; }
 	.status.published { border-color: color-mix(in srgb, var(--status-sage) 55%, transparent); color: var(--status-sage); }
 	.status.draft { border-color: color-mix(in srgb, var(--status-amber) 55%, transparent); color: var(--status-amber); }
@@ -194,7 +243,8 @@ function formatUpdatedAt(value: number) {
 		.gallery-list, .create-panel { padding: 20px; }
 		.gallery-title { align-items: flex-start; flex-direction: column; gap: 8px; }
 		li { grid-template-columns: 30px 1fr; }
-		.open-link { grid-column: 2; justify-self: start; min-height: 44px; box-sizing: border-box; display: inline-flex; align-items: center; }
+		.gallery-actions { grid-column: 2; justify-self: start; }
+		.open-link, .order-button { min-height: 44px; box-sizing: border-box; display: inline-flex; align-items: center; justify-content: center; }
 		button { min-height: 44px; }
 	}
 </style>

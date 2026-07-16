@@ -18,6 +18,18 @@ export interface PortfolioPlacementDraft {
 	focalPoint?: { x: number; y: number } | null;
 }
 
+export interface PortfolioGalleryDraftForm {
+	title: string;
+	description: string;
+	slug: string;
+	placements: PortfolioPlacementDraft[];
+}
+
+export interface PortfolioPublishIssue {
+	fieldId: string;
+	message: string;
+}
+
 export interface PortfolioRevisionEditorState extends PortfolioRevisionSummary {
 	placements: PortfolioPlacementDraft[];
 }
@@ -59,6 +71,75 @@ export function mergePortfolioMediaAssets(
 	return new Map(
 		[...libraryAssets, ...placedAssets].map((asset) => [asset._id, asset]),
 	);
+}
+
+export function copyPortfolioGalleryDraft(
+	draft: Partial<PortfolioGalleryDraftForm> | null | undefined,
+): PortfolioGalleryDraftForm {
+	return {
+		title: draft?.title ?? "",
+		description: draft?.description ?? "",
+		slug: draft?.slug ?? "",
+		placements: (draft?.placements ?? []).map((placement) => ({ ...placement })),
+	};
+}
+
+export function serializePortfolioGalleryDraft(draft: PortfolioGalleryDraftForm) {
+	return JSON.stringify({
+		title: draft.title,
+		description: draft.description,
+		slug: draft.slug,
+		placements: draft.placements.map((placement) => ({
+			key: placement.key,
+			assetId: placement.assetId,
+			altText: placement.altText ?? null,
+			decorative: placement.decorative,
+			caption: placement.caption ?? null,
+			focalPoint: placement.focalPoint ?? null,
+		})),
+	});
+}
+
+export function movePortfolioPlacement(
+	placements: PortfolioPlacementDraft[],
+	index: number,
+	direction: -1 | 1,
+) {
+	const destination = index + direction;
+	if (destination < 0 || destination >= placements.length) return placements;
+	const reordered = [...placements];
+	[reordered[index], reordered[destination]] = [reordered[destination], reordered[index]];
+	return reordered;
+}
+
+export function validatePortfolioGalleryForPublish(
+	draft: PortfolioGalleryDraftForm,
+): PortfolioPublishIssue[] {
+	const issues: PortfolioPublishIssue[] = [];
+	if (!draft.title.trim()) {
+		issues.push({ fieldId: "gallery-title", message: "Add a gallery name." });
+	}
+	if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(draft.slug)) {
+		issues.push({ fieldId: "gallery-slug", message: "Use a valid lowercase public URL." });
+	}
+	if (draft.placements.length === 0) {
+		issues.push({ fieldId: "gallery-images-heading", message: "Add at least one image." });
+	}
+	for (const [index, placement] of draft.placements.entries()) {
+		const altText = placement.altText?.trim() ?? "";
+		if (!placement.decorative && !altText) {
+			issues.push({
+				fieldId: `placement-${placement.key}-alt`,
+				message: `Image ${index + 1} needs alt text or must be marked decorative.`,
+			});
+		} else if (placement.decorative && altText) {
+			issues.push({
+				fieldId: `placement-${placement.key}-alt`,
+				message: `Image ${index + 1} cannot have alt text while marked decorative.`,
+			});
+		}
+	}
+	return issues;
 }
 
 export interface PortfolioGalleryEditorSummary {
@@ -133,7 +214,14 @@ export function shouldLoadPortfolioServerRevision(input: {
 	dirty: boolean;
 	serverRevisionId: string | undefined;
 	loadedServerRevisionId: string | undefined;
+	currentDraftRevisionId?: string;
+	locallySavedRevisionIds?: readonly string[];
 }) {
 	if (input.initialized && input.dirty) return false;
+	if (
+		input.serverRevisionId
+		&& input.serverRevisionId !== input.currentDraftRevisionId
+		&& input.locallySavedRevisionIds?.includes(input.serverRevisionId)
+	) return false;
 	return !input.initialized || input.serverRevisionId !== input.loadedServerRevisionId;
 }
