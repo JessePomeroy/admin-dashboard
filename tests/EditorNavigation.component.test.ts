@@ -22,23 +22,25 @@ describe("EditorNavigation", () => {
 		unmount(component);
 	});
 
-	it("shows only configured modules and marks Portfolio as current", () => {
+	it("shows only configured modules and marks nested Pages routes as current", () => {
 		const component = mount(EditorNavigation, {
 			target: document.body,
 			props: {
-				pathname: "/admin/editor/portfolio",
+				pathname: "/admin/editor/pages/homepage-quote",
 				siteSettingsEnabled: true,
+				homepageQuoteEnabled: true,
 				portfolioEnabled: true,
 			},
 		});
 
 		expect(Array.from(document.querySelectorAll("a"), (item) => item.textContent?.trim())).toEqual([
 			"site settings",
+			"pages",
 			"portfolio",
 		]);
 		expect(document.querySelectorAll('a[aria-current="page"]')).toHaveLength(1);
 		expect(document.querySelector('a[aria-current="page"]')?.textContent).toContain(
-			"portfolio",
+			"pages",
 		);
 		unmount(component);
 	});
