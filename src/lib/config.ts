@@ -228,6 +228,8 @@ export interface AdminEditorConfig {
 		initialPayload: HomepageQuoteDraftPayload;
 		/** Shared workspace route; defaults to `/admin/editor/pages/homepage-quote`. */
 		baseHref?: string;
+		/** Same-origin host endpoint that issues a short-lived real-Homepage draft preview. */
+		previewEndpoint?: string;
 	};
 	/** Enables public Portfolio authoring; private client galleries stay separate. */
 	portfolio?: {
