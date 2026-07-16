@@ -23,6 +23,12 @@ export {
 	type ContactPageDraftPayload,
 	type ContactPageEditorState,
 	type ContactPageRevisionState,
+	type AboutPortraitDraft,
+	type AboutSectionDraft,
+	type AboutHighlightDraft,
+	type AboutPageDraftPayload,
+	type AboutPageEditorState,
+	type AboutPageRevisionState,
 } from "./config";
 
 // Convex client (honors AdminConfig.mutationTransport)
@@ -60,6 +66,7 @@ export { default as SiteSettingsPage } from "./pages/editor/SiteSettingsPage.sve
 export { default as EditorPagesPage } from "./pages/editor/EditorPagesPage.svelte";
 export { default as HomepageQuotePage } from "./pages/editor/HomepageQuotePage.svelte";
 export { default as ContactPage } from "./pages/editor/ContactPage.svelte";
+export { default as AboutPage } from "./pages/editor/AboutPage.svelte";
 export { default as PortfolioGalleriesPage } from "./pages/editor/PortfolioGalleriesPage.svelte";
 export { default as PortfolioGalleryPage } from "./pages/editor/PortfolioGalleryPage.svelte";
 export { default as PlatformPage } from "./pages/PlatformPage.svelte";
@@ -75,6 +82,7 @@ export * from "./cmsMediaUpload";
 export * from "./siteSettings";
 export * from "./homepageQuote";
 export * from "./contactPage";
+export * from "./aboutPage";
 export type * from "./types";
 export * from "./utils";
 

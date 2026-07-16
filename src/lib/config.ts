@@ -56,6 +56,12 @@ export interface AdminAPI {
 		saveContactPageDraft: FnRef;
 		publishContactPage: FnRef;
 		discardContactPageDraft: FnRef;
+		getAboutPageEditorState?: FnRef;
+		saveAboutPageDraft?: FnRef;
+		publishAboutPage?: FnRef;
+		discardAboutPageDraft?: FnRef;
+		listMediaAssets?: FnRef;
+		getPlacedMediaAssets?: FnRef;
 	};
 	portfolioEditor?: {
 		listForEditor: FnRef;
@@ -252,6 +258,55 @@ export interface ContactPageEditorState {
 	publishedAt: number | null;
 }
 
+export interface AboutPortraitDraft {
+	key: string;
+	assetId: string;
+	altText?: string;
+	decorative: boolean;
+	focalPoint?: { x: number; y: number };
+}
+
+export interface AboutSectionDraft {
+	key: string;
+	title?: string;
+	items: string[];
+}
+
+export interface AboutHighlightDraft {
+	key: string;
+	label?: string;
+	value?: string;
+}
+
+export interface AboutPageDraftPayload {
+	heading?: string;
+	displayName?: string;
+	role?: string;
+	introduction?: string;
+	biography?: string;
+	portraits?: AboutPortraitDraft[];
+	sections?: AboutSectionDraft[];
+	highlights?: AboutHighlightDraft[];
+	seoDescription?: string;
+	seoImageAssetId?: string;
+}
+
+export interface AboutPageRevisionState {
+	revisionId: string;
+	schemaVersion: 1;
+	payload: AboutPageDraftPayload;
+	source: "admin" | "sanityImport" | "restore";
+	createdAt: number;
+}
+
+export interface AboutPageEditorState {
+	documentId: string;
+	draft: AboutPageRevisionState | null;
+	published: AboutPageRevisionState | null;
+	updatedAt: number;
+	publishedAt: number | null;
+}
+
 export interface AdminEditorConfig {
 	siteSettings?: {
 		/** Public URL used by the optional Preview action. */
@@ -272,6 +327,19 @@ export interface AdminEditorConfig {
 		initialPayload: ContactPageDraftPayload;
 		/** Shared workspace route; defaults to `/admin/editor/pages/contact`. */
 		baseHref?: string;
+		/** Same-origin endpoint for the later real-page draft preview. */
+		previewEndpoint?: string;
+	};
+	/** Enables an About content surface while the public site retains layout ownership. */
+	aboutPage?: {
+		/** Current host-owned text used to initialize the first unpublished draft. */
+		initialPayload: AboutPageDraftPayload;
+		/** Public origin for immutable CMS image derivatives, without a trailing slash. */
+		mediaBaseUrl: string;
+		/** Shared workspace route; defaults to `/admin/editor/pages/about`. */
+		baseHref?: string;
+		/** Same-origin host endpoint that issues and completes CMS media uploads. */
+		uploadEndpoint?: string;
 		/** Same-origin endpoint for the later real-page draft preview. */
 		previewEndpoint?: string;
 	};
