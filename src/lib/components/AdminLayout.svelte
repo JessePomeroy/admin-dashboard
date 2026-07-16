@@ -77,11 +77,15 @@ let siteSettingsEditorEnabled = $derived(
 let homepageQuoteEditorEnabled = $derived(
 	Boolean(config.editor?.homepageQuote && api.siteEditor),
 );
+let contactPageEditorEnabled = $derived(
+	Boolean(config.editor?.contactPage && api.siteEditor),
+);
+let pagesEditorEnabled = $derived(homepageQuoteEditorEnabled || contactPageEditorEnabled);
 let portfolioEditorEnabled = $derived(
 	Boolean(config.editor?.portfolio && api.portfolioEditor),
 );
 let editorEnabled = $derived(
-	siteSettingsEditorEnabled || homepageQuoteEditorEnabled || portfolioEditorEnabled,
+	siteSettingsEditorEnabled || pagesEditorEnabled || portfolioEditorEnabled,
 );
 let editorActive = $derived(
 	editorEnabled && isAdminRouteActive("/admin/editor", $page.url.pathname),
@@ -204,7 +208,7 @@ function closeMobileMenu() {
 			<EditorNavigation
 				pathname={$page.url.pathname}
 				siteSettingsEnabled={siteSettingsEditorEnabled}
-				homepageQuoteEnabled={homepageQuoteEditorEnabled}
+				pagesEnabled={pagesEditorEnabled}
 				portfolioEnabled={portfolioEditorEnabled}
 				mobile
 			/>
@@ -257,7 +261,7 @@ function closeMobileMenu() {
 		<EditorNavigation
 			pathname={$page.url.pathname}
 			siteSettingsEnabled={siteSettingsEditorEnabled}
-			homepageQuoteEnabled={homepageQuoteEditorEnabled}
+			pagesEnabled={pagesEditorEnabled}
 			portfolioEnabled={portfolioEditorEnabled}
 		/>
 	{/if}

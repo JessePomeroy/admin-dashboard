@@ -4,13 +4,13 @@ import { isAdminRouteActive } from "./adminNavigation";
 let {
 	pathname,
 	siteSettingsEnabled = false,
-	homepageQuoteEnabled = false,
+		pagesEnabled = false,
 	portfolioEnabled = false,
 	mobile = false,
 }: {
 	pathname: string;
 	siteSettingsEnabled?: boolean;
-	homepageQuoteEnabled?: boolean;
+		pagesEnabled?: boolean;
 	portfolioEnabled?: boolean;
 	mobile?: boolean;
 } = $props();
@@ -19,7 +19,7 @@ let items = $derived([
 	...(siteSettingsEnabled
 		? [{ href: "/admin/editor", label: "site settings" }]
 		: []),
-	...(homepageQuoteEnabled
+		...(pagesEnabled
 		? [{ href: "/admin/editor/pages", label: "pages" }]
 		: []),
 	...(portfolioEnabled

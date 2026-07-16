@@ -91,6 +91,10 @@
 	background: var(--admin-surface);
 }
 
+.settings-page > section + section {
+	margin-top: 20px;
+}
+
 .settings-page .section-heading {
 	display: flex;
 	gap: 14px;

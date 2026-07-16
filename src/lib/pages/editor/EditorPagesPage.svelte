@@ -4,10 +4,12 @@ import "../../styles/editorial-page.css";
 
 const config = getAdminConfig();
 const quoteConfig = config.editor?.homepageQuote;
-if (!quoteConfig || !config.api.siteEditor) {
+const contactConfig = config.editor?.contactPage;
+if ((!quoteConfig && !contactConfig) || !config.api.siteEditor) {
 	throw new Error("Pages editor is not configured for this host");
 }
-const quoteHref = quoteConfig.baseHref ?? "/admin/editor/pages/homepage-quote";
+const quoteHref = quoteConfig?.baseHref ?? "/admin/editor/pages/homepage-quote";
+const contactHref = contactConfig?.baseHref ?? "/admin/editor/pages/contact";
 </script>
 
 <svelte:head><title>Pages — {config.siteName}</title></svelte:head>
@@ -20,9 +22,26 @@ const quoteHref = quoteConfig.baseHref ?? "/admin/editor/pages/homepage-quote";
 		</div>
 	</header>
 
-	<section aria-labelledby="homepage-content-heading">
+	{#if contactConfig}
+	<section aria-labelledby="contact-page-heading">
 		<div class="section-heading">
 			<span>01</span>
+			<div>
+				<h2 id="contact-page-heading">editable pages</h2>
+				<p>Business-facing content inside pages whose structure and operations remain designed and platform-managed.</p>
+			</div>
+		</div>
+		<a class="page-entry" href={contactHref}>
+			<span><strong>contact &amp; booking</strong><small>Visible copy, public details, inquiry choices, and booking link</small></span>
+			<span aria-hidden="true">→</span>
+		</a>
+	</section>
+	{/if}
+
+	{#if quoteConfig}
+	<section aria-labelledby="homepage-content-heading">
+		<div class="section-heading">
+			<span>{contactConfig ? "02" : "01"}</span>
 			<div>
 				<h2 id="homepage-content-heading">homepage content</h2>
 				<p>Focused content slots on the designed Homepage—not access to the page layout itself.</p>
@@ -33,4 +52,5 @@ const quoteHref = quoteConfig.baseHref ?? "/admin/editor/pages/homepage-quote";
 			<span aria-hidden="true">→</span>
 		</a>
 	</section>
+	{/if}
 </div>
