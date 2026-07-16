@@ -48,6 +48,10 @@ export interface AdminAPI {
 		saveSiteSettingsDraft: FnRef;
 		publishSiteSettings: FnRef;
 		discardSiteSettingsDraft: FnRef;
+		getHomepageQuoteEditorState: FnRef;
+		saveHomepageQuoteDraft: FnRef;
+		publishHomepageQuote: FnRef;
+		discardHomepageQuoteDraft: FnRef;
 	};
 	portfolioEditor?: {
 		listForEditor: FnRef;
@@ -192,10 +196,38 @@ export interface SiteSettingsEditorState {
 	publishedAt: number | null;
 }
 
+export interface HomepageQuoteDraftPayload {
+	text?: string;
+	attribution?: string;
+}
+
+export interface HomepageQuoteRevisionState {
+	revisionId: string;
+	schemaVersion: 1;
+	payload: HomepageQuoteDraftPayload;
+	source: "admin" | "sanityImport" | "restore";
+	createdAt: number;
+}
+
+export interface HomepageQuoteEditorState {
+	documentId: string;
+	draft: HomepageQuoteRevisionState | null;
+	published: HomepageQuoteRevisionState | null;
+	updatedAt: number;
+	publishedAt: number | null;
+}
+
 export interface AdminEditorConfig {
 	siteSettings?: {
 		/** Public URL used by the optional Preview action. */
 		previewHref?: string;
+	};
+	/** Enables a site-specific Quote slot without exposing the Homepage editor. */
+	homepageQuote?: {
+		/** Current host-owned quote used to initialize the first unpublished draft. */
+		initialPayload: HomepageQuoteDraftPayload;
+		/** Shared workspace route; defaults to `/admin/editor/pages/homepage-quote`. */
+		baseHref?: string;
 	};
 	/** Enables public Portfolio authoring; private client galleries stay separate. */
 	portfolio?: {

@@ -16,6 +16,7 @@ import {
 	type SiteSettingsFieldErrors,
 	validateSiteSettingsForPublish,
 } from "../../siteSettings";
+import "../../styles/editorial-page.css";
 
 type SaveState =
 	| "loading"
@@ -335,51 +336,3 @@ function moveSocialLink(index: number, direction: -1 | 1) {
 		</form>
 	{/if}
 </div>
-
-<style>
-	.settings-page { max-width: 1040px; padding: 48px 40px 96px; }
-	.settings-header { display: flex; justify-content: space-between; gap: 32px; align-items: flex-start; margin-bottom: 36px; }
-	h1 { margin: 0; color: var(--admin-heading); font-family: var(--admin-font-display); font-size: 1.8rem; font-weight: 500; }
-	.description { max-width: 560px; margin: 8px 0 0; color: var(--admin-text-muted); line-height: 1.6; }
-	.actions { display: flex; align-items: center; justify-content: flex-end; gap: 8px; flex-wrap: wrap; }
-	.save-state { color: var(--admin-text-subtle); font-size: .74rem; margin-right: 4px; }
-	.actions a, button { border: 1px solid var(--admin-border-strong); border-radius: 6px; padding: 9px 13px; background: transparent; color: var(--admin-text); font: inherit; font-size: .78rem; text-decoration: none; cursor: pointer; }
-	button:disabled { opacity: .4; cursor: default; }
-	.primary { background: var(--admin-accent); color: var(--admin-bg); border-color: transparent; }
-	.alert { margin-bottom: 24px; padding: 12px 14px; border: 1px solid color-mix(in srgb, var(--status-rose) 45%, transparent); color: var(--status-rose); border-radius: 6px; }
-	.loading, .empty { color: var(--admin-text-muted); }
-	form { display: flex; flex-direction: column; gap: 20px; }
-	section { padding: 28px; border: 1px solid var(--admin-border); border-radius: 10px; background: var(--admin-surface); }
-	.section-heading { display: flex; gap: 14px; align-items: flex-start; margin-bottom: 24px; }
-	.section-heading > span { color: var(--admin-text-subtle); font-size: .72rem; padding-top: 4px; }
-	.section-heading div { flex: 1; }
-	h2 { margin: 0; color: var(--admin-heading); font-size: 1rem; font-weight: 500; }
-	.section-heading p { margin: 5px 0 0; color: var(--admin-text-muted); font-size: .82rem; }
-	.fields { display: grid; gap: 18px; }
-	.two-column { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-	.wide { grid-column: 1 / -1; }
-	label { display: flex; flex-direction: column; gap: 7px; color: var(--admin-text-muted); font-size: .78rem; }
-	input, textarea { width: 100%; box-sizing: border-box; border: 1px solid var(--admin-border-strong); border-radius: 6px; background: var(--admin-bg); color: var(--admin-heading); padding: 11px 12px; font: inherit; text-transform: none; }
-	input:focus, textarea:focus, button:focus-visible, a:focus-visible { outline: 2px solid var(--admin-accent); outline-offset: 2px; }
-	[aria-invalid="true"] { border-color: var(--status-rose); }
-	small { color: var(--admin-text-subtle); line-height: 1.45; }
-	.field-error { color: var(--status-rose); }
-	.social-list { display: flex; flex-direction: column; gap: 12px; }
-	.social-row { display: grid; grid-template-columns: minmax(140px, .55fr) minmax(220px, 1fr) auto; gap: 12px; align-items: start; }
-	.row-actions { display: flex; gap: 5px; padding-top: 23px; }
-	.row-actions button { padding: 8px 9px; }
-	.text-action { margin-left: auto; padding: 7px 10px; }
-	@media (max-width: 900px) {
-		.settings-header { flex-direction: column; }
-		.actions { justify-content: flex-start; }
-		.social-row { grid-template-columns: 1fr; }
-		.row-actions { padding-top: 0; }
-	}
-	@media (max-width: 768px) {
-		.settings-page { padding: 28px 20px 72px; }
-		.two-column { grid-template-columns: 1fr; }
-		.wide { grid-column: auto; }
-		section { padding: 20px; }
-		.actions { position: sticky; bottom: 0; z-index: 5; width: 100%; padding: 10px 0; background: var(--admin-bg); }
-	}
-</style>

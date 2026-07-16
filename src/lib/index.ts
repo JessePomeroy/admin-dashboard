@@ -17,6 +17,9 @@ export {
 	type SiteSettingsEditorState,
 	type SiteSettingsRevisionState,
 	type SiteSettingsSocialLink,
+	type HomepageQuoteDraftPayload,
+	type HomepageQuoteEditorState,
+	type HomepageQuoteRevisionState,
 } from "./config";
 
 // Convex client (honors AdminConfig.mutationTransport)
@@ -51,6 +54,8 @@ export { default as InvoicingPage } from "./pages/InvoicingPage.svelte";
 export { default as MessagesPage } from "./pages/MessagesPage.svelte";
 export { default as OrdersPage } from "./pages/OrdersPage.svelte";
 export { default as SiteSettingsPage } from "./pages/editor/SiteSettingsPage.svelte";
+export { default as EditorPagesPage } from "./pages/editor/EditorPagesPage.svelte";
+export { default as HomepageQuotePage } from "./pages/editor/HomepageQuotePage.svelte";
 export { default as PortfolioGalleriesPage } from "./pages/editor/PortfolioGalleriesPage.svelte";
 export { default as PortfolioGalleryPage } from "./pages/editor/PortfolioGalleryPage.svelte";
 export { default as PlatformPage } from "./pages/PlatformPage.svelte";
@@ -64,6 +69,7 @@ export * from "./galleryUploadPolicy";
 export * from "./portfolioEditor";
 export * from "./cmsMediaUpload";
 export * from "./siteSettings";
+export * from "./homepageQuote";
 export type * from "./types";
 export * from "./utils";
 
