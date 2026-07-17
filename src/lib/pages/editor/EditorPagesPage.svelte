@@ -6,12 +6,14 @@ const config = getAdminConfig();
 const quoteConfig = config.editor?.homepageQuote;
 const contactConfig = config.editor?.contactPage;
 const aboutConfig = config.editor?.aboutPage;
-if ((!quoteConfig && !contactConfig && !aboutConfig) || !config.api.siteEditor) {
+const modelingConfig = config.editor?.modelingPage;
+if ((!quoteConfig && !contactConfig && !aboutConfig && !modelingConfig) || !config.api.siteEditor) {
 	throw new Error("Pages editor is not configured for this host");
 }
 const quoteHref = quoteConfig?.baseHref ?? "/admin/editor/pages/homepage-quote";
 const contactHref = contactConfig?.baseHref ?? "/admin/editor/pages/contact";
 const aboutHref = aboutConfig?.baseHref ?? "/admin/editor/pages/about";
+const modelingHref = modelingConfig?.baseHref ?? "/admin/editor/pages/modeling";
 </script>
 
 <svelte:head><title>Pages — {config.siteName}</title></svelte:head>
@@ -24,7 +26,7 @@ const aboutHref = aboutConfig?.baseHref ?? "/admin/editor/pages/about";
 		</div>
 	</header>
 
-	{#if contactConfig || aboutConfig}
+	{#if contactConfig || aboutConfig || modelingConfig}
 	<section aria-labelledby="editable-pages-heading">
 		<div class="section-heading">
 			<span>01</span>
@@ -36,6 +38,12 @@ const aboutHref = aboutConfig?.baseHref ?? "/admin/editor/pages/about";
 		{#if aboutConfig}
 			<a class="page-entry" href={aboutHref}>
 				<span><strong>about</strong><small>Biography, ordered portraits, selected details, and search description</small></span>
+				<span aria-hidden="true">→</span>
+			</a>
+		{/if}
+		{#if modelingConfig}
+			<a class="page-entry" href={modelingHref}>
+				<span><strong>modeling &amp; acting</strong><small>Ordered category galleries, image accessibility, visibility, and search description</small></span>
 				<span aria-hidden="true">→</span>
 			</a>
 		{/if}
@@ -51,7 +59,7 @@ const aboutHref = aboutConfig?.baseHref ?? "/admin/editor/pages/about";
 	{#if quoteConfig}
 	<section aria-labelledby="homepage-content-heading">
 		<div class="section-heading">
-			<span>{contactConfig || aboutConfig ? "02" : "01"}</span>
+			<span>{contactConfig || aboutConfig || modelingConfig ? "02" : "01"}</span>
 			<div>
 				<h2 id="homepage-content-heading">homepage content</h2>
 				<p>Focused content slots on the designed Homepage—not access to the page layout itself.</p>
