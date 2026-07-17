@@ -155,3 +155,15 @@ export function validateAboutPageForPublish(payload: AboutPageDraftPayload) {
 	}
 	return issues;
 }
+
+export function resolveAboutPagePreviewUrl(value: unknown, currentOrigin: string) {
+	if (typeof value !== "string" || !value) {
+		throw new Error("The preview endpoint returned an invalid URL.");
+	}
+	const origin = new URL(currentOrigin).origin;
+	const url = new URL(value, `${origin}/`);
+	if (url.origin !== origin) {
+		throw new Error("The preview endpoint returned an unsafe URL.");
+	}
+	return url.toString();
+}

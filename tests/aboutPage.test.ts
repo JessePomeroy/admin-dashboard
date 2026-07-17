@@ -3,6 +3,7 @@ import {
 	copyAboutPageDraft,
 	moveAboutItem,
 	newAboutPortrait,
+	resolveAboutPagePreviewUrl,
 	serializeAboutPageDraft,
 	validateAboutPageForPublish,
 } from "../src/lib/aboutPage";
@@ -72,5 +73,17 @@ describe("About editor helpers", () => {
 		});
 		expect(moveAboutItem(["a", "b", "c"], 1, -1)).toEqual(["b", "a", "c"]);
 		expect(moveAboutItem(["a", "b"], 0, -1)).toEqual(["a", "b"]);
+	});
+
+	it("accepts only same-origin About preview URLs", () => {
+		expect(resolveAboutPagePreviewUrl(
+			"/preview/about-page",
+			"https://tenant.example/admin/editor/pages/about",
+		)).toBe("https://tenant.example/preview/about-page");
+		expect(() => resolveAboutPagePreviewUrl(
+			"https://attacker.example/collect",
+			"https://tenant.example",
+		)).toThrow(/unsafe/);
+		expect(() => resolveAboutPagePreviewUrl(null, "https://tenant.example")).toThrow(/invalid/);
 	});
 });
