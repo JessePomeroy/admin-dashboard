@@ -60,6 +60,10 @@ export interface AdminAPI {
 		saveAboutPageDraft?: FnRef;
 		publishAboutPage?: FnRef;
 		discardAboutPageDraft?: FnRef;
+		getModelingPageEditorState?: FnRef;
+		saveModelingPageDraft?: FnRef;
+		publishModelingPage?: FnRef;
+		discardModelingPageDraft?: FnRef;
 		listMediaAssets?: FnRef;
 		getPlacedMediaAssets?: FnRef;
 	};
@@ -306,6 +310,46 @@ export interface AboutPageEditorState {
 	publishedAt: number | null;
 }
 
+export interface ModelingImageDraft {
+	key: string;
+	assetId: string;
+	altText?: string;
+	decorative: boolean;
+}
+
+export interface ModelingGalleryDraft {
+	key: string;
+	title?: string;
+	slug?: string;
+	description?: string;
+	isVisible: boolean;
+	images?: ModelingImageDraft[];
+}
+
+export interface ModelingPageDraftPayload {
+	heading?: string;
+	intro?: string;
+	galleries?: ModelingGalleryDraft[];
+	seoDescription?: string;
+	seoImageAssetId?: string;
+}
+
+export interface ModelingPageRevisionState {
+	revisionId: string;
+	schemaVersion: 1;
+	payload: ModelingPageDraftPayload;
+	source: "admin" | "sanityImport" | "restore";
+	createdAt: number;
+}
+
+export interface ModelingPageEditorState {
+	documentId: string;
+	draft: ModelingPageRevisionState | null;
+	published: ModelingPageRevisionState | null;
+	updatedAt: number;
+	publishedAt: number | null;
+}
+
 export interface AdminEditorConfig {
 	siteSettings?: {
 		/** Public URL used by the optional Preview action. */
@@ -336,6 +380,19 @@ export interface AdminEditorConfig {
 		/** Public origin for immutable CMS image derivatives, without a trailing slash. */
 		mediaBaseUrl: string;
 		/** Shared workspace route; defaults to `/admin/editor/pages/about`. */
+		baseHref?: string;
+		/** Same-origin host endpoint that issues and completes CMS media uploads. */
+		uploadEndpoint?: string;
+		/** Same-origin endpoint for the later real-page draft preview. */
+		previewEndpoint?: string;
+	};
+	/** Enables ordered Modeling categories while the public site retains layout ownership. */
+	modelingPage?: {
+		/** Current host-owned copy and category names used for the first draft. */
+		initialPayload: ModelingPageDraftPayload;
+		/** Public origin for immutable CMS image derivatives, without a trailing slash. */
+		mediaBaseUrl: string;
+		/** Shared workspace route; defaults to `/admin/editor/pages/modeling`. */
 		baseHref?: string;
 		/** Same-origin host endpoint that issues and completes CMS media uploads. */
 		uploadEndpoint?: string;
