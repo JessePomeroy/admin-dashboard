@@ -82,7 +82,6 @@ let currentJson = $derived(serializeAboutPageDraft(form));
 let mediaPage = $derived(mediaQuery.data as PortfolioMediaPage | undefined);
 let referencedAssetIds = $derived([...new Set([
 	...(form.portraits ?? []).map((portrait) => portrait.assetId),
-	...(form.seoImageAssetId ? [form.seoImageAssetId] : []),
 ])]);
 const placedMediaQuery = useQuery(getPlacedMediaAssets, () => ({
 	siteUrl: config.siteUrl,
@@ -424,13 +423,13 @@ function addUploadedAsset(asset: PortfolioMediaAsset) {
 				</div>
 			</section>
 
-			<AboutPortraits portraits={form.portraits ?? []} {mediaById} mediaBaseUrl={aboutConfig.mediaBaseUrl} seoImageAssetId={form.seoImageAssetId} {publishIssues} {reviewRequested} uploadEndpoint={aboutConfig.uploadEndpoint} onChange={(portraits) => (form.portraits = portraits)} onSharingImageChange={(assetId) => (form.seoImageAssetId = assetId)} onChooseMedia={() => (pickerOpen = true)} onUploadReady={addUploadedAsset} />
+			<AboutPortraits portraits={form.portraits ?? []} {mediaById} mediaBaseUrl={aboutConfig.mediaBaseUrl} {publishIssues} {reviewRequested} uploadEndpoint={aboutConfig.uploadEndpoint} onChange={(portraits) => (form.portraits = portraits)} onChooseMedia={() => (pickerOpen = true)} onUploadReady={addUploadedAsset} />
 
 			<AboutStructuredContent sections={form.sections ?? []} highlights={form.highlights ?? []} {publishIssues} {reviewRequested} onSectionsChange={(sections) => (form.sections = sections)} onHighlightsChange={(highlights) => (form.highlights = highlights)} />
 
 			<section aria-labelledby="about-seo-heading">
 				<div class="section-heading"><div><h2 id="about-seo-heading">search &amp; sharing</h2><p>Write a concise, natural summary of who this page is about and what visitors will find. Example: “About Margaret Helena, a Michigan photographer and multidisciplinary artist working across portraiture, direction, and performance.”</p></div></div>
-				<div class="fields"><label class="wide">search description<textarea id="about-seo-description" rows="4" maxlength="320" bind:value={form.seoDescription} aria-invalid={reviewRequested && publishIssues.some((issue) => issue.fieldId === "about-seo-description")}></textarea><small>{form.seoDescription?.length ?? 0} / 320. Choose “Use for link previews” on a portrait to set the optional sharing image.</small></label></div>
+				<div class="fields"><label class="wide">search description<textarea id="about-seo-description" rows="4" maxlength="320" bind:value={form.seoDescription} aria-invalid={reviewRequested && publishIssues.some((issue) => issue.fieldId === "about-seo-description")}></textarea><small>{form.seoDescription?.length ?? 0} / 320. The site uses its default sharing image for link previews.</small></label></div>
 			</section>
 		</form>
 	{/if}

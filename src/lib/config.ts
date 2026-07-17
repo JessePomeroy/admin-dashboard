@@ -266,7 +266,6 @@ export interface AboutPortraitDraft {
 	key: string;
 	assetId: string;
 	altText?: string;
-	decorative: boolean;
 }
 
 export interface AboutSectionDraft {
@@ -291,7 +290,6 @@ export interface AboutPageDraftPayload {
 	sections?: AboutSectionDraft[];
 	highlights?: AboutHighlightDraft[];
 	seoDescription?: string;
-	seoImageAssetId?: string;
 }
 
 export interface AboutPageRevisionState {
@@ -314,7 +312,6 @@ export interface ModelingImageDraft {
 	key: string;
 	assetId: string;
 	altText?: string;
-	decorative: boolean;
 }
 
 export interface ModelingGalleryDraft {
@@ -331,7 +328,6 @@ export interface ModelingPageDraftPayload {
 	intro?: string;
 	galleries?: ModelingGalleryDraft[];
 	seoDescription?: string;
-	seoImageAssetId?: string;
 }
 
 export interface ModelingPageRevisionState {

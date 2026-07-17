@@ -212,7 +212,6 @@ async function saveNow() {
 					key: placement.key,
 					assetId: placement.assetId,
 					altText: placement.altText || undefined,
-					decorative: placement.decorative,
 					caption: placement.caption || undefined,
 					focalPoint: placement.focalPoint ?? undefined,
 				})),

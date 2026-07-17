@@ -12,24 +12,20 @@ let {
 	portraits,
 	mediaById,
 	mediaBaseUrl,
-	seoImageAssetId,
 	publishIssues,
 	reviewRequested,
 	uploadEndpoint,
 	onChange,
-	onSharingImageChange,
 	onChooseMedia,
 	onUploadReady,
 }: {
 	portraits: AboutPortraitDraft[];
 	mediaById: Map<string, PortfolioMediaAsset>;
 	mediaBaseUrl: string;
-	seoImageAssetId?: string;
 	publishIssues: AboutPublishIssue[];
 	reviewRequested: boolean;
 	uploadEndpoint?: string;
 	onChange: (portraits: AboutPortraitDraft[]) => void;
-	onSharingImageChange: (assetId: string | undefined) => void;
 	onChooseMedia: () => void;
 	onUploadReady: (asset: PortfolioMediaAsset) => void;
 } = $props();
@@ -41,13 +37,7 @@ function update(index: number, change: Partial<AboutPortraitDraft>) {
 }
 
 function remove(index: number) {
-	const removed = portraits[index];
 	onChange(portraits.filter((_, itemIndex) => itemIndex !== index));
-	if (seoImageAssetId === removed.assetId) onSharingImageChange(undefined);
-}
-
-function setDecorative(index: number, decorative: boolean) {
-	update(index, { decorative, altText: decorative ? "" : portraits[index].altText });
 }
 </script>
 
@@ -76,9 +66,7 @@ function setDecorative(index: number, decorative: boolean) {
 						<div><strong>{asset?.originalFilename ?? `portrait ${index + 1}`}</strong><span>position {index + 1}</span></div>
 					</div>
 					<div class="placement-fields">
-						<label>alt text<input id={`about-portrait-${portrait.key}-alt`} maxlength="500" value={portrait.altText ?? ""} oninput={(event) => update(index, { altText: event.currentTarget.value })} disabled={portrait.decorative} aria-invalid={reviewRequested && Boolean(issue)} />{#if reviewRequested && issue}<small class="field-error">{issue.message}</small>{/if}</label>
-						<label class="check"><input type="checkbox" checked={portrait.decorative} onchange={(event) => setDecorative(index, event.currentTarget.checked)} /> Decorative image</label>
-						<label class="check"><input type="radio" name="sharing-image" checked={seoImageAssetId === portrait.assetId} onchange={() => onSharingImageChange(portrait.assetId)} /> Use for link previews</label>
+						<label>alt text<input id={`about-portrait-${portrait.key}-alt`} maxlength="500" value={portrait.altText ?? ""} oninput={(event) => update(index, { altText: event.currentTarget.value })} aria-invalid={reviewRequested && Boolean(issue)} />{#if reviewRequested && issue}<small class="field-error">{issue.message}</small>{/if}</label>
 					</div>
 					<div class="actions" role="group" aria-label={`Reorder portrait ${index + 1}`}>
 						<button type="button" class="secondary order" onclick={() => onChange(moveAboutItem(portraits, index, -1))} disabled={index === 0} aria-label="Move portrait earlier">↑</button>
@@ -111,8 +99,6 @@ function setDecorative(index: number, decorative: boolean) {
 	label { display: flex; flex-direction: column; gap: 7px; color: var(--admin-text-muted); font-size: .76rem; }
 	input:not([type]) { width: 100%; box-sizing: border-box; border: 1px solid var(--admin-border-strong); border-radius: 6px; padding: 10px 11px; background: var(--admin-bg); color: var(--admin-heading); font: inherit; text-transform: none; }
 	[aria-invalid="true"] { border-color: var(--status-rose); }
-	.check { flex-direction: row; align-items: center; }
-	.check input { width: auto; }
 	.actions { display: grid; grid-template-columns: repeat(2, auto); gap: 6px; }
 	.order { min-width: 38px; padding: 7px 9px; }
 	.remove { grid-column: 1 / -1; min-height: 36px; padding: 7px 9px; }

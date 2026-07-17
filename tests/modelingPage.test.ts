@@ -35,7 +35,6 @@ const complete = {
 			key: "image-1",
 			assetId: "media-1",
 			altText: "Margaret in an editorial portrait.",
-			decorative: false,
 		}],
 	}],
 	seoDescription: "Modeling, acting, and portrait work by Margaret Helena.",
@@ -51,12 +50,25 @@ describe("Modeling editor helpers", () => {
 		);
 	});
 
+	it("strips retired image metadata from loaded drafts", () => {
+		const copied = copyModelingPageDraft({
+			...complete,
+			seoImageAssetId: "media-1",
+			galleries: [{
+				...complete.galleries[0],
+				images: [{ ...complete.galleries[0].images[0], decorative: false }],
+			}],
+		});
+		expect(copied).not.toHaveProperty("seoImageAssetId");
+		expect(copied.galleries?.[0].images?.[0]).not.toHaveProperty("decorative");
+	});
+
 	it("creates hidden categories and accessible image drafts", () => {
 		expect(newModelingGallery()).toMatchObject({ isVisible: false, images: [] });
 		expect(newModelingImage(asset)).toMatchObject({
 			assetId: "media-1",
-			decorative: false,
 		});
+		expect(newModelingImage(asset)).not.toHaveProperty("decorative");
 		expect(slugifyModelingTitle(" Comp Card Digitals ")).toBe("comp-card-digitals");
 	});
 

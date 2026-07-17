@@ -20,12 +20,22 @@ export function emptyModelingPageDraft(): ModelingPageDraftPayload {
 export function copyModelingPageDraft(
 	payload: ModelingPageDraftPayload | undefined,
 ): ModelingPageDraftPayload {
+	const legacy = payload as (ModelingPageDraftPayload & { seoImageAssetId?: string }) | undefined;
+	const { seoImageAssetId: _seoImageAssetId, ...content } = legacy ?? {};
 	return {
 		...emptyModelingPageDraft(),
-		...payload,
+		...content,
 		galleries: (payload?.galleries ?? []).map((gallery) => ({
-			...gallery,
-			images: (gallery.images ?? []).map((image) => ({ ...image })),
+			key: gallery.key,
+			title: gallery.title,
+			slug: gallery.slug,
+			description: gallery.description,
+			isVisible: gallery.isVisible,
+			images: (gallery.images ?? []).map((image) => ({
+				key: image.key,
+				assetId: image.assetId,
+				altText: image.altText,
+			})),
 		})),
 	};
 }
@@ -43,7 +53,6 @@ export function serializeModelingPageDraft(payload: ModelingPageDraftPayload) {
 			images: gallery.images ?? [],
 		})),
 		seoDescription: payload.seoDescription ?? null,
-		seoImageAssetId: payload.seoImageAssetId ?? null,
 	});
 }
 
@@ -75,7 +84,6 @@ export function newModelingImage(asset: PortfolioMediaAsset): ModelingImageDraft
 		key: key("image"),
 		assetId: asset._id,
 		altText: "",
-		decorative: false,
 	};
 }
 
@@ -168,10 +176,10 @@ export function validateModelingPageForPublish(payload: ModelingPageDraftPayload
 			});
 		}
 		for (const [imageIndex, image] of images.entries()) {
-			if (!image.decorative && !image.altText?.trim()) {
+			if (!image.altText?.trim()) {
 				issues.push({
 					fieldId: `modeling-image-${image.key}-alt`,
-					message: `Category ${index + 1}, image ${imageIndex + 1} needs alt text or must be marked Decorative.`,
+					message: `Category ${index + 1}, image ${imageIndex + 1} needs alt text.`,
 				});
 			}
 		}
