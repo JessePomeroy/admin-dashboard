@@ -78,11 +78,6 @@ function setDecorative(index: number, decorative: boolean) {
 					<div class="placement-fields">
 						<label>alt text<input id={`about-portrait-${portrait.key}-alt`} maxlength="500" value={portrait.altText ?? ""} oninput={(event) => update(index, { altText: event.currentTarget.value })} disabled={portrait.decorative} aria-invalid={reviewRequested && Boolean(issue)} />{#if reviewRequested && issue}<small class="field-error">{issue.message}</small>{/if}</label>
 						<label class="check"><input type="checkbox" checked={portrait.decorative} onchange={(event) => setDecorative(index, event.currentTarget.checked)} /> Decorative image</label>
-						<div class="focal">
-							<span>focal point</span>
-							<label>horizontal<input aria-label={`Portrait ${index + 1} horizontal focal point`} type="range" min="0" max="1" step="0.01" value={portrait.focalPoint?.x ?? 0.5} oninput={(event) => update(index, { focalPoint: { x: Number(event.currentTarget.value), y: portrait.focalPoint?.y ?? 0.5 } })} /></label>
-							<label>vertical<input aria-label={`Portrait ${index + 1} vertical focal point`} type="range" min="0" max="1" step="0.01" value={portrait.focalPoint?.y ?? 0.5} oninput={(event) => update(index, { focalPoint: { x: portrait.focalPoint?.x ?? 0.5, y: Number(event.currentTarget.value) } })} /></label>
-						</div>
 						<label class="check"><input type="radio" name="sharing-image" checked={seoImageAssetId === portrait.assetId} onchange={() => onSharingImageChange(portrait.assetId)} /> Use for link previews</label>
 					</div>
 					<div class="actions" role="group" aria-label={`Reorder portrait ${index + 1}`}>
@@ -118,9 +113,6 @@ function setDecorative(index: number, decorative: boolean) {
 	[aria-invalid="true"] { border-color: var(--status-rose); }
 	.check { flex-direction: row; align-items: center; }
 	.check input { width: auto; }
-	.focal { display: grid; grid-template-columns: auto 1fr 1fr; gap: 10px; align-items: center; }
-	.focal > span { color: var(--admin-text-muted); font-size: .76rem; }
-	.focal label { gap: 3px; color: var(--admin-text-subtle); font-size: .66rem; }
 	.actions { display: grid; grid-template-columns: repeat(2, auto); gap: 6px; }
 	.order { min-width: 38px; padding: 7px 9px; }
 	.remove { grid-column: 1 / -1; min-height: 36px; padding: 7px 9px; }

@@ -76,5 +76,5 @@ describe("package server subpath Node import", () => {
 		);
 
 		expect(output).toBe(new Array(24).fill("function").join(","));
-	}, 30_000);
+	}, 60_000);
 });

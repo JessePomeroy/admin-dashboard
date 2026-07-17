@@ -24,8 +24,10 @@ export function copyAboutPageDraft(
 		...emptyAboutPageDraft(),
 		...payload,
 		portraits: (payload?.portraits ?? []).map((portrait) => ({
-			...portrait,
-			focalPoint: portrait.focalPoint ? { ...portrait.focalPoint } : undefined,
+			key: portrait.key,
+			assetId: portrait.assetId,
+			altText: portrait.altText,
+			decorative: portrait.decorative,
 		})),
 		sections: (payload?.sections ?? []).map((section) => ({
 			...section,
@@ -60,7 +62,6 @@ export function newAboutPortrait(asset: PortfolioMediaAsset): AboutPortraitDraft
 		assetId: asset._id,
 		altText: "",
 		decorative: false,
-		focalPoint: { x: 0.5, y: 0.5 },
 	};
 }
 
