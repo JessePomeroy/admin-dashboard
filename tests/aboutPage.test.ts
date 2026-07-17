@@ -30,7 +30,6 @@ const complete = {
 		assetId: "media-1",
 		altText: "Margaret standing in soft window light.",
 		decorative: false,
-		focalPoint: { x: 0.5, y: 0.4 },
 	}],
 	sections: [{ key: "section-1", title: "Disciplines", items: ["Photography"] }],
 	highlights: [{ key: "highlight-1", label: "Based in", value: "Michigan" }],
@@ -41,12 +40,18 @@ describe("About editor helpers", () => {
 	it("deep-copies nested ordered fields and serializes them stably", () => {
 		const copied = copyAboutPageDraft(complete);
 		copied.sections?.[0].items.push("Direction");
-		copied.portraits?.[0].focalPoint && (copied.portraits[0].focalPoint.x = 0.2);
 		expect(complete.sections[0].items).toEqual(["Photography"]);
-		expect(complete.portraits[0].focalPoint.x).toBe(0.5);
 		expect(serializeAboutPageDraft(complete)).toBe(
 			serializeAboutPageDraft({ highlights: complete.highlights, ...complete }),
 		);
+	});
+
+	it("strips retired focal-point data from an existing draft", () => {
+		const legacy = {
+			...complete,
+			portraits: [{ ...complete.portraits[0], focalPoint: { x: 0.25, y: 0.75 } }],
+		};
+		expect(copyAboutPageDraft(legacy).portraits?.[0]).not.toHaveProperty("focalPoint");
 	});
 
 	it("matches the publication boundary for content, portraits, and accessibility", () => {
@@ -64,12 +69,11 @@ describe("About editor helpers", () => {
 		]));
 	});
 
-	it("creates centered accessible portrait drafts and preserves bounded ordering", () => {
+	it("creates accessible portrait drafts and preserves bounded ordering", () => {
 		const portrait = newAboutPortrait(asset);
 		expect(portrait).toMatchObject({
 			assetId: "media-1",
 			decorative: false,
-			focalPoint: { x: 0.5, y: 0.5 },
 		});
 		expect(moveAboutItem(["a", "b", "c"], 1, -1)).toEqual(["b", "a", "c"]);
 		expect(moveAboutItem(["a", "b"], 0, -1)).toEqual(["a", "b"]);

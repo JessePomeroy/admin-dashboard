@@ -263,7 +263,6 @@ export interface AboutPortraitDraft {
 	assetId: string;
 	altText?: string;
 	decorative: boolean;
-	focalPoint?: { x: number; y: number };
 }
 
 export interface AboutSectionDraft {
