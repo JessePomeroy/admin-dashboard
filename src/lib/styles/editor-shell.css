@@ -75,6 +75,8 @@
 @media (max-width: 640px) {
 	[data-admin] .sidebar.editor-compact {
 		transform: translateX(-100%);
+		visibility: hidden;
+		pointer-events: none;
 	}
 
 	[data-admin] .admin-main.editor-active {
