@@ -29,7 +29,7 @@ jobs:
       - name: Build
         run: corepack pnpm build
 
-      # Publish, treating E409 ("Cannot publish over existing version") as a
+      # Publish, treating the registry's existing-version errors as a
       # successful no-op. The previous design used `npm view` to pre-check
       # whether the version was already published and skip the publish step
       # accordingly — but that read against GitHub Packages was unreliable
@@ -51,7 +51,7 @@ jobs:
             echo "published=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          if echo "$output" | grep -q "Cannot publish over existing version"; then
+          if echo "$output" | grep -Eqi "cannot publish over (existing version|the previously published versions)"; then
             echo "::notice::Version already published on GitHub Packages — treating as no-op."
             echo "published=false" >> "$GITHUB_OUTPUT"
             exit 0
