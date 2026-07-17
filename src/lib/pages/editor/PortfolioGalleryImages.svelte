@@ -38,12 +38,6 @@ function movePlacement(index: number, direction: -1 | 1) {
 	onChange(movePortfolioPlacement(placements, index, direction));
 }
 
-function setDecorative(index: number, decorative: boolean) {
-	const next = placements.map((placement, itemIndex) => itemIndex === index
-		? { ...placement, decorative, altText: decorative ? "" : placement.altText }
-		: placement);
-	onChange(next);
-}
 </script>
 
 <section aria-labelledby="gallery-images-heading">
@@ -68,9 +62,8 @@ function setDecorative(index: number, decorative: boolean) {
 						<div><strong>{asset?.originalFilename ?? `image ${index + 1}`}</strong><span>position {index + 1}</span></div>
 					</div>
 					<div class="placement-fields">
-						<label>alt text<input id={`placement-${placement.key}-alt`} maxlength="500" value={placement.altText ?? ""} oninput={(event) => onChange(placements.map((item, itemIndex) => itemIndex === index ? { ...item, altText: event.currentTarget.value } : item))} disabled={placement.decorative} aria-invalid={reviewRequested && Boolean(accessibilityIssue)} />{#if reviewRequested && accessibilityIssue}<small>{accessibilityIssue.message}</small>{/if}</label>
+						<label>alt text<input id={`placement-${placement.key}-alt`} maxlength="500" value={placement.altText ?? ""} oninput={(event) => onChange(placements.map((item, itemIndex) => itemIndex === index ? { ...item, altText: event.currentTarget.value } : item))} aria-invalid={reviewRequested && Boolean(accessibilityIssue)} />{#if reviewRequested && accessibilityIssue}<small>{accessibilityIssue.message}</small>{/if}</label>
 						<label>caption<input maxlength="1000" value={placement.caption ?? ""} oninput={(event) => onChange(placements.map((item, itemIndex) => itemIndex === index ? { ...item, caption: event.currentTarget.value } : item))} /></label>
-						<label class="decorative"><input type="checkbox" checked={placement.decorative} onchange={(event) => setDecorative(index, event.currentTarget.checked)} /> decorative image</label>
 					</div>
 					<div class="actions" role="group" aria-label={`Reorder ${asset?.originalFilename ?? `image ${index + 1}`}`}>
 						<button type="button" class="secondary order" onclick={() => movePlacement(index, -1)} disabled={index === 0} aria-label="Move image earlier">↑</button>
@@ -105,8 +98,6 @@ function setDecorative(index: number, decorative: boolean) {
 	input { width: 100%; box-sizing: border-box; border: 1px solid var(--admin-border-strong); border-radius: 6px; padding: 10px 11px; background: var(--admin-bg); color: var(--admin-heading); font: inherit; text-transform: none; }
 	[aria-invalid="true"] { border-color: var(--status-rose); }
 	small { color: var(--status-rose); line-height: 1.45; }
-	.decorative { flex-direction: row; align-items: center; }
-	.decorative input { width: auto; }
 	.actions { display: grid; grid-template-columns: repeat(2, auto); gap: 6px; }
 	.order { min-width: 38px; padding: 7px 9px; }
 	.remove { grid-column: 1 / -1; min-height: 36px; padding: 7px 9px; }

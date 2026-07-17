@@ -90,8 +90,8 @@ describe("portfolio editor presentation", () => {
 		expect(newPortfolioPlacement(asset)).toMatchObject({
 			key: `asset-${asset.assetId}`,
 			assetId: "convex-media-id",
-			decorative: false,
 		});
+		expect(newPortfolioPlacement(asset)).not.toHaveProperty("decorative");
 	});
 
 	it("accepts only same-origin preview URLs", () => {
@@ -169,19 +169,19 @@ describe("portfolio editor presentation", () => {
 				key: "image-1",
 				assetId: "asset-1",
 				altText: "A portrait",
-				decorative: false,
 			}],
 		};
 		const copy = copyPortfolioGalleryDraft(original);
 		copy.placements[0].altText = "Changed";
 		expect(original.placements[0].altText).toBe("A portrait");
 		expect(serializePortfolioGalleryDraft(copy)).toContain('"altText":"Changed"');
+		expect(serializePortfolioGalleryDraft(copy)).not.toContain("decorative");
 	});
 
 	it("reorders placements without mutating the source list", () => {
 		const placements = [
-			{ key: "a", assetId: "asset-a", decorative: true },
-			{ key: "b", assetId: "asset-b", decorative: true },
+			{ key: "a", assetId: "asset-a" },
+			{ key: "b", assetId: "asset-b" },
 		];
 		expect(movePortfolioPlacement(placements, 1, -1).map(({ key }) => key)).toEqual(["b", "a"]);
 		expect(placements.map(({ key }) => key)).toEqual(["a", "b"]);
@@ -204,13 +204,17 @@ describe("portfolio editor presentation", () => {
 			description: "",
 			slug: "selected-work",
 			placements: [
-				{ key: "one", assetId: "asset-one", altText: "", decorative: false },
-				{ key: "two", assetId: "asset-two", altText: "", decorative: true },
+				{ key: "one", assetId: "asset-one", altText: "" },
+				{ key: "two", assetId: "asset-two", altText: "" },
 			],
 		})).toEqual([
 			{
 				fieldId: "placement-one-alt",
-				message: "Image 1 needs alt text or must be marked decorative.",
+				message: "Image 1 needs alt text.",
+			},
+			{
+				fieldId: "placement-two-alt",
+				message: "Image 2 needs alt text.",
 			},
 		]);
 	});

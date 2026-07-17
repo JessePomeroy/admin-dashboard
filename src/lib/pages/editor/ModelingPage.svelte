@@ -89,7 +89,6 @@ let referencedAssetIds = $derived([...new Set([
 	...(form.galleries ?? []).flatMap((gallery) =>
 		(gallery.images ?? []).map((image) => image.assetId)
 	),
-	...(form.seoImageAssetId ? [form.seoImageAssetId] : []),
 ])]);
 const placedMediaQuery = useQuery(getPlacedMediaAssets, () => ({
 	siteUrl: config.siteUrl,
@@ -401,9 +400,6 @@ function updateGallery(galleryKey: string, gallery: ModelingGalleryDraft) {
 function removeGallery(galleryKey: string) {
 	const gallery = (form.galleries ?? []).find((item) => item.key === galleryKey);
 	if (!gallery || !confirm(`Remove ${gallery.title?.trim() || "this category"} from the draft?`)) return;
-	if ((gallery.images ?? []).some((image) => image.assetId === form.seoImageAssetId)) {
-		form.seoImageAssetId = undefined;
-	}
 	form.galleries = (form.galleries ?? []).filter((item) => item.key !== galleryKey);
 }
 
@@ -490,7 +486,6 @@ function addUploadedAsset(galleryKey: string, asset: PortfolioMediaAsset) {
 							count={form.galleries?.length ?? 0}
 							{mediaById}
 							mediaBaseUrl={modelingConfig.mediaBaseUrl}
-							seoImageAssetId={form.seoImageAssetId}
 							{publishIssues}
 							{reviewRequested}
 							uploadEndpoint={modelingConfig.uploadEndpoint}
@@ -499,7 +494,6 @@ function addUploadedAsset(galleryKey: string, asset: PortfolioMediaAsset) {
 							onMove={(direction) => (form.galleries = moveModelingItem(form.galleries ?? [], index, direction))}
 							onChooseMedia={() => (pickerGalleryKey = gallery.key)}
 							onUploadReady={(asset) => addUploadedAsset(gallery.key, asset)}
-							onSharingImageChange={(assetId) => (form.seoImageAssetId = assetId)}
 						/>
 					{/each}
 				{/if}
@@ -507,7 +501,7 @@ function addUploadedAsset(galleryKey: string, asset: PortfolioMediaAsset) {
 
 			<section aria-labelledby="modeling-seo-heading">
 				<div class="section-heading"><div><h2 id="modeling-seo-heading">search &amp; sharing</h2><p>Write a natural summary of the page for search results and link previews. Example: “Modeling, acting, and portrait portfolio for Margaret Helena, including fashion editorial, comp card digitals, and commercial work.”</p></div></div>
-				<div class="fields"><label>search description<textarea id="modeling-seo-description" rows="4" maxlength="320" bind:value={form.seoDescription} aria-invalid={reviewRequested && publishIssues.some((issue) => issue.fieldId === "modeling-seo-description")}></textarea><small>{form.seoDescription?.length ?? 0} / 320. Choose “Use for link previews” on any category image to set the optional sharing image.</small></label></div>
+				<div class="fields"><label>search description<textarea id="modeling-seo-description" rows="4" maxlength="320" bind:value={form.seoDescription} aria-invalid={reviewRequested && publishIssues.some((issue) => issue.fieldId === "modeling-seo-description")}></textarea><small>{form.seoDescription?.length ?? 0} / 320. The site uses its default sharing image for link previews.</small></label></div>
 			</section>
 		</form>
 	{/if}

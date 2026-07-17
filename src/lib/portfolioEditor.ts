@@ -13,7 +13,6 @@ export interface PortfolioPlacementDraft {
 	assetId: string;
 	order?: number;
 	altText?: string | null;
-	decorative: boolean;
 	caption?: string | null;
 	focalPoint?: { x: number; y: number } | null;
 }
@@ -80,7 +79,14 @@ export function copyPortfolioGalleryDraft(
 		title: draft?.title ?? "",
 		description: draft?.description ?? "",
 		slug: draft?.slug ?? "",
-		placements: (draft?.placements ?? []).map((placement) => ({ ...placement })),
+		placements: (draft?.placements ?? []).map((placement) => ({
+			key: placement.key,
+			assetId: placement.assetId,
+			order: placement.order,
+			altText: placement.altText,
+			caption: placement.caption,
+			focalPoint: placement.focalPoint,
+		})),
 	};
 }
 
@@ -93,7 +99,6 @@ export function serializePortfolioGalleryDraft(draft: PortfolioGalleryDraftForm)
 			key: placement.key,
 			assetId: placement.assetId,
 			altText: placement.altText ?? null,
-			decorative: placement.decorative,
 			caption: placement.caption ?? null,
 			focalPoint: placement.focalPoint ?? null,
 		})),
@@ -127,15 +132,10 @@ export function validatePortfolioGalleryForPublish(
 	}
 	for (const [index, placement] of draft.placements.entries()) {
 		const altText = placement.altText?.trim() ?? "";
-		if (!placement.decorative && !altText) {
+		if (!altText) {
 			issues.push({
 				fieldId: `placement-${placement.key}-alt`,
-				message: `Image ${index + 1} needs alt text or must be marked decorative.`,
-			});
-		} else if (placement.decorative && altText) {
-			issues.push({
-				fieldId: `placement-${placement.key}-alt`,
-				message: `Image ${index + 1} cannot have alt text while marked decorative.`,
+				message: `Image ${index + 1} needs alt text.`,
 			});
 		}
 	}
@@ -215,7 +215,6 @@ export function newPortfolioPlacement(asset: PortfolioMediaAsset): PortfolioPlac
 		key: `asset-${asset.assetId}`,
 		assetId: asset._id,
 		altText: "",
-		decorative: false,
 		caption: "",
 		focalPoint: null,
 	};

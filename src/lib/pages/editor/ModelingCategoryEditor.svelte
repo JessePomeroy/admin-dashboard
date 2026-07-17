@@ -18,7 +18,6 @@ let {
 	count,
 	mediaById,
 	mediaBaseUrl,
-	seoImageAssetId,
 	publishIssues,
 	reviewRequested,
 	uploadEndpoint,
@@ -27,14 +26,12 @@ let {
 	onMove,
 	onChooseMedia,
 	onUploadReady,
-	onSharingImageChange,
 }: {
 	gallery: ModelingGalleryDraft;
 	index: number;
 	count: number;
 	mediaById: Map<string, PortfolioMediaAsset>;
 	mediaBaseUrl: string;
-	seoImageAssetId?: string;
 	publishIssues: ModelingPublishIssue[];
 	reviewRequested: boolean;
 	uploadEndpoint?: string;
@@ -43,7 +40,6 @@ let {
 	onMove: (direction: -1 | 1) => void;
 	onChooseMedia: () => void;
 	onUploadReady: (asset: PortfolioMediaAsset) => void;
-	onSharingImageChange: (assetId: string | undefined) => void;
 } = $props();
 
 let images = $derived(gallery.images ?? []);
@@ -61,16 +57,7 @@ function updateImage(imageIndex: number, change: Partial<ModelingImageDraft>) {
 }
 
 function removeImage(imageIndex: number) {
-	const removed = images[imageIndex];
 	update({ images: images.filter((_, itemIndex) => itemIndex !== imageIndex) });
-	if (seoImageAssetId === removed.assetId) onSharingImageChange(undefined);
-}
-
-function setDecorative(imageIndex: number, decorative: boolean) {
-	updateImage(imageIndex, {
-		decorative,
-		altText: decorative ? "" : images[imageIndex].altText,
-	});
 }
 
 function fillSlug() {
@@ -126,9 +113,7 @@ function fillSlug() {
 						<div><strong>{asset?.originalFilename ?? `image ${imageIndex + 1}`}</strong><span>position {imageIndex + 1}</span></div>
 					</div>
 					<div class="placement-fields">
-						<label>alt text<input id={`modeling-image-${image.key}-alt`} maxlength="500" value={image.altText ?? ""} oninput={(event) => updateImage(imageIndex, { altText: event.currentTarget.value })} disabled={image.decorative} aria-invalid={reviewRequested && Boolean(issue)} />{#if reviewRequested && issue}<small class="field-error">{issue.message}</small>{/if}</label>
-						<label class="check"><input type="checkbox" checked={image.decorative} onchange={(event) => setDecorative(imageIndex, event.currentTarget.checked)} /> Decorative image</label>
-						<label class="check"><input type="radio" name="modeling-sharing-image" checked={seoImageAssetId === image.assetId} onchange={() => onSharingImageChange(image.assetId)} /> Use for link previews</label>
+						<label>alt text<input id={`modeling-image-${image.key}-alt`} maxlength="500" value={image.altText ?? ""} oninput={(event) => updateImage(imageIndex, { altText: event.currentTarget.value })} aria-invalid={reviewRequested && Boolean(issue)} />{#if reviewRequested && issue}<small class="field-error">{issue.message}</small>{/if}</label>
 					</div>
 					<div class="image-actions" role="group" aria-label={`Reorder image ${imageIndex + 1}`}>
 						<button type="button" onclick={() => update({ images: moveModelingItem(images, imageIndex, -1) })} disabled={imageIndex === 0} aria-label="Move image earlier">↑</button>
@@ -147,7 +132,7 @@ function fillSlug() {
 	.position { color: var(--admin-text-subtle); font-size: .66rem; letter-spacing: .08em; text-transform: uppercase; }
 	h3, h4 { margin: 5px 0 0; color: var(--admin-heading); font-size: 1rem; font-weight: 500; }
 	h4 { margin: 0; font-size: .9rem; }
-	.visibility, .check { display: flex; flex-direction: row; align-items: center; gap: 8px; color: var(--admin-text-muted); font-size: .75rem; }
+	.visibility { display: flex; flex-direction: row; align-items: center; gap: 8px; color: var(--admin-text-muted); font-size: .75rem; }
 	.category-actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 16px 0 20px; padding-bottom: 18px; border-bottom: 1px solid var(--admin-border); }
 	button { min-height: 40px; border: 1px solid var(--admin-border-strong); border-radius: 6px; padding: 9px 13px; background: transparent; color: var(--admin-text); font: inherit; font-size: .74rem; cursor: pointer; }
 	button:disabled { opacity: .45; cursor: default; }

@@ -20,14 +20,15 @@ export function emptyAboutPageDraft(): AboutPageDraftPayload {
 export function copyAboutPageDraft(
 	payload: AboutPageDraftPayload | undefined,
 ): AboutPageDraftPayload {
+	const legacy = payload as (AboutPageDraftPayload & { seoImageAssetId?: string }) | undefined;
+	const { seoImageAssetId: _seoImageAssetId, ...content } = legacy ?? {};
 	return {
 		...emptyAboutPageDraft(),
-		...payload,
+		...content,
 		portraits: (payload?.portraits ?? []).map((portrait) => ({
 			key: portrait.key,
 			assetId: portrait.assetId,
 			altText: portrait.altText,
-			decorative: portrait.decorative,
 		})),
 		sections: (payload?.sections ?? []).map((section) => ({
 			...section,
@@ -48,7 +49,6 @@ export function serializeAboutPageDraft(payload: AboutPageDraftPayload) {
 		sections: payload.sections ?? [],
 		highlights: payload.highlights ?? [],
 		seoDescription: payload.seoDescription ?? null,
-		seoImageAssetId: payload.seoImageAssetId ?? null,
 	});
 }
 
@@ -61,7 +61,6 @@ export function newAboutPortrait(asset: PortfolioMediaAsset): AboutPortraitDraft
 		key: key("portrait"),
 		assetId: asset._id,
 		altText: "",
-		decorative: false,
 	};
 }
 
@@ -106,10 +105,10 @@ export function validateAboutPageForPublish(payload: AboutPageDraftPayload) {
 		});
 	}
 	for (const [index, portrait] of portraits.entries()) {
-		if (!portrait.decorative && !portrait.altText?.trim()) {
+		if (!portrait.altText?.trim()) {
 			issues.push({
 				fieldId: `about-portrait-${portrait.key}-alt`,
-				message: `Portrait ${index + 1} needs alt text or must be marked Decorative.`,
+				message: `Portrait ${index + 1} needs alt text.`,
 			});
 		}
 	}
