@@ -58,7 +58,7 @@ function toggleTheme() {
 // Lock body scroll when mobile sidebar is open
 $effect(() => {
 	if (browser) {
-		if (mobileMenuOpen) {
+		if (mobileMenuOpen || editorMenuOpen) {
 			document.body.style.overflow = "hidden";
 		} else {
 			document.body.style.overflow = "";
@@ -92,6 +92,11 @@ let editorActive = $derived(
 );
 let navItems = $derived(getAdminNavItems({ editorEnabled }));
 let mobileMenuOpen = $state(false);
+let editorMenuOpen = $state(false);
+
+$effect(() => {
+	if (!editorActive) editorMenuOpen = false;
+});
 
 // Auth session state (subscribe to nanostore)
 let authUserEmail = $state<string | undefined>(undefined);
@@ -146,27 +151,50 @@ $effect(() => {
 let showPasswordForm = $state(false);
 function closeMobileMenu() {
 	mobileMenuOpen = false;
+	editorMenuOpen = false;
 }
 </script>
 
-<div class="admin-layout" data-admin style={themeStyle()}>
+<div class="admin-layout" class:editor-workspace={editorActive} data-admin style={themeStyle()}>
 	<!-- Mobile header -->
 	<header class="mobile-header">
-		<button class="hamburger" onclick={() => (mobileMenuOpen = !mobileMenuOpen)} aria-label="Toggle menu">
-			<span class="hamburger-line" class:open={mobileMenuOpen}></span>
-			<span class="hamburger-line" class:open={mobileMenuOpen}></span>
-			<span class="hamburger-line" class:open={mobileMenuOpen}></span>
-		</button>
-		<span class="mobile-brand">{config.siteName}</span>
+		{#if editorActive}
+			<a href="/admin" class="editor-mobile-back" aria-label="back to admin" onclick={closeMobileMenu}>
+				<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+					<line x1="19" y1="12" x2="5" y2="12" /><polyline points="12 19 5 12 12 5" />
+				</svg>
+				<span>admin</span>
+			</a>
+			<span class="mobile-brand">editor</span>
+			<button
+				class="editor-mobile-menu"
+				onclick={() => (editorMenuOpen = !editorMenuOpen)}
+				aria-label="toggle editor sections"
+				aria-controls="editor-mobile-navigation"
+				aria-expanded={editorMenuOpen}
+			>
+				<span>sections</span>
+				<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+					<path d="M6 9l6 6 6-6" />
+				</svg>
+			</button>
+		{:else}
+			<button class="hamburger" onclick={() => (mobileMenuOpen = !mobileMenuOpen)} aria-label="Toggle menu">
+				<span class="hamburger-line" class:open={mobileMenuOpen}></span>
+				<span class="hamburger-line" class:open={mobileMenuOpen}></span>
+				<span class="hamburger-line" class:open={mobileMenuOpen}></span>
+			</button>
+			<span class="mobile-brand">{config.siteName}</span>
+		{/if}
 	</header>
 
 	<!-- Mobile overlay -->
-	{#if mobileMenuOpen}
+	{#if mobileMenuOpen || editorMenuOpen}
 		<button class="mobile-overlay" onclick={closeMobileMenu} aria-label="Close menu"></button>
 	{/if}
 
 	<!-- Sidebar -->
-	<aside class="sidebar" class:sidebar-open={mobileMenuOpen} class:editor-compact={editorActive} aria-label="Admin navigation">
+	<aside class="sidebar" class:sidebar-open={mobileMenuOpen && !editorActive} class:editor-compact={editorActive} aria-label="Admin navigation">
 		<div class="sidebar-brand">
 			<span class="brand-text">{config.siteName}</span>
 		</div>
@@ -204,16 +232,6 @@ function closeMobileMenu() {
 				{/if}
 			{/each}
 		</nav>
-		{#if editorActive}
-			<EditorNavigation
-				pathname={$page.url.pathname}
-				siteSettingsEnabled={siteSettingsEditorEnabled}
-				pagesEnabled={pagesEditorEnabled}
-				portfolioEnabled={portfolioEditorEnabled}
-				mobile
-			/>
-		{/if}
-
 		<div class="sidebar-footer">
 			{#if config.authClient && authUserEmail}
 					<div class="user-info">
@@ -264,6 +282,15 @@ function closeMobileMenu() {
 			pagesEnabled={pagesEditorEnabled}
 			portfolioEnabled={portfolioEditorEnabled}
 		/>
+		<EditorNavigation
+			pathname={$page.url.pathname}
+			siteSettingsEnabled={siteSettingsEditorEnabled}
+			pagesEnabled={pagesEditorEnabled}
+			portfolioEnabled={portfolioEditorEnabled}
+			mobile
+			open={editorMenuOpen}
+			onDismiss={() => (editorMenuOpen = false)}
+		/>
 	{/if}
 
 	<!-- Main content -->
@@ -309,6 +336,39 @@ function closeMobileMenu() {
 		font-weight: 500;
 		color: var(--admin-heading);
 		letter-spacing: 0.01em;
+	}
+
+	.editor-mobile-back,
+	.editor-mobile-menu {
+		display: inline-flex;
+		align-items: center;
+		gap: 7px;
+		min-height: 36px;
+		padding: 8px 10px;
+		border: 0;
+		border-radius: 6px;
+		background: transparent;
+		color: var(--admin-text-muted);
+		font: inherit;
+		font-size: 0.78rem;
+		text-decoration: none;
+		cursor: pointer;
+	}
+
+	.editor-mobile-back:hover,
+	.editor-mobile-menu:hover {
+		color: var(--admin-heading);
+		background: var(--admin-active);
+	}
+
+	.editor-mobile-back svg,
+	.editor-mobile-menu svg {
+		width: 16px;
+		height: 16px;
+	}
+
+	.editor-mobile-menu {
+		margin-left: auto;
 	}
 
 	.hamburger {

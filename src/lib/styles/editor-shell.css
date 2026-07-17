@@ -1,16 +1,21 @@
+[data-admin] {
+	--editor-rail-width: 72px;
+	--editor-panel-width: 272px;
+}
+
 [data-admin] .sidebar.editor-compact {
-	width: 64px;
+	width: var(--editor-rail-width);
 }
 
 [data-admin] .sidebar.editor-compact .sidebar-brand {
-	padding-inline: 12px;
+	padding-inline: 16px;
 	text-align: center;
 }
 
 [data-admin] .sidebar.editor-compact .brand-text {
 	display: block;
 	overflow: hidden;
-	width: 28px;
+	width: 32px;
 	white-space: nowrap;
 	font-size: 0;
 }
@@ -31,7 +36,7 @@
 }
 
 [data-admin] .sidebar.editor-compact .sidebar-footer {
-	padding-inline: 8px;
+	padding-inline: 10px;
 }
 
 [data-admin] .sidebar.editor-compact .theme-toggle,
@@ -41,40 +46,35 @@
 }
 
 [data-admin] .admin-main.editor-active {
-	margin-left: 284px;
-	max-width: calc(100vw - 284px);
+	margin-left: calc(var(--editor-rail-width) + var(--editor-panel-width));
+	max-width: calc(100vw - var(--editor-rail-width) - var(--editor-panel-width));
 }
 
-@media (max-width: 768px) {
+@media (min-width: 641px) and (max-width: 1024px) {
+	[data-admin] {
+		--editor-panel-width: 240px;
+	}
+}
+
+@media (min-width: 641px) and (max-width: 768px) {
+	[data-admin].editor-workspace .mobile-header {
+		display: none;
+	}
+
+	[data-admin].editor-workspace .sidebar.editor-compact {
+		transform: none;
+	}
+
+	[data-admin].editor-workspace .admin-main.editor-active {
+		margin-left: calc(var(--editor-rail-width) + var(--editor-panel-width));
+		max-width: calc(100vw - var(--editor-rail-width) - var(--editor-panel-width));
+		padding-top: 0;
+	}
+}
+
+@media (max-width: 640px) {
 	[data-admin] .sidebar.editor-compact {
-		width: 220px;
-	}
-
-	[data-admin] .sidebar.editor-compact .sidebar-brand {
-		padding: 28px 24px 24px;
-		text-align: left;
-	}
-
-	[data-admin] .sidebar.editor-compact .brand-text {
-		width: auto;
-		font-size: 1.15rem;
-	}
-
-	[data-admin] .sidebar.editor-compact .brand-text::first-letter {
-		font-size: inherit;
-	}
-
-	[data-admin] .sidebar.editor-compact .nav-item,
-	[data-admin] .sidebar.editor-compact .theme-toggle,
-	[data-admin] .sidebar.editor-compact .back-link {
-		justify-content: flex-start;
-		padding-inline: 12px;
-	}
-
-	[data-admin] .sidebar.editor-compact .nav-item > span:not(.nav-dot),
-	[data-admin] .sidebar.editor-compact .sidebar-footer span,
-	[data-admin] .sidebar.editor-compact .lock-icon {
-		display: initial;
+		transform: translateX(-100%);
 	}
 
 	[data-admin] .admin-main.editor-active {
