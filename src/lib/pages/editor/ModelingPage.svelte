@@ -17,6 +17,7 @@ import {
 	moveModelingItem,
 	newModelingGallery,
 	newModelingImage,
+	resolveModelingPagePreviewUrl,
 	serializeModelingPageDraft,
 	validateModelingPageForPublish,
 } from "../../modelingPage";
@@ -37,6 +38,7 @@ if (!config.api.siteEditor || !config.editor?.modelingPage) {
 }
 const editorApi = config.api.siteEditor;
 const modelingConfig = config.editor.modelingPage;
+const previewEndpoint = modelingConfig.previewEndpoint;
 const getModelingPageEditorState = editorApi.getModelingPageEditorState;
 const saveModelingPageDraft = editorApi.saveModelingPageDraft;
 const publishModelingPage = editorApi.publishModelingPage;
@@ -73,6 +75,7 @@ let saveState = $state<SaveState>("loading");
 let saveError = $state("");
 let publishMessage = $state("");
 let publishing = $state(false);
+let previewing = $state(false);
 let reviewRequested = $state(false);
 let lastSavedJson = $state("");
 let lastAttemptedJson = $state("");
@@ -321,6 +324,47 @@ async function publish() {
 	}
 }
 
+async function preview() {
+	if (!browser || !previewEndpoint) return;
+	const previewWindow = window.open("about:blank", "modeling-page-preview");
+	if (!previewWindow) {
+		saveError = "Allow pop-ups for this site to open the draft preview.";
+		return;
+	}
+	previewWindow.opener = null;
+	previewing = true;
+	saveError = "";
+	try {
+		if (!(await saveNow()) || !baseRevisionId) {
+			previewWindow.close();
+			return;
+		}
+		const response = await fetch(previewEndpoint, {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({ draftRevisionId: baseRevisionId }),
+		});
+		const result = await response.json().catch(() => null) as {
+			previewUrl?: unknown;
+			error?: unknown;
+		} | null;
+		if (!response.ok) {
+			throw new Error(typeof result?.error === "string"
+				? result.error
+				: "Could not create the draft preview.");
+		}
+		previewWindow.location.href = resolveModelingPagePreviewUrl(
+			result?.previewUrl,
+			window.location.origin,
+		);
+	} catch (error) {
+		previewWindow.close();
+		saveError = error instanceof Error ? error.message : "Could not create the draft preview.";
+	} finally {
+		previewing = false;
+	}
+}
+
 async function discard() {
 	if (saveState === "conflict") {
 		if (!confirm("Discard this device's changes and load the newer server draft?")) return;
@@ -401,6 +445,7 @@ function addUploadedAsset(galleryKey: string, asset: PortfolioMediaAsset) {
 				<span class="save-state" aria-live="polite">{saveState === "offline" ? "offline — saved on this device" : saveState}</span>
 				<button type="button" onclick={() => void discard()} disabled={!baseRevisionId && !hasPendingWork}>{saveState === "conflict" ? "reload server draft" : "discard draft"}</button>
 				<button type="button" onclick={() => void saveNow()} disabled={saveState === "saving" || saveState === "conflict"}>save now</button>
+				{#if previewEndpoint}<button type="button" onclick={() => void preview()} disabled={previewing || saveState === "saving" || saveState === "syncing" || saveState === "offline" || saveState === "conflict"}>{previewing ? "preparing preview…" : "preview"}</button>{/if}
 				<button type="button" class="primary" onclick={() => void publish()} disabled={publishing || saveState === "saving" || saveState === "syncing" || saveState === "offline" || saveState === "conflict"}>{publishing ? "publishing…" : "publish"}</button>
 			</div>
 		{/if}

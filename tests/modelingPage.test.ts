@@ -4,6 +4,7 @@ import {
 	moveModelingItem,
 	newModelingGallery,
 	newModelingImage,
+	resolveModelingPagePreviewUrl,
 	serializeModelingPageDraft,
 	slugifyModelingTitle,
 	validateModelingPageForPublish,
@@ -85,5 +86,17 @@ describe("Modeling editor helpers", () => {
 	it("preserves bounded category and image ordering", () => {
 		expect(moveModelingItem(["a", "b", "c"], 1, -1)).toEqual(["b", "a", "c"]);
 		expect(moveModelingItem(["a", "b"], 0, -1)).toEqual(["a", "b"]);
+	});
+
+	it("accepts only same-origin Modeling preview URLs", () => {
+		expect(resolveModelingPagePreviewUrl(
+			"/preview/modeling-page",
+			"https://tenant.example/admin/editor/pages/modeling",
+		)).toBe("https://tenant.example/preview/modeling-page");
+		expect(() => resolveModelingPagePreviewUrl(
+			"https://attacker.example/collect",
+			"https://tenant.example",
+		)).toThrow(/unsafe/);
+		expect(() => resolveModelingPagePreviewUrl(null, "https://tenant.example")).toThrow(/invalid/);
 	});
 });
