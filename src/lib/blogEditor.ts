@@ -204,6 +204,52 @@ export function emptyPostBody(): PostRichTextDocument {
 	return { version: 1, blocks: [] };
 }
 
+export function postBodyToPlainText(body: PostRichTextDocument | undefined) {
+	return (body?.blocks ?? [])
+		.map((block) => {
+			if (
+				typeof block === "object"
+				&& block
+				&& "children" in block
+				&& Array.isArray(block.children)
+			) {
+				return block.children
+					.map((child) =>
+						typeof child === "object"
+						&& child
+						&& "text" in child
+						&& typeof child.text === "string"
+							? child.text
+							: ""
+					)
+					.join("");
+			}
+			return "";
+		})
+		.filter(Boolean)
+		.join("\n\n");
+}
+
+export function postBodyFromPlainText(value: string): PostRichTextDocument {
+	const paragraphs = value
+		.split(/\n{2,}/)
+		.map((paragraph) => paragraph.trim())
+		.filter(Boolean);
+	return {
+		version: 1,
+		blocks: paragraphs.map((paragraph, index) => ({
+			type: "paragraph",
+			key: `paragraph-${index + 1}`,
+			children: [{
+				type: "text",
+				key: `paragraph-${index + 1}-text`,
+				text: paragraph,
+				marks: [],
+			}],
+		})),
+	};
+}
+
 export function emptyPostDraft(): PostDraft {
 	return {
 		kind: "post",
@@ -472,7 +518,7 @@ export function validatePostMetadataForPublish(payload: PostDraft): PostFieldErr
 	}
 	if (!payload.authorDocumentId) errors.authorDocumentId = "Choose an author before publishing.";
 	if ((payload.body?.blocks.length ?? 0) === 0) {
-		errors.body = "Post body editing arrives in the next slice; publishing will stay blocked until the body is complete.";
+		errors.body = "Add body text before publishing.";
 	}
 	return errors;
 }

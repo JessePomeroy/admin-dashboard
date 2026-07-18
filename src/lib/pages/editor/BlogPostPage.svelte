@@ -7,6 +7,8 @@ import {
 	copyPostDraft,
 	defaultPresentationForFormat,
 	hasPostErrors,
+	postBodyFromPlainText,
+	postBodyToPlainText,
 	serializePostDraft,
 	slugifyBlogTitle,
 	validatePostMetadataForPublish,
@@ -52,6 +54,8 @@ let categories = $derived(
 		.filter((item) => item.publishedRevisionId && !item.archivedAt),
 );
 let form = $state<PostDraft>(copyPostDraft(undefined));
+let bodyText = $state("");
+let initializedBodyText = $state("");
 let initializedRevisionId = $state<string | null>(null);
 let saveState = $state<"loading" | "saved" | "dirty" | "saving" | "error">("loading");
 let saveError = $state("");
@@ -70,6 +74,8 @@ let slugChanged = $derived(Boolean(publishedSlug && draftSlug && publishedSlug !
 $effect(() => {
 	if (!activeRevision || initializedRevisionId === activeRevision.revisionId) return;
 	form = copyPostDraft(activeRevision.draft);
+	bodyText = postBodyToPlainText(form.body);
+	initializedBodyText = bodyText;
 	initializedRevisionId = activeRevision.revisionId;
 	lastSavedJson = serializePostDraft(form);
 	saveState = "saved";
@@ -86,6 +92,7 @@ function normalizedDraft(): PostDraft {
 	const draft = copyPostDraft(form);
 	return {
 		...draft,
+		body: bodyText === initializedBodyText ? draft.body : postBodyFromPlainText(bodyText),
 		authorDocumentId: draft.authorDocumentId || undefined,
 		categories: draft.categories.filter((category) => category.documentId),
 	};
@@ -196,6 +203,8 @@ async function discardDraft() {
 		});
 		if (editorState.published) {
 			form = copyPostDraft(editorState.published.draft);
+			bodyText = postBodyToPlainText(form.body);
+			initializedBodyText = bodyText;
 			lastSavedJson = serializePostDraft(form);
 		}
 	} catch (error) {
@@ -370,11 +379,17 @@ async function discardDraft() {
 				<span>05</span>
 				<div>
 					<h2 id="body-heading">body</h2>
-					<p>Saved drafts preserve the existing body graph, but body editing is intentionally deferred.</p>
+					<p>Basic paragraph text for simple Essay posts. Images, headings, lists, and rich marks stay deferred.</p>
 				</div>
 			</div>
-			{#if fieldErrors.body}<p class="notice" role="status">{fieldErrors.body}</p>{/if}
-			<p class="empty-inline">{form.body.blocks.length} body blocks currently stored.</p>
+			<div class="fields">
+				<label>
+					body text
+					<textarea rows="12" bind:value={bodyText} aria-invalid={Boolean(fieldErrors.body)}></textarea>
+					<small>Separate paragraphs with a blank line. This editor preserves richer existing body data unless you change this text.</small>
+					{#if fieldErrors.body}<small class="field-error">{fieldErrors.body}</small>{/if}
+				</label>
+			</div>
 		</section>
 
 		{#if slugChanged}
@@ -476,15 +491,9 @@ async function discardDraft() {
 		margin-top: 5px;
 	}
 
-	.empty-inline,
-	.notice {
+	.empty-inline {
 		margin: 0;
 		color: var(--admin-text-muted);
-	}
-
-	.notice {
-		margin-bottom: 8px;
-		color: var(--admin-warning, #e6c26a);
 	}
 
 	@media (max-width: 820px) {
