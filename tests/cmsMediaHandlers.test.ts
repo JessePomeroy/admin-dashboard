@@ -156,6 +156,40 @@ describe("CMS media host handlers", () => {
 		});
 	});
 
+	it("recovers an ambiguous completed process using the same private identity", async () => {
+		configure();
+		const fetchMock = vi.fn()
+			.mockResolvedValueOnce(new Response("Uploaded object not found", { status: 404 }))
+			.mockResolvedValueOnce(Response.json(readyWorkerAsset()));
+		vi.stubGlobal("fetch", fetchMock);
+		mutation.mockResolvedValue({ id: "media-1", status: "ready" });
+
+		const response = await createCmsMediaProcessHandler()({
+			request: request("/api/admin/media/process", { privateObjectKey: SOURCE_KEY }),
+		});
+
+		expect(fetchMock.mock.calls.map(([url]) => url)).toEqual([
+			"https://cms-media.example/v1/uploads/finalize",
+			"https://cms-media.example/v1/uploads/process",
+		]);
+		expect(await response.json()).toMatchObject({
+			asset: { _id: "media-1", status: "ready", assetId: ASSET_ID },
+		});
+	});
+
+	it("rejects a different missing-source response instead of bypassing finalization", async () => {
+		configure();
+		const fetchMock = vi.fn(async () => new Response("Different object missing", { status: 404 }));
+		vi.stubGlobal("fetch", fetchMock);
+
+		await expect(createCmsMediaProcessHandler()({
+			request: request("/api/admin/media/process", { privateObjectKey: SOURCE_KEY }),
+		})).rejects.toMatchObject({ status: 404 });
+
+		expect(fetchMock).toHaveBeenCalledOnce();
+		expect(mutation).not.toHaveBeenCalled();
+	});
+
 	it("rejects a foreign private key before Worker or Convex access", async () => {
 		configure();
 		const fetchMock = vi.fn();

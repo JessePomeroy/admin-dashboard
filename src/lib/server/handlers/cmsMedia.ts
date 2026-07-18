@@ -35,6 +35,15 @@ async function workerJson(response: Response) {
 	}
 }
 
+async function acceptFinalizedSourceOrProcessedRetry(response: Response) {
+	if (response.status === 404) {
+		const message = (await response.text()).trim();
+		if (message === "Uploaded object not found") return;
+		throw error(response.status, message || "CMS media request failed");
+	}
+	await workerJson(response);
+}
+
 function validFilename(value: unknown): value is string {
 	return typeof value === "string"
 		&& value.length > 0
@@ -207,7 +216,7 @@ export function createCmsMediaProcessHandler() {
 		try {
 			const workerBase = config.cmsMediaWorkerUrl!.replace(/\/+$/, "");
 			const headers = workerHeaders(config.cmsMediaTenantSecret!);
-			await workerJson(await fetch(`${workerBase}/v1/uploads/finalize`, {
+			await acceptFinalizedSourceOrProcessedRetry(await fetch(`${workerBase}/v1/uploads/finalize`, {
 				method: "POST",
 				headers,
 				body: JSON.stringify({ privateObjectKey: input.privateObjectKey }),
