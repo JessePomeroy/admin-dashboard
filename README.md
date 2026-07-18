@@ -84,6 +84,11 @@ export const adminServerConfig: AdminServerConfig = {
   convexUrl: publicEnv.PUBLIC_CONVEX_URL ?? "",
   resendApiKey: privateEnv.RESEND_API_KEY ?? "",
   galleryAdminSecret: privateEnv.GALLERY_ADMIN_SECRET ?? "",
+  cmsMediaWorkerUrl: privateEnv.CMS_MEDIA_WORKER_URL ?? "",
+  cmsMediaTenantSecret: privateEnv.CMS_MEDIA_TENANT_SECRET ?? "",
+  cmsMediaConvexSiteUrl: privateEnv.CMS_MEDIA_CONVEX_SITE_URL ?? "",
+  cmsMediaDeletionCompletionSecret:
+    privateEnv.CMS_MEDIA_DELETION_COMPLETION_SECRET ?? "",
   verifyAdmin: adminAuth.verifyRequest,
   getConvexToken: adminAuth.getTokenFromRequest,
 };
@@ -141,6 +146,17 @@ CRM subscription onboarding and access changes are operator-run processes.
 - Better Auth JWT validation and browser token delivery
 - gallery upload-session, presign, upload, process, delete, and bulk-delete
   routes
+- CMS media upload/process and permanent asset-deletion routes
+
+`createCmsMediaDeleteHandler` accepts exactly `{ id }` from the browser. It
+authenticates the admin, asks Convex to mark that host tenant's unreferenced
+asset for deletion, validates the complete fixed-key manifest, removes the
+objects through the tenant-scoped CMS media Worker, and only then calls the
+Convex `.site` completion action. The host supplies the site identity, both
+server bearers, and the generated `portfolioEditor.requestDeletion` reference;
+none may come from browser input. A Worker or completion failure leaves the
+Convex record in its retryable `deleting` state. Mount this permanent operation
+separately from editor controls that merely remove an image placement.
 
 Gallery handlers bridge the host to `gallery-worker`. The host owns tenant
 authorization; the Worker owns R2 key validation, upload tokens, object access,

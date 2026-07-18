@@ -18,6 +18,7 @@ describe("package server subpath Node import", () => {
 					"createAdminAuthValidator,",
 					"createAdminMutationHandler,",
 					"createAdminTokenHandler,",
+					"createCmsMediaDeleteHandler,",
 					"createContractSendHandler,",
 					"createGalleryDeleteHandler,",
 					"createGalleryPresignHandler,",
@@ -44,6 +45,7 @@ describe("package server subpath Node import", () => {
 					"createAdminAuthValidator,",
 					"createAdminMutationHandler,",
 					"createAdminTokenHandler,",
+					"createCmsMediaDeleteHandler,",
 					"createContractSendHandler,",
 					"createGalleryDeleteHandler,",
 					"createGalleryPresignHandler,",
@@ -75,6 +77,6 @@ describe("package server subpath Node import", () => {
 			},
 		);
 
-		expect(output).toBe(new Array(24).fill("function").join(","));
+		expect(output).toBe(new Array(25).fill("function").join(","));
 	}, 60_000);
 });
