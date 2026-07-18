@@ -4,11 +4,18 @@ import {
 	authorBioToText,
 	blogDocumentStatus,
 	copyBlogSupportingDraft,
+	copyPostDraft,
+	defaultPresentationForFormat,
+	emptyPostDraft,
 	hasBlogSupportingErrors,
+	hasPostErrors,
 	newBlogDocumentKey,
+	presentationMatchesFormat,
 	serializeBlogSupportingDraft,
+	serializePostDraft,
 	slugifyBlogTitle,
 	validateBlogSupportingForPublish,
+	validatePostMetadataForPublish,
 } from "../src/lib/blogEditor";
 
 describe("Blog editor helpers", () => {
@@ -68,7 +75,51 @@ describe("Blog editor helpers", () => {
 		vi.spyOn(Math, "random").mockReturnValue(0.123456);
 		expect(slugifyBlogTitle(" Café Field Notes! ")).toBe("cafe-field-notes");
 		expect(newBlogDocumentKey("author")).toMatch(/^author-[a-z0-9]+-[a-z0-9]+$/);
+		expect(newBlogDocumentKey("post")).toMatch(/^post-[a-z0-9]+-[a-z0-9]+$/);
 		vi.restoreAllMocks();
+	});
+
+	it("copies and serializes Post drafts while preserving deferred body data", () => {
+		const copied = copyPostDraft({
+			...emptyPostDraft(),
+			title: "A Post",
+			slug: "a-post",
+			body: {
+				version: 1,
+				blocks: [{ type: "custom", key: "body-block" }],
+			},
+		});
+		copied.body.blocks.splice(0, 1);
+		expect(serializePostDraft({
+			...emptyPostDraft(),
+			title: "A Post",
+			slug: "a-post",
+		})).toContain("a-post");
+	});
+
+	it("validates Post metadata before publish without pretending body editing exists", () => {
+		expect(presentationMatchesFormat("essay", "standard")).toBe(true);
+		expect(presentationMatchesFormat("essay", "technical")).toBe(false);
+		expect(defaultPresentationForFormat("projectStory")).toBe("caseStudy");
+		const errors = validatePostMetadataForPublish({
+			...emptyPostDraft(),
+			title: "Field Notes",
+			slug: "field-notes",
+			summary: "A short public summary.",
+			authorDocumentId: "author-id",
+		});
+		expect(hasPostErrors(errors)).toBe(true);
+		expect(errors.body).toContain("next slice");
+		expect(validatePostMetadataForPublish({
+			...emptyPostDraft(),
+			title: "Bad",
+			slug: "Bad Slug",
+			presentation: "technical",
+		})).toMatchObject({
+			slug: expect.any(String),
+			presentation: expect.any(String),
+			authorDocumentId: expect.any(String),
+		});
 	});
 
 	it("reports draft, changed, and published statuses", () => {

@@ -1,4 +1,5 @@
 export type BlogSupportingKind = "author" | "category";
+export type BlogDocumentKind = BlogSupportingKind | "post";
 
 export interface RichTextDocument {
 	version: 1;
@@ -72,6 +73,67 @@ export interface PostEditorRevisionHeader {
 	displayPublishedAt: number | null;
 }
 
+export type PostFormat = "essay" | "projectStory" | "technicalNote";
+export type PostPresentation =
+	| "standard"
+	| "behindTheScenes"
+	| "caseStudy"
+	| "clientStory"
+	| "technical";
+
+export interface PostTechnicalItem {
+	key: string;
+	label?: string;
+	details?: string;
+}
+
+export interface PostCategoryReferenceDraft {
+	key: string;
+	documentId: string;
+}
+
+export interface PostMainImageDraft {
+	key: string;
+	assetId: string;
+	altText?: string;
+	caption?: string;
+}
+
+export interface PostRichTextDocument {
+	version: 1;
+	blocks: Array<Record<string, unknown>>;
+}
+
+export interface PostDraft {
+	kind: "post";
+	title?: string;
+	slug?: string;
+	format?: PostFormat;
+	presentation?: PostPresentation;
+	displayPublishedAt?: number;
+	summary?: string;
+	seoTitle?: string;
+	seoDescription?: string;
+	brief?: string;
+	approach?: string;
+	outcome?: string;
+	credits?: string;
+	equipment: PostTechnicalItem[];
+	materials: PostTechnicalItem[];
+	authorDocumentId?: string;
+	categories: PostCategoryReferenceDraft[];
+	mainImage?: PostMainImageDraft;
+	body: PostRichTextDocument;
+}
+
+export interface PostEditorRevisionState {
+	revisionId: string;
+	schemaVersion: 1;
+	draft: PostDraft;
+	source: "admin" | "sanityImport" | "restore";
+	createdAt: number;
+}
+
 export interface PostEditorSummary {
 	documentId: string;
 	documentKey: string;
@@ -81,6 +143,19 @@ export interface PostEditorSummary {
 	draft: PostEditorRevisionHeader | null;
 	published: PostEditorRevisionHeader | null;
 	updatedAt: number;
+	archivedAt: number | null;
+}
+
+export interface PostEditorState {
+	documentId: string;
+	documentKey: string;
+	kind: "post";
+	slug: string | null;
+	rank: number;
+	draft: PostEditorRevisionState | null;
+	published: PostEditorRevisionState | null;
+	updatedAt: number;
+	publishedAt: number | null;
 	archivedAt: number | null;
 }
 
@@ -120,9 +195,35 @@ export function slugifyBlogTitle(value: string) {
 		.slice(0, 96);
 }
 
-export function newBlogDocumentKey(kind: BlogSupportingKind) {
+export function newBlogDocumentKey(kind: BlogDocumentKind) {
 	const random = Math.random().toString(36).slice(2, 8);
 	return `${kind}-${Date.now().toString(36)}-${random}`;
+}
+
+export function emptyPostBody(): PostRichTextDocument {
+	return { version: 1, blocks: [] };
+}
+
+export function emptyPostDraft(): PostDraft {
+	return {
+		kind: "post",
+		title: "",
+		slug: "",
+		format: "essay",
+		presentation: "standard",
+		displayPublishedAt: Date.now(),
+		summary: "",
+		seoTitle: "",
+		seoDescription: "",
+		brief: "",
+		approach: "",
+		outcome: "",
+		credits: "",
+		equipment: [],
+		materials: [],
+		categories: [],
+		body: emptyPostBody(),
+	};
 }
 
 export function emptyBlogSupportingDraft(kind: BlogSupportingKind): BlogSupportingDraft {
@@ -189,6 +290,54 @@ export function copyBlogSupportingDraft(
 	};
 }
 
+function copyPostTechnicalItems(items: PostTechnicalItem[] | undefined) {
+	return (items ?? []).map((item) => ({
+		key: item.key,
+		label: item.label ?? "",
+		details: item.details ?? "",
+	}));
+}
+
+function copyPostCategories(items: PostCategoryReferenceDraft[] | undefined) {
+	return (items ?? []).map((item) => ({
+		key: item.key,
+		documentId: item.documentId,
+	}));
+}
+
+function copyPostBody(body: PostRichTextDocument | undefined): PostRichTextDocument {
+	if (!body) return emptyPostBody();
+	return {
+		version: 1,
+		blocks: body.blocks.map((block) => ({ ...block })),
+	};
+}
+
+export function copyPostDraft(payload: PostDraft | undefined): PostDraft {
+	if (!payload) return emptyPostDraft();
+	return {
+		kind: "post",
+		title: payload.title ?? "",
+		slug: payload.slug ?? "",
+		format: payload.format ?? "essay",
+		presentation: payload.presentation ?? "standard",
+		displayPublishedAt: payload.displayPublishedAt ?? Date.now(),
+		summary: payload.summary ?? "",
+		seoTitle: payload.seoTitle ?? "",
+		seoDescription: payload.seoDescription ?? "",
+		brief: payload.brief ?? "",
+		approach: payload.approach ?? "",
+		outcome: payload.outcome ?? "",
+		credits: payload.credits ?? "",
+		equipment: copyPostTechnicalItems(payload.equipment),
+		materials: copyPostTechnicalItems(payload.materials),
+		authorDocumentId: payload.authorDocumentId,
+		categories: copyPostCategories(payload.categories),
+		mainImage: payload.mainImage ? { ...payload.mainImage } : undefined,
+		body: copyPostBody(payload.body),
+	};
+}
+
 export function serializeBlogSupportingDraft(payload: BlogSupportingDraft) {
 	if (payload.kind === "author") {
 		return JSON.stringify({
@@ -203,6 +352,30 @@ export function serializeBlogSupportingDraft(payload: BlogSupportingDraft) {
 		title: payload.title ?? null,
 		slug: payload.slug ?? null,
 		description: payload.description ?? null,
+	});
+}
+
+export function serializePostDraft(payload: PostDraft) {
+	return JSON.stringify({
+		kind: "post",
+		title: payload.title ?? null,
+		slug: payload.slug ?? null,
+		format: payload.format ?? null,
+		presentation: payload.presentation ?? null,
+		displayPublishedAt: payload.displayPublishedAt ?? null,
+		summary: payload.summary ?? null,
+		seoTitle: payload.seoTitle ?? null,
+		seoDescription: payload.seoDescription ?? null,
+		brief: payload.brief ?? null,
+		approach: payload.approach ?? null,
+		outcome: payload.outcome ?? null,
+		credits: payload.credits ?? null,
+		equipment: copyPostTechnicalItems(payload.equipment),
+		materials: copyPostTechnicalItems(payload.materials),
+		authorDocumentId: payload.authorDocumentId ?? null,
+		categories: copyPostCategories(payload.categories),
+		mainImage: payload.mainImage ?? null,
+		body: payload.body ?? emptyPostBody(),
 	});
 }
 
@@ -237,5 +410,73 @@ export function validateBlogSupportingForPublish(
 }
 
 export function hasBlogSupportingErrors(errors: BlogSupportingFieldErrors) {
+	return Object.keys(errors).length > 0;
+}
+
+export type PostFieldErrors = Partial<Record<
+	| "title"
+	| "slug"
+	| "format"
+	| "presentation"
+	| "displayPublishedAt"
+	| "summary"
+	| "seoTitle"
+	| "seoDescription"
+	| "authorDocumentId"
+	| "body",
+	string
+>>;
+
+const compatiblePostPresentations: Record<PostFormat, PostPresentation[]> = {
+	essay: ["standard", "behindTheScenes"],
+	projectStory: ["caseStudy", "clientStory"],
+	technicalNote: ["technical"],
+};
+
+export function presentationMatchesFormat(
+	format: PostFormat | undefined,
+	presentation: PostPresentation | undefined,
+) {
+	if (!format || !presentation) return false;
+	return compatiblePostPresentations[format]?.includes(presentation) ?? false;
+}
+
+export function defaultPresentationForFormat(format: PostFormat): PostPresentation {
+	return compatiblePostPresentations[format][0];
+}
+
+export function validatePostMetadataForPublish(payload: PostDraft): PostFieldErrors {
+	const errors: PostFieldErrors = {};
+	const slug = payload.slug?.trim() ?? "";
+	if (!payload.title?.trim()) errors.title = "Post title is required.";
+	else if (payload.title.length > 200) errors.title = "Post title must be 200 characters or fewer.";
+	if (!slug) errors.slug = "URL name is required.";
+	else if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug)) {
+		errors.slug = "Use lowercase words separated by hyphens.";
+	}
+	if (!payload.format) errors.format = "Choose a Post format.";
+	if (!payload.presentation) errors.presentation = "Choose a presentation.";
+	else if (!presentationMatchesFormat(payload.format, payload.presentation)) {
+		errors.presentation = "Presentation must match the selected format.";
+	}
+	if (
+		payload.displayPublishedAt === undefined
+		|| !Number.isSafeInteger(payload.displayPublishedAt)
+		|| payload.displayPublishedAt < 0
+	) errors.displayPublishedAt = "Choose a valid public date.";
+	if (!payload.summary?.trim()) errors.summary = "Post summary is required.";
+	else if (payload.summary.length > 320) errors.summary = "Post summary must be 320 characters or fewer.";
+	if ((payload.seoTitle?.length ?? 0) > 200) errors.seoTitle = "SEO title must be 200 characters or fewer.";
+	if ((payload.seoDescription?.length ?? 0) > 320) {
+		errors.seoDescription = "SEO description must be 320 characters or fewer.";
+	}
+	if (!payload.authorDocumentId) errors.authorDocumentId = "Choose an author before publishing.";
+	if ((payload.body?.blocks.length ?? 0) === 0) {
+		errors.body = "Post body editing arrives in the next slice; publishing will stay blocked until the body is complete.";
+	}
+	return errors;
+}
+
+export function hasPostErrors(errors: PostFieldErrors) {
 	return Object.keys(errors).length > 0;
 }
