@@ -30,6 +30,7 @@ describe("EditorNavigation", () => {
 				siteSettingsEnabled: true,
 				pagesEnabled: true,
 				portfolioEnabled: true,
+				blogEnabled: true,
 			},
 		});
 
@@ -37,10 +38,26 @@ describe("EditorNavigation", () => {
 			"site settings",
 			"pages",
 			"portfolio",
+			"blog",
 		]);
 		expect(document.querySelectorAll('a[aria-current="page"]')).toHaveLength(1);
 		expect(document.querySelector('a[aria-current="page"]')?.textContent).toContain(
 			"pages",
+		);
+		unmount(component);
+	});
+
+	it("marks nested Blog routes as current", () => {
+		const component = mount(EditorNavigation, {
+			target: document.body,
+			props: {
+				pathname: "/admin/editor/blog/posts/doc-1",
+				blogEnabled: true,
+			},
+		});
+
+		expect(document.querySelector('a[aria-current="page"]')?.textContent).toContain(
+			"blog",
 		);
 		unmount(component);
 	});

@@ -77,6 +77,28 @@ export interface AdminAPI {
 		getPlacedMediaAssets: FnRef;
 		registerReadyWebAsset: FnRef;
 	};
+	blogContent?: {
+		listForEditor: FnRef;
+		getEditorState: FnRef;
+		createDraft: FnRef;
+		saveDraft: FnRef;
+		publish: FnRef;
+		discardDraft: FnRef;
+		unpublish: FnRef;
+		archive: FnRef;
+		restore: FnRef;
+	};
+	postContent?: {
+		listForEditor: FnRef;
+		getEditorState: FnRef;
+		createDraft: FnRef;
+		saveDraft: FnRef;
+		publish: FnRef;
+		discardDraft: FnRef;
+		unpublish: FnRef;
+		archive: FnRef;
+		restore: FnRef;
+	};
 	crm: {
 		createClient: FnRef;
 		updateClient: FnRef;
@@ -405,6 +427,11 @@ export interface AdminEditorConfig {
 		uploadEndpoint?: string;
 		/** Same-origin host endpoint that issues short-lived real-site draft previews. */
 		previewEndpoint?: string;
+	};
+	/** Enables Blog authoring for Authors, Categories, and Posts. */
+	blog?: {
+		/** Shared workspace route; defaults to `/admin/editor/blog`. */
+		baseHref?: string;
 	};
 }
 

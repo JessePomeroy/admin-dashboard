@@ -4,8 +4,9 @@ import { isAdminRouteActive } from "./adminNavigation";
 let {
 	pathname,
 	siteSettingsEnabled = false,
-		pagesEnabled = false,
+	pagesEnabled = false,
 	portfolioEnabled = false,
+	blogEnabled = false,
 	mobile = false,
 	open = false,
 	onDismiss,
@@ -14,6 +15,7 @@ let {
 	siteSettingsEnabled?: boolean;
 	pagesEnabled?: boolean;
 	portfolioEnabled?: boolean;
+	blogEnabled?: boolean;
 	mobile?: boolean;
 	open?: boolean;
 	onDismiss?: () => void;
@@ -28,6 +30,9 @@ let items = $derived([
 		: []),
 	...(portfolioEnabled
 		? [{ href: "/admin/editor/portfolio", label: "portfolio" }]
+		: []),
+	...(blogEnabled
+		? [{ href: "/admin/editor/blog", label: "blog" }]
 		: []),
 ]);
 
