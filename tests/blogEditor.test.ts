@@ -11,6 +11,8 @@ import {
 	hasPostErrors,
 	newBlogDocumentKey,
 	presentationMatchesFormat,
+	postBodyFromPlainText,
+	postBodyToPlainText,
 	serializeBlogSupportingDraft,
 	serializePostDraft,
 	slugifyBlogTitle,
@@ -97,6 +99,17 @@ describe("Blog editor helpers", () => {
 		})).toContain("a-post");
 	});
 
+	it("converts simple Post body paragraphs to and from plain text", () => {
+		const body = postBodyFromPlainText("First paragraph.\n\nSecond paragraph.");
+		expect(body.blocks).toHaveLength(2);
+		expect(body.blocks[0]).toMatchObject({
+			type: "paragraph",
+			children: [{ text: "First paragraph.", marks: [] }],
+		});
+		expect(postBodyToPlainText(body)).toBe("First paragraph.\n\nSecond paragraph.");
+		expect(postBodyFromPlainText("   ").blocks).toEqual([]);
+	});
+
 	it("validates Post metadata before publish without pretending body editing exists", () => {
 		expect(presentationMatchesFormat("essay", "standard")).toBe(true);
 		expect(presentationMatchesFormat("essay", "technical")).toBe(false);
@@ -109,7 +122,15 @@ describe("Blog editor helpers", () => {
 			authorDocumentId: "author-id",
 		});
 		expect(hasPostErrors(errors)).toBe(true);
-		expect(errors.body).toContain("next slice");
+		expect(errors.body).toContain("body text");
+		expect(validatePostMetadataForPublish({
+			...emptyPostDraft(),
+			title: "Field Notes",
+			slug: "field-notes",
+			summary: "A short public summary.",
+			authorDocumentId: "author-id",
+			body: postBodyFromPlainText("A complete body."),
+		}).body).toBeUndefined();
 		expect(validatePostMetadataForPublish({
 			...emptyPostDraft(),
 			title: "Bad",
