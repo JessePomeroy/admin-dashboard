@@ -1,0 +1,100 @@
+import { describe, expect, it, vi } from "vitest";
+import {
+	authorBioFromText,
+	authorBioToText,
+	blogDocumentStatus,
+	copyBlogSupportingDraft,
+	hasBlogSupportingErrors,
+	newBlogDocumentKey,
+	serializeBlogSupportingDraft,
+	slugifyBlogTitle,
+	validateBlogSupportingForPublish,
+} from "../src/lib/blogEditor";
+
+describe("Blog editor helpers", () => {
+	it("builds bounded one-paragraph Author bios from plain text", () => {
+		const bio = authorBioFromText("  Writes about light.  ");
+		expect(bio).toEqual({
+			version: 1,
+			blocks: [{
+				type: "paragraph",
+				key: "bio-paragraph",
+				children: [{
+					type: "text",
+					key: "bio-text",
+					text: "Writes about light.",
+					marks: [],
+				}],
+			}],
+		});
+		expect(authorBioToText(bio)).toBe("Writes about light.");
+		expect(authorBioFromText("   ")).toBeUndefined();
+	});
+
+	it("copies and serializes supporting drafts without sharing nested references", () => {
+		const copied = copyBlogSupportingDraft({
+			kind: "author",
+			name: "Maggie",
+			slug: "maggie",
+			bio: authorBioFromText("Photographer."),
+		}, "author");
+		if (copied.kind !== "author") throw new Error("Expected author draft");
+		copied.bio?.blocks[0]?.children.splice(0, 1);
+		expect(authorBioToText(authorBioFromText("Photographer."))).toBe("Photographer.");
+		expect(serializeBlogSupportingDraft({
+			kind: "category",
+			title: "Field Notes",
+			slug: "field-notes",
+			description: "",
+		})).toContain("field-notes");
+	});
+
+	it("validates publish requirements for Authors and Categories", () => {
+		expect(hasBlogSupportingErrors(validateBlogSupportingForPublish({
+			kind: "author",
+			name: "",
+			slug: "Bad Slug",
+		}))).toBe(true);
+		expect(validateBlogSupportingForPublish({
+			kind: "category",
+			title: "Field Notes",
+			slug: "field-notes",
+			description: "Essays and notes.",
+		})).toEqual({});
+	});
+
+	it("normalizes URL slugs and makes document keys", () => {
+		vi.spyOn(Date, "now").mockReturnValue(1_800_000_000_000);
+		vi.spyOn(Math, "random").mockReturnValue(0.123456);
+		expect(slugifyBlogTitle(" Café Field Notes! ")).toBe("cafe-field-notes");
+		expect(newBlogDocumentKey("author")).toMatch(/^author-[a-z0-9]+-[a-z0-9]+$/);
+		vi.restoreAllMocks();
+	});
+
+	it("reports draft, changed, and published statuses", () => {
+		expect(blogDocumentStatus({
+			documentId: "1",
+			documentKey: "a",
+			kind: "author",
+			slug: null,
+			rank: 0,
+			label: "Author",
+			draftRevisionId: "draft",
+			publishedRevisionId: null,
+			updatedAt: 1,
+			archivedAt: null,
+		})).toBe("draft");
+		expect(blogDocumentStatus({
+			documentId: "1",
+			documentKey: "a",
+			kind: "author",
+			slug: "author",
+			rank: 0,
+			label: "Author",
+			draftRevisionId: "draft",
+			publishedRevisionId: "published",
+			updatedAt: 1,
+			archivedAt: null,
+		})).toBe("changed");
+	});
+});

@@ -1,9 +1,14 @@
 <script lang="ts">
+import { goto } from "$app/navigation";
 import { useQuery } from "convex-svelte";
+import { useAdminClient } from "../../adminClient";
 import {
 	blogDocumentLabel,
 	blogDocumentStatus,
+	newBlogDocumentKey,
+	slugifyBlogTitle,
 	type BlogSupportingEditorSummary,
+	type BlogSupportingKind,
 	type PostEditorSummary,
 } from "../../blogEditor";
 import { getAdminConfig } from "../../config";
@@ -17,12 +22,14 @@ if (!blogApi || !postApi || !blogConfig) {
 	throw new Error("Blog editor is not configured for this host");
 }
 
+const editorApi = blogApi;
 const baseHref = blogConfig.baseHref ?? "/admin/editor/blog";
-const authorsQuery = useQuery(blogApi.listForEditor, {
+const client = useAdminClient();
+const authorsQuery = useQuery(editorApi.listForEditor, {
 	siteUrl: config.siteUrl,
 	kind: "author",
 });
-const categoriesQuery = useQuery(blogApi.listForEditor, {
+const categoriesQuery = useQuery(editorApi.listForEditor, {
 	siteUrl: config.siteUrl,
 	kind: "category",
 });
@@ -37,11 +44,33 @@ let categories = $derived(
 	(categoriesQuery.data as BlogSupportingEditorSummary[] | undefined) ?? [],
 );
 let posts = $derived((postsQuery.data as PostEditorSummary[] | undefined) ?? []);
+let createState = $state<"idle" | "saving" | "error">("idle");
+let createError = $state("");
 
 function statusLabel(document: BlogSupportingEditorSummary | PostEditorSummary) {
 	const status = blogDocumentStatus(document);
 	if (status === "changed") return "draft changes";
 	return status;
+}
+
+async function createSupporting(kind: BlogSupportingKind) {
+	createState = "saving";
+	createError = "";
+	try {
+		const label = kind === "author" ? "new author" : "new category";
+		const result = await client.mutation(editorApi.createDraft, {
+			siteUrl: config.siteUrl,
+			documentKey: newBlogDocumentKey(kind),
+			draft: kind === "author"
+				? { kind, name: label, slug: slugifyBlogTitle(label) }
+				: { kind, title: label, slug: slugifyBlogTitle(label), description: "" },
+		}) as { documentId: string };
+		createState = "idle";
+		await goto(`${baseHref}/${kind === "author" ? "authors" : "categories"}/${result.documentId}`);
+	} catch (error) {
+		createState = "error";
+		createError = error instanceof Error ? error.message : "Could not create the draft.";
+	}
 }
 </script>
 
@@ -88,9 +117,17 @@ function statusLabel(document: BlogSupportingEditorSummary | PostEditorSummary) 
 				<p>Author profiles and categories used by Posts. Active references are guarded by the shared content lifecycle.</p>
 			</div>
 		</div>
+		{#if createError}
+			<p class="error" role="alert">{createError}</p>
+		{/if}
 		<div class="support-grid">
 			<div>
-				<h3>authors</h3>
+				<div class="group-heading">
+					<h3>authors</h3>
+					<button type="button" onclick={() => void createSupporting("author")} disabled={createState === "saving"}>
+						new author
+					</button>
+				</div>
 				{#if authors.length === 0}
 					<p class="empty">No authors yet.</p>
 				{:else}
@@ -108,7 +145,12 @@ function statusLabel(document: BlogSupportingEditorSummary | PostEditorSummary) 
 				{/if}
 			</div>
 			<div>
-				<h3>categories</h3>
+				<div class="group-heading">
+					<h3>categories</h3>
+					<button type="button" onclick={() => void createSupporting("category")} disabled={createState === "saving"}>
+						new category
+					</button>
+				</div>
 				{#if categories.length === 0}
 					<p class="empty">No categories yet.</p>
 				{:else}
@@ -153,12 +195,48 @@ function statusLabel(document: BlogSupportingEditorSummary | PostEditorSummary) 
 		color: var(--admin-heading);
 	}
 
+	.group-heading {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 12px;
+		margin-bottom: 10px;
+	}
+
+	.group-heading h3 {
+		margin: 0;
+	}
+
+	button {
+		border: 1px solid var(--admin-border);
+		border-radius: 8px;
+		padding: 8px 10px;
+		background: transparent;
+		color: var(--admin-heading);
+		font: inherit;
+		cursor: pointer;
+	}
+
+	button:disabled {
+		cursor: wait;
+		opacity: 0.55;
+	}
+
+	button:hover:not(:disabled) {
+		background: var(--admin-active);
+	}
+
 	.empty {
 		margin: 0;
 		padding: 18px;
 		border: 1px dashed var(--admin-border);
 		border-radius: 12px;
 		color: var(--admin-text-muted);
+	}
+
+	.error {
+		margin: 0 0 16px;
+		color: var(--admin-danger, #ff8f8f);
 	}
 
 	@media (max-width: 820px) {
