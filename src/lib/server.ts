@@ -45,3 +45,4 @@ export {
 	createCmsMediaCapabilityHandler,
 	createCmsMediaProcessHandler,
 } from "./server/handlers/cmsMedia.js";
+export { createCmsMediaDeleteHandler } from "./server/handlers/cmsMediaDeletion.js";

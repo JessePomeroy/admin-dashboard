@@ -76,6 +76,8 @@ export interface AdminAPI {
 		listMediaAssets: FnRef;
 		getPlacedMediaAssets: FnRef;
 		registerReadyWebAsset: FnRef;
+		/** Optional until a host mounts the permanent CMS media deletion route. */
+		requestDeletion?: FnRef;
 	};
 	blogContent?: {
 		listForEditor: FnRef;
@@ -578,6 +580,13 @@ export interface AdminServerConfig extends AdminConfig {
 	cmsMediaWorkerUrl?: string;
 	/** Server-only bearer scoped to this config's exact siteUrl. */
 	cmsMediaTenantSecret?: string;
+	/**
+	 * Server-only Convex HTTP Actions origin (the deployment's `.convex.site`
+	 * URL), used to complete a CMS media deletion after storage cleanup.
+	 */
+	cmsMediaConvexSiteUrl?: string;
+	/** Server-only, per-host bearer for the Convex deletion completion action. */
+	cmsMediaDeletionCompletionSecret?: string;
 	/**
 	 * Verify that a request comes from an authorized admin for the host-owned
 	 * tenant or creator scope. Every shared side-effect handler requires this
