@@ -5,6 +5,7 @@ import { useAdminClient } from "../../adminClient";
 import {
 	blogDocumentLabel,
 	blogDocumentStatus,
+	emptyPostDraft,
 	newBlogDocumentKey,
 	slugifyBlogTitle,
 	type BlogSupportingEditorSummary,
@@ -23,6 +24,7 @@ if (!blogApi || !postApi || !blogConfig) {
 }
 
 const editorApi = blogApi;
+const postEditorApi = postApi;
 const baseHref = blogConfig.baseHref ?? "/admin/editor/blog";
 const client = useAdminClient();
 const authorsQuery = useQuery(editorApi.listForEditor, {
@@ -33,7 +35,7 @@ const categoriesQuery = useQuery(editorApi.listForEditor, {
 	siteUrl: config.siteUrl,
 	kind: "category",
 });
-const postsQuery = useQuery(postApi.listForEditor, {
+const postsQuery = useQuery(postEditorApi.listForEditor, {
 	siteUrl: config.siteUrl,
 });
 
@@ -72,6 +74,28 @@ async function createSupporting(kind: BlogSupportingKind) {
 		createError = error instanceof Error ? error.message : "Could not create the draft.";
 	}
 }
+
+async function createPost() {
+	createState = "saving";
+	createError = "";
+	try {
+		const title = "new post";
+		const result = await client.mutation(postEditorApi.createDraft, {
+			siteUrl: config.siteUrl,
+			documentKey: newBlogDocumentKey("post"),
+			draft: {
+				...emptyPostDraft(),
+				title,
+				slug: slugifyBlogTitle(title),
+			},
+		}) as { documentId: string };
+		createState = "idle";
+		await goto(`${baseHref}/posts/${result.documentId}`);
+	} catch (error) {
+		createState = "error";
+		createError = error instanceof Error ? error.message : "Could not create the draft.";
+	}
+}
 </script>
 
 <svelte:head><title>Blog — {config.siteName}</title></svelte:head>
@@ -91,6 +115,9 @@ async function createSupporting(kind: BlogSupportingKind) {
 				<h2 id="posts-heading">posts</h2>
 				<p>Draft and published Post records, newest public ordering handled by the content service.</p>
 			</div>
+			<button type="button" onclick={() => void createPost()} disabled={createState === "saving"}>
+				new post
+			</button>
 		</div>
 		{#if posts.length === 0}
 			<p class="empty">No posts yet.</p>
