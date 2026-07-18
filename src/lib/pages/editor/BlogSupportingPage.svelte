@@ -46,6 +46,8 @@ let saveState = $state<"loading" | "saved" | "dirty" | "saving" | "error">("load
 let saveError = $state("");
 let publishState = $state<"idle" | "publishing" | "error">("idle");
 let publishError = $state("");
+let lifecycleState = $state<"idle" | "working" | "error">("idle");
+let lifecycleError = $state("");
 let fieldErrors = $state<BlogSupportingFieldErrors>({});
 let acknowledgeSlugChange = $state(false);
 let currentJson = $derived(serializeBlogSupportingDraft(normalizedDraft()));
@@ -56,6 +58,7 @@ let backHref = $derived(`${baseHref}`);
 let publishedSlug = $derived(publishedDraft?.slug?.trim() || "");
 let draftSlug = $derived(form.slug?.trim() || "");
 let slugChanged = $derived(Boolean(publishedSlug && draftSlug && publishedSlug !== draftSlug));
+let archived = $derived(Boolean(editorState?.archivedAt));
 
 $effect(() => {
 	if (!activeRevision || initializedRevisionId === activeRevision.revisionId) return;
@@ -96,7 +99,7 @@ function updateSlugFromTitle() {
 }
 
 async function saveDraft() {
-	if (!editorState) return;
+	if (!editorState || archived) return;
 	const draft = normalizedDraft();
 	saveState = "saving";
 	saveError = "";
@@ -116,7 +119,7 @@ async function saveDraft() {
 }
 
 async function publishDraft() {
-	if (!editorState) return;
+	if (!editorState || archived) return;
 	const draft = normalizedDraft();
 	fieldErrors = validateBlogSupportingForPublish(draft);
 	if (hasBlogSupportingErrors(fieldErrors)) return;
@@ -152,7 +155,7 @@ async function publishDraft() {
 }
 
 async function discardDraft() {
-	if (!editorState?.draft) return;
+	if (!editorState?.draft || archived) return;
 	saveError = "";
 	try {
 		await client.mutation(editorApi.discardDraft, {
@@ -167,6 +170,50 @@ async function discardDraft() {
 	} catch (error) {
 		saveState = "error";
 		saveError = error instanceof Error ? error.message : "Could not discard this draft.";
+	}
+}
+
+async function unpublishDocument() {
+	if (!editorState?.published || archived) return;
+	lifecycleState = "working";
+	lifecycleError = "";
+	try {
+		await client.mutation(editorApi.unpublish, { documentId });
+		lifecycleState = "idle";
+	} catch (error) {
+		lifecycleState = "error";
+		lifecycleError = error instanceof Error ? error.message : "Could not unpublish this document.";
+	}
+}
+
+async function archiveDocument() {
+	if (!editorState || archived) return;
+	if (saveState === "dirty") {
+		lifecycleState = "error";
+		lifecycleError = "Save or discard draft changes before archiving.";
+		return;
+	}
+	lifecycleState = "working";
+	lifecycleError = "";
+	try {
+		await client.mutation(editorApi.archive, { documentId });
+		lifecycleState = "idle";
+	} catch (error) {
+		lifecycleState = "error";
+		lifecycleError = error instanceof Error ? error.message : "Could not archive this document.";
+	}
+}
+
+async function restoreDocument() {
+	if (!editorState?.archivedAt) return;
+	lifecycleState = "working";
+	lifecycleError = "";
+	try {
+		await client.mutation(editorApi.restore, { documentId });
+		lifecycleState = "idle";
+	} catch (error) {
+		lifecycleState = "error";
+		lifecycleError = error instanceof Error ? error.message : "Could not restore this document.";
 	}
 }
 </script>
@@ -191,10 +238,10 @@ async function discardDraft() {
 			</div>
 			<div class="header-actions">
 				<span class="save-status">{saveState}</span>
-				<button type="button" onclick={() => void saveDraft()} disabled={saveState === "saving"}>
+				<button type="button" onclick={() => void saveDraft()} disabled={saveState === "saving" || archived}>
 					save draft
 				</button>
-				<button type="button" class="primary" onclick={() => void publishDraft()} disabled={publishState === "publishing"}>
+				<button type="button" class="primary" onclick={() => void publishDraft()} disabled={publishState === "publishing" || archived}>
 					{publishState === "publishing" ? "publishing…" : "publish"}
 				</button>
 			</div>
@@ -202,6 +249,10 @@ async function discardDraft() {
 
 		{#if saveError}<p class="error" role="alert">{saveError}</p>{/if}
 		{#if publishError}<p class="error" role="alert">{publishError}</p>{/if}
+		{#if lifecycleError}<p class="error" role="alert">{lifecycleError}</p>{/if}
+		{#if archived}
+			<p class="notice" role="status">This {kind} is archived. Restore it before editing or publishing.</p>
+		{/if}
 
 		<section aria-labelledby="identity-heading">
 			<div class="section-heading">
@@ -295,9 +346,27 @@ async function discardDraft() {
 						<p>Discard only clears the current draft pointer; immutable history stays available server-side.</p>
 					</div>
 				</div>
-				<button type="button" onclick={() => void discardDraft()}>discard draft</button>
+				<button type="button" onclick={() => void discardDraft()} disabled={archived}>discard draft</button>
 			</section>
 		{/if}
+
+		<section aria-labelledby="lifecycle-heading">
+			<div class="section-heading">
+				<span>{slugChanged ? "05" : editorState.draft ? "04" : "03"}</span>
+				<div>
+					<h2 id="lifecycle-heading">visibility and recovery</h2>
+					<p>Unpublish removes the public version. Archive hides this document from editor lists while keeping it recoverable.</p>
+				</div>
+			</div>
+			<div class="action-row">
+				{#if archived}
+					<button type="button" onclick={() => void restoreDocument()} disabled={lifecycleState === "working"}>restore</button>
+				{:else}
+					<button type="button" onclick={() => void unpublishDocument()} disabled={!editorState.published || lifecycleState === "working"}>unpublish</button>
+					<button type="button" class="danger" onclick={() => void archiveDocument()} disabled={lifecycleState === "working"}>archive</button>
+				{/if}
+			</div>
+		</section>
 	</div>
 {/if}
 
@@ -342,6 +411,11 @@ async function discardDraft() {
 		color: var(--admin-bg);
 	}
 
+	button.danger {
+		border-color: color-mix(in srgb, var(--admin-danger, #ff8f8f) 55%, transparent);
+		color: var(--admin-danger, #ff8f8f);
+	}
+
 	button:disabled {
 		cursor: wait;
 		opacity: 0.55;
@@ -366,5 +440,16 @@ async function discardDraft() {
 
 	.error {
 		margin: 0 0 16px;
+	}
+
+	.notice {
+		margin: 0 0 16px;
+		color: var(--admin-text-muted);
+	}
+
+	.action-row {
+		display: flex;
+		gap: 10px;
+		flex-wrap: wrap;
 	}
 </style>
