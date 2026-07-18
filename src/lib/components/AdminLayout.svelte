@@ -80,12 +80,26 @@ let homepageQuoteEditorEnabled = $derived(
 let contactPageEditorEnabled = $derived(
 	Boolean(config.editor?.contactPage && api.siteEditor),
 );
-let pagesEditorEnabled = $derived(homepageQuoteEditorEnabled || contactPageEditorEnabled);
+let aboutPageEditorEnabled = $derived(
+	Boolean(config.editor?.aboutPage && api.siteEditor),
+);
+let modelingPageEditorEnabled = $derived(
+	Boolean(config.editor?.modelingPage && api.siteEditor),
+);
+let pagesEditorEnabled = $derived(
+	homepageQuoteEditorEnabled
+		|| contactPageEditorEnabled
+		|| aboutPageEditorEnabled
+		|| modelingPageEditorEnabled,
+);
 let portfolioEditorEnabled = $derived(
 	Boolean(config.editor?.portfolio && api.portfolioEditor),
 );
+let blogEditorEnabled = $derived(
+	Boolean(config.editor?.blog && api.blogContent && api.postContent),
+);
 let editorEnabled = $derived(
-	siteSettingsEditorEnabled || pagesEditorEnabled || portfolioEditorEnabled,
+	siteSettingsEditorEnabled || pagesEditorEnabled || portfolioEditorEnabled || blogEditorEnabled,
 );
 let editorActive = $derived(
 	editorEnabled && isAdminRouteActive("/admin/editor", $page.url.pathname),
@@ -281,12 +295,14 @@ function closeMobileMenu() {
 			siteSettingsEnabled={siteSettingsEditorEnabled}
 			pagesEnabled={pagesEditorEnabled}
 			portfolioEnabled={portfolioEditorEnabled}
+			blogEnabled={blogEditorEnabled}
 		/>
 		<EditorNavigation
 			pathname={$page.url.pathname}
 			siteSettingsEnabled={siteSettingsEditorEnabled}
 			pagesEnabled={pagesEditorEnabled}
 			portfolioEnabled={portfolioEditorEnabled}
+			blogEnabled={blogEditorEnabled}
 			mobile
 			open={editorMenuOpen}
 			onDismiss={() => (editorMenuOpen = false)}
