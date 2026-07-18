@@ -76,6 +76,7 @@ export { default as ModelingPage } from "./pages/editor/ModelingPage.svelte";
 export { default as PortfolioGalleriesPage } from "./pages/editor/PortfolioGalleriesPage.svelte";
 export { default as PortfolioGalleryPage } from "./pages/editor/PortfolioGalleryPage.svelte";
 export { default as BlogPage } from "./pages/editor/BlogPage.svelte";
+export { default as BlogSupportingPage } from "./pages/editor/BlogSupportingPage.svelte";
 export { default as PlatformPage } from "./pages/PlatformPage.svelte";
 export { default as QuotesPage } from "./pages/QuotesPage.svelte";
 
