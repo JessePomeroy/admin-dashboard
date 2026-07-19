@@ -42,6 +42,7 @@ if (!portfolioApi || !portfolioConfig) {
 const getEditorState = portfolioApi.getEditorState;
 const savePortfolioDraft = portfolioApi.saveDraft;
 const publishPortfolioGallery = portfolioApi.publish;
+const publishingEnabled = Boolean(publishPortfolioGallery);
 const listMediaAssets = portfolioApi.listMediaAssets;
 const getPlacedMediaAssets = portfolioApi.getPlacedMediaAssets;
 const portfolioBaseHref = portfolioConfig.baseHref ?? "/admin/editor/portfolio";
@@ -92,7 +93,8 @@ let currentJson = $derived(serializePortfolioGalleryDraft(form));
 let dirty = $derived(initialized && currentJson !== savedJson);
 let publishIssues = $derived(validatePortfolioGalleryForPublish(form));
 let publicationCurrent = $derived(
-	isPublished
+	publishingEnabled
+	&& isPublished
 	&& !dirty
 	&& Boolean(baseRevisionId)
 	&& publishedRevisionId === baseRevisionId,
@@ -278,6 +280,7 @@ onMount(() => {
 });
 
 async function publish() {
+	if (!publishPortfolioGallery) return;
 	reviewRequested = true;
 	publishMessage = "";
 	if (publishIssues.length > 0) {
@@ -377,10 +380,16 @@ function reloadServerDraft() {
 			<div>
 				<a class="back" href={portfolioBaseHref}>← portfolio</a>
 				<h1>{form.title || "untitled gallery"}</h1>
-				<p>Changes autosave as a private draft. Publishing makes the current saved revision available to the public site immediately.</p>
+				<p>{publishingEnabled
+					? "Changes autosave as a private draft. Publishing makes the current saved revision available to the public site immediately."
+					: "Changes autosave as a private draft. Saved work remains in this editor until publishing is connected."}</p>
 			</div>
 			<div class="actions">
-				<span aria-live="polite">{saveState === "offline" ? "offline — saved on this device" : publicationCurrent ? "published" : saveState}</span>
+				<span aria-live="polite">{saveState === "offline"
+					? "offline — saved on this device"
+					: publicationCurrent
+						? "published"
+						: !publishingEnabled && saveState === "saved" ? "draft saved" : saveState}</span>
 				{#if saveState === "conflict"}
 					<button type="button" class="secondary" onclick={reloadServerDraft}>reload server draft</button>
 				{:else}
@@ -389,20 +398,24 @@ function reloadServerDraft() {
 				{#if previewEndpoint}
 					<button type="button" class="secondary" onclick={() => void preview()} disabled={previewing || saveState === "saving" || saveState === "syncing" || saveState === "offline" || saveState === "conflict"}>{previewing ? "preparing preview…" : "preview"}</button>
 				{/if}
-				<button type="button" onclick={() => void publish()} disabled={publicationCurrent || publishing || saveState === "saving" || saveState === "syncing" || saveState === "offline" || saveState === "conflict"}>{publishing ? "publishing…" : "publish"}</button>
+				{#if publishingEnabled}
+					<button type="button" onclick={() => void publish()} disabled={publicationCurrent || publishing || saveState === "saving" || saveState === "syncing" || saveState === "offline" || saveState === "conflict"}>{publishing ? "publishing…" : "publish"}</button>
+				{/if}
 			</div>
 		</header>
 
 		{#if saveError}<p class="alert" role="alert">{saveError}</p>{/if}
-		{#if publishMessage}<p class="success" role="status">{publishMessage}</p>{/if}
+		{#if publishingEnabled && publishMessage}<p class="success" role="status">{publishMessage}</p>{/if}
 
-		<PortfolioPublishReview issues={publishIssues} />
+		{#if publishingEnabled}
+			<PortfolioPublishReview issues={publishIssues} />
+		{/if}
 
 		<section aria-labelledby="gallery-details-heading">
-			<div class="section-heading"><h2 id="gallery-details-heading">gallery details</h2><p>Name, description, and public path.</p></div>
+			<div class="section-heading"><h2 id="gallery-details-heading">gallery details</h2><p>{publishingEnabled ? "Name, description, and public path." : "Name, description, and saved URL name."}</p></div>
 			<div class="fields">
 				<label>gallery name<input id="gallery-title" maxlength="120" bind:value={form.title} aria-invalid={reviewRequested && !form.title.trim()} /></label>
-				<label>public URL<input id="gallery-slug" maxlength="80" bind:value={form.slug} spellcheck="false" aria-invalid={reviewRequested && !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(form.slug)} /></label>
+				<label>{publishingEnabled ? "public URL" : "URL name"}<input id="gallery-slug" maxlength="80" bind:value={form.slug} spellcheck="false" aria-invalid={reviewRequested && !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(form.slug)} /></label>
 				<label class="wide">description<textarea rows="3" maxlength="2000" bind:value={form.description}></textarea></label>
 			</div>
 		</section>
@@ -413,6 +426,7 @@ function reloadServerDraft() {
 			mediaBaseUrl={portfolioConfig.mediaBaseUrl}
 			{publishIssues}
 			{reviewRequested}
+			{publishingEnabled}
 			uploadEndpoint={portfolioConfig.uploadEndpoint}
 			onChange={(placements) => (form.placements = placements)}
 			onChooseMedia={() => (pickerOpen = true)}

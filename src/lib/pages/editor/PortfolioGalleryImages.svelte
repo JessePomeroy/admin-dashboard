@@ -14,6 +14,7 @@ let {
 	mediaBaseUrl,
 	publishIssues,
 	reviewRequested,
+	publishingEnabled = true,
 	onChange,
 	onChooseMedia,
 	uploadEndpoint,
@@ -24,6 +25,7 @@ let {
 	mediaBaseUrl: string;
 	publishIssues: PortfolioPublishIssue[];
 	reviewRequested: boolean;
+	publishingEnabled?: boolean;
 	onChange: (placements: PortfolioPlacementDraft[]) => void;
 	onChooseMedia: () => void;
 	uploadEndpoint?: string;
@@ -42,7 +44,7 @@ function movePlacement(index: number, direction: -1 | 1) {
 
 <section aria-labelledby="gallery-images-heading">
 	<div class="section-heading">
-		<div><h2 id="gallery-images-heading" tabindex="-1">images</h2><p>{placements.length} {placements.length === 1 ? "image" : "images"} in this draft. Use the arrow controls to set their public order.</p></div>
+		<div><h2 id="gallery-images-heading" tabindex="-1">images</h2><p>{placements.length} {placements.length === 1 ? "image" : "images"} in this draft. Use the arrow controls to set their {publishingEnabled ? "public" : "saved"} order.</p></div>
 		<button type="button" class="secondary" onclick={onChooseMedia}>choose from media</button>
 	</div>
 	{#if uploadEndpoint}

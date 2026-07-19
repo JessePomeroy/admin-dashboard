@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import type { AdminAPI } from "../src/lib/config";
 import {
 	portfolioGalleryLabel,
 	portfolioGalleryStatus,
@@ -40,6 +41,20 @@ function gallery(
 }
 
 describe("portfolio editor presentation", () => {
+	it("accepts a draft-only host contract without a publish mutation", () => {
+		const stagingApi: NonNullable<AdminAPI["portfolioEditor"]> = {
+			listForEditor: "portfolioEditor.listForEditor",
+			getEditorState: "portfolioEditor.getEditorState",
+			saveDraft: "portfolioEditor.saveDraft",
+			reorder: "portfolioEditor.reorder",
+			listMediaAssets: "portfolioEditor.listMediaAssets",
+			getPlacedMediaAssets: "portfolioEditor.getPlacedMediaAssets",
+			registerReadyWebAsset: "portfolioEditor.registerReadyWebAsset",
+		};
+
+		expect(stagingApi.publish).toBeUndefined();
+	});
+
 	it("creates bounded lowercase gallery slugs from human titles", () => {
 		expect(slugifyPortfolioTitle("  Café Portraits & Motion  ")).toBe(
 			"cafe-portraits-motion",

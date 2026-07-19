@@ -63,6 +63,7 @@ export { default as CrmPage } from "./pages/CrmPage.svelte";
 export { default as DashboardPage } from "./pages/DashboardPage.svelte";
 export { default as EmailsPage } from "./pages/EmailsPage.svelte";
 export { default as GalleriesPage } from "./pages/GalleriesPage.svelte";
+export { default as ClientGalleriesPage } from "./pages/gallery-delivery/GalleryDeliveryPage.svelte";
 export { default as InquiriesPage } from "./pages/InquiriesPage.svelte";
 export { default as InvoicingPage } from "./pages/InvoicingPage.svelte";
 export { default as MessagesPage } from "./pages/MessagesPage.svelte";
