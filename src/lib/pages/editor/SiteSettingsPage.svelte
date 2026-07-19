@@ -34,6 +34,8 @@ if (!config.api.siteEditor || !config.editor?.siteSettings) {
 }
 const editorApi = config.api.siteEditor;
 const siteSettingsConfig = config.editor.siteSettings;
+const publishSiteSettings = editorApi.publishSiteSettings;
+const publishingEnabled = Boolean(publishSiteSettings);
 
 const client = useAdminClient();
 const editorQuery = useQuery(editorApi.getSiteSettingsEditorState, {
@@ -206,6 +208,10 @@ onMount(() => {
 });
 
 async function publish() {
+	if (!publishSiteSettings) {
+		await saveNow();
+		return;
+	}
 	fieldErrors = validateSiteSettingsForPublish(form);
 	if (hasSiteSettingsErrors(fieldErrors)) {
 		saveError = "Complete the highlighted fields before publishing.";
@@ -213,7 +219,7 @@ async function publish() {
 	}
 	if (!(await saveNow()) || !baseRevisionId) return;
 	try {
-		await client.mutation(editorApi.publishSiteSettings, {
+		await client.mutation(publishSiteSettings, {
 			siteUrl: config.siteUrl,
 			draftRevisionId: baseRevisionId,
 		});
@@ -241,7 +247,9 @@ async function discard() {
 		clearLocalDraft();
 		return;
 	}
-	if (!confirm("Discard this draft and return to the currently published settings?")) return;
+	if (!confirm(publishingEnabled
+		? "Discard this draft and return to the currently published settings?"
+		: "Discard this private draft and reset the form?")) return;
 	if (baseRevisionId) {
 		await client.mutation(editorApi.discardSiteSettingsDraft, {
 			siteUrl: config.siteUrl,
@@ -281,16 +289,20 @@ function moveSocialLink(index: number, direction: -1 | 1) {
 	<header class="settings-header">
 		<div>
 			<h1>site settings</h1>
-			<p class="description">Identity, social links, and default search information shared across the public site.</p>
+			<p class="description">{publishingEnabled
+				? "Identity, social links, and default search information shared across the public site."
+				: "Private site-setting drafts for a future public rollout. Changes remain in this editor until publishing is connected."}</p>
 		</div>
 		<div class="actions">
 			<span class="save-state" aria-live="polite">{saveState === "offline" ? "offline — saved on this device" : saveState}</span>
-			{#if siteSettingsConfig.previewHref}
+			{#if publishingEnabled && siteSettingsConfig.previewHref}
 				<a href={siteSettingsConfig.previewHref} target="_blank" rel="noopener">preview</a>
 			{/if}
 			<button type="button" class="secondary" onclick={() => void discard()} disabled={!initialized || (!baseRevisionId && !hasPendingWork)}>{saveState === "conflict" ? "reload server draft" : "discard draft"}</button>
 			<button type="button" class="secondary" onclick={() => void saveNow()} disabled={!initialized || saveState === "saving" || saveState === "conflict"}>save now</button>
-			<button type="button" class="primary" onclick={() => void publish()} disabled={!initialized || saveState === "saving" || saveState === "syncing" || saveState === "offline" || saveState === "conflict"}>publish</button>
+			{#if publishingEnabled}
+				<button type="button" class="primary" onclick={() => void publish()} disabled={!initialized || saveState === "saving" || saveState === "syncing" || saveState === "offline" || saveState === "conflict"}>publish</button>
+			{/if}
 		</div>
 	</header>
 
@@ -301,9 +313,9 @@ function moveSocialLink(index: number, direction: -1 | 1) {
 	{#if !initialized}
 		<p class="loading" role="status">loading site settings…</p>
 	{:else}
-		<form onsubmit={(event) => { event.preventDefault(); void publish(); }}>
+		<form onsubmit={(event) => { event.preventDefault(); publishingEnabled ? void publish() : void saveNow(); }}>
 			<section aria-labelledby="identity-heading">
-				<div class="section-heading"><span>01</span><div><h2 id="identity-heading">site identity</h2><p>The public name and short description of this site.</p></div></div>
+				<div class="section-heading"><span>01</span><div><h2 id="identity-heading">site identity</h2><p>{publishingEnabled ? "The public name and short description of this site." : "The name and short description prepared for a future public rollout."}</p></div></div>
 				<div class="fields two-column">
 					<label>artist or business name<input maxlength="120" bind:value={form.artistName} aria-invalid={Boolean(fieldErrors.artistName)} />{#if fieldErrors.artistName}<small class="field-error">{fieldErrors.artistName}</small>{/if}</label>
 					<label>browser and site title<input maxlength="120" bind:value={form.siteTitle} aria-invalid={Boolean(fieldErrors.siteTitle)} />{#if fieldErrors.siteTitle}<small class="field-error">{fieldErrors.siteTitle}</small>{/if}</label>
