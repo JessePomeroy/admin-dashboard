@@ -55,7 +55,8 @@ export interface AdminAPI {
 		discardHomepageQuoteDraft: FnRef;
 		getContactPageEditorState: FnRef;
 		saveContactPageDraft: FnRef;
-		publishContactPage: FnRef;
+		/** Optional while a host stages private Contact drafts before connecting a public provider. */
+		publishContactPage?: FnRef;
 		discardContactPageDraft: FnRef;
 		getAboutPageEditorState?: FnRef;
 		saveAboutPageDraft?: FnRef;

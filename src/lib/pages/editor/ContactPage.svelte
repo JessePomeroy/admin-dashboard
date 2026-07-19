@@ -27,7 +27,9 @@ if (!config.api.siteEditor || !config.editor?.contactPage) {
 }
 const editorApi = config.api.siteEditor;
 const contactConfig = config.editor.contactPage;
-const previewEndpoint = contactConfig.previewEndpoint;
+const publishContactPage = editorApi.publishContactPage;
+const publishingEnabled = Boolean(publishContactPage);
+const previewEndpoint = publishingEnabled ? contactConfig.previewEndpoint : undefined;
 const client = useAdminClient();
 const editorQuery = useQuery(editorApi.getContactPageEditorState, { siteUrl: config.siteUrl });
 const storageKey = `admin:site-editor:contact-page:${config.siteUrl}`;
@@ -78,7 +80,9 @@ function restoreLocalDraft(serverJson: string) {
 		form = copyContactPageDraft(local.payload);
 		if ((local.baseRevisionId ?? undefined) !== baseRevisionId) {
 			saveState = "conflict";
-			saveError = "The server changed while this device had unsynchronized work. Review or reload before publishing.";
+			saveError = publishingEnabled
+				? "The server changed while this device had unsynchronized work. Review or reload before publishing."
+				: "The server changed while this device had unsynchronized work. Review or reload before continuing.";
 			return;
 		}
 		saveState = serializeContactPageDraft(form) === serverJson ? "saved" : "dirty";
@@ -220,6 +224,10 @@ onMount(() => {
 });
 
 async function publish() {
+	if (!publishContactPage) {
+		await saveNow();
+		return;
+	}
 	fieldErrors = validateContactPageForPublish(form);
 	if (hasContactPageErrors(fieldErrors)) {
 		saveError = "Complete the highlighted fields before publishing.";
@@ -227,7 +235,7 @@ async function publish() {
 	}
 	if (!(await saveNow()) || !baseRevisionId) return;
 	try {
-		await client.mutation(editorApi.publishContactPage, {
+		await client.mutation(publishContactPage, {
 			siteUrl: config.siteUrl,
 			draftRevisionId: baseRevisionId,
 		});
@@ -292,7 +300,9 @@ async function discard() {
 		form = copyContactPageDraft(serverDraft);
 		baseRevisionId = serverRevisionId;
 	} else {
-		if (!confirm("Discard this draft and return to the published Contact content?")) return;
+		if (!confirm(publishingEnabled
+			? "Discard this draft and return to the published Contact content?"
+			: "Discard this private draft and reset the form?")) return;
 		if (baseRevisionId) {
 			await client.mutation(editorApi.discardContactPageDraft, {
 				siteUrl: config.siteUrl,
@@ -342,7 +352,9 @@ function moveChoice(index: number, offset: -1 | 1) {
 	<header class="settings-header">
 		<div>
 			<h1>contact &amp; booking</h1>
-			<p class="description">Edit the words and public destinations visitors see. Form fields, required validation, abuse protection, recipients, and delivery integrations remain platform-managed.</p>
+			<p class="description">{publishingEnabled
+				? "Edit the words and public destinations visitors see. Form fields, required validation, abuse protection, recipients, and delivery integrations remain platform-managed."
+				: "Private Contact & Booking drafts for a future public rollout. Changes remain in this editor until publishing is connected. Form fields, required validation, abuse protection, recipients, and delivery integrations remain platform-managed."}</p>
 		</div>
 		{#if initialized && !setupRequired}
 			<div class="actions">
@@ -350,7 +362,7 @@ function moveChoice(index: number, offset: -1 | 1) {
 				<button type="button" onclick={() => void discard()} disabled={!baseRevisionId && !hasPendingWork}>{saveState === "conflict" ? "reload server draft" : "discard draft"}</button>
 				<button type="button" onclick={() => void saveNow()} disabled={saveState === "saving" || saveState === "conflict"}>save now</button>
 				{#if previewEndpoint}<button type="button" onclick={() => void preview()} disabled={previewing || saveState === "saving" || saveState === "syncing" || saveState === "offline" || saveState === "conflict"}>{previewing ? "preparing preview…" : "preview"}</button>{/if}
-				<button type="button" class="primary" onclick={() => void publish()} disabled={saveState === "saving" || saveState === "syncing" || saveState === "offline" || saveState === "conflict"}>publish</button>
+				{#if publishingEnabled}<button type="button" class="primary" onclick={() => void publish()} disabled={saveState === "saving" || saveState === "syncing" || saveState === "offline" || saveState === "conflict"}>publish</button>{/if}
 			</div>
 		{/if}
 	</header>
@@ -360,7 +372,9 @@ function moveChoice(index: number, offset: -1 | 1) {
 		<p class="loading" role="status">loading contact content…</p>
 	{:else if setupRequired}
 		<section aria-labelledby="setup-contact-heading">
-			<div class="section-heading"><span>01</span><div><h2 id="setup-contact-heading">set up contact content</h2><p>Copy the content currently used by the public site or begin with empty fields. This creates an unpublished draft only.</p></div></div>
+			<div class="section-heading"><span>01</span><div><h2 id="setup-contact-heading">set up contact content</h2><p>{publishingEnabled
+				? "Copy the content currently used by the public site or begin with empty fields. This creates an unpublished draft only."
+				: "Copy the content currently used by the public site or begin with empty fields. This creates a private draft in this editor."}</p></div></div>
 			<div class="setup-summary"><strong>{contactConfig.initialPayload.heading}</strong><span>{contactConfig.initialPayload.intro}</span></div>
 			<div class="actions">
 				<button type="button" class="primary" onclick={() => void beginWithCurrentContent()} disabled={setupStatus === "saving"}>{setupStatus === "saving" ? "copying…" : "copy current content"}</button>
@@ -368,7 +382,7 @@ function moveChoice(index: number, offset: -1 | 1) {
 			</div>
 		</section>
 	{:else}
-		<form onsubmit={(event) => { event.preventDefault(); void publish(); }}>
+		<form onsubmit={(event) => { event.preventDefault(); publishingEnabled ? void publish() : void saveNow(); }}>
 			<section aria-labelledby="contact-copy-heading">
 				<div class="section-heading"><span>01</span><div><h2 id="contact-copy-heading">contact copy</h2><p>Visible words around the existing designed contact form.</p></div></div>
 				<div class="fields two-column">
