@@ -4,22 +4,30 @@ import { useQuery } from "convex-svelte";
 import { useAdminClient } from "../../adminClient";
 import {
 	blogDocumentLabel,
+	blogSupportingReferenceOptions,
 	copyPostDraft,
 	defaultPresentationForFormat,
 	hasPostErrors,
-	postBodyFromPlainText,
+	postBodySupportsPlainTextEditing,
 	postBodyToPlainText,
+	postMediaReviewPlacements,
+	resolvePostBodyPlainTextEdit,
 	serializePostDraft,
 	slugifyBlogTitle,
+	updatePostMediaAltText,
+	validatePostMediaForPublish,
 	validatePostMetadataForPublish,
 	type BlogSupportingEditorSummary,
 	type PostDraft,
 	type PostEditorState,
 	type PostFieldErrors,
 	type PostFormat,
+	type PostMediaPublishIssue,
 } from "../../blogEditor";
 import { getAdminConfig } from "../../config";
+import { type PortfolioMediaAsset } from "../../portfolioEditor";
 import "../../styles/editorial-page.css";
+import BlogMediaReview from "./BlogMediaReview.svelte";
 
 let { documentId }: { documentId: string } = $props();
 
@@ -32,6 +40,11 @@ if (!blogApi || !postApi || !blogConfig) {
 }
 
 const baseHref = blogConfig.baseHref ?? "/admin/editor/blog";
+const mediaBaseUrl = blogConfig.mediaBaseUrl;
+const getManyMediaAssets = mediaBaseUrl ? config.api.mediaAssets?.getManyForEditor : undefined;
+if (mediaBaseUrl && !getManyMediaAssets) {
+	throw new Error("Blog media review API is incomplete for this host");
+}
 const postEditorApi = postApi;
 const client = useAdminClient();
 const editorQuery = useQuery(postEditorApi.getEditorState, () => ({ documentId }));
@@ -45,25 +58,37 @@ const categoriesQuery = useQuery(blogApi.listForEditor, {
 });
 
 let editorState = $derived(editorQuery.data as PostEditorState | undefined);
+let form = $state<PostDraft>(copyPostDraft(undefined));
+let authorDocuments = $derived(
+	((authorsQuery.data as BlogSupportingEditorSummary[] | undefined) ?? []),
+);
+let categoryDocuments = $derived(
+	((categoriesQuery.data as BlogSupportingEditorSummary[] | undefined) ?? []),
+);
 let authors = $derived(
-	((authorsQuery.data as BlogSupportingEditorSummary[] | undefined) ?? [])
-		.filter((item) => item.publishedRevisionId && !item.archivedAt),
+	blogSupportingReferenceOptions(
+		authorDocuments,
+		form.authorDocumentId ? [form.authorDocumentId] : [],
+	),
 );
 let categories = $derived(
-	((categoriesQuery.data as BlogSupportingEditorSummary[] | undefined) ?? [])
-		.filter((item) => item.publishedRevisionId && !item.archivedAt),
+	blogSupportingReferenceOptions(
+		categoryDocuments,
+		form.categories.map((category) => category.documentId),
+	),
 );
-let form = $state<PostDraft>(copyPostDraft(undefined));
 let bodyText = $state("");
 let initializedBodyText = $state("");
 let initializedRevisionId = $state<string | null>(null);
 let saveState = $state<"loading" | "saved" | "dirty" | "saving" | "error">("loading");
 let saveError = $state("");
+let canSave = $derived(saveState === "dirty" || saveState === "error");
 let publishState = $state<"idle" | "publishing" | "error">("idle");
 let publishError = $state("");
 let lifecycleState = $state<"idle" | "working" | "error">("idle");
 let lifecycleError = $state("");
 let fieldErrors = $state<PostFieldErrors>({});
+let mediaIssues = $state<PostMediaPublishIssue[]>([]);
 let acknowledgeSlugChange = $state(false);
 let currentJson = $derived(serializePostDraft(normalizedDraft()));
 let lastSavedJson = $state("");
@@ -73,6 +98,25 @@ let publishedSlug = $derived(publishedDraft?.slug?.trim() || "");
 let draftSlug = $derived(form.slug?.trim() || "");
 let slugChanged = $derived(Boolean(publishedSlug && draftSlug && publishedSlug !== draftSlug));
 let archived = $derived(Boolean(editorState?.archivedAt));
+let bodyPlainTextEditable = $derived(postBodySupportsPlainTextEditing(form.body));
+let mediaPlacements = $derived(postMediaReviewPlacements(form));
+let mediaAssetIds = $derived([...new Set(mediaPlacements.map((placement) => placement.assetId))]);
+const mediaQuery = getManyMediaAssets
+	? useQuery(getManyMediaAssets, () => ({ siteUrl: config.siteUrl, ids: mediaAssetIds }))
+	: null;
+let mediaById = $derived(new Map(
+	((mediaQuery?.data ?? []) as PortfolioMediaAsset[]).map((asset) => [asset._id, asset]),
+));
+let mediaReviewItems = $derived(mediaPlacements.map((placement) => ({
+	id: placement.fieldId,
+	assetId: placement.assetId,
+	label: placement.kind === "main"
+		? "main image"
+		: `body image ${(placement.bodyImageIndex ?? 0) + 1}`,
+	altText: placement.altText,
+	caption: placement.caption,
+	error: mediaIssues.find((issue) => issue.fieldId === placement.fieldId)?.message,
+})));
 
 $effect(() => {
 	if (!activeRevision || initializedRevisionId === activeRevision.revisionId) return;
@@ -83,6 +127,7 @@ $effect(() => {
 	lastSavedJson = serializePostDraft(form);
 	saveState = "saved";
 	fieldErrors = {};
+	mediaIssues = [];
 	acknowledgeSlugChange = false;
 });
 
@@ -95,10 +140,22 @@ function normalizedDraft(): PostDraft {
 	const draft = copyPostDraft(form);
 	return {
 		...draft,
-		body: bodyText === initializedBodyText ? draft.body : postBodyFromPlainText(bodyText),
+		body: resolvePostBodyPlainTextEdit(draft.body, initializedBodyText, bodyText),
 		authorDocumentId: draft.authorDocumentId || undefined,
 		categories: draft.categories.filter((category) => category.documentId),
 	};
+}
+
+function supportingOptionLabel(document: BlogSupportingEditorSummary) {
+	const label = blogDocumentLabel(document);
+	if (document.archivedAt) return `${label} — archived, currently linked`;
+	if (!document.publishedRevisionId) return `${label} — draft, currently linked`;
+	return label;
+}
+
+function updateMediaAltText(item: { id: string }, value: string) {
+	form = updatePostMediaAltText(form, item.id, value);
+	mediaIssues = mediaIssues.filter((issue) => issue.fieldId !== item.id);
 }
 
 function updateSlugFromTitle() {
@@ -141,7 +198,7 @@ function toggleCategory(categoryId: string, checked: boolean) {
 }
 
 async function saveDraft() {
-	if (!editorState || archived) return;
+	if (!editorState || archived || !canSave) return;
 	const draft = normalizedDraft();
 	saveState = "saving";
 	saveError = "";
@@ -164,7 +221,8 @@ async function publishDraft() {
 	if (!editorState || archived) return;
 	const draft = normalizedDraft();
 	fieldErrors = validatePostMetadataForPublish(draft);
-	if (hasPostErrors(fieldErrors)) return;
+	mediaIssues = validatePostMediaForPublish(draft);
+	if (hasPostErrors(fieldErrors) || mediaIssues.length > 0) return;
 	if (slugChanged && !acknowledgeSlugChange) {
 		publishError = "Confirm the public URL change before publishing.";
 		publishState = "error";
@@ -271,11 +329,11 @@ async function restoreDocument() {
 			<div>
 				<a class="back" href={baseHref}>← blog</a>
 				<h1>post</h1>
-				<p class="description">Edit the Post metadata and publication identity. Body and media authoring arrive in the next Blog slice.</p>
+				<p class="description">Edit the Post identity, references, body text, and factual descriptions for its existing images.</p>
 			</div>
 			<div class="header-actions">
 				<span class="save-status">{saveState}</span>
-				<button type="button" onclick={() => void saveDraft()} disabled={saveState === "saving" || archived}>
+				<button type="button" onclick={() => void saveDraft()} disabled={!canSave || archived}>
 					save draft
 				</button>
 				<button type="button" class="primary" onclick={() => void publishDraft()} disabled={publishState === "publishing" || archived}>
@@ -321,7 +379,7 @@ async function restoreDocument() {
 				<label>
 					summary
 					<textarea rows="4" maxlength="320" bind:value={form.summary} aria-invalid={Boolean(fieldErrors.summary)}></textarea>
-					<small>Used as the public excerpt until body editing lands.</small>
+					<small>Used as the public excerpt on Blog lists and link previews.</small>
 					{#if fieldErrors.summary}<small class="field-error">{fieldErrors.summary}</small>{/if}
 				</label>
 			</div>
@@ -368,7 +426,7 @@ async function restoreDocument() {
 				<span>03</span>
 				<div>
 					<h2 id="references-heading">author and categories</h2>
-					<p>Only published supporting records are offered here so a public Post cannot point at hidden content.</p>
+					<p>Published records are available for new links. Existing draft links remain visible so imported relationships are never silently removed.</p>
 				</div>
 			</div>
 			<div class="fields two">
@@ -377,7 +435,7 @@ async function restoreDocument() {
 					<select bind:value={form.authorDocumentId} aria-invalid={Boolean(fieldErrors.authorDocumentId)}>
 						<option value="">choose an author</option>
 						{#each authors as author}
-							<option value={author.documentId}>{blogDocumentLabel(author)}</option>
+							<option value={author.documentId}>{supportingOptionLabel(author)}</option>
 						{/each}
 					</select>
 					{#if fieldErrors.authorDocumentId}<small class="field-error">{fieldErrors.authorDocumentId}</small>{/if}
@@ -385,7 +443,7 @@ async function restoreDocument() {
 			</div>
 			<div class="checkbox-list" aria-label="categories">
 				{#if categories.length === 0}
-					<p class="empty-inline">No published categories yet.</p>
+					<p class="empty-inline">No published or currently linked categories.</p>
 				{:else}
 					{#each categories as category}
 						<label class="check">
@@ -394,7 +452,7 @@ async function restoreDocument() {
 								checked={categoryChecked(category.documentId)}
 								onchange={(event) => toggleCategory(category.documentId, event.currentTarget.checked)}
 							/>
-							<span>{blogDocumentLabel(category)}</span>
+							<span>{supportingOptionLabel(category)}</span>
 						</label>
 					{/each}
 				{/if}
@@ -430,23 +488,48 @@ async function restoreDocument() {
 				<span>05</span>
 				<div>
 					<h2 id="body-heading">body</h2>
-					<p>Basic paragraph text for simple Essay posts. Images, headings, lists, and rich marks stay deferred.</p>
+					<p>Simple paragraph-only Posts can be edited here. Rich imported structure remains protected until the full rich editor is available.</p>
 				</div>
 			</div>
 			<div class="fields">
 				<label>
 					body text
-					<textarea rows="12" bind:value={bodyText} aria-invalid={Boolean(fieldErrors.body)}></textarea>
-					<small>Separate paragraphs with a blank line. This editor preserves richer existing body data unless you change this text.</small>
+					<textarea rows="12" bind:value={bodyText} readonly={!bodyPlainTextEditable || archived} aria-readonly={!bodyPlainTextEditable || archived} aria-invalid={Boolean(fieldErrors.body)}></textarea>
+					{#if bodyPlainTextEditable}
+						<small>Separate paragraphs with a blank line.</small>
+					{:else}
+						<small>This body contains images, marks, or other rich structure. It is read-only here and will be saved unchanged.</small>
+					{/if}
 					{#if fieldErrors.body}<small class="field-error">{fieldErrors.body}</small>{/if}
 				</label>
 			</div>
 		</section>
 
+		<section aria-labelledby="media-heading">
+			<div class="section-heading">
+				<span>06</span>
+				<div>
+					<h2 id="media-heading">image review</h2>
+					<p>Images remain in their exact main/body order. This review changes alt text only.</p>
+				</div>
+			</div>
+			{#if mediaReviewItems.length > 0}
+				<BlogMediaReview
+					items={mediaReviewItems}
+					{mediaById}
+					mediaBaseUrl={mediaBaseUrl}
+					disabled={archived}
+					onAltTextChange={updateMediaAltText}
+				/>
+			{:else}
+				<p class="empty-inline">This Post has no linked images.</p>
+			{/if}
+		</section>
+
 		{#if slugChanged}
 			<section aria-labelledby="slug-change-heading">
 				<div class="section-heading">
-					<span>06</span>
+					<span>07</span>
 					<div>
 						<h2 id="slug-change-heading">public URL change</h2>
 						<p>Publishing will retain the old URL and point it at the new slug.</p>
@@ -462,7 +545,7 @@ async function restoreDocument() {
 		{#if editorState.draft}
 			<section aria-labelledby="draft-actions-heading">
 				<div class="section-heading">
-					<span>{slugChanged ? "07" : "06"}</span>
+					<span>{slugChanged ? "08" : "07"}</span>
 					<div>
 						<h2 id="draft-actions-heading">draft actions</h2>
 						<p>Discard only clears the current draft pointer; immutable history stays available server-side.</p>
@@ -474,7 +557,7 @@ async function restoreDocument() {
 
 		<section aria-labelledby="lifecycle-heading">
 			<div class="section-heading">
-				<span>{slugChanged ? "08" : editorState.draft ? "07" : "06"}</span>
+				<span>{slugChanged ? "09" : editorState.draft ? "08" : "07"}</span>
 				<div>
 					<h2 id="lifecycle-heading">visibility and recovery</h2>
 					<p>Unpublish removes the public version. Archive hides this Post from editor lists while keeping it recoverable.</p>

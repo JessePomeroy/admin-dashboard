@@ -101,6 +101,10 @@ export interface AdminAPI {
 		archive: FnRef;
 		restore: FnRef;
 	};
+	/** Tenant-scoped CMS media reads shared by editor modules. */
+	mediaAssets?: {
+		getManyForEditor: FnRef;
+	};
 	crm: {
 		createClient: FnRef;
 		updateClient: FnRef;
@@ -434,6 +438,8 @@ export interface AdminEditorConfig {
 	blog?: {
 		/** Shared workspace route; defaults to `/admin/editor/blog`. */
 		baseHref?: string;
+		/** Public origin for immutable CMS image derivatives, without a trailing slash. */
+		mediaBaseUrl?: string;
 	};
 }
 
