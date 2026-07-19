@@ -30,6 +30,7 @@ describe("EditorNavigation", () => {
 				siteSettingsEnabled: true,
 				pagesEnabled: true,
 				portfolioEnabled: true,
+				productsEnabled: true,
 				blogEnabled: true,
 			},
 		});
@@ -38,12 +39,44 @@ describe("EditorNavigation", () => {
 			"site settings",
 			"pages",
 			"portfolio",
+			"products",
 			"blog",
 		]);
 		expect(document.querySelectorAll('a[aria-current="page"]')).toHaveLength(1);
 		expect(document.querySelector('a[aria-current="page"]')?.textContent).toContain(
 			"pages",
 		);
+		unmount(component);
+	});
+
+	it("marks nested Product routes as current and honors a host route", () => {
+		const component = mount(EditorNavigation, {
+			target: document.body,
+			props: {
+				pathname: "/admin/editor/catalog/item-1",
+				productsEnabled: true,
+				productsHref: "/admin/editor/catalog",
+			},
+		});
+
+		const link = document.querySelector<HTMLAnchorElement>('a[aria-current="page"]');
+		expect(link?.textContent).toContain("products");
+		expect(link?.getAttribute("href")).toBe("/admin/editor/catalog");
+		unmount(component);
+	});
+
+	it("does not show Products when the host capability is disabled", () => {
+		const component = mount(EditorNavigation, {
+			target: document.body,
+			props: {
+				pathname: "/admin/editor/products",
+				portfolioEnabled: true,
+			},
+		});
+
+		expect(Array.from(document.querySelectorAll("a"), (item) => item.textContent?.trim())).toEqual([
+			"portfolio",
+		]);
 		unmount(component);
 	});
 

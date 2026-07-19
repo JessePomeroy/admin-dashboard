@@ -1,0 +1,349 @@
+export type CatalogProductKind = "print";
+export type CatalogPrintFulfillmentMode =
+	| "production_partner"
+	| "merchant_fulfilled";
+export type CatalogSaleAvailability = "available" | "unavailable";
+export type CatalogVariantStatus = "enabled" | "disabled";
+export type CatalogRevisionSource = "admin" | "sanityImport" | "restore";
+
+export interface CatalogProductVariantDraftForm {
+	key: string;
+	materialOptionKey?: string;
+	sizeOptionKey?: string;
+	retailPriceCents?: number;
+	status: CatalogVariantStatus;
+}
+
+export interface CatalogProductDraftForm {
+	title?: string;
+	slug?: string;
+	description?: string;
+	fulfillmentMode: CatalogPrintFulfillmentMode;
+	saleAvailability: CatalogSaleAvailability;
+	borderOptionsEnabled: boolean;
+	frameOptionsEnabled: boolean;
+	framePriceMultiplierBasisPoints: number;
+	variants: CatalogProductVariantDraftForm[];
+}
+
+export interface CatalogProductRevisionSummary {
+	revisionId: string;
+	title: string | null;
+	saleAvailability: CatalogSaleAvailability;
+	variantCount: number;
+	createdAt: number;
+}
+
+export interface CatalogProductVariantProjection {
+	key: string;
+	order: number;
+	materialOptionKey: string | null;
+	sizeOptionKey: string | null;
+	retailPriceCents: number | null;
+	status: CatalogVariantStatus;
+}
+
+export interface CatalogProductEditorRevision {
+	revisionId: string;
+	schemaVersion: 1;
+	productKind: CatalogProductKind;
+	currency: "usd";
+	title: string | null;
+	slug: string | null;
+	description: string | null;
+	fulfillmentMode: CatalogPrintFulfillmentMode;
+	saleAvailability: CatalogSaleAvailability;
+	borderOptionsEnabled: boolean;
+	frameOptionsEnabled: boolean;
+	framePriceMultiplierBasisPoints: number;
+	variantCount: number;
+	checksum: string;
+	source: CatalogRevisionSource;
+	createdAt: number;
+	variants: CatalogProductVariantProjection[];
+}
+
+export interface CatalogProductEditorSummary {
+	productId: string;
+	productKey: string;
+	productKind: CatalogProductKind;
+	slug: string | null;
+	draft: CatalogProductRevisionSummary | null;
+	published: CatalogProductRevisionSummary | null;
+	createdAt: number;
+	updatedAt: number;
+	publishedAt: number | null;
+}
+
+export interface CatalogProductEditorState {
+	productId: string;
+	productKey: string;
+	productKind: CatalogProductKind;
+	slug: string | null;
+	draft: CatalogProductEditorRevision | null;
+	published: CatalogProductEditorRevision | null;
+	updatedAt: number;
+	publishedAt: number | null;
+}
+
+export type CatalogProductStatus = "draft" | "discarded";
+const CATALOG_PRICE_CENTS_MAXIMUM = 100_000_000;
+const CATALOG_FRAME_MULTIPLIER_BASIS_POINTS_MAXIMUM = 1_000_000;
+export const CATALOG_PRODUCT_VARIANT_LIMIT = 100;
+
+function optionalProjectionValue(value: string | null | undefined) {
+	return value ?? undefined;
+}
+
+function requirePrintFulfillmentMode(
+	value: unknown,
+): CatalogPrintFulfillmentMode {
+	if (value === "production_partner" || value === "merchant_fulfilled")
+		return value;
+	throw new Error("A print must use physical fulfillment.");
+}
+
+function parseBoundedInteger(
+	value: string | number | null | undefined,
+	options: { field: string; maximum: number; optional: boolean },
+) {
+	if (value === null || value === undefined || value === "") {
+		if (options.optional) return undefined;
+		throw new Error(`${options.field} is required.`);
+	}
+	let parsed: number;
+	if (typeof value === "number") parsed = value;
+	else {
+		if (!/^(?:0|[1-9]\d*)$/.test(value)) {
+			throw new Error(`${options.field} must be a whole number.`);
+		}
+		parsed = Number(value);
+	}
+	if (!Number.isSafeInteger(parsed) || parsed < 0 || parsed > options.maximum) {
+		throw new Error(
+			`${options.field} must be a whole number between 0 and ${options.maximum}.`,
+		);
+	}
+	return parsed;
+}
+
+function newOpaqueCatalogKey(prefix: "print" | "variant") {
+	if (!globalThis.crypto?.randomUUID) {
+		throw new Error("Secure catalog identity generation is unavailable.");
+	}
+	return `${prefix}-${globalThis.crypto.randomUUID()}`;
+}
+
+export function emptyCatalogProductDraft(): CatalogProductDraftForm {
+	return {
+		fulfillmentMode: "production_partner",
+		saleAvailability: "unavailable",
+		borderOptionsEnabled: false,
+		frameOptionsEnabled: false,
+		framePriceMultiplierBasisPoints: 10_000,
+		variants: [],
+	};
+}
+
+export function catalogProductDraftFromRevision(
+	revision: CatalogProductEditorRevision | null | undefined,
+): CatalogProductDraftForm {
+	if (!revision) return emptyCatalogProductDraft();
+	if (revision.productKind !== "print") {
+		throw new Error(
+			"The single-print editor cannot edit another product kind.",
+		);
+	}
+	if (revision.currency !== "usd") {
+		throw new Error("The single-print editor requires USD pricing.");
+	}
+	if (revision.variantCount !== revision.variants.length) {
+		throw new Error("The catalog variant count does not match its revision.");
+	}
+	return {
+		title: optionalProjectionValue(revision.title),
+		slug: optionalProjectionValue(revision.slug),
+		description: optionalProjectionValue(revision.description),
+		fulfillmentMode: requirePrintFulfillmentMode(revision.fulfillmentMode),
+		saleAvailability: revision.saleAvailability,
+		borderOptionsEnabled: revision.borderOptionsEnabled,
+		frameOptionsEnabled: revision.frameOptionsEnabled,
+		framePriceMultiplierBasisPoints: parseCatalogBasisPoints(
+			revision.framePriceMultiplierBasisPoints,
+		),
+		variants: revision.variants.map((variant) => ({
+			key: variant.key,
+			materialOptionKey: optionalProjectionValue(variant.materialOptionKey),
+			sizeOptionKey: optionalProjectionValue(variant.sizeOptionKey),
+			retailPriceCents: parseCatalogPriceCents(variant.retailPriceCents),
+			status: variant.status,
+		})),
+	};
+}
+
+export function copyCatalogProductDraft(
+	source:
+		| CatalogProductDraftForm
+		| CatalogProductEditorRevision
+		| null
+		| undefined,
+): CatalogProductDraftForm {
+	if (!source) return emptyCatalogProductDraft();
+	if ("revisionId" in source) return catalogProductDraftFromRevision(source);
+	return {
+		title: source.title,
+		slug: source.slug,
+		description: source.description,
+		fulfillmentMode: requirePrintFulfillmentMode(source.fulfillmentMode),
+		saleAvailability: source.saleAvailability,
+		borderOptionsEnabled: source.borderOptionsEnabled,
+		frameOptionsEnabled: source.frameOptionsEnabled,
+		framePriceMultiplierBasisPoints: parseCatalogBasisPoints(
+			source.framePriceMultiplierBasisPoints,
+		),
+		variants: source.variants.map((variant) => ({
+			key: variant.key,
+			materialOptionKey: variant.materialOptionKey,
+			sizeOptionKey: variant.sizeOptionKey,
+			retailPriceCents: parseCatalogPriceCents(variant.retailPriceCents),
+			status: variant.status,
+		})),
+	};
+}
+
+export function serializeCatalogProductDraft(draft: CatalogProductDraftForm) {
+	return JSON.stringify({
+		title: draft.title ?? null,
+		slug: draft.slug ?? null,
+		description: draft.description ?? null,
+		fulfillmentMode: draft.fulfillmentMode,
+		saleAvailability: draft.saleAvailability,
+		borderOptionsEnabled: draft.borderOptionsEnabled,
+		frameOptionsEnabled: draft.frameOptionsEnabled,
+		framePriceMultiplierBasisPoints: draft.framePriceMultiplierBasisPoints,
+		variants: draft.variants.map((variant) => ({
+			key: variant.key,
+			materialOptionKey: variant.materialOptionKey ?? null,
+			sizeOptionKey: variant.sizeOptionKey ?? null,
+			retailPriceCents: variant.retailPriceCents ?? null,
+			status: variant.status,
+		})),
+	});
+}
+
+export function catalogProductLabel(product: CatalogProductEditorSummary) {
+	return (
+		product.draft?.title?.trim() ||
+		product.published?.title?.trim() ||
+		product.slug ||
+		"untitled print"
+	);
+}
+
+export function catalogProductStatus(
+	product: CatalogProductEditorSummary,
+): CatalogProductStatus {
+	return product.draft ? "draft" : "discarded";
+}
+
+export function slugifyCatalogProductTitle(value: string) {
+	return value
+		.normalize("NFKD")
+		.replace(/[\u0300-\u036f]/g, "")
+		.toLowerCase()
+		.replace(/[^a-z0-9]+/g, "-")
+		.replace(/^-+|-+$/g, "")
+		.slice(0, 96)
+		.replace(/-+$/g, "");
+}
+
+export function slugifyCatalogOptionKey(value: string) {
+	return value
+		.normalize("NFKD")
+		.replace(/[\u0300-\u036f]/g, "")
+		.toLowerCase()
+		.replace(/[^a-z0-9]+/g, "-")
+		.replace(/^-+|-+$/g, "")
+		.slice(0, 120)
+		.replace(/-+$/g, "");
+}
+
+export function newCatalogProductKey(kind: CatalogProductKind = "print") {
+	return newOpaqueCatalogKey(kind);
+}
+function newCatalogVariantKey() {
+	return newOpaqueCatalogKey("variant");
+}
+export function newCatalogProductVariant(): CatalogProductVariantDraftForm {
+	return { key: newCatalogVariantKey(), status: "enabled" };
+}
+
+export function addCatalogProductVariant(
+	variants: readonly CatalogProductVariantDraftForm[],
+	variant: CatalogProductVariantDraftForm = newCatalogProductVariant(),
+) {
+	if (variants.length >= CATALOG_PRODUCT_VARIANT_LIMIT) {
+		throw new Error(
+			`A print cannot exceed ${CATALOG_PRODUCT_VARIANT_LIMIT} variants.`,
+		);
+	}
+	if (variants.some(({ key }) => key === variant.key)) {
+		throw new Error("Catalog variant keys must be unique.");
+	}
+	return [...variants, { ...variant }];
+}
+
+export function removeCatalogProductVariant(
+	variants: readonly CatalogProductVariantDraftForm[],
+	key: string,
+) {
+	const index = variants.findIndex((variant) => variant.key === key);
+	if (index < 0) return variants;
+	return [...variants.slice(0, index), ...variants.slice(index + 1)];
+}
+
+export function moveCatalogProductVariant(
+	variants: readonly CatalogProductVariantDraftForm[],
+	index: number,
+	direction: -1 | 1,
+) {
+	const destination = index + direction;
+	if (
+		index < 0 ||
+		index >= variants.length ||
+		destination < 0 ||
+		destination >= variants.length
+	) {
+		return variants;
+	}
+	const reordered = variants.map((variant) => ({ ...variant }));
+	[reordered[index], reordered[destination]] = [
+		reordered[destination],
+		reordered[index],
+	];
+	return reordered;
+}
+
+export function parseCatalogPriceCents(
+	value: string | number | null | undefined,
+) {
+	return parseBoundedInteger(value, {
+		field: "Retail price cents",
+		maximum: CATALOG_PRICE_CENTS_MAXIMUM,
+		optional: true,
+	});
+}
+
+/** Parse literal basis points: 10,000 = 1x and 20,000 = 2x. */
+export function parseCatalogBasisPoints(
+	value: string | number | null | undefined,
+) {
+	const parsed = parseBoundedInteger(value, {
+		field: "Frame price multiplier basis points",
+		maximum: CATALOG_FRAME_MULTIPLIER_BASIS_POINTS_MAXIMUM,
+		optional: false,
+	});
+	if (parsed === undefined)
+		throw new Error("Frame price multiplier basis points is required.");
+	return parsed;
+}
