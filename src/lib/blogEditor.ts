@@ -1,18 +1,49 @@
 export type BlogSupportingKind = "author" | "category";
 export type BlogDocumentKind = BlogSupportingKind | "post";
 
+export type RichTextMark =
+	| { type: "strong" }
+	| { type: "emphasis" }
+	| { type: "link"; key: string; href: string };
+
+export interface RichTextSpan {
+	type: "text";
+	key: string;
+	text: string;
+	marks: RichTextMark[];
+}
+
+export interface RichTextListItem {
+	key: string;
+	children: RichTextSpan[];
+}
+
+export type RichTextTextBlock = {
+	key: string;
+	children: RichTextSpan[];
+} & (
+	| { type: "paragraph" }
+	| { type: "heading"; level: 2 | 3 | 4 }
+	| { type: "quote" }
+);
+
+export interface RichTextListBlock {
+	type: "list";
+	key: string;
+	style: "bullet" | "number";
+	items: RichTextListItem[];
+}
+
 export interface RichTextDocument {
 	version: 1;
-	blocks: Array<{
-		type: "paragraph";
-		key: string;
-		children: Array<{
-			type: "text";
-			key: string;
-			text: string;
-			marks: [];
-		}>;
-	}>;
+	blocks: Array<RichTextTextBlock | RichTextListBlock>;
+}
+
+export interface BlogImageDraft {
+	key: string;
+	assetId: string;
+	altText?: string;
+	caption?: string;
 }
 
 export interface AuthorDraft {
@@ -20,6 +51,7 @@ export interface AuthorDraft {
 	name?: string;
 	slug?: string;
 	bio?: RichTextDocument;
+	portrait?: BlogImageDraft;
 }
 
 export interface CategoryDraft {
@@ -92,11 +124,10 @@ export interface PostCategoryReferenceDraft {
 	documentId: string;
 }
 
-export interface PostMainImageDraft {
-	key: string;
-	assetId: string;
-	altText?: string;
-	caption?: string;
+export interface PostMainImageDraft extends BlogImageDraft {}
+
+export interface PostImageBlockDraft extends BlogImageDraft {
+	type: "image";
 }
 
 export interface PostRichTextDocument {
@@ -124,6 +155,20 @@ export interface PostDraft {
 	categories: PostCategoryReferenceDraft[];
 	mainImage?: PostMainImageDraft;
 	body: PostRichTextDocument;
+}
+
+export interface PostMediaReviewPlacement extends BlogImageDraft {
+	fieldId: string;
+	kind: "main" | "body";
+	/** Zero-based index among body image blocks; omitted for the main image. */
+	bodyImageIndex?: number;
+	/** Exact block index in the rich body; omitted for the main image. */
+	blockIndex?: number;
+}
+
+export interface PostMediaPublishIssue {
+	fieldId: string;
+	message: string;
 }
 
 export interface PostEditorRevisionState {
@@ -183,6 +228,22 @@ export function blogDocumentLabel(
 ) {
 	if ("label" in document) return document.label || "untitled";
 	return document.draft?.title || document.published?.title || "untitled";
+}
+
+/**
+ * Offer published supporting content plus records already linked by the Post.
+ * This keeps imported draft relationships visible without exposing unrelated
+ * unpublished or archived records as new choices.
+ */
+export function blogSupportingReferenceOptions(
+	documents: readonly BlogSupportingEditorSummary[],
+	referencedDocumentIds: Iterable<string>,
+) {
+	const referenced = new Set(referencedDocumentIds);
+	return documents.filter((document) =>
+		referenced.has(document.documentId)
+		|| Boolean(document.publishedRevisionId && !document.archivedAt)
+	);
 }
 
 export function slugifyBlogTitle(value: string) {
@@ -250,6 +311,76 @@ export function postBodyFromPlainText(value: string): PostRichTextDocument {
 	};
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+	return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+/** Clone JSON-compatible editor values without invoking structuredClone on Svelte proxies. */
+function cloneJsonValue<T>(value: T): T {
+	if (Array.isArray(value)) {
+		return value.map((item) => cloneJsonValue(item)) as T;
+	}
+	if (isRecord(value)) {
+		return Object.fromEntries(
+			Object.entries(value).map(([key, item]) => [key, cloneJsonValue(item)]),
+		) as T;
+	}
+	return value;
+}
+
+function hasOnlyKeys(value: Record<string, unknown>, allowedKeys: readonly string[]) {
+	const allowed = new Set(allowedKeys);
+	return Object.keys(value).every((key) => allowed.has(key));
+}
+
+function isExactlyPlainTextParagraphBlock(block: unknown) {
+	if (
+		!isRecord(block)
+		|| block.type !== "paragraph"
+		|| typeof block.key !== "string"
+		|| !Array.isArray(block.children)
+		|| !hasOnlyKeys(block, ["type", "key", "children"])
+	) return false;
+	return block.children.every((child) =>
+		isRecord(child)
+		&& child.type === "text"
+		&& typeof child.key === "string"
+		&& typeof child.text === "string"
+		&& Array.isArray(child.marks)
+		&& child.marks.length === 0
+		&& hasOnlyKeys(child, ["type", "key", "text", "marks"])
+	);
+}
+
+/**
+ * Plain-text editing is deliberately conservative: any additional structure,
+ * mark, or block type stays locked until the rich editor can represent it.
+ */
+export function postBodySupportsPlainTextEditing(body: PostRichTextDocument | undefined) {
+	return (body?.blocks ?? []).every(isExactlyPlainTextParagraphBlock);
+}
+
+function copyPostBody(body: PostRichTextDocument | undefined): PostRichTextDocument {
+	if (!body) return emptyPostBody();
+	return cloneJsonValue(body);
+}
+
+/**
+ * Resolve the body for a plain-text form without ever flattening rich content.
+ * Returning a copy also keeps UI state isolated from the query payload.
+ */
+export function resolvePostBodyPlainTextEdit(
+	body: PostRichTextDocument | undefined,
+	initializedText: string,
+	nextText: string,
+): PostRichTextDocument {
+	if (
+		nextText === initializedText
+		|| !postBodySupportsPlainTextEditing(body)
+	) return copyPostBody(body);
+	return postBodyFromPlainText(nextText);
+}
+
 export function emptyPostDraft(): PostDraft {
 	return {
 		kind: "post",
@@ -302,8 +433,30 @@ export function authorBioFromText(value: string): RichTextDocument | undefined {
 
 export function authorBioToText(value: RichTextDocument | undefined) {
 	return (value?.blocks ?? [])
-		.flatMap((block) => block.children.map((child) => child.text))
+		.flatMap((block) =>
+			block.type === "list"
+				? block.items.map((item) => item.children.map((child) => child.text).join(""))
+				: [block.children.map((child) => child.text).join("")]
+		)
+		.filter(Boolean)
 		.join("\n\n");
+}
+
+/** Author bios use the full text-only rich contract, but this form edits paragraphs only. */
+export function authorBioSupportsPlainTextEditing(value: RichTextDocument | undefined) {
+	return (value?.blocks ?? []).every(isExactlyPlainTextParagraphBlock);
+}
+
+/** Preserve original block keys until the editor actually changes the text. */
+export function resolveAuthorBioPlainTextEdit(
+	bio: RichTextDocument | undefined,
+	initializedText: string,
+	nextText: string,
+): RichTextDocument | undefined {
+	if (nextText === initializedText || !authorBioSupportsPlainTextEditing(bio)) {
+		return bio ? cloneJsonValue(bio) : undefined;
+	}
+	return authorBioFromText(nextText);
 }
 
 export function copyBlogSupportingDraft(
@@ -316,16 +469,8 @@ export function copyBlogSupportingDraft(
 			kind: "author",
 			name: payload.name ?? "",
 			slug: payload.slug ?? "",
-			bio: payload.bio
-				? {
-					version: 1,
-					blocks: payload.bio.blocks.map((block) => ({
-						type: "paragraph",
-						key: block.key,
-						children: block.children.map((child) => ({ ...child, marks: [] })),
-					})),
-				}
-				: emptyAuthorBio(),
+			bio: payload.bio ? cloneJsonValue(payload.bio) : emptyAuthorBio(),
+			portrait: payload.portrait ? { ...payload.portrait } : undefined,
 		};
 	}
 	return {
@@ -349,14 +494,6 @@ function copyPostCategories(items: PostCategoryReferenceDraft[] | undefined) {
 		key: item.key,
 		documentId: item.documentId,
 	}));
-}
-
-function copyPostBody(body: PostRichTextDocument | undefined): PostRichTextDocument {
-	if (!body) return emptyPostBody();
-	return {
-		version: 1,
-		blocks: body.blocks.map((block) => ({ ...block })),
-	};
 }
 
 export function copyPostDraft(payload: PostDraft | undefined): PostDraft {
@@ -391,6 +528,7 @@ export function serializeBlogSupportingDraft(payload: BlogSupportingDraft) {
 			name: payload.name ?? null,
 			slug: payload.slug ?? null,
 			bio: payload.bio ?? null,
+			portrait: payload.portrait ?? null,
 		});
 	}
 	return JSON.stringify({
@@ -426,7 +564,7 @@ export function serializePostDraft(payload: PostDraft) {
 }
 
 export type BlogSupportingFieldErrors = Partial<Record<
-	"name" | "title" | "slug" | "bio" | "description",
+	"name" | "title" | "slug" | "bio" | "portraitAltText" | "description",
 	string
 >>;
 
@@ -444,6 +582,13 @@ export function validateBlogSupportingForPublish(
 		if ((payload.name?.length ?? 0) > 120) errors.name = "Author name must be 120 characters or fewer.";
 		if (authorBioToText(payload.bio).length > 20_000) {
 			errors.bio = "Author bio is too long.";
+		}
+		if (payload.portrait) {
+			const altText = payload.portrait.altText?.trim() ?? "";
+			if (!altText) errors.portraitAltText = "Author portrait needs alt text.";
+			else if (altText.length > 500) {
+				errors.portraitAltText = "Author portrait alt text must be 500 characters or fewer.";
+			}
 		}
 	} else {
 		if (!payload.title?.trim()) errors.title = "Category title is required.";
@@ -525,4 +670,81 @@ export function validatePostMetadataForPublish(payload: PostDraft): PostFieldErr
 
 export function hasPostErrors(errors: PostFieldErrors) {
 	return Object.keys(errors).length > 0;
+}
+
+export function isPostImageBlock(block: unknown): block is PostImageBlockDraft {
+	return isRecord(block)
+		&& block.type === "image"
+		&& typeof block.key === "string"
+		&& typeof block.assetId === "string";
+}
+
+/** Main image first, followed by rich-body images in exact block order. */
+export function postMediaReviewPlacements(payload: PostDraft): PostMediaReviewPlacement[] {
+	const placements: PostMediaReviewPlacement[] = [];
+	if (payload.mainImage) {
+		placements.push({
+			...payload.mainImage,
+			fieldId: "post-main-image-alt",
+			kind: "main",
+		});
+	}
+	let bodyImageIndex = 0;
+	for (const [blockIndex, block] of payload.body.blocks.entries()) {
+		if (!isPostImageBlock(block)) continue;
+		placements.push({
+			key: block.key,
+			assetId: block.assetId,
+			...(typeof block.altText === "string" ? { altText: block.altText } : {}),
+			...(typeof block.caption === "string" ? { caption: block.caption } : {}),
+			fieldId: `post-body-image-${block.key}-alt`,
+			kind: "body",
+			bodyImageIndex,
+			blockIndex,
+		});
+		bodyImageIndex += 1;
+	}
+	return placements;
+}
+
+/** Update one placement while preserving every key, relationship, and block. */
+export function updatePostMediaAltText(
+	payload: PostDraft,
+	fieldId: string,
+	altText: string,
+): PostDraft {
+	const draft = copyPostDraft(payload);
+	if (fieldId === "post-main-image-alt") {
+		if (draft.mainImage) draft.mainImage = { ...draft.mainImage, altText };
+		return draft;
+	}
+	draft.body = {
+		...draft.body,
+		blocks: draft.body.blocks.map((block) =>
+			isPostImageBlock(block)
+			&& `post-body-image-${block.key}-alt` === fieldId
+				? { ...block, altText }
+				: block
+		),
+	};
+	return draft;
+}
+
+export function validatePostMediaForPublish(payload: PostDraft): PostMediaPublishIssue[] {
+	return postMediaReviewPlacements(payload).flatMap((placement) => {
+		const altText = placement.altText?.trim() ?? "";
+		const label = placement.kind === "main"
+			? "Main image"
+			: `Body image ${(placement.bodyImageIndex ?? 0) + 1}`;
+		if (!altText) {
+			return [{ fieldId: placement.fieldId, message: `${label} needs alt text.` }];
+		}
+		if (altText.length > 500) {
+			return [{
+				fieldId: placement.fieldId,
+				message: `${label} alt text must be 500 characters or fewer.`,
+			}];
+		}
+		return [];
+	});
 }

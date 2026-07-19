@@ -104,7 +104,7 @@ async function createPost() {
 	<header class="settings-header">
 		<div>
 			<h1>blog</h1>
-			<p class="description">Authors, categories, and posts for the public journal. This first workspace is read-only while the detail forms arrive in the next iterations.</p>
+			<p class="description">Authors, categories, and posts for the public journal. Open a record to edit its draft, review existing images, or manage publication.</p>
 		</div>
 	</header>
 
