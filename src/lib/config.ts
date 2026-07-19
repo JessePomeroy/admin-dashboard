@@ -71,7 +71,8 @@ export interface AdminAPI {
 		listForEditor: FnRef;
 		getEditorState: FnRef;
 		saveDraft: FnRef;
-		publish: FnRef;
+		/** Optional while a host stages private drafts before connecting a public provider. */
+		publish?: FnRef;
 		reorder: FnRef;
 		listMediaAssets: FnRef;
 		getPlacedMediaAssets: FnRef;

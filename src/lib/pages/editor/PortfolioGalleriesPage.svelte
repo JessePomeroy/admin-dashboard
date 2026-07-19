@@ -18,6 +18,7 @@ if (!portfolioApi || !config.editor?.portfolio) {
 const listPortfolioGalleries = portfolioApi.listForEditor;
 const savePortfolioDraft = portfolioApi.saveDraft;
 const reorderPortfolioGalleries = portfolioApi.reorder;
+const publishingEnabled = Boolean(portfolioApi.publish);
 const portfolioBaseHref = config.editor.portfolio.baseHref ?? "/admin/editor/portfolio";
 
 const client = useAdminClient();
@@ -72,7 +73,9 @@ async function createGallery() {
 			},
 		});
 		createState = "idle";
-		createMessage = `Created ${title.trim()} as an unpublished gallery.`;
+		createMessage = publishingEnabled
+			? `Created ${title.trim()} as an unpublished gallery.`
+			: `Created ${title.trim()} as a gallery draft.`;
 		title = "";
 		slug = "";
 		slugWasEdited = false;
@@ -125,7 +128,9 @@ function formatUpdatedAt(value: number) {
 	<header>
 		<div>
 			<h1>portfolio</h1>
-			<p>Public galleries, their order, and whether each one is ready for visitors.</p>
+			<p>{publishingEnabled
+				? "Public galleries, their order, and whether each one is ready for visitors."
+				: "Gallery drafts, their saved order, and the images prepared for a future public rollout."}</p>
 		</div>
 		<span class="count">{galleries?.length ?? 0} {(galleries?.length ?? 0) === 1 ? "gallery" : "galleries"}</span>
 	</header>
@@ -134,7 +139,9 @@ function formatUpdatedAt(value: number) {
 		<section class="gallery-list" aria-labelledby="gallery-list-heading">
 			<div class="section-heading">
 				<h2 id="gallery-list-heading">gallery collection</h2>
-				<p>The public site follows this deliberate order.</p>
+				<p>{publishingEnabled
+					? "The public site follows this deliberate order."
+					: "This deliberate order is saved with the private drafts."}</p>
 				{#if reorderMessage}<span class:error={reorderState === "error"} role={reorderState === "error" ? "alert" : "status"}>{reorderMessage}</span>{/if}
 			</div>
 
@@ -143,18 +150,20 @@ function formatUpdatedAt(value: number) {
 			{:else if galleries.length === 0}
 				<div class="empty">
 					<strong>No portfolio galleries yet.</strong>
-					<p>Create the first unpublished gallery when you are ready to begin selecting images.</p>
+					<p>{publishingEnabled
+						? "Create the first unpublished gallery when you are ready to begin selecting images."
+						: "Create the first gallery draft when you are ready to begin selecting images."}</p>
 				</div>
 			{:else}
 				<ol>
 					{#each galleries as gallery, index (gallery.galleryId)}
-						{@const status = portfolioGalleryStatus(gallery)}
+						{@const status = publishingEnabled ? portfolioGalleryStatus(gallery) : "draft"}
 						<li>
 							<span class="order" aria-label={`Position ${index + 1}`}>{String(index + 1).padStart(2, "0")}</span>
 							<div class="gallery-summary">
 								<div class="gallery-title">
 									<h3>{portfolioGalleryLabel(gallery)}</h3>
-									<span class:published={status === "published"} class:draft={status === "draft changes"} class="status">{status}</span>
+									<span class:published={status === "published"} class:draft={status === "draft changes" || status === "draft"} class="status">{status}</span>
 								</div>
 								<p>/{gallery.slug} · {gallery.draft?.placementCount ?? gallery.published?.placementCount ?? 0} images · updated {formatUpdatedAt(gallery.updatedAt)}</p>
 							</div>
@@ -171,7 +180,9 @@ function formatUpdatedAt(value: number) {
 
 		<aside class="create-panel" aria-labelledby="create-gallery-heading">
 			<h2 id="create-gallery-heading">new gallery</h2>
-			<p>Create the draft first. Images and details can be added before anything is published.</p>
+			<p>{publishingEnabled
+				? "Create the draft first. Images and details can be added before anything is published."
+				: "Create and arrange a private draft. Publishing is not connected for this site yet."}</p>
 			<form onsubmit={(event) => { event.preventDefault(); void createGallery(); }}>
 				<label>
 					gallery name
@@ -179,12 +190,14 @@ function formatUpdatedAt(value: number) {
 					{#if errors.title}<small class="field-error">{errors.title}</small>{/if}
 				</label>
 				<label>
-					public URL
+					{publishingEnabled ? "public URL" : "URL name"}
 					<div class="slug-field"><span>/</span><input value={slug} oninput={updateSlug} maxlength="80" autocomplete="off" spellcheck="false" aria-invalid={Boolean(errors.slug)} /></div>
-					<small>Lowercase words separated by hyphens. The URL locks after publication until redirects are available.</small>
+					<small>{publishingEnabled
+						? "Lowercase words separated by hyphens. The URL locks after publication until redirects are available."
+						: "Lowercase words separated by hyphens. This is saved with the draft for the future public page."}</small>
 					{#if errors.slug}<small class="field-error">{errors.slug}</small>{/if}
 				</label>
-				<button type="submit" disabled={createState === "saving"}>{createState === "saving" ? "creating…" : "create unpublished gallery"}</button>
+				<button type="submit" disabled={createState === "saving"}>{createState === "saving" ? "creating…" : publishingEnabled ? "create unpublished gallery" : "create gallery draft"}</button>
 			</form>
 			{#if createMessage}<p class:error={createState === "error"} class="message" role={createState === "error" ? "alert" : "status"}>{createMessage}</p>{/if}
 		</aside>

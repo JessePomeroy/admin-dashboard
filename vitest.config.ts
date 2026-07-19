@@ -1,5 +1,11 @@
-import { defineConfig } from "vitest/config";
+import { fileURLToPath } from "node:url";
 import { svelte } from "@sveltejs/vite-plugin-svelte";
+import { defineConfig } from "vitest/config";
+
+const svelteKitEnvironment = fileURLToPath(new URL(
+	"./tests/stubs/svelteKitEnvironment.ts",
+	import.meta.url,
+));
 
 export default defineConfig({
 	test: {
@@ -20,6 +26,7 @@ export default defineConfig({
 			{
 				plugins: [svelte()],
 				resolve: {
+					alias: { "$app/environment": svelteKitEnvironment },
 					conditions: ["browser"],
 				},
 				test: {
