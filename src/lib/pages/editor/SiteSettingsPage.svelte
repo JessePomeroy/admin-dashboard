@@ -92,7 +92,9 @@ function restoreLocalDraft(serverJson: string) {
 		form = copySiteSettingsDraft(local.payload);
 		if ((local.baseRevisionId ?? undefined) !== baseRevisionId) {
 			saveState = "conflict";
-			saveError = "The server changed while this device had unsynchronized work. Review or discard this draft before publishing.";
+			saveError = publishingEnabled
+				? "The server changed while this device had unsynchronized work. Review or discard this draft before publishing."
+				: "The server changed while this device had unsynchronized work. Review or discard this draft before continuing.";
 			return true;
 		}
 		saveState = serializeSiteSettingsDraft(form) === serverJson ? "saved" : "dirty";

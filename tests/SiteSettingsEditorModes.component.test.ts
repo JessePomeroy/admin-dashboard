@@ -164,4 +164,31 @@ describe("Site settings editor capability modes", () => {
 			expect.anything(),
 		);
 	});
+
+	it("uses neutral conflict guidance when a private local draft is restored", async () => {
+		mocks.publishingEnabled = false;
+		localStorage.setItem(
+			"admin:site-editor:site-settings:https://site.example",
+			JSON.stringify({
+				schemaVersion: 1,
+				baseRevisionId: "older-revision",
+				payload: {
+					artistName: "Offline edit",
+					siteTitle: "Reflecting Pool",
+					tagline: "Photography in motion",
+					socialLinks: [],
+					seoDescription: "Photography by Maggie.",
+				},
+			}),
+		);
+
+		await renderPage();
+
+		expect(document.querySelector('[role="alert"]')?.textContent).toContain(
+			"Review or discard this draft before continuing.",
+		);
+		expect(document.body.textContent).not.toContain(
+			"Review or discard this draft before publishing.",
+		);
+	});
 });
