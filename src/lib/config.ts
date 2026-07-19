@@ -46,7 +46,8 @@ export interface AdminAPI {
 	siteEditor?: {
 		getSiteSettingsEditorState: FnRef;
 		saveSiteSettingsDraft: FnRef;
-		publishSiteSettings: FnRef;
+		/** Optional while a host stages private settings before connecting a public provider. */
+		publishSiteSettings?: FnRef;
 		discardSiteSettingsDraft: FnRef;
 		getHomepageQuoteEditorState: FnRef;
 		saveHomepageQuoteDraft: FnRef;
