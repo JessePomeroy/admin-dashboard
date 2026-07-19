@@ -4,6 +4,7 @@ import { browser } from "$app/environment";
 import { page } from "$app/stores";
 import { useQuery } from "convex-svelte";
 import { useAdminClient } from "../adminClient";
+import { getCatalogProductEditorCapability } from "../catalogProductCapability";
 import { getAdminCapabilitiesForLayout } from "../capabilities";
 import { isDark } from "../theme";
 import { getAdminConfig } from "../config";
@@ -98,8 +99,13 @@ let portfolioEditorEnabled = $derived(
 let blogEditorEnabled = $derived(
 	Boolean(config.editor?.blog && api.blogContent && api.postContent),
 );
+let productsEditorEnabled = $derived(Boolean(getCatalogProductEditorCapability(config)));
 let editorEnabled = $derived(
-	siteSettingsEditorEnabled || pagesEditorEnabled || portfolioEditorEnabled || blogEditorEnabled,
+	siteSettingsEditorEnabled
+		|| pagesEditorEnabled
+		|| portfolioEditorEnabled
+		|| productsEditorEnabled
+		|| blogEditorEnabled,
 );
 let editorActive = $derived(
 	editorEnabled && isAdminRouteActive("/admin/editor", $page.url.pathname),
@@ -295,6 +301,8 @@ function closeMobileMenu() {
 			siteSettingsEnabled={siteSettingsEditorEnabled}
 			pagesEnabled={pagesEditorEnabled}
 			portfolioEnabled={portfolioEditorEnabled}
+			productsEnabled={productsEditorEnabled}
+			productsHref={config.editor?.products?.baseHref}
 			blogEnabled={blogEditorEnabled}
 		/>
 		<EditorNavigation
@@ -302,6 +310,8 @@ function closeMobileMenu() {
 			siteSettingsEnabled={siteSettingsEditorEnabled}
 			pagesEnabled={pagesEditorEnabled}
 			portfolioEnabled={portfolioEditorEnabled}
+			productsEnabled={productsEditorEnabled}
+			productsHref={config.editor?.products?.baseHref}
 			blogEnabled={blogEditorEnabled}
 			mobile
 			open={editorMenuOpen}

@@ -6,6 +6,8 @@ let {
 	siteSettingsEnabled = false,
 	pagesEnabled = false,
 	portfolioEnabled = false,
+	productsEnabled = false,
+	productsHref = "/admin/editor/products",
 	blogEnabled = false,
 	mobile = false,
 	open = false,
@@ -15,6 +17,8 @@ let {
 	siteSettingsEnabled?: boolean;
 	pagesEnabled?: boolean;
 	portfolioEnabled?: boolean;
+	productsEnabled?: boolean;
+	productsHref?: string;
 	blogEnabled?: boolean;
 	mobile?: boolean;
 	open?: boolean;
@@ -30,6 +34,9 @@ let items = $derived([
 		: []),
 	...(portfolioEnabled
 		? [{ href: "/admin/editor/portfolio", label: "portfolio" }]
+		: []),
+	...(productsEnabled
+		? [{ href: productsHref, label: "products" }]
 		: []),
 	...(blogEnabled
 		? [{ href: "/admin/editor/blog", label: "blog" }]

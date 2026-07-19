@@ -1,0 +1,235 @@
+import { describe, expect, it, vi } from "vitest";
+import {
+	addCatalogProductVariant,
+	CATALOG_PRODUCT_VARIANT_LIMIT,
+	catalogProductDraftFromRevision,
+	catalogProductLabel,
+	catalogProductStatus,
+	copyCatalogProductDraft,
+	emptyCatalogProductDraft,
+	moveCatalogProductVariant,
+	newCatalogProductKey,
+	newCatalogProductVariant,
+	parseCatalogBasisPoints,
+	parseCatalogPriceCents,
+	removeCatalogProductVariant,
+	serializeCatalogProductDraft,
+	slugifyCatalogOptionKey,
+	slugifyCatalogProductTitle,
+	type CatalogProductEditorRevision,
+	type CatalogProductEditorSummary,
+} from "../src/lib/catalogProductEditor";
+
+function revision(
+	overrides: Partial<CatalogProductEditorRevision> = {},
+): CatalogProductEditorRevision {
+	return {
+		revisionId: "revision-1",
+		schemaVersion: 1,
+		productKind: "print",
+		currency: "usd",
+		title: "Moonrise",
+		slug: "moonrise",
+		description: null,
+		fulfillmentMode: "production_partner",
+		saleAvailability: "available",
+		borderOptionsEnabled: false,
+		frameOptionsEnabled: true,
+		framePriceMultiplierBasisPoints: 0,
+		variantCount: 1,
+		checksum: "checksum",
+		source: "admin",
+		createdAt: 1,
+		variants: [
+			{
+				key: "variant-opaque",
+				order: 0,
+				materialOptionKey: null,
+				sizeOptionKey: "8x10",
+				retailPriceCents: 0,
+				status: "enabled",
+			},
+		],
+		...overrides,
+	};
+}
+
+function summary(
+	overrides: Partial<CatalogProductEditorSummary> = {},
+): CatalogProductEditorSummary {
+	return {
+		productId: "product-1",
+		productKey: "print-opaque",
+		productKind: "print",
+		slug: "moonrise",
+		draft: {
+			revisionId: "revision-1",
+			title: "Moonrise",
+			saleAvailability: "available",
+			variantCount: 1,
+			createdAt: 1,
+		},
+		published: null,
+		createdAt: 1,
+		updatedAt: 1,
+		publishedAt: null,
+		...overrides,
+	};
+}
+
+describe("catalog product editor helpers", () => {
+	it("converts nullable projections, preserves zero, and strips order", () => {
+		const projected = revision();
+		const draft = catalogProductDraftFromRevision(projected);
+		expect(draft).toEqual({
+			title: "Moonrise",
+			slug: "moonrise",
+			description: undefined,
+			fulfillmentMode: "production_partner",
+			saleAvailability: "available",
+			borderOptionsEnabled: false,
+			frameOptionsEnabled: true,
+			framePriceMultiplierBasisPoints: 0,
+			variants: [
+				{
+					key: "variant-opaque",
+					materialOptionKey: undefined,
+					sizeOptionKey: "8x10",
+					retailPriceCents: 0,
+					status: "enabled",
+				},
+			],
+		});
+		expect(draft.variants[0]).not.toHaveProperty("order");
+		expect(projected.variants[0]).toHaveProperty("order", 0);
+	});
+
+	it("uses an unavailable physical-print draft when no revision exists", () => {
+		expect(catalogProductDraftFromRevision(null)).toEqual(
+			emptyCatalogProductDraft(),
+		);
+		expect(emptyCatalogProductDraft()).toEqual({
+			fulfillmentMode: "production_partner",
+			saleAvailability: "unavailable",
+			borderOptionsEnabled: false,
+			frameOptionsEnabled: false,
+			framePriceMultiplierBasisPoints: 10_000,
+			variants: [],
+		});
+	});
+
+	it("fails closed for non-print fulfillment and inconsistent projections", () => {
+		expect(() =>
+			catalogProductDraftFromRevision({
+				...revision(),
+				fulfillmentMode: "digital_delivery",
+			} as unknown as CatalogProductEditorRevision),
+		).toThrow(/physical fulfillment/i);
+		expect(() =>
+			catalogProductDraftFromRevision(revision({ variantCount: 2 })),
+		).toThrow(/variant count/i);
+	});
+
+	it("copies and serializes drafts without retaining variant references", () => {
+		const original = catalogProductDraftFromRevision(revision());
+		const copy = copyCatalogProductDraft(original);
+		copy.variants[0].sizeOptionKey = "11x14";
+		expect(original.variants[0].sizeOptionKey).toBe("8x10");
+		expect(serializeCatalogProductDraft(original)).toContain(
+			'"retailPriceCents":0',
+		);
+		expect(serializeCatalogProductDraft(original)).not.toContain('"order":');
+	});
+
+	it("labels active and discarded private products", () => {
+		expect(catalogProductLabel(summary())).toBe("Moonrise");
+		expect(catalogProductStatus(summary())).toBe("draft");
+		expect(catalogProductLabel(summary({ draft: null, slug: null }))).toBe(
+			"untitled print",
+		);
+		expect(catalogProductStatus(summary({ draft: null }))).toBe("discarded");
+	});
+
+	it("creates slugs independently from opaque identity", () => {
+		expect(slugifyCatalogProductTitle("  Café Moonrise & Water  ")).toBe(
+			"cafe-moonrise-water",
+		);
+		expect(slugifyCatalogProductTitle("---")).toBe("");
+		expect(slugifyCatalogProductTitle(`${"a".repeat(95)} b`)).toHaveLength(95);
+		expect(slugifyCatalogOptionKey(" Fine Art / Rag  ")).toBe("fine-art-rag");
+	});
+
+	it("creates opaque product and variant keys with separate namespaces", () => {
+		const randomUUID = vi
+			.spyOn(globalThis.crypto, "randomUUID")
+			.mockReturnValueOnce("11111111-1111-4111-8111-111111111111")
+			.mockReturnValueOnce("22222222-2222-4222-8222-222222222222");
+		expect(newCatalogProductKey("print")).toBe(
+			"print-11111111-1111-4111-8111-111111111111",
+		);
+		expect(newCatalogProductVariant()).toEqual({
+			key: "variant-22222222-2222-4222-8222-222222222222",
+			status: "enabled",
+		});
+		randomUUID.mockRestore();
+	});
+
+	it("adds, removes, and reorders variants immutably", () => {
+		const variants = [
+			{ key: "variant-a", status: "enabled" as const },
+			{ key: "variant-b", status: "disabled" as const },
+		];
+		const added = addCatalogProductVariant(variants, {
+			key: "variant-c",
+			status: "enabled",
+		});
+		expect(added.map(({ key }) => key)).toEqual([
+			"variant-a",
+			"variant-b",
+			"variant-c",
+		]);
+		expect(() => addCatalogProductVariant(variants, variants[0])).toThrow(
+			/unique/i,
+		);
+		const moved = moveCatalogProductVariant(added, 2, -1);
+		expect(moved.map(({ key }) => key)).toEqual([
+			"variant-a",
+			"variant-c",
+			"variant-b",
+		]);
+		expect(added.map(({ key }) => key)).toEqual([
+			"variant-a",
+			"variant-b",
+			"variant-c",
+		]);
+		expect(moveCatalogProductVariant(added, 0, -1)).toBe(added);
+		expect(
+			removeCatalogProductVariant(moved, "variant-c").map(({ key }) => key),
+		).toEqual(["variant-a", "variant-b"]);
+		expect(removeCatalogProductVariant(moved, "missing")).toBe(moved);
+		expect(() =>
+			addCatalogProductVariant(
+				Array.from({ length: CATALOG_PRODUCT_VARIANT_LIMIT }, (_, index) => ({
+					key: `variant-${index}`,
+					status: "enabled" as const,
+				})),
+				{ key: "variant-overflow", status: "enabled" },
+			),
+		).toThrow(/cannot exceed 100 variants/i);
+	});
+
+	it("accepts only strict bounded integer cents and literal basis points", () => {
+		expect(parseCatalogPriceCents(0)).toBe(0);
+		expect(parseCatalogPriceCents("0")).toBe(0);
+		expect(parseCatalogPriceCents("")).toBeUndefined();
+		expect(parseCatalogPriceCents(null)).toBeUndefined();
+		expect(() => parseCatalogPriceCents("12.50")).toThrow(/whole number/i);
+		expect(() => parseCatalogPriceCents("01")).toThrow(/whole number/i);
+		expect(() => parseCatalogPriceCents(-1)).toThrow(/between 0/i);
+		expect(() => parseCatalogPriceCents(100_000_001)).toThrow(/between 0/i);
+		expect(parseCatalogBasisPoints(0)).toBe(0);
+		expect(parseCatalogBasisPoints("10000")).toBe(10_000);
+		expect(() => parseCatalogBasisPoints("")).toThrow(/required/i);
+		expect(() => parseCatalogBasisPoints(1.5)).toThrow(/whole number/i);
+	});
+});

@@ -74,6 +74,36 @@ If the host's generated Convex module name differs from `AdminAPI`—for example
 `galleries` versus `galleryDelivery`—use a Proxy alias. Never spread Convex's
 `api` Proxy; it has no enumerable function namespaces.
 
+### Private product drafts
+
+The optional Products workspace is capability-driven. It appears only when the
+host declares `editor.products` and provides the complete private-draft API:
+`catalogProducts.listForEditor`, `getEditorState`, `createDraft`, `saveDraft`,
+and `discardDraft`. Generated Convex references remain opaque inside this
+package.
+
+```ts
+export const adminConfig: AdminConfig = {
+  // existing host configuration
+  editor: {
+    products: {
+      enabledKinds: ["print"],
+    },
+  },
+  api: new Proxy(api, {
+    get(target, property, receiver) {
+      if (property === "catalogProducts") return api.catalogProducts;
+      return Reflect.get(target, property, receiver);
+    },
+  }),
+};
+```
+
+This first capability supports individual prints only. It does not expose a
+publish mutation, public-by-slug query, preview, checkout/provider identifiers,
+or product media. Sanity remains the live public catalog until a later host
+slice deliberately connects publication and print-quality source media.
+
 ## Server configuration
 
 ```ts

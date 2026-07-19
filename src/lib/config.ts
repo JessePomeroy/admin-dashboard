@@ -104,6 +104,14 @@ export interface AdminAPI {
 		archive: FnRef;
 		restore: FnRef;
 	};
+	/** Private catalog draft operations. Public catalog reads and publication stay host-owned. */
+	catalogProducts?: {
+		listForEditor: FnRef;
+		getEditorState: FnRef;
+		createDraft: FnRef;
+		saveDraft: FnRef;
+		discardDraft: FnRef;
+	};
 	/** Tenant-scoped CMS media reads shared by editor modules. */
 	mediaAssets?: {
 		getManyForEditor: FnRef;
@@ -443,6 +451,13 @@ export interface AdminEditorConfig {
 		baseHref?: string;
 		/** Public origin for immutable CMS image derivatives, without a trailing slash. */
 		mediaBaseUrl?: string;
+	};
+	/** Enables private product-draft authoring. This iteration supports prints only. */
+	products?: {
+		/** Shared workspace route; defaults to `/admin/editor/products`. */
+		baseHref?: string;
+		/** Product kinds exposed by this host. The current editor intentionally supports only prints. */
+		enabledKinds?: readonly ["print"];
 	};
 }
 
