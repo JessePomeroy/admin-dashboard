@@ -112,6 +112,14 @@ export interface AdminAPI {
 		saveDraft: FnRef;
 		discardDraft: FnRef;
 	};
+	/** Private V2 catalog graph operations for multi-kind product read-back and staged editing. */
+	catalogProductGraphs?: {
+		listForEditor: FnRef;
+		getEditorState: FnRef;
+		createDraft: FnRef;
+		saveDraft: FnRef;
+		discardDraft: FnRef;
+	};
 	/** Tenant-scoped CMS media reads shared by editor modules. */
 	mediaAssets?: {
 		getManyForEditor: FnRef;
@@ -452,12 +460,19 @@ export interface AdminEditorConfig {
 		/** Public origin for immutable CMS image derivatives, without a trailing slash. */
 		mediaBaseUrl?: string;
 	};
-	/** Enables private product-draft authoring. This iteration supports prints only. */
+	/** Enables private product-draft authoring and catalog read-back. */
 	products?: {
 		/** Shared workspace route; defaults to `/admin/editor/products`. */
 		baseHref?: string;
-		/** Product kinds exposed by this host. The current editor intentionally supports only prints. */
-		enabledKinds?: readonly ["print"];
+		/** Product kinds exposed by this host. Non-print V2 kinds are read-only until their editors land. */
+		enabledKinds?: readonly (
+			| "print"
+			| "print_set"
+			| "postcard"
+			| "merchandise"
+			| "tapestry"
+			| "digital_download"
+		)[];
 	};
 }
 

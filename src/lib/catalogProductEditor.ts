@@ -1,4 +1,10 @@
-export type CatalogProductKind = "print";
+export type CatalogProductKind =
+	| "print"
+	| "print_set"
+	| "postcard"
+	| "merchandise"
+	| "tapestry"
+	| "digital_download";
 export type CatalogPrintFulfillmentMode =
 	| "production_partner"
 	| "merchant_fulfilled";
@@ -45,22 +51,26 @@ export interface CatalogProductVariantProjection {
 
 export interface CatalogProductEditorRevision {
 	revisionId: string;
-	schemaVersion: 1;
+	schemaVersion: 1 | 2;
 	productKind: CatalogProductKind;
-	currency: "usd";
-	title: string | null;
-	slug: string | null;
-	description: string | null;
-	fulfillmentMode: CatalogPrintFulfillmentMode;
-	saleAvailability: CatalogSaleAvailability;
-	borderOptionsEnabled: boolean;
-	frameOptionsEnabled: boolean;
-	framePriceMultiplierBasisPoints: number;
-	variantCount: number;
-	checksum: string;
-	source: CatalogRevisionSource;
 	createdAt: number;
-	variants: CatalogProductVariantProjection[];
+	currency?: "usd";
+	title?: string | null;
+	slug?: string | null;
+	description?: string | null;
+	fulfillmentMode?: CatalogPrintFulfillmentMode;
+	saleAvailability?: CatalogSaleAvailability;
+	borderOptionsEnabled?: boolean;
+	frameOptionsEnabled?: boolean;
+	framePriceMultiplierBasisPoints?: number;
+	variantCount?: number;
+	checksum?: string;
+	source?: CatalogRevisionSource;
+	variants?: CatalogProductVariantProjection[];
+	draft?: CatalogProductGraphV2Draft;
+	webMediaAssets?: CatalogEditorMediaRelation[];
+	printSourceAssets?: CatalogEditorMediaRelation[];
+	paidFileAsset?: CatalogEditorMediaRelation | null;
 }
 
 export interface CatalogProductEditorSummary {
@@ -79,11 +89,54 @@ export interface CatalogProductEditorState {
 	productId: string;
 	productKey: string;
 	productKind: CatalogProductKind;
+	graphVersion?: 1 | 2;
 	slug: string | null;
 	draft: CatalogProductEditorRevision | null;
 	published: CatalogProductEditorRevision | null;
 	updatedAt: number;
 	publishedAt: number | null;
+}
+
+export interface CatalogEditorMediaAsset {
+	assetId?: string;
+	filename?: string | null;
+	width?: number | null;
+	height?: number | null;
+	altText?: string | null;
+	url?: string | null;
+}
+
+export interface CatalogEditorMediaRelation {
+	placementKey?: string;
+	relationKey?: string;
+	asset: CatalogEditorMediaAsset;
+}
+
+export interface CatalogProductGraphV2VariantDraft {
+	key: string;
+	order: number;
+	materialOptionKey?: string;
+	sizeOptionKey?: string;
+	retailPriceCents?: number;
+	status: CatalogVariantStatus;
+}
+
+export interface CatalogProductGraphV2Draft {
+	productKind: CatalogProductKind;
+	title?: string;
+	slug?: string;
+	description?: string;
+	currency: "usd";
+	saleAvailability: CatalogSaleAvailability;
+	fulfillmentMode?: CatalogPrintFulfillmentMode | "digital_delivery";
+	borderOptionsEnabled?: boolean;
+	frameOptionsEnabled?: boolean;
+	framePriceMultiplierBasisPoints?: number;
+	variants?: CatalogProductGraphV2VariantDraft[];
+	webMedia?: unknown[];
+	printSources?: unknown[];
+	setMembers?: unknown[];
+	paidFile?: unknown;
 }
 
 export type CatalogProductStatus = "draft" | "discarded";
@@ -127,7 +180,7 @@ function parseBoundedInteger(
 	return parsed;
 }
 
-function newOpaqueCatalogKey(prefix: "print" | "variant") {
+function newOpaqueCatalogKey(prefix: CatalogProductKind | "variant") {
 	if (!globalThis.crypto?.randomUUID) {
 		throw new Error("Secure catalog identity generation is unavailable.");
 	}
@@ -157,8 +210,17 @@ export function catalogProductDraftFromRevision(
 	if (revision.currency !== "usd") {
 		throw new Error("The single-print editor requires USD pricing.");
 	}
-	if (revision.variantCount !== revision.variants.length) {
+	if (revision.variantCount !== revision.variants?.length) {
 		throw new Error("The catalog variant count does not match its revision.");
+	}
+	if (
+		revision.fulfillmentMode === undefined ||
+		revision.saleAvailability === undefined ||
+		revision.borderOptionsEnabled === undefined ||
+		revision.frameOptionsEnabled === undefined ||
+		revision.framePriceMultiplierBasisPoints === undefined
+	) {
+		throw new Error("The single-print editor requires a complete print revision.");
 	}
 	return {
 		title: optionalProjectionValue(revision.title),
@@ -171,7 +233,7 @@ export function catalogProductDraftFromRevision(
 		framePriceMultiplierBasisPoints: parseCatalogBasisPoints(
 			revision.framePriceMultiplierBasisPoints,
 		),
-		variants: revision.variants.map((variant) => ({
+		variants: (revision.variants ?? []).map((variant) => ({
 			key: variant.key,
 			materialOptionKey: optionalProjectionValue(variant.materialOptionKey),
 			sizeOptionKey: optionalProjectionValue(variant.sizeOptionKey),
@@ -236,7 +298,7 @@ export function catalogProductLabel(product: CatalogProductEditorSummary) {
 		product.draft?.title?.trim() ||
 		product.published?.title?.trim() ||
 		product.slug ||
-		"untitled print"
+		`untitled ${catalogProductKindLabel(product.productKind)}`
 	);
 }
 
@@ -346,4 +408,46 @@ export function parseCatalogBasisPoints(
 	if (parsed === undefined)
 		throw new Error("Frame price multiplier basis points is required.");
 	return parsed;
+}
+
+export function catalogProductKindLabel(kind: CatalogProductKind) {
+	switch (kind) {
+		case "print":
+			return "print";
+		case "print_set":
+			return "print set";
+		case "postcard":
+			return "postcard";
+		case "merchandise":
+			return "merchandise";
+		case "tapestry":
+			return "tapestry";
+		case "digital_download":
+			return "digital download";
+	}
+}
+
+export function catalogProductEditorTitle(
+	revision: CatalogProductEditorRevision | null | undefined,
+) {
+	return revision?.title ?? revision?.draft?.title ?? null;
+}
+
+export function catalogProductEditorDescription(
+	revision: CatalogProductEditorRevision | null | undefined,
+) {
+	return revision?.description ?? revision?.draft?.description ?? null;
+}
+
+export function catalogProductEditorSaleAvailability(
+	revision: CatalogProductEditorRevision | null | undefined,
+) {
+	return revision?.saleAvailability ?? revision?.draft?.saleAvailability ?? null;
+}
+
+export function catalogProductEditorVariantCount(
+	revision: CatalogProductEditorRevision | null | undefined,
+) {
+	return revision?.variantCount ?? revision?.variants?.length ??
+		revision?.draft?.variants?.length ?? 0;
 }

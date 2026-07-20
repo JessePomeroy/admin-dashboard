@@ -4,6 +4,11 @@ import { useAdminClient } from "../../adminClient";
 import { getCatalogProductEditorCapability } from "../../catalogProductCapability";
 import {
 	catalogProductDraftFromRevision,
+	catalogProductEditorDescription,
+	catalogProductEditorSaleAvailability,
+	catalogProductEditorTitle,
+	catalogProductEditorVariantCount,
+	catalogProductKindLabel,
 	copyCatalogProductDraft,
 	emptyCatalogProductDraft,
 	parseCatalogBasisPoints,
@@ -42,6 +47,8 @@ let multiplierInput = $state("10000");
 let multiplierError = $state("");
 let variantsValid = $state(true);
 let currentJson = $derived(serializeCatalogProductDraft(form));
+let isGraphV2 = $derived(editorState?.graphVersion === 2 || editorState?.draft?.schemaVersion === 2 || editorState?.published?.schemaVersion === 2);
+let readOnlyRevision = $derived(editorState?.draft ?? editorState?.published ?? null);
 let dirty = $derived(initialized && hasActiveDraft && currentJson !== savedJson);
 let canSave = $derived(
 	hasActiveDraft
@@ -67,6 +74,11 @@ function loadServerDraft(state: CatalogProductEditorState) {
 
 $effect(() => {
 	if (!editorState) return;
+	if (isGraphV2) {
+		saveState = "saved";
+		initialized = true;
+		return;
+	}
 	const serverRevisionId = editorState.draft?.revisionId ?? null;
 	if (!initialized) return loadServerDraft(editorState);
 	if (["saving", "discarding"].includes(saveState)) return;
@@ -183,11 +195,27 @@ async function startDraft() {
 {:else}
 	<div class="settings-page product-page">
 		<header class="settings-header">
-			<div><a class="back" href={baseHref}>← products</a><h1>{form.title?.trim() || editorState.productKey}</h1><p class="description">Edit the private product definition and ordered price variants. This draft is not connected to the public shop.</p></div>
-			{#if hasActiveDraft}<div class="actions"><span class="save-state" aria-live="polite">{saveState}</span><button type="button" class="primary" onclick={() => void saveDraft()} disabled={!canSave}>save draft</button></div>{/if}
+			<div><a class="back" href={baseHref}>← products</a><h1>{isGraphV2 ? catalogProductEditorTitle(readOnlyRevision)?.trim() || editorState.productKey : form.title?.trim() || editorState.productKey}</h1><p class="description">{isGraphV2 ? "Review the imported private catalog graph. Product-specific editing arrives in a later slice." : "Edit the private product definition and ordered price variants. This draft is not connected to the public shop."}</p></div>
+			{#if hasActiveDraft && !isGraphV2}<div class="actions"><span class="save-state" aria-live="polite">{saveState}</span><button type="button" class="primary" onclick={() => void saveDraft()} disabled={!canSave}>save draft</button></div>{/if}
 		</header>
 		{#if saveError}<p class="alert" role="alert">{saveError}</p>{/if}
-		{#if !hasActiveDraft}
+		{#if isGraphV2}
+			<section aria-labelledby="product-readback-heading">
+				<div class="section-heading"><span>01</span><div><h2 id="product-readback-heading">imported catalog draft</h2><p>This product is stored in the new graph model as an unpublished draft.</p></div></div>
+				<dl class="readback-grid">
+					<div><dt>kind</dt><dd>{catalogProductKindLabel(editorState.productKind)}</dd></div>
+					<div><dt>URL name</dt><dd>{editorState.slug ? `/${editorState.slug}` : "not set"}</dd></div>
+					<div><dt>availability</dt><dd>{catalogProductEditorSaleAvailability(readOnlyRevision) ?? "not set"}</dd></div>
+					<div><dt>variants</dt><dd>{catalogProductEditorVariantCount(readOnlyRevision)}</dd></div>
+					<div><dt>web images</dt><dd>{readOnlyRevision?.webMediaAssets?.length ?? 0}</dd></div>
+					<div><dt>print files</dt><dd>{readOnlyRevision?.printSourceAssets?.length ?? 0}</dd></div>
+				</dl>
+				{#if catalogProductEditorDescription(readOnlyRevision)}
+					<p class="readback-description">{catalogProductEditorDescription(readOnlyRevision)}</p>
+				{/if}
+				<p class="readback-note">Read-only for this slice: this confirms the Sanity import is visible to the protected Editor without connecting it to the public shop or checkout flow.</p>
+			</section>
+		{:else if !hasActiveDraft}
 			<section aria-labelledby="discarded-product-heading">
 				<div class="section-heading"><span>01</span><div><h2 id="discarded-product-heading">no active draft</h2><p>This product identity remains in the catalog, but its editable draft was discarded. No product details are currently staged.</p></div></div>
 				<button type="button" onclick={() => void startDraft()} disabled={saveState === "saving"}>{saveState === "saving" ? "starting…" : "start a new draft"}</button>
@@ -226,5 +254,11 @@ async function startDraft() {
 	.option-grid { display: flex; flex-wrap: wrap; gap: 18px 28px; margin-top: 22px; }
 	.check { flex-direction: row !important; align-items: center; color: var(--admin-text) !important; } .check input { width: auto !important; }
 	.multiplier { max-width: 360px; margin-top: 20px; }
+	.readback-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 14px; margin: 0; }
+	.readback-grid div { border: 1px solid var(--admin-border); border-radius: 10px; padding: 14px; background: color-mix(in srgb, var(--admin-surface) 82%, transparent); }
+	.readback-grid dt { margin: 0 0 6px; color: var(--admin-text-muted); font-size: .68rem; text-transform: lowercase; letter-spacing: .08em; }
+	.readback-grid dd { margin: 0; color: var(--admin-heading); font-size: .95rem; }
+	.readback-description, .readback-note { margin: 18px 0 0; color: var(--admin-text-muted); line-height: 1.6; }
+	.readback-note { border-top: 1px solid var(--admin-border); padding-top: 18px; font-size: .84rem; }
 	.danger { border-color: color-mix(in srgb, var(--admin-danger, var(--status-rose)) 55%, transparent) !important; color: var(--admin-danger, var(--status-rose)) !important; }
 </style>
