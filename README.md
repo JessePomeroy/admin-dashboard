@@ -77,32 +77,35 @@ If the host's generated Convex module name differs from `AdminAPI`—for example
 ### Private product drafts
 
 The optional Products workspace is capability-driven. It appears only when the
-host declares `editor.products` and provides the complete private-draft API:
-`catalogProducts.listForEditor`, `getEditorState`, `createDraft`, `saveDraft`,
-and `discardDraft`. Generated Convex references remain opaque inside this
-package.
+host declares `editor.products` and provides a complete private-draft API.
+Legacy hosts may provide `catalogProducts.listForEditor`, `getEditorState`,
+`createDraft`, `saveDraft`, and `discardDraft` for the single-print editor.
+Hosts using the catalog graph model may instead provide the same function names
+under `catalogProductGraphs`; the list page can read back all enabled product
+kinds while product-specific editing screens are added slice by slice.
 
 ```ts
 export const adminConfig: AdminConfig = {
   // existing host configuration
   editor: {
     products: {
-      enabledKinds: ["print"],
+      enabledKinds: ["print", "print_set", "postcard"],
     },
   },
   api: new Proxy(api, {
     get(target, property, receiver) {
-      if (property === "catalogProducts") return api.catalogProducts;
+      if (property === "catalogProductGraphs") return api.catalogProductGraphs;
       return Reflect.get(target, property, receiver);
     },
   }),
 };
 ```
 
-This first capability supports individual prints only. It does not expose a
-publish mutation, public-by-slug query, preview, checkout/provider identifiers,
-or product media. Sanity remains the live public catalog until a later host
-slice deliberately connects publication and print-quality source media.
+The V2 graph capability is still private and publish-gated by the host. It does
+not expose a publish mutation, public-by-slug query, preview,
+checkout/provider identifiers, or public provider switch by itself. Sanity may
+remain the live public catalog until a later host slice deliberately connects
+publication and print-quality source media.
 
 ## Server configuration
 
