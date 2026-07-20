@@ -82,7 +82,10 @@ Legacy hosts may provide `catalogProducts.listForEditor`, `getEditorState`,
 `createDraft`, `saveDraft`, and `discardDraft` for the single-print editor.
 Hosts using the catalog graph model may instead provide the same function names
 under `catalogProductGraphs`; the list page can read back all enabled product
-kinds while product-specific editing screens are added slice by slice.
+kinds. V2 single-print drafts can edit identity, sale settings, print options,
+and ordered variants while preserving imported media and print-source
+relations. Other V2 product kinds remain staged read-back views until their
+specific editors land.
 
 ```ts
 export const adminConfig: AdminConfig = {

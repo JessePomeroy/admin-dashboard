@@ -122,16 +122,24 @@ export interface CatalogProductGraphV2VariantDraft {
 }
 
 export interface CatalogProductGraphV2Draft {
+	schemaVersion: 2;
 	productKind: CatalogProductKind;
 	title?: string;
 	slug?: string;
 	description?: string;
+	seoDescription?: string;
 	currency: "usd";
 	saleAvailability: CatalogSaleAvailability;
 	fulfillmentMode?: CatalogPrintFulfillmentMode | "digital_delivery";
-	borderOptionsEnabled?: boolean;
-	frameOptionsEnabled?: boolean;
-	framePriceMultiplierBasisPoints?: number;
+	shopPlacement: {
+		featured: boolean;
+		orderRank?: string;
+	};
+	printOptions?: {
+		borderOptionsEnabled: boolean;
+		frameOptionsEnabled: boolean;
+		framePriceMultiplierBasisPoints: number;
+	};
 	variants?: CatalogProductGraphV2VariantDraft[];
 	webMedia?: unknown[];
 	printSources?: unknown[];
@@ -243,6 +251,42 @@ export function catalogProductDraftFromRevision(
 	};
 }
 
+export function catalogProductGraphPrintDraftFromRevision(
+	revision: CatalogProductEditorRevision | null | undefined,
+): CatalogProductDraftForm {
+	const draft = revision?.draft;
+	if (!revision || !draft || draft.productKind !== "print") {
+		throw new Error("The print graph editor requires an active print draft.");
+	}
+	if (draft.currency !== "usd") {
+		throw new Error("The print graph editor requires USD pricing.");
+	}
+	if (!draft.printOptions) {
+		throw new Error("The print graph editor requires print options.");
+	}
+	return {
+		title: optionalProjectionValue(draft.title),
+		slug: optionalProjectionValue(draft.slug),
+		description: optionalProjectionValue(draft.description),
+		fulfillmentMode: requirePrintFulfillmentMode(draft.fulfillmentMode),
+		saleAvailability: draft.saleAvailability,
+		borderOptionsEnabled: draft.printOptions.borderOptionsEnabled,
+		frameOptionsEnabled: draft.printOptions.frameOptionsEnabled,
+		framePriceMultiplierBasisPoints: parseCatalogBasisPoints(
+			draft.printOptions.framePriceMultiplierBasisPoints,
+		),
+		variants: [...(draft.variants ?? [])]
+			.sort((left, right) => left.order - right.order)
+			.map((variant) => ({
+				key: variant.key,
+				materialOptionKey: variant.materialOptionKey,
+				sizeOptionKey: variant.sizeOptionKey,
+				retailPriceCents: parseCatalogPriceCents(variant.retailPriceCents),
+				status: variant.status,
+			})),
+	};
+}
+
 export function copyCatalogProductDraft(
 	source:
 		| CatalogProductDraftForm
@@ -291,6 +335,41 @@ export function serializeCatalogProductDraft(draft: CatalogProductDraftForm) {
 			status: variant.status,
 		})),
 	});
+}
+
+export function catalogProductGraphPrintDraftFromForm(
+	revision: CatalogProductEditorRevision,
+	form: CatalogProductDraftForm,
+): CatalogProductGraphV2Draft {
+	const draft = revision.draft;
+	if (!draft || draft.productKind !== "print") {
+		throw new Error("The print graph editor requires a print graph draft.");
+	}
+	return {
+		...draft,
+		title: form.title,
+		slug: form.slug,
+		description: form.description,
+		fulfillmentMode: requirePrintFulfillmentMode(form.fulfillmentMode),
+		saleAvailability: form.saleAvailability,
+		printOptions: {
+			borderOptionsEnabled: form.borderOptionsEnabled,
+			frameOptionsEnabled: form.frameOptionsEnabled,
+			framePriceMultiplierBasisPoints: parseCatalogBasisPoints(
+				form.framePriceMultiplierBasisPoints,
+			),
+		},
+		variants: form.variants.map((variant, order) => ({
+			key: variant.key,
+			order,
+			...(variant.materialOptionKey ? { materialOptionKey: variant.materialOptionKey } : {}),
+			...(variant.sizeOptionKey ? { sizeOptionKey: variant.sizeOptionKey } : {}),
+			...(variant.retailPriceCents !== undefined
+				? { retailPriceCents: parseCatalogPriceCents(variant.retailPriceCents) }
+				: {}),
+			status: variant.status,
+		})),
+	};
 }
 
 export function catalogProductLabel(product: CatalogProductEditorSummary) {
