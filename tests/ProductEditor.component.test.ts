@@ -103,6 +103,52 @@ const revision = {
 		},
 	],
 };
+const graphRevision = {
+	revisionId: "graph-revision-1",
+	schemaVersion: 2,
+	productKind: "print",
+	createdAt: 1,
+	draft: {
+		schemaVersion: 2,
+		productKind: "print",
+		title: "Avant Alien 2.2",
+		slug: "avant-alien-2-2",
+		description: "Imported print description.",
+		seoDescription: "Imported SEO copy.",
+		currency: "usd",
+		fulfillmentMode: "production_partner",
+		saleAvailability: "available",
+		shopPlacement: { featured: true, orderRank: "a0" },
+		printOptions: {
+			borderOptionsEnabled: true,
+			frameOptionsEnabled: false,
+			framePriceMultiplierBasisPoints: 10_000,
+		},
+		variants: [
+			{
+				key: "variant-original",
+				order: 0,
+				materialOptionKey: "fine-art-paper",
+				sizeOptionKey: "8x10",
+				retailPriceCents: 2500,
+				status: "enabled",
+			},
+		],
+		webMedia: [
+			{
+				key: "web-primary",
+				order: 0,
+				role: "primary",
+				assetId: "media-1",
+				altText: "A luminous print.",
+			},
+		],
+		printSources: [{ key: "print-source", order: 0, assetId: "source-1" }],
+	},
+	webMediaAssets: [{ placementKey: "web-primary", asset: { assetId: "media-1" } }],
+	printSourceAssets: [{ relationKey: "print-source", asset: { assetId: "source-1" } }],
+	paidFileAsset: null,
+};
 
 async function mountList() {
 	components.push(mount(ProductsPage, { target: document.body }));
@@ -346,6 +392,75 @@ describe("draft-only product editor", () => {
 		);
 		expect(saveCall?.[1].draft.variants).toHaveLength(2);
 		expect(saveCall?.[1].draft.variants[1].key).toBe("variant-original");
+	});
+
+	it("saves migrated V2 print drafts without dropping imported graph relations", async () => {
+		mocks.detailData = {
+			productId: "product-1",
+			productKey: "sanity.catalog.print",
+			productKind: "print",
+			graphVersion: 2,
+			slug: "avant-alien-2-2",
+			draft: graphRevision,
+			published: null,
+			updatedAt: 1,
+			publishedAt: null,
+		};
+		await mountDetail();
+		expect(document.body.textContent).toContain(
+			"still not connected to the public shop",
+		);
+		expect(document.body.textContent).not.toContain("discard draft");
+
+		const name = input("product name");
+		name!.value = "Avant Alien 2.2 revised";
+		name!.dispatchEvent(new Event("input", { bubbles: true }));
+		const availability = Array.from(document.querySelectorAll("label"))
+			.find((item) => item.textContent?.includes("sale availability"))
+			?.querySelector("select") as HTMLSelectElement | null;
+		availability!.value = "unavailable";
+		availability!.dispatchEvent(new Event("change", { bubbles: true }));
+		button("add variant")?.click();
+		await tick();
+		(
+			document.querySelector(
+				'[aria-label="Move variant 2 earlier"]',
+			) as HTMLButtonElement | null
+		)?.click();
+		await tick();
+
+		button("save draft")?.click();
+		await tick();
+		await Promise.resolve();
+
+		const saveCall = mocks.mutation.mock.calls.find(
+			([ref]) => ref === mocks.refs.saveDraft,
+		);
+		expect(saveCall?.[1]).toEqual(
+			expect.objectContaining({
+				productId: "product-1",
+				expectedDraftRevisionId: "graph-revision-1",
+			}),
+		);
+		expect(saveCall?.[1].draft).toEqual(
+			expect.objectContaining({
+				schemaVersion: 2,
+				productKind: "print",
+				title: "Avant Alien 2.2 revised",
+				saleAvailability: "unavailable",
+				seoDescription: "Imported SEO copy.",
+				shopPlacement: { featured: true, orderRank: "a0" },
+				webMedia: graphRevision.draft.webMedia,
+				printSources: graphRevision.draft.printSources,
+				printOptions: expect.objectContaining({
+					borderOptionsEnabled: true,
+				}),
+			}),
+		);
+		expect(saveCall?.[1].draft.variants).toEqual([
+			expect.objectContaining({ order: 0 }),
+			expect.objectContaining({ key: "variant-original", order: 1 }),
+		]);
 	});
 
 	it("accepts a delayed own-save query echo without replacing the next local edit", async () => {

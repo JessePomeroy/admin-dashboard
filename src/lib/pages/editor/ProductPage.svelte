@@ -8,6 +8,8 @@ import {
 	catalogProductEditorSaleAvailability,
 	catalogProductEditorTitle,
 	catalogProductEditorVariantCount,
+	catalogProductGraphPrintDraftFromForm,
+	catalogProductGraphPrintDraftFromRevision,
 	catalogProductKindLabel,
 	copyCatalogProductDraft,
 	emptyCatalogProductDraft,
@@ -48,6 +50,7 @@ let multiplierError = $state("");
 let variantsValid = $state(true);
 let currentJson = $derived(serializeCatalogProductDraft(form));
 let isGraphV2 = $derived(editorState?.graphVersion === 2 || editorState?.draft?.schemaVersion === 2 || editorState?.published?.schemaVersion === 2);
+let canEditGraphPrint = $derived(isGraphV2 && editorState?.productKind === "print" && Boolean(editorState.draft));
 let readOnlyRevision = $derived(editorState?.draft ?? editorState?.published ?? null);
 let dirty = $derived(initialized && hasActiveDraft && currentJson !== savedJson);
 let canSave = $derived(
@@ -72,11 +75,45 @@ function loadServerDraft(state: CatalogProductEditorState) {
 	initialized = true;
 }
 
+function loadServerGraphPrintDraft(state: CatalogProductEditorState) {
+	locallyCommittedRevisionIds = [];
+	form = catalogProductGraphPrintDraftFromRevision(state.draft);
+	hasActiveDraft = Boolean(state.draft);
+	baseRevisionId = state.draft?.revisionId;
+	loadedServerRevisionId = state.draft?.revisionId ?? null;
+	savedJson = serializeCatalogProductDraft(form);
+	multiplierInput = String(form.framePriceMultiplierBasisPoints);
+	saveState = "saved";
+	saveError = "";
+	multiplierError = "";
+	initialized = true;
+}
+
 $effect(() => {
 	if (!editorState) return;
 	if (isGraphV2) {
-		saveState = "saved";
-		initialized = true;
+		if (!canEditGraphPrint) {
+			saveState = "saved";
+			initialized = true;
+			return;
+		}
+		const serverRevisionId = editorState.draft?.revisionId ?? null;
+		if (!initialized) return loadServerGraphPrintDraft(editorState);
+		if (["saving", "discarding"].includes(saveState)) return;
+		if (serverRevisionId === loadedServerRevisionId) return;
+		const localEchoIndex = locallyCommittedRevisionIds.indexOf(serverRevisionId);
+		if (localEchoIndex >= 0) {
+			loadedServerRevisionId = serverRevisionId;
+			baseRevisionId = serverRevisionId ?? undefined;
+			locallyCommittedRevisionIds = locallyCommittedRevisionIds.slice(localEchoIndex + 1);
+			return;
+		}
+		if (dirty) {
+			saveState = "conflict";
+			saveError = "A newer server draft arrived while this page had unsaved changes. Reload before continuing.";
+			return;
+		}
+		loadServerGraphPrintDraft(editorState);
 		return;
 	}
 	const serverRevisionId = editorState.draft?.revisionId ?? null;
@@ -86,6 +123,7 @@ $effect(() => {
 	const localEchoIndex = locallyCommittedRevisionIds.indexOf(serverRevisionId);
 	if (localEchoIndex >= 0) {
 		loadedServerRevisionId = serverRevisionId;
+		baseRevisionId = serverRevisionId ?? undefined;
 		locallyCommittedRevisionIds = locallyCommittedRevisionIds.slice(localEchoIndex + 1);
 		return;
 	}
@@ -131,7 +169,10 @@ function rememberCommittedRevision(revisionId: string | null) {
 
 async function saveDraft() {
 	if (!canSave) return;
-	const draft = copyCatalogProductDraft(form);
+	if (!editorState?.draft) return;
+	const draft = canEditGraphPrint
+		? catalogProductGraphPrintDraftFromForm(editorState.draft, copyCatalogProductDraft(form))
+		: copyCatalogProductDraft(form);
 	saveState = "saving";
 	saveError = "";
 	try {
@@ -142,7 +183,7 @@ async function saveDraft() {
 		}) as { revisionId: string };
 		baseRevisionId = result.revisionId;
 		rememberCommittedRevision(result.revisionId);
-		savedJson = serializeCatalogProductDraft(draft);
+		savedJson = serializeCatalogProductDraft(form);
 		saveState = "saved";
 	} catch (error) {
 		saveError = mutationError(error, "Could not save this product draft.");
@@ -193,13 +234,13 @@ async function startDraft() {
 {:else if editorState === undefined}
 	<p class="loading" role="status">Loading product draft…</p>
 {:else}
-	<div class="settings-page product-page">
+		<div class="settings-page product-page">
 		<header class="settings-header">
-			<div><a class="back" href={baseHref}>← products</a><h1>{isGraphV2 ? catalogProductEditorTitle(readOnlyRevision)?.trim() || editorState.productKey : form.title?.trim() || editorState.productKey}</h1><p class="description">{isGraphV2 ? "Review the imported private catalog graph. Product-specific editing arrives in a later slice." : "Edit the private product definition and ordered price variants. This draft is not connected to the public shop."}</p></div>
-			{#if hasActiveDraft && !isGraphV2}<div class="actions"><span class="save-state" aria-live="polite">{saveState}</span><button type="button" class="primary" onclick={() => void saveDraft()} disabled={!canSave}>save draft</button></div>{/if}
+			<div><a class="back" href={baseHref}>← products</a><h1>{canEditGraphPrint || !isGraphV2 ? form.title?.trim() || editorState.productKey : catalogProductEditorTitle(readOnlyRevision)?.trim() || editorState.productKey}</h1><p class="description">{canEditGraphPrint ? "Edit the private imported print draft. This is still not connected to the public shop." : isGraphV2 ? "Review the imported private catalog graph. Product-specific editing arrives in a later slice." : "Edit the private product definition and ordered price variants. This draft is not connected to the public shop."}</p></div>
+			{#if hasActiveDraft && (!isGraphV2 || canEditGraphPrint)}<div class="actions"><span class="save-state" aria-live="polite">{saveState}</span><button type="button" class="primary" onclick={() => void saveDraft()} disabled={!canSave}>save draft</button></div>{/if}
 		</header>
 		{#if saveError}<p class="alert" role="alert">{saveError}</p>{/if}
-		{#if isGraphV2}
+		{#if isGraphV2 && !canEditGraphPrint}
 			<section aria-labelledby="product-readback-heading">
 				<div class="section-heading"><span>01</span><div><h2 id="product-readback-heading">imported catalog draft</h2><p>This product is stored in the new graph model as an unpublished draft.</p></div></div>
 				<dl class="readback-grid">
@@ -239,10 +280,12 @@ async function startDraft() {
 				{#if form.frameOptionsEnabled}<label class="multiplier">frame price multiplier (basis points)<input inputmode="numeric" value={multiplierInput} oninput={(event) => updateMultiplier(event.currentTarget.value)} aria-invalid={Boolean(multiplierError)} /><small>10,000 = 1×; 20,000 = 2×.</small>{#if multiplierError}<small class="field-error">{multiplierError}</small>{/if}</label>{/if}
 			</section>
 			<CatalogProductVariants variants={form.variants} onChange={(variants) => { form.variants = variants; }} onValidityChange={(valid) => { variantsValid = valid; }} disabled={["saving", "discarding", "conflict"].includes(saveState)} />
-			<section aria-labelledby="product-draft-actions-heading">
-				<div class="section-heading"><span>04</span><div><h2 id="product-draft-actions-heading">draft actions</h2><p>Discard clears the active draft pointer. The product identity and immutable revision history remain retained.</p></div></div>
-				<button type="button" class="danger" onclick={() => void discardDraft()} disabled={saveState === "saving" || saveState === "discarding"}>{saveState === "discarding" ? "discarding…" : "discard draft"}</button>
-			</section>
+			{#if !isGraphV2}
+				<section aria-labelledby="product-draft-actions-heading">
+					<div class="section-heading"><span>04</span><div><h2 id="product-draft-actions-heading">draft actions</h2><p>Discard clears the active draft pointer. The product identity and immutable revision history remain retained.</p></div></div>
+					<button type="button" class="danger" onclick={() => void discardDraft()} disabled={saveState === "saving" || saveState === "discarding"}>{saveState === "discarding" ? "discarding…" : "discard draft"}</button>
+				</section>
+			{/if}
 		{/if}
 	</div>
 {/if}
