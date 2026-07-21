@@ -4,6 +4,7 @@ import ProductPage from "../src/lib/pages/editor/ProductPage.svelte";
 import ProductsPage from "../src/lib/pages/editor/ProductsPage.svelte";
 
 const mocks = vi.hoisted(() => ({
+	upload: vi.fn(),
 	mutation: vi.fn(async (ref: { name?: string }) =>
 		ref.name === "catalog:createDraft"
 			? { productId: "new-product", revisionId: "new-revision" }
@@ -42,6 +43,9 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("$app/navigation", () => ({ goto: mocks.goto }));
+vi.mock("../src/lib/cmsMediaUpload", () => ({
+	uploadCmsMediaFile: mocks.upload,
+}));
 vi.mock("convex-svelte", async () => {
 	const { createSubscriber } = await import("svelte/reactivity");
 	const subscribe = createSubscriber((update) => {
@@ -414,6 +418,15 @@ function checkbox(label: string) {
 		.find((item) => item.textContent?.includes(label))
 		?.querySelector('input[type="checkbox"]') as HTMLInputElement | null;
 }
+function chooseFile(input: HTMLInputElement, file: File) {
+	Object.defineProperty(input, "files", {
+		configurable: true,
+		value: Object.assign([file], {
+			item: (index: number) => index === 0 ? file : null,
+		}),
+	});
+	input.dispatchEvent(new Event("change", { bubbles: true }));
+}
 async function updateDetailQuery(value: unknown) {
 	mocks.detailData = value;
 	mocks.notifyQuery?.();
@@ -423,6 +436,7 @@ async function updateDetailQuery(value: unknown) {
 
 describe("draft-only product editor", () => {
 	beforeEach(() => {
+		mocks.upload.mockReset();
 		mocks.mutation.mockClear();
 		mocks.goto.mockClear();
 		mocks.mutation.mockImplementation(async (ref: { name?: string }) =>
@@ -884,6 +898,88 @@ describe("draft-only product editor", () => {
 		expect(mocks.mutation.mock.calls.some(
 			([ref]) => ref === mocks.mediaRefs.registerReadyWebAsset,
 		)).toBe(false);
+	});
+
+	it("keeps an upload that finishes during a save dirty until it is persisted", async () => {
+		mocks.graphApiEnabled = true;
+		mocks.mediaEnabled = true;
+		mocks.enabledKinds = ["print", "tapestry"];
+		mocks.mediaListData = { page: [], isDone: true, continueCursor: "" };
+		mocks.detailData = {
+			productId: "product-1",
+			productKey: "sanity.catalog.tapestry",
+			productKind: "tapestry",
+			graphVersion: 2,
+			slug: "soft-portal",
+			draft: fixedPriceGraphRevision,
+			published: null,
+			updatedAt: 1,
+			publishedAt: null,
+		};
+		let finishUpload: ((asset: ReturnType<typeof mediaAsset>) => void) | undefined;
+		mocks.upload.mockImplementation(() => new Promise((resolve) => {
+			finishUpload = resolve;
+		}));
+		let finishFirstSave: ((result: { revisionId: string }) => void) | undefined;
+		let holdFirstSave = true;
+		mocks.mutation.mockImplementation((ref: { name?: string }) => {
+			if (ref.name === "catalog:saveDraft" && holdFirstSave) {
+				holdFirstSave = false;
+				return new Promise((resolve) => {
+					finishFirstSave = resolve;
+				});
+			}
+			return Promise.resolve({ revisionId: "saved-revision-2" });
+		});
+
+		await mountDetail();
+		chooseFile(
+			document.querySelector('input[type="file"]') as HTMLInputElement,
+			new File(["image"], "during-save.jpg", { type: "image/jpeg" }),
+		);
+		await tick();
+		const name = input("product name");
+		name!.value = "Soft Portal revised";
+		name!.dispatchEvent(new Event("input", { bubbles: true }));
+		await tick();
+		button("save draft")?.click();
+		await tick();
+		const firstSave = mocks.mutation.mock.calls.find(
+			([ref]) => ref === mocks.refs.saveDraft,
+		)?.[1].draft;
+		expect(firstSave.webMedia).not.toEqual(
+			expect.arrayContaining([expect.objectContaining({ assetId: "media-during-save" })]),
+		);
+
+		finishUpload?.(mediaAsset(
+			"media-during-save",
+			"55555555-5555-4555-8555-555555555555",
+			"during-save.jpg",
+		));
+		await Promise.resolve();
+		await tick();
+		await Promise.resolve();
+		await tick();
+		expect(document.body.textContent).toContain("during-save.jpg");
+
+		finishFirstSave?.({ revisionId: "saved-revision-1" });
+		await Promise.resolve();
+		await tick();
+		await Promise.resolve();
+		await tick();
+		expect(document.querySelector(".save-state")?.textContent).toBe("dirty");
+		expect(button("save draft")?.disabled).toBe(false);
+
+		button("save draft")?.click();
+		await tick();
+		await Promise.resolve();
+		const saves = mocks.mutation.mock.calls.filter(([ref]) => ref === mocks.refs.saveDraft);
+		expect(saves).toHaveLength(2);
+		expect(saves[1][1].draft.webMedia).toEqual(
+			expect.arrayContaining([
+				expect.objectContaining({ assetId: "media-during-save" }),
+			]),
+		);
 	});
 
 	it("surfaces product media query failures", async () => {
