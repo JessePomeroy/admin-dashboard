@@ -20,6 +20,12 @@ export interface CatalogProductVariantDraftForm {
 	status: CatalogVariantStatus;
 }
 
+export interface CatalogProductSetMemberDraftForm {
+	key: string;
+	mediaPlacementKey: string;
+	printSourceKey: string;
+}
+
 export interface CatalogProductDraftForm {
 	productKind: CatalogProductKind;
 	title?: string;
@@ -31,6 +37,7 @@ export interface CatalogProductDraftForm {
 	frameOptionsEnabled: boolean;
 	framePriceMultiplierBasisPoints: number;
 	variants: CatalogProductVariantDraftForm[];
+	setMembers: CatalogProductSetMemberDraftForm[];
 }
 
 export interface CatalogProductRevisionSummary {
@@ -122,6 +129,13 @@ export interface CatalogProductGraphV2VariantDraft {
 	status: CatalogVariantStatus;
 }
 
+export interface CatalogProductGraphV2SetMemberDraft {
+	key: string;
+	order: number;
+	mediaPlacementKey: string;
+	printSourceKey: string;
+}
+
 export interface CatalogProductGraphV2Draft {
 	schemaVersion: 2;
 	productKind: CatalogProductKind;
@@ -144,7 +158,7 @@ export interface CatalogProductGraphV2Draft {
 	variants?: CatalogProductGraphV2VariantDraft[];
 	webMedia?: unknown[];
 	printSources?: unknown[];
-	setMembers?: unknown[];
+	setMembers?: CatalogProductGraphV2SetMemberDraft[];
 	paidFile?: unknown;
 }
 
@@ -154,6 +168,7 @@ const CATALOG_FRAME_MULTIPLIER_BASIS_POINTS_MAXIMUM = 1_000_000;
 export const CATALOG_PRODUCT_VARIANT_LIMIT = 100;
 export const CATALOG_EDITABLE_GRAPH_PRODUCT_KINDS = [
 	"print",
+	"print_set",
 	"postcard",
 	"merchandise",
 	"tapestry",
@@ -213,6 +228,7 @@ export function emptyCatalogProductDraft(): CatalogProductDraftForm {
 		frameOptionsEnabled: false,
 		framePriceMultiplierBasisPoints: 10_000,
 		variants: [],
+		setMembers: [],
 	};
 }
 
@@ -259,6 +275,7 @@ export function catalogProductDraftFromRevision(
 			retailPriceCents: parseCatalogPriceCents(variant.retailPriceCents),
 			status: variant.status,
 		})),
+		setMembers: [],
 	};
 }
 
@@ -282,8 +299,11 @@ export function catalogProductGraphDraftFromRevision(
 	if (draft.currency !== "usd") {
 		throw new Error("The catalog graph editor requires USD pricing.");
 	}
-	if (draft.productKind === "print" && !draft.printOptions) {
-		throw new Error("The print graph editor requires print options.");
+	if (
+		(draft.productKind === "print" || draft.productKind === "print_set")
+		&& !draft.printOptions
+	) {
+		throw new Error("The print-family graph editor requires print options.");
 	}
 	return {
 		productKind: draft.productKind,
@@ -307,6 +327,13 @@ export function catalogProductGraphDraftFromRevision(
 				sizeOptionKey: variant.sizeOptionKey,
 				retailPriceCents: parseCatalogPriceCents(variant.retailPriceCents),
 				status: variant.status,
+			})),
+		setMembers: [...(draft.setMembers ?? [])]
+			.sort((left, right) => left.order - right.order)
+			.map((member) => ({
+				key: member.key,
+				mediaPlacementKey: member.mediaPlacementKey,
+				printSourceKey: member.printSourceKey,
 			})),
 	};
 }
@@ -339,6 +366,7 @@ export function copyCatalogProductDraft(
 			retailPriceCents: parseCatalogPriceCents(variant.retailPriceCents),
 			status: variant.status,
 		})),
+		setMembers: source.setMembers.map((member) => ({ ...member })),
 	};
 }
 
@@ -360,6 +388,11 @@ export function serializeCatalogProductDraft(draft: CatalogProductDraftForm) {
 			retailPriceCents: variant.retailPriceCents ?? null,
 			status: variant.status,
 		})),
+		setMembers: draft.setMembers.map((member) => ({
+			key: member.key,
+			mediaPlacementKey: member.mediaPlacementKey,
+			printSourceKey: member.printSourceKey,
+		})),
 	});
 }
 
@@ -379,11 +412,11 @@ export function catalogProductGraphDraftFromForm(
 		title: form.title,
 		slug: form.slug,
 		description: form.description,
-		...(draft.productKind === "print"
+		...(draft.productKind === "print" || draft.productKind === "print_set"
 			? { fulfillmentMode: requirePrintFulfillmentMode(form.fulfillmentMode) }
 			: {}),
 		saleAvailability: form.saleAvailability,
-		...(draft.productKind === "print"
+		...(draft.productKind === "print" || draft.productKind === "print_set"
 			? {
 					printOptions: {
 						borderOptionsEnabled: form.borderOptionsEnabled,
@@ -403,7 +436,17 @@ export function catalogProductGraphDraftFromForm(
 				? { retailPriceCents: parseCatalogPriceCents(variant.retailPriceCents) }
 				: {}),
 			status: variant.status,
-		})),
+			})),
+		...(draft.productKind === "print_set"
+			? {
+					setMembers: form.setMembers.map((member, order) => ({
+						key: member.key,
+						order,
+						mediaPlacementKey: member.mediaPlacementKey,
+						printSourceKey: member.printSourceKey,
+					})),
+				}
+			: {}),
 	};
 }
 
@@ -493,6 +536,28 @@ export function moveCatalogProductVariant(
 		return variants;
 	}
 	const reordered = variants.map((variant) => ({ ...variant }));
+	[reordered[index], reordered[destination]] = [
+		reordered[destination],
+		reordered[index],
+	];
+	return reordered;
+}
+
+export function moveCatalogProductSetMember(
+	members: readonly CatalogProductSetMemberDraftForm[],
+	index: number,
+	direction: -1 | 1,
+) {
+	const destination = index + direction;
+	if (
+		index < 0 ||
+		index >= members.length ||
+		destination < 0 ||
+		destination >= members.length
+	) {
+		return members;
+	}
+	const reordered = members.map((member) => ({ ...member }));
 	[reordered[index], reordered[destination]] = [
 		reordered[destination],
 		reordered[index],
