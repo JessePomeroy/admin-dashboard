@@ -21,6 +21,7 @@ export interface CatalogProductVariantDraftForm {
 }
 
 export interface CatalogProductDraftForm {
+	productKind: CatalogProductKind;
 	title?: string;
 	slug?: string;
 	description?: string;
@@ -151,6 +152,14 @@ export type CatalogProductStatus = "draft" | "discarded";
 const CATALOG_PRICE_CENTS_MAXIMUM = 100_000_000;
 const CATALOG_FRAME_MULTIPLIER_BASIS_POINTS_MAXIMUM = 1_000_000;
 export const CATALOG_PRODUCT_VARIANT_LIMIT = 100;
+export const CATALOG_EDITABLE_GRAPH_PRODUCT_KINDS = [
+	"print",
+	"postcard",
+	"merchandise",
+	"tapestry",
+] as const satisfies readonly CatalogProductKind[];
+export type CatalogEditableGraphProductKind =
+	(typeof CATALOG_EDITABLE_GRAPH_PRODUCT_KINDS)[number];
 
 function optionalProjectionValue(value: string | null | undefined) {
 	return value ?? undefined;
@@ -197,6 +206,7 @@ function newOpaqueCatalogKey(prefix: CatalogProductKind | "variant") {
 
 export function emptyCatalogProductDraft(): CatalogProductDraftForm {
 	return {
+		productKind: "print",
 		fulfillmentMode: "production_partner",
 		saleAvailability: "unavailable",
 		borderOptionsEnabled: false,
@@ -231,6 +241,7 @@ export function catalogProductDraftFromRevision(
 		throw new Error("The single-print editor requires a complete print revision.");
 	}
 	return {
+		productKind: "print",
 		title: optionalProjectionValue(revision.title),
 		slug: optionalProjectionValue(revision.slug),
 		description: optionalProjectionValue(revision.description),
@@ -251,29 +262,42 @@ export function catalogProductDraftFromRevision(
 	};
 }
 
-export function catalogProductGraphPrintDraftFromRevision(
+export function canEditCatalogProductGraphKind(
+	kind: CatalogProductKind | null | undefined,
+): kind is CatalogEditableGraphProductKind {
+	return CATALOG_EDITABLE_GRAPH_PRODUCT_KINDS.includes(
+		kind as CatalogEditableGraphProductKind,
+	);
+}
+
+export function catalogProductGraphDraftFromRevision(
 	revision: CatalogProductEditorRevision | null | undefined,
 ): CatalogProductDraftForm {
 	const draft = revision?.draft;
-	if (!revision || !draft || draft.productKind !== "print") {
-		throw new Error("The print graph editor requires an active print draft.");
+	if (!revision || !draft || !canEditCatalogProductGraphKind(draft.productKind)) {
+		throw new Error(
+			"The catalog graph editor requires an active editable product draft.",
+		);
 	}
 	if (draft.currency !== "usd") {
-		throw new Error("The print graph editor requires USD pricing.");
+		throw new Error("The catalog graph editor requires USD pricing.");
 	}
-	if (!draft.printOptions) {
+	if (draft.productKind === "print" && !draft.printOptions) {
 		throw new Error("The print graph editor requires print options.");
 	}
 	return {
+		productKind: draft.productKind,
 		title: optionalProjectionValue(draft.title),
 		slug: optionalProjectionValue(draft.slug),
 		description: optionalProjectionValue(draft.description),
-		fulfillmentMode: requirePrintFulfillmentMode(draft.fulfillmentMode),
+		fulfillmentMode: draft.productKind === "print"
+			? requirePrintFulfillmentMode(draft.fulfillmentMode)
+			: "production_partner",
 		saleAvailability: draft.saleAvailability,
-		borderOptionsEnabled: draft.printOptions.borderOptionsEnabled,
-		frameOptionsEnabled: draft.printOptions.frameOptionsEnabled,
+		borderOptionsEnabled: draft.printOptions?.borderOptionsEnabled ?? false,
+		frameOptionsEnabled: draft.printOptions?.frameOptionsEnabled ?? false,
 		framePriceMultiplierBasisPoints: parseCatalogBasisPoints(
-			draft.printOptions.framePriceMultiplierBasisPoints,
+			draft.printOptions?.framePriceMultiplierBasisPoints ?? 10_000,
 		),
 		variants: [...(draft.variants ?? [])]
 			.sort((left, right) => left.order - right.order)
@@ -300,6 +324,7 @@ export function copyCatalogProductDraft(
 		title: source.title,
 		slug: source.slug,
 		description: source.description,
+		productKind: source.productKind,
 		fulfillmentMode: requirePrintFulfillmentMode(source.fulfillmentMode),
 		saleAvailability: source.saleAvailability,
 		borderOptionsEnabled: source.borderOptionsEnabled,
@@ -322,6 +347,7 @@ export function serializeCatalogProductDraft(draft: CatalogProductDraftForm) {
 		title: draft.title ?? null,
 		slug: draft.slug ?? null,
 		description: draft.description ?? null,
+		productKind: draft.productKind,
 		fulfillmentMode: draft.fulfillmentMode,
 		saleAvailability: draft.saleAvailability,
 		borderOptionsEnabled: draft.borderOptionsEnabled,
@@ -337,28 +363,37 @@ export function serializeCatalogProductDraft(draft: CatalogProductDraftForm) {
 	});
 }
 
-export function catalogProductGraphPrintDraftFromForm(
+export function catalogProductGraphDraftFromForm(
 	revision: CatalogProductEditorRevision,
 	form: CatalogProductDraftForm,
 ): CatalogProductGraphV2Draft {
 	const draft = revision.draft;
-	if (!draft || draft.productKind !== "print") {
-		throw new Error("The print graph editor requires a print graph draft.");
+	if (!draft || !canEditCatalogProductGraphKind(draft.productKind)) {
+		throw new Error("The catalog graph editor requires an editable graph draft.");
+	}
+	if (form.productKind !== draft.productKind) {
+		throw new Error("The catalog graph editor cannot change product kind.");
 	}
 	return {
 		...draft,
 		title: form.title,
 		slug: form.slug,
 		description: form.description,
-		fulfillmentMode: requirePrintFulfillmentMode(form.fulfillmentMode),
+		...(draft.productKind === "print"
+			? { fulfillmentMode: requirePrintFulfillmentMode(form.fulfillmentMode) }
+			: {}),
 		saleAvailability: form.saleAvailability,
-		printOptions: {
-			borderOptionsEnabled: form.borderOptionsEnabled,
-			frameOptionsEnabled: form.frameOptionsEnabled,
-			framePriceMultiplierBasisPoints: parseCatalogBasisPoints(
-				form.framePriceMultiplierBasisPoints,
-			),
-		},
+		...(draft.productKind === "print"
+			? {
+					printOptions: {
+						borderOptionsEnabled: form.borderOptionsEnabled,
+						frameOptionsEnabled: form.frameOptionsEnabled,
+						framePriceMultiplierBasisPoints: parseCatalogBasisPoints(
+							form.framePriceMultiplierBasisPoints,
+						),
+					},
+				}
+			: {}),
 		variants: form.variants.map((variant, order) => ({
 			key: variant.key,
 			order,

@@ -2,6 +2,8 @@ import { describe, expect, it, vi } from "vitest";
 import {
 	addCatalogProductVariant,
 	CATALOG_PRODUCT_VARIANT_LIMIT,
+	catalogProductGraphDraftFromForm,
+	catalogProductGraphDraftFromRevision,
 	catalogProductDraftFromRevision,
 	catalogProductLabel,
 	catalogProductStatus,
@@ -82,6 +84,7 @@ describe("catalog product editor helpers", () => {
 		const projected = revision();
 		const draft = catalogProductDraftFromRevision(projected);
 		expect(draft).toEqual({
+			productKind: "print",
 			title: "Moonrise",
 			slug: "moonrise",
 			description: undefined,
@@ -109,6 +112,7 @@ describe("catalog product editor helpers", () => {
 			emptyCatalogProductDraft(),
 		);
 		expect(emptyCatalogProductDraft()).toEqual({
+			productKind: "print",
 			fulfillmentMode: "production_partner",
 			saleAvailability: "unavailable",
 			borderOptionsEnabled: false,
@@ -139,6 +143,68 @@ describe("catalog product editor helpers", () => {
 			'"retailPriceCents":0',
 		);
 		expect(serializeCatalogProductDraft(original)).not.toContain('"order":');
+	});
+
+	it("edits fixed-price graph products without dropping imported relations", () => {
+		const graphRevision: CatalogProductEditorRevision = {
+			revisionId: "revision-2",
+			schemaVersion: 2,
+			productKind: "tapestry",
+			createdAt: 1,
+			draft: {
+				schemaVersion: 2,
+				productKind: "tapestry",
+				title: "Soft Portal",
+				slug: "soft-portal",
+				description: "Imported tapestry.",
+				seoDescription: "Imported search copy.",
+				currency: "usd",
+				saleAvailability: "available",
+				shopPlacement: { featured: true, orderRank: "b0" },
+				variants: [
+					{
+						key: "variant-large",
+						order: 1,
+						retailPriceCents: 12000,
+						status: "enabled",
+					},
+					{
+						key: "variant-small",
+						order: 0,
+						retailPriceCents: 8000,
+						status: "disabled",
+					},
+				],
+				webMedia: [{ key: "web-primary", order: 0, assetId: "media-1" }],
+			},
+		};
+		const form = catalogProductGraphDraftFromRevision(graphRevision);
+		expect(form.productKind).toBe("tapestry");
+		expect(form.variants.map(({ key }) => key)).toEqual([
+			"variant-small",
+			"variant-large",
+		]);
+		const draft = catalogProductGraphDraftFromForm(graphRevision, {
+			...form,
+			title: "Soft Portal revised",
+			saleAvailability: "unavailable",
+		});
+		expect(draft).toEqual(
+			expect.objectContaining({
+				schemaVersion: 2,
+				productKind: "tapestry",
+				title: "Soft Portal revised",
+				saleAvailability: "unavailable",
+				seoDescription: "Imported search copy.",
+				shopPlacement: { featured: true, orderRank: "b0" },
+				webMedia: graphRevision.draft?.webMedia,
+			}),
+		);
+		expect(draft).not.toHaveProperty("printOptions");
+		expect(draft.variants).toEqual([
+			expect.objectContaining({ key: "variant-small", order: 0 }),
+			expect.objectContaining({ key: "variant-large", order: 1 }),
+		]);
 	});
 
 	it("labels active and discarded private products", () => {

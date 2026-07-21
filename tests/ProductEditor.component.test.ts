@@ -149,6 +149,43 @@ const graphRevision = {
 	printSourceAssets: [{ relationKey: "print-source", asset: { assetId: "source-1" } }],
 	paidFileAsset: null,
 };
+const fixedPriceGraphRevision = {
+	revisionId: "graph-revision-2",
+	schemaVersion: 2,
+	productKind: "tapestry",
+	createdAt: 1,
+	draft: {
+		schemaVersion: 2,
+		productKind: "tapestry",
+		title: "Soft Portal",
+		slug: "soft-portal",
+		description: "Imported tapestry description.",
+		seoDescription: "Imported tapestry SEO copy.",
+		currency: "usd",
+		saleAvailability: "available",
+		shopPlacement: { featured: false, orderRank: "c0" },
+		variants: [
+			{
+				key: "variant-small",
+				order: 0,
+				retailPriceCents: 8000,
+				status: "enabled",
+			},
+		],
+		webMedia: [
+			{
+				key: "web-primary",
+				order: 0,
+				role: "primary",
+				assetId: "media-2",
+				altText: "A tapestry.",
+			},
+		],
+	},
+	webMediaAssets: [{ placementKey: "web-primary", asset: { assetId: "media-2" } }],
+	printSourceAssets: [],
+	paidFileAsset: null,
+};
 
 async function mountList() {
 	components.push(mount(ProductsPage, { target: document.body }));
@@ -460,6 +497,66 @@ describe("draft-only product editor", () => {
 		expect(saveCall?.[1].draft.variants).toEqual([
 			expect.objectContaining({ order: 0 }),
 			expect.objectContaining({ key: "variant-original", order: 1 }),
+		]);
+	});
+
+	it("saves migrated fixed-price graph product drafts without exposing print-only controls", async () => {
+		mocks.detailData = {
+			productId: "product-1",
+			productKey: "sanity.catalog.tapestry",
+			productKind: "tapestry",
+			graphVersion: 2,
+			slug: "soft-portal",
+			draft: fixedPriceGraphRevision,
+			published: null,
+			updatedAt: 1,
+			publishedAt: null,
+		};
+		await mountDetail();
+		expect(document.body.textContent).toContain(
+			"Edit this private imported tapestry draft",
+		);
+		expect(document.body.textContent).not.toContain("fulfillment");
+		expect(document.body.textContent).not.toContain("offer frame options");
+
+		const name = input("product name");
+		name!.value = "Soft Portal revised";
+		name!.dispatchEvent(new Event("input", { bubbles: true }));
+		const price = input("retail price (cents)");
+		price!.value = "9000";
+		price!.dispatchEvent(new Event("input", { bubbles: true }));
+		await tick();
+
+		button("save draft")?.click();
+		await tick();
+		await Promise.resolve();
+
+		const saveCall = mocks.mutation.mock.calls.find(
+			([ref]) => ref === mocks.refs.saveDraft,
+		);
+		expect(saveCall?.[1]).toEqual(
+			expect.objectContaining({
+				productId: "product-1",
+				expectedDraftRevisionId: "graph-revision-2",
+			}),
+		);
+		expect(saveCall?.[1].draft).toEqual(
+			expect.objectContaining({
+				schemaVersion: 2,
+				productKind: "tapestry",
+				title: "Soft Portal revised",
+				seoDescription: "Imported tapestry SEO copy.",
+				shopPlacement: { featured: false, orderRank: "c0" },
+				webMedia: fixedPriceGraphRevision.draft.webMedia,
+			}),
+		);
+		expect(saveCall?.[1].draft).not.toHaveProperty("printOptions");
+		expect(saveCall?.[1].draft.variants).toEqual([
+			expect.objectContaining({
+				key: "variant-small",
+				order: 0,
+				retailPriceCents: 9000,
+			}),
 		]);
 	});
 
