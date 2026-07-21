@@ -1,5 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
 import {
+	addCatalogProductWebMedia,
+	alignCatalogProductWebMediaWithSetMembers,
+	CATALOG_PRODUCT_WEB_MEDIA_LIMIT,
 	addCatalogProductVariant,
 	CATALOG_PRODUCT_VARIANT_LIMIT,
 	catalogProductGraphDraftFromForm,
@@ -10,12 +13,14 @@ import {
 	copyCatalogProductDraft,
 	emptyCatalogProductDraft,
 	moveCatalogProductVariant,
+	moveCatalogProductWebMedia,
 	moveCatalogProductSetMember,
 	newCatalogProductKey,
 	newCatalogProductVariant,
 	parseCatalogBasisPoints,
 	parseCatalogPriceCents,
 	removeCatalogProductVariant,
+	removeCatalogProductWebMedia,
 	serializeCatalogProductDraft,
 	slugifyCatalogOptionKey,
 	slugifyCatalogProductTitle,
@@ -235,8 +240,8 @@ describe("catalog product editor helpers", () => {
 				],
 				webMedia: [
 					{ key: "cover", order: 0, role: "cover", assetId: "media-cover" },
-					{ key: "member-a-media", order: 1, role: "set_member", assetId: "media-a" },
-					{ key: "member-b-media", order: 2, role: "set_member", assetId: "media-b" },
+					{ key: "member-a-media", order: 0, role: "set_member", assetId: "media-a" },
+					{ key: "member-b-media", order: 1, role: "set_member", assetId: "media-b" },
 				],
 				printSources: [
 					{ key: "member-a-source", order: 0, assetId: "source-a" },
@@ -273,11 +278,18 @@ describe("catalog product editor helpers", () => {
 				title: "Twin Moons revised",
 				seoDescription: "Imported set search copy.",
 				shopPlacement: { featured: true, orderRank: "a0" },
-				webMedia: graphRevision.draft?.webMedia,
-				printSources: graphRevision.draft?.printSources,
 				printOptions: expect.objectContaining({ borderOptionsEnabled: true }),
 			}),
 		);
+		expect(draft.webMedia).toEqual([
+			expect.objectContaining({ key: "cover", role: "cover", order: 0 }),
+			expect.objectContaining({ key: "member-b-media", role: "set_member", order: 0 }),
+			expect.objectContaining({ key: "member-a-media", role: "set_member", order: 1 }),
+		]);
+		expect(draft.printSources).toEqual([
+			expect.objectContaining({ key: "member-b-source", order: 0 }),
+			expect.objectContaining({ key: "member-a-source", order: 1 }),
+		]);
 		expect(draft.setMembers).toEqual([
 			expect.objectContaining({ key: "member-b", order: 0 }),
 			expect.objectContaining({ key: "member-a", order: 1 }),
@@ -430,6 +442,89 @@ describe("catalog product editor helpers", () => {
 				{ key: "variant-overflow", status: "enabled" },
 			),
 		).toThrow(/cannot exceed 100 variants/i);
+	});
+
+	it("adds display media in role order while preserving hidden share metadata", () => {
+		const share = {
+			key: "imported-share",
+			role: "social_share" as const,
+			assetId: "hidden-share",
+			altText: "Imported share image",
+		};
+		const primary = addCatalogProductWebMedia([share], {
+			_id: "media-primary",
+			assetId: "11111111-1111-4111-8111-111111111111",
+		}, "print");
+		expect(primary.map(({ role }) => role)).toEqual(["primary", "social_share"]);
+		expect(primary[0]).toMatchObject({
+			key: "media-primary-11111111-1111-4111-8111-111111111111",
+			assetId: "media-primary",
+		});
+
+		const gallery = addCatalogProductWebMedia(primary, {
+			_id: "media-gallery",
+			assetId: "22222222-2222-4222-8222-222222222222",
+		}, "print");
+		expect(gallery.map(({ role }) => role)).toEqual([
+			"primary",
+			"gallery",
+			"social_share",
+		]);
+		expect(gallery.at(-1)).toEqual(share);
+		expect(() => addCatalogProductWebMedia(gallery, {
+			_id: "media-gallery",
+			assetId: "33333333-3333-4333-8333-333333333333",
+		}, "print")).toThrow(/already attached/i);
+
+		const shareReuse = addCatalogProductWebMedia([share], {
+			_id: "hidden-share",
+			assetId: "44444444-4444-4444-8444-444444444444",
+		}, "tapestry");
+		expect(shareReuse.map(({ role }) => role)).toEqual(["gallery", "social_share"]);
+	});
+
+	it("keeps same-role gallery order, alt text, and detach operations immutable", () => {
+		const placements = [
+			{ key: "gallery-z", role: "gallery" as const, assetId: "media-z", altText: "Z image" },
+			{ key: "gallery-a", role: "gallery" as const, assetId: "media-a", altText: "A image" },
+		];
+		const moved = moveCatalogProductWebMedia(placements, "gallery-a", -1);
+		expect(moved.map(({ key }) => key)).toEqual(["gallery-a", "gallery-z"]);
+		expect(moved[0]?.altText).toBe("A image");
+		expect(placements.map(({ key }) => key)).toEqual(["gallery-z", "gallery-a"]);
+
+		const removed = removeCatalogProductWebMedia(moved, "gallery-z");
+		expect(removed.map(({ key }) => key)).toEqual(["gallery-a"]);
+		expect(moved).toHaveLength(2);
+		expect(() => removeCatalogProductWebMedia(
+			placements,
+			"gallery-z",
+			[{ key: "member", mediaPlacementKey: "gallery-z", printSourceKey: "source" }],
+		)).toThrow(/belongs to a print-set member/i);
+	});
+
+	it("aligns print-set media to member order and rejects the placement limit", () => {
+		const placements = [
+			{ key: "cover", role: "cover" as const, assetId: "cover-media" },
+			{ key: "member-z", role: "set_member" as const, assetId: "media-z" },
+			{ key: "member-a", role: "set_member" as const, assetId: "media-a" },
+		];
+		const members = [
+			{ key: "second", mediaPlacementKey: "member-a", printSourceKey: "source-a" },
+			{ key: "first", mediaPlacementKey: "member-z", printSourceKey: "source-z" },
+		];
+		expect(
+			alignCatalogProductWebMediaWithSetMembers(placements, members).map(({ key }) => key),
+		).toEqual(["cover", "member-a", "member-z"]);
+		expect(() => addCatalogProductWebMedia(
+			Array.from({ length: CATALOG_PRODUCT_WEB_MEDIA_LIMIT }, (_, index) => ({
+				key: `gallery-${index}`,
+				role: "gallery" as const,
+				assetId: `media-${index}`,
+			})),
+			{ _id: "overflow", assetId: "55555555-5555-4555-8555-555555555555" },
+			"tapestry",
+		)).toThrow(/cannot exceed 50 web images/i);
 	});
 
 	it("accepts only strict bounded integer cents and literal basis points", () => {

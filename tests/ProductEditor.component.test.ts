@@ -18,14 +18,26 @@ const mocks = vi.hoisted(() => ({
 	listError: undefined as Error | undefined,
 	detailData: undefined as unknown,
 	detailError: undefined as Error | undefined,
+	mediaListData: undefined as unknown,
+	mediaListError: undefined as Error | undefined,
+	mediaPlacedData: [] as unknown[],
+	mediaPlacedError: undefined as Error | undefined,
 	notifyQuery: undefined as (() => void) | undefined,
 	enabledKinds: ["print"] as string[],
+	graphApiEnabled: false,
+	mediaEnabled: false,
+	mediaRegisterEnabled: true,
 	refs: {
 		listForEditor: { name: "catalog:listForEditor" },
 		getEditorState: { name: "catalog:getEditorState" },
 		createDraft: { name: "catalog:createDraft" },
 		saveDraft: { name: "catalog:saveDraft" },
 		discardDraft: { name: "catalog:discardDraft" },
+	},
+	mediaRefs: {
+		listForEditor: { name: "media:listForEditor" },
+		getManyForEditor: { name: "media:getManyForEditor" },
+		registerReadyWebAsset: { name: "media:registerReadyWebAsset" },
 	},
 }));
 
@@ -42,15 +54,17 @@ vi.mock("convex-svelte", async () => {
 		useQuery: (ref: { name?: string }) => ({
 			get data() {
 				subscribe();
-				return ref.name === "catalog:listForEditor"
-					? mocks.listData
-					: mocks.detailData;
+				if (ref.name === "catalog:listForEditor") return mocks.listData;
+				if (ref.name === "media:listForEditor") return mocks.mediaListData;
+				if (ref.name === "media:getManyForEditor") return mocks.mediaPlacedData;
+				return mocks.detailData;
 			},
 			get error() {
 				subscribe();
-				return ref.name === "catalog:listForEditor"
-					? mocks.listError
-					: mocks.detailError;
+				if (ref.name === "catalog:listForEditor") return mocks.listError;
+				if (ref.name === "media:listForEditor") return mocks.mediaListError;
+				if (ref.name === "media:getManyForEditor") return mocks.mediaPlacedError;
+				return mocks.detailError;
 			},
 		}),
 	};
@@ -64,11 +78,31 @@ vi.mock("../src/lib/config", () => ({
 		siteName: "test site",
 		fromEmail: "test@example.com",
 		isCreator: true,
-		api: { catalogProducts: mocks.refs },
+		api: {
+			catalogProducts: mocks.refs,
+			...(mocks.graphApiEnabled ? { catalogProductGraphs: mocks.refs } : {}),
+			...(mocks.mediaEnabled
+				? {
+						mediaAssets: {
+							listForEditor: mocks.mediaRefs.listForEditor,
+							getManyForEditor: mocks.mediaRefs.getManyForEditor,
+							...(mocks.mediaRegisterEnabled
+								? { registerReadyWebAsset: mocks.mediaRefs.registerReadyWebAsset }
+								: {}),
+						},
+					}
+				: {}),
+		},
 		editor: {
 			products: {
 				baseHref: "/admin/editor/products",
 				enabledKinds: mocks.enabledKinds,
+				...(mocks.mediaEnabled
+					? {
+							mediaBaseUrl: "https://media.example",
+							uploadEndpoint: "/api/admin/media",
+						}
+					: {}),
 			},
 		},
 	}),
@@ -145,7 +179,7 @@ const graphRevision = {
 		],
 		printSources: [{ key: "print-source", order: 0, assetId: "source-1" }],
 	},
-	webMediaAssets: [{ placementKey: "web-primary", asset: { assetId: "media-1" } }],
+	webMediaAssets: [{ placementKey: "web-primary", asset: { mediaAssetId: "media-1" } }],
 	printSourceAssets: [{ relationKey: "print-source", asset: { assetId: "source-1" } }],
 	paidFileAsset: null,
 };
@@ -183,7 +217,7 @@ const fixedPriceGraphRevision = {
 			},
 		],
 	},
-	webMediaAssets: [{ placementKey: "web-primary", asset: { assetId: "media-2" } }],
+	webMediaAssets: [{ placementKey: "web-primary", asset: { mediaAssetId: "media-2" } }],
 	printSourceAssets: [],
 	paidFileAsset: null,
 };
@@ -226,14 +260,14 @@ const printSetGraphRevision = {
 			},
 			{
 				key: "member-a-media",
-				order: 1,
+				order: 0,
 				role: "set_member",
 				assetId: "media-a",
 				altText: "First print.",
 			},
 			{
 				key: "member-b-media",
-				order: 2,
+				order: 1,
 				role: "set_member",
 				assetId: "media-b",
 				altText: "Second print.",
@@ -259,9 +293,9 @@ const printSetGraphRevision = {
 		],
 	},
 	webMediaAssets: [
-		{ placementKey: "cover", asset: { assetId: "media-cover" } },
-		{ placementKey: "member-a-media", asset: { assetId: "media-a" } },
-		{ placementKey: "member-b-media", asset: { assetId: "media-b" } },
+		{ placementKey: "cover", asset: { mediaAssetId: "media-cover" } },
+		{ placementKey: "member-a-media", asset: { mediaAssetId: "media-a" } },
+		{ placementKey: "member-b-media", asset: { mediaAssetId: "media-b" } },
 	],
 	printSourceAssets: [
 		{ relationKey: "member-a-source", asset: { assetId: "source-a" } },
@@ -309,7 +343,7 @@ const digitalDownloadGraphRevision = {
 		},
 	},
 	webMediaAssets: [
-		{ placementKey: "web-primary", asset: { assetId: "media-download" } },
+		{ placementKey: "web-primary", asset: { mediaAssetId: "media-download" } },
 	],
 	printSourceAssets: [],
 	paidFileAsset: {
@@ -326,6 +360,30 @@ const digitalDownloadGraphRevision = {
 		},
 	},
 };
+
+function mediaAsset(
+	_id: string,
+	assetId: string,
+	originalFilename: string,
+) {
+	return {
+		_id,
+		assetId,
+		originalFilename,
+		status: "ready" as const,
+		source: {
+			contentType: "image/jpeg",
+			sizeBytes: 1_000,
+			width: 1200,
+			height: 800,
+		},
+		derivatives: {
+			thumb: { key: `sites/site.example/web/${assetId}/thumb.webp`, width: 320, height: 213 },
+			card: { key: `sites/site.example/web/${assetId}/card.webp`, width: 768, height: 512 },
+		},
+		createdAt: 1,
+	};
+}
 
 async function mountList() {
 	components.push(mount(ProductsPage, { target: document.body }));
@@ -380,7 +438,14 @@ describe("draft-only product editor", () => {
 		mocks.listError = undefined;
 		mocks.detailData = undefined;
 		mocks.detailError = undefined;
+		mocks.mediaListData = undefined;
+		mocks.mediaListError = undefined;
+		mocks.mediaPlacedData = [];
+		mocks.mediaPlacedError = undefined;
 		mocks.enabledKinds = ["print"];
+		mocks.graphApiEnabled = false;
+		mocks.mediaEnabled = false;
+		mocks.mediaRegisterEnabled = true;
 	});
 	afterEach(() => {
 		for (const component of components.splice(0)) unmount(component);
@@ -703,6 +768,145 @@ describe("draft-only product editor", () => {
 		]);
 	});
 
+	it("edits product display media while preserving hidden share metadata", async () => {
+		mocks.graphApiEnabled = true;
+		mocks.mediaEnabled = true;
+		mocks.mediaRegisterEnabled = false;
+		mocks.enabledKinds = ["print", "tapestry"];
+		const first = mediaAsset(
+			"media-1",
+			"11111111-1111-4111-8111-111111111111",
+			"first.jpg",
+		);
+		const second = mediaAsset(
+			"media-2",
+			"22222222-2222-4222-8222-222222222222",
+			"second.jpg",
+		);
+		const hiddenShare = mediaAsset(
+			"media-share",
+			"33333333-3333-4333-8333-333333333333",
+			"hidden-share.jpg",
+		);
+		const extra = mediaAsset(
+			"media-3",
+			"44444444-4444-4444-8444-444444444444",
+			"extra.jpg",
+		);
+		mocks.mediaListData = {
+			page: [extra, second, first],
+			isDone: true,
+			continueCursor: "",
+		};
+		mocks.mediaPlacedData = [first, second, hiddenShare];
+		const mediaRevision = {
+			...fixedPriceGraphRevision,
+			draft: {
+				...fixedPriceGraphRevision.draft,
+				webMedia: [
+					{ key: "gallery-z", order: 0, role: "gallery", assetId: first._id, altText: "First alt" },
+					{ key: "gallery-a", order: 1, role: "gallery", assetId: second._id, altText: "Second alt" },
+					{ key: "share", order: 0, role: "social_share", assetId: hiddenShare._id, altText: "Share alt" },
+				],
+			},
+		};
+		mocks.detailData = {
+			productId: "product-1",
+			productKey: "sanity.catalog.tapestry",
+			productKind: "tapestry",
+			graphVersion: 2,
+			slug: "soft-portal",
+			draft: mediaRevision,
+			published: null,
+			updatedAt: 1,
+			publishedAt: null,
+		};
+
+		await mountDetail();
+		const mediaSection = document.querySelector(
+			'section[aria-labelledby="catalog-product-media-heading"]',
+		) as HTMLElement;
+		expect(mediaSection.textContent).toContain("first.jpg");
+		expect(mediaSection.textContent).toContain("second.jpg");
+		expect(mediaSection.textContent).not.toContain("hidden-share.jpg");
+		expect(mediaSection.querySelectorAll("li")).toHaveLength(2);
+		expect(mediaSection.querySelector<HTMLInputElement>('input[type="file"]')?.multiple).toBe(true);
+
+		(mediaSection.querySelector(
+			'[aria-label="Move image 2 earlier"]',
+		) as HTMLButtonElement).click();
+		await tick();
+		const firstAlt = mediaSection.querySelectorAll<HTMLInputElement>('input[maxlength="1000"]')[0];
+		firstAlt.value = "Second image revised";
+		firstAlt.dispatchEvent(new Event("input", { bubbles: true }));
+		button("choose from media")?.click();
+		await tick();
+		expect(document.querySelector(".picker")?.textContent).toContain("hidden-share.jpg");
+		const extraPickerRow = Array.from(document.querySelectorAll(".picker li"))
+			.find((row) => row.textContent?.includes("extra.jpg"));
+		(extraPickerRow?.querySelector("button") as HTMLButtonElement).click();
+		await tick();
+		expect(mediaSection.querySelectorAll("li")).toHaveLength(3);
+
+		button("save draft")?.click();
+		await tick();
+		await Promise.resolve();
+		const firstSave = mocks.mutation.mock.calls.find(
+			([ref]) => ref === mocks.refs.saveDraft,
+		)?.[1].draft;
+		expect(firstSave.webMedia).toEqual([
+			expect.objectContaining({ key: "gallery-a", role: "gallery", order: 0, altText: "Second image revised" }),
+			expect.objectContaining({ key: "gallery-z", role: "gallery", order: 1, altText: "First alt" }),
+			expect.objectContaining({
+				key: "media-gallery-44444444-4444-4444-8444-444444444444",
+				role: "gallery",
+				order: 2,
+				assetId: "media-3",
+			}),
+			expect.objectContaining({ key: "share", role: "social_share", order: 0, altText: "Share alt" }),
+		]);
+
+		const extraRow = Array.from(mediaSection.querySelectorAll("li"))
+			.find((row) => row.textContent?.includes("extra.jpg"));
+		(Array.from(extraRow?.querySelectorAll("button") ?? [])
+			.find((item) => item.textContent?.trim() === "remove") as HTMLButtonElement).click();
+		await tick();
+		expect(mediaSection.querySelectorAll("li")).toHaveLength(2);
+		button("save draft")?.click();
+		await tick();
+		await Promise.resolve();
+		const saves = mocks.mutation.mock.calls.filter(([ref]) => ref === mocks.refs.saveDraft);
+		expect(saves).toHaveLength(2);
+		expect(saves[1][1].draft.webMedia).toHaveLength(3);
+		expect(saves[1][1].draft.webMedia).not.toEqual(
+			expect.arrayContaining([expect.objectContaining({ assetId: "media-3" })]),
+		);
+		expect(mocks.mutation.mock.calls.some(
+			([ref]) => ref === mocks.mediaRefs.registerReadyWebAsset,
+		)).toBe(false);
+	});
+
+	it("surfaces product media query failures", async () => {
+		mocks.graphApiEnabled = true;
+		mocks.mediaEnabled = true;
+		mocks.mediaListError = new Error("media unavailable");
+		mocks.detailData = {
+			productId: "product-1",
+			productKey: "sanity.catalog.tapestry",
+			productKind: "tapestry",
+			graphVersion: 2,
+			slug: "soft-portal",
+			draft: fixedPriceGraphRevision,
+			published: null,
+			updatedAt: 1,
+			publishedAt: null,
+		};
+		await mountDetail();
+		expect(document.querySelector('[role="alert"]')?.textContent).toContain(
+			"Could not load product images",
+		);
+	});
+
 	it("saves migrated print-set graph drafts with ordered member references", async () => {
 		mocks.detailData = {
 			productId: "product-1",
@@ -751,11 +955,18 @@ describe("draft-only product editor", () => {
 				title: "Twin Moons revised",
 				seoDescription: "Imported print set SEO copy.",
 				shopPlacement: { featured: true, orderRank: "d0" },
-				webMedia: printSetGraphRevision.draft.webMedia,
-				printSources: printSetGraphRevision.draft.printSources,
 				printOptions: expect.objectContaining({ borderOptionsEnabled: true }),
 			}),
 		);
+		expect(saveCall?.[1].draft.webMedia).toEqual([
+			expect.objectContaining({ key: "cover", role: "cover", order: 0 }),
+			expect.objectContaining({ key: "member-b-media", role: "set_member", order: 0 }),
+			expect.objectContaining({ key: "member-a-media", role: "set_member", order: 1 }),
+		]);
+		expect(saveCall?.[1].draft.printSources).toEqual([
+			expect.objectContaining({ key: "member-b-source", order: 0 }),
+			expect.objectContaining({ key: "member-a-source", order: 1 }),
+		]);
 		expect(saveCall?.[1].draft.setMembers).toEqual([
 			expect.objectContaining({ key: "member-b", order: 0 }),
 			expect.objectContaining({ key: "member-a", order: 1 }),

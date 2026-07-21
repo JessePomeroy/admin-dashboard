@@ -68,7 +68,7 @@ function handleKeydown(event: KeyboardEvent) {
 		{#if assets.length === 0}
 			<div class="empty">
 				<strong>No ready media yet.</strong>
-				<p>Upload an image from the gallery editor, then reuse it here.</p>
+				<p>Upload an image from an editor, then reuse it here.</p>
 			</div>
 		{:else}
 			<ul>
