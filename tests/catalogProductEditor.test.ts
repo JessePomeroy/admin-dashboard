@@ -10,6 +10,7 @@ import {
 	copyCatalogProductDraft,
 	emptyCatalogProductDraft,
 	moveCatalogProductVariant,
+	moveCatalogProductSetMember,
 	newCatalogProductKey,
 	newCatalogProductVariant,
 	parseCatalogBasisPoints,
@@ -102,6 +103,7 @@ describe("catalog product editor helpers", () => {
 					status: "enabled",
 				},
 			],
+			setMembers: [],
 		});
 		expect(draft.variants[0]).not.toHaveProperty("order");
 		expect(projected.variants[0]).toHaveProperty("order", 0);
@@ -119,6 +121,7 @@ describe("catalog product editor helpers", () => {
 			frameOptionsEnabled: false,
 			framePriceMultiplierBasisPoints: 10_000,
 			variants: [],
+			setMembers: [],
 		});
 	});
 
@@ -204,6 +207,86 @@ describe("catalog product editor helpers", () => {
 		expect(draft.variants).toEqual([
 			expect.objectContaining({ key: "variant-small", order: 0 }),
 			expect.objectContaining({ key: "variant-large", order: 1 }),
+		]);
+	});
+
+	it("edits print-set graph products without dropping member or asset relations", () => {
+		const graphRevision: CatalogProductEditorRevision = {
+			revisionId: "revision-set",
+			schemaVersion: 2,
+			productKind: "print_set",
+			createdAt: 1,
+			draft: {
+				schemaVersion: 2,
+				productKind: "print_set",
+				title: "Twin Moons",
+				slug: "twin-moons",
+				description: "Imported set.",
+				seoDescription: "Imported set search copy.",
+				currency: "usd",
+				fulfillmentMode: "production_partner",
+				saleAvailability: "available",
+				shopPlacement: { featured: true, orderRank: "a0" },
+				printOptions: {
+					borderOptionsEnabled: true,
+					frameOptionsEnabled: false,
+					framePriceMultiplierBasisPoints: 10_000,
+				},
+				variants: [
+					{
+						key: "variant-set",
+						order: 0,
+						retailPriceCents: 18000,
+						status: "enabled",
+					},
+				],
+				webMedia: [
+					{ key: "cover", order: 0, role: "cover", assetId: "media-cover" },
+					{ key: "member-a-media", order: 1, role: "set_member", assetId: "media-a" },
+					{ key: "member-b-media", order: 2, role: "set_member", assetId: "media-b" },
+				],
+				printSources: [
+					{ key: "member-a-source", order: 0, assetId: "source-a" },
+					{ key: "member-b-source", order: 1, assetId: "source-b" },
+				],
+				setMembers: [
+					{
+						key: "member-a",
+						order: 0,
+						mediaPlacementKey: "member-a-media",
+						printSourceKey: "member-a-source",
+					},
+					{
+						key: "member-b",
+						order: 1,
+						mediaPlacementKey: "member-b-media",
+						printSourceKey: "member-b-source",
+					},
+				],
+			},
+		};
+		const form = catalogProductGraphDraftFromRevision(graphRevision);
+		expect(form.productKind).toBe("print_set");
+		const draft = catalogProductGraphDraftFromForm(graphRevision, {
+			...form,
+			title: "Twin Moons revised",
+			setMembers: [...moveCatalogProductSetMember(form.setMembers, 1, -1)],
+		});
+		expect(draft).toEqual(
+			expect.objectContaining({
+				schemaVersion: 2,
+				productKind: "print_set",
+				title: "Twin Moons revised",
+				seoDescription: "Imported set search copy.",
+				shopPlacement: { featured: true, orderRank: "a0" },
+				webMedia: graphRevision.draft?.webMedia,
+				printSources: graphRevision.draft?.printSources,
+				printOptions: expect.objectContaining({ borderOptionsEnabled: true }),
+			}),
+		);
+		expect(draft.setMembers).toEqual([
+			expect.objectContaining({ key: "member-b", order: 0 }),
+			expect.objectContaining({ key: "member-a", order: 1 }),
 		]);
 	});
 

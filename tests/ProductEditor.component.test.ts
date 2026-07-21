@@ -186,6 +186,88 @@ const fixedPriceGraphRevision = {
 	printSourceAssets: [],
 	paidFileAsset: null,
 };
+const printSetGraphRevision = {
+	revisionId: "graph-revision-set",
+	schemaVersion: 2,
+	productKind: "print_set",
+	createdAt: 1,
+	draft: {
+		schemaVersion: 2,
+		productKind: "print_set",
+		title: "Twin Moons",
+		slug: "twin-moons",
+		description: "Imported print set.",
+		seoDescription: "Imported print set SEO copy.",
+		currency: "usd",
+		fulfillmentMode: "production_partner",
+		saleAvailability: "available",
+		shopPlacement: { featured: true, orderRank: "d0" },
+		printOptions: {
+			borderOptionsEnabled: true,
+			frameOptionsEnabled: false,
+			framePriceMultiplierBasisPoints: 10_000,
+		},
+		variants: [
+			{
+				key: "variant-set",
+				order: 0,
+				retailPriceCents: 18000,
+				status: "enabled",
+			},
+		],
+		webMedia: [
+			{
+				key: "cover",
+				order: 0,
+				role: "cover",
+				assetId: "media-cover",
+				altText: "A print set.",
+			},
+			{
+				key: "member-a-media",
+				order: 1,
+				role: "set_member",
+				assetId: "media-a",
+				altText: "First print.",
+			},
+			{
+				key: "member-b-media",
+				order: 2,
+				role: "set_member",
+				assetId: "media-b",
+				altText: "Second print.",
+			},
+		],
+		printSources: [
+			{ key: "member-a-source", order: 0, assetId: "source-a" },
+			{ key: "member-b-source", order: 1, assetId: "source-b" },
+		],
+		setMembers: [
+			{
+				key: "member-a",
+				order: 0,
+				mediaPlacementKey: "member-a-media",
+				printSourceKey: "member-a-source",
+			},
+			{
+				key: "member-b",
+				order: 1,
+				mediaPlacementKey: "member-b-media",
+				printSourceKey: "member-b-source",
+			},
+		],
+	},
+	webMediaAssets: [
+		{ placementKey: "cover", asset: { assetId: "media-cover" } },
+		{ placementKey: "member-a-media", asset: { assetId: "media-a" } },
+		{ placementKey: "member-b-media", asset: { assetId: "media-b" } },
+	],
+	printSourceAssets: [
+		{ relationKey: "member-a-source", asset: { assetId: "source-a" } },
+		{ relationKey: "member-b-source", asset: { assetId: "source-b" } },
+	],
+	paidFileAsset: null,
+};
 
 async function mountList() {
 	components.push(mount(ProductsPage, { target: document.body }));
@@ -557,6 +639,65 @@ describe("draft-only product editor", () => {
 				order: 0,
 				retailPriceCents: 9000,
 			}),
+		]);
+	});
+
+	it("saves migrated print-set graph drafts with ordered member references", async () => {
+		mocks.detailData = {
+			productId: "product-1",
+			productKey: "sanity.catalog.printSet",
+			productKind: "print_set",
+			graphVersion: 2,
+			slug: "twin-moons",
+			draft: printSetGraphRevision,
+			published: null,
+			updatedAt: 1,
+			publishedAt: null,
+		};
+		await mountDetail();
+		expect(document.body.textContent).toContain(
+			"Edit this private imported print set draft",
+		);
+		expect(document.body.textContent).toContain("set members");
+
+		const name = input("product name");
+		name!.value = "Twin Moons revised";
+		name!.dispatchEvent(new Event("input", { bubbles: true }));
+		(
+			document.querySelector(
+				'[aria-label="Move set member 2 earlier"]',
+			) as HTMLButtonElement | null
+		)?.click();
+		await tick();
+
+		button("save draft")?.click();
+		await tick();
+		await Promise.resolve();
+
+		const saveCall = mocks.mutation.mock.calls.find(
+			([ref]) => ref === mocks.refs.saveDraft,
+		);
+		expect(saveCall?.[1]).toEqual(
+			expect.objectContaining({
+				productId: "product-1",
+				expectedDraftRevisionId: "graph-revision-set",
+			}),
+		);
+		expect(saveCall?.[1].draft).toEqual(
+			expect.objectContaining({
+				schemaVersion: 2,
+				productKind: "print_set",
+				title: "Twin Moons revised",
+				seoDescription: "Imported print set SEO copy.",
+				shopPlacement: { featured: true, orderRank: "d0" },
+				webMedia: printSetGraphRevision.draft.webMedia,
+				printSources: printSetGraphRevision.draft.printSources,
+				printOptions: expect.objectContaining({ borderOptionsEnabled: true }),
+			}),
+		);
+		expect(saveCall?.[1].draft.setMembers).toEqual([
+			expect.objectContaining({ key: "member-b", order: 0 }),
+			expect.objectContaining({ key: "member-a", order: 1 }),
 		]);
 	});
 

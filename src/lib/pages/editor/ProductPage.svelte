@@ -22,6 +22,7 @@ import {
 } from "../../catalogProductEditor";
 import { getAdminConfig } from "../../config";
 import "../../styles/editorial-page.css";
+import CatalogProductSetMembers from "./CatalogProductSetMembers.svelte";
 import CatalogProductVariants from "./CatalogProductVariants.svelte";
 
 let { productId }: { productId: string } = $props();
@@ -272,17 +273,20 @@ async function startDraft() {
 				</div>
 			</section>
 			<section aria-labelledby="sale-settings-heading">
-				<div class="section-heading"><span>02</span><div><h2 id="sale-settings-heading">sale settings</h2><p>{form.productKind === "print" ? "Choose how the print is fulfilled and whether customers may currently order it." : "Choose whether customers may currently order this product."}</p></div></div>
+				<div class="section-heading"><span>02</span><div><h2 id="sale-settings-heading">sale settings</h2><p>{form.productKind === "print" || form.productKind === "print_set" ? `Choose how the ${catalogProductKindLabel(form.productKind)} is fulfilled and whether customers may currently order it.` : "Choose whether customers may currently order this product."}</p></div></div>
 				<div class="fields two-column">
-					{#if form.productKind === "print"}<label>fulfillment<select bind:value={form.fulfillmentMode}><option value="production_partner">production partner</option><option value="merchant_fulfilled">handled by the studio</option></select></label>{/if}
+					{#if form.productKind === "print" || form.productKind === "print_set"}<label>fulfillment<select bind:value={form.fulfillmentMode}><option value="production_partner">production partner</option><option value="merchant_fulfilled">handled by the studio</option></select></label>{/if}
 					<label>sale availability<select bind:value={form.saleAvailability}><option value="available">available</option><option value="unavailable">unavailable</option></select></label>
 				</div>
-				{#if form.productKind === "print"}
+				{#if form.productKind === "print" || form.productKind === "print_set"}
 					<div class="option-grid"><label class="check"><input type="checkbox" bind:checked={form.borderOptionsEnabled} /><span>offer border options</span></label><label class="check"><input type="checkbox" bind:checked={form.frameOptionsEnabled} /><span>offer frame options</span></label></div>
 					{#if form.frameOptionsEnabled}<label class="multiplier">frame price multiplier (basis points)<input inputmode="numeric" value={multiplierInput} oninput={(event) => updateMultiplier(event.currentTarget.value)} aria-invalid={Boolean(multiplierError)} /><small>10,000 = 1×; 20,000 = 2×.</small>{#if multiplierError}<small class="field-error">{multiplierError}</small>{/if}</label>{/if}
 				{/if}
 			</section>
 			<CatalogProductVariants variants={form.variants} productLabel={catalogProductKindLabel(form.productKind)} onChange={(variants) => { form.variants = variants; }} onValidityChange={(valid) => { variantsValid = valid; }} disabled={["saving", "discarding", "conflict"].includes(saveState)} />
+			{#if form.productKind === "print_set"}
+				<CatalogProductSetMembers members={form.setMembers} onChange={(members) => { form.setMembers = members; }} disabled={["saving", "discarding", "conflict"].includes(saveState)} />
+			{/if}
 			{#if !isGraphV2}
 				<section aria-labelledby="product-draft-actions-heading">
 					<div class="section-heading"><span>04</span><div><h2 id="product-draft-actions-heading">draft actions</h2><p>Discard clears the active draft pointer. The product identity and immutable revision history remain retained.</p></div></div>
