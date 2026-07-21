@@ -78,7 +78,7 @@ export interface CatalogProductEditorRevision {
 	draft?: CatalogProductGraphV2Draft;
 	webMediaAssets?: CatalogEditorMediaRelation[];
 	printSourceAssets?: CatalogEditorMediaRelation[];
-	paidFileAsset?: CatalogEditorMediaRelation | null;
+	paidFileAsset?: CatalogEditorPaidFileRelation | null;
 }
 
 export interface CatalogProductEditorSummary {
@@ -118,6 +118,20 @@ export interface CatalogEditorMediaRelation {
 	placementKey?: string;
 	relationKey?: string;
 	asset: CatalogEditorMediaAsset;
+}
+
+export interface CatalogEditorPaidFileRelation {
+	relationKey: string;
+	asset: {
+		kind: "paid_digital_file";
+		assetId: string;
+		status: "verified";
+		originalFilename: string;
+		mimeType: "application/zip";
+		sizeBytes: number;
+		version?: string;
+		createdAt: number;
+	};
 }
 
 export interface CatalogProductGraphV2VariantDraft {
@@ -172,6 +186,7 @@ export const CATALOG_EDITABLE_GRAPH_PRODUCT_KINDS = [
 	"postcard",
 	"merchandise",
 	"tapestry",
+	"digital_download",
 ] as const satisfies readonly CatalogProductKind[];
 export type CatalogEditableGraphProductKind =
 	(typeof CATALOG_EDITABLE_GRAPH_PRODUCT_KINDS)[number];
@@ -310,7 +325,7 @@ export function catalogProductGraphDraftFromRevision(
 		title: optionalProjectionValue(draft.title),
 		slug: optionalProjectionValue(draft.slug),
 		description: optionalProjectionValue(draft.description),
-		fulfillmentMode: draft.productKind === "print"
+		fulfillmentMode: draft.productKind === "print" || draft.productKind === "print_set"
 			? requirePrintFulfillmentMode(draft.fulfillmentMode)
 			: "production_partner",
 		saleAvailability: draft.saleAvailability,

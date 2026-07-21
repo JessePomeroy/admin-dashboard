@@ -464,7 +464,7 @@ export interface AdminEditorConfig {
 	products?: {
 		/** Shared workspace route; defaults to `/admin/editor/products`. */
 		baseHref?: string;
-		/** Product kinds exposed by this host. Non-print V2 kinds are read-only until their editors land. */
+		/** Product kinds exposed by this host's private draft editor. */
 		enabledKinds?: readonly (
 			| "print"
 			| "print_set"

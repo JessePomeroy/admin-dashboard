@@ -22,6 +22,7 @@ import {
 } from "../../catalogProductEditor";
 import { getAdminConfig } from "../../config";
 import "../../styles/editorial-page.css";
+import CatalogProductPaidFile from "./CatalogProductPaidFile.svelte";
 import CatalogProductSetMembers from "./CatalogProductSetMembers.svelte";
 import CatalogProductVariants from "./CatalogProductVariants.svelte";
 
@@ -54,6 +55,12 @@ let currentJson = $derived(serializeCatalogProductDraft(form));
 let isGraphV2 = $derived(editorState?.graphVersion === 2 || editorState?.draft?.schemaVersion === 2 || editorState?.published?.schemaVersion === 2);
 let canEditGraphProduct = $derived(isGraphV2 && canEditCatalogProductGraphKind(editorState?.productKind) && Boolean(editorState?.draft));
 let readOnlyRevision = $derived(editorState?.draft ?? editorState?.published ?? null);
+let usesSinglePrice = $derived(
+	form.productKind === "postcard"
+		|| form.productKind === "merchandise"
+		|| form.productKind === "tapestry"
+		|| form.productKind === "digital_download",
+);
 let dirty = $derived(initialized && hasActiveDraft && currentJson !== savedJson);
 let canSave = $derived(
 	hasActiveDraft
@@ -283,9 +290,12 @@ async function startDraft() {
 					{#if form.frameOptionsEnabled}<label class="multiplier">frame price multiplier (basis points)<input inputmode="numeric" value={multiplierInput} oninput={(event) => updateMultiplier(event.currentTarget.value)} aria-invalid={Boolean(multiplierError)} /><small>10,000 = 1×; 20,000 = 2×.</small>{#if multiplierError}<small class="field-error">{multiplierError}</small>{/if}</label>{/if}
 				{/if}
 			</section>
-			<CatalogProductVariants variants={form.variants} productLabel={catalogProductKindLabel(form.productKind)} onChange={(variants) => { form.variants = variants; }} onValidityChange={(valid) => { variantsValid = valid; }} disabled={["saving", "discarding", "conflict"].includes(saveState)} />
+			<CatalogProductVariants variants={form.variants} productLabel={catalogProductKindLabel(form.productKind)} fixedPrice={usesSinglePrice} onChange={(variants) => { form.variants = variants; }} onValidityChange={(valid) => { variantsValid = valid; }} disabled={["saving", "discarding", "conflict"].includes(saveState)} />
 			{#if form.productKind === "print_set"}
 				<CatalogProductSetMembers members={form.setMembers} onChange={(members) => { form.setMembers = members; }} disabled={["saving", "discarding", "conflict"].includes(saveState)} />
+			{/if}
+			{#if form.productKind === "digital_download"}
+				<CatalogProductPaidFile relation={readOnlyRevision?.paidFileAsset} />
 			{/if}
 			{#if !isGraphV2}
 				<section aria-labelledby="product-draft-actions-heading">

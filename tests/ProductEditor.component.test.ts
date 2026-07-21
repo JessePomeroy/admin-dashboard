@@ -162,11 +162,12 @@ const fixedPriceGraphRevision = {
 		description: "Imported tapestry description.",
 		seoDescription: "Imported tapestry SEO copy.",
 		currency: "usd",
+		fulfillmentMode: "merchant_fulfilled",
 		saleAvailability: "available",
 		shopPlacement: { featured: false, orderRank: "c0" },
 		variants: [
 			{
-				key: "variant-small",
+				key: "default",
 				order: 0,
 				retailPriceCents: 8000,
 				status: "enabled",
@@ -176,7 +177,7 @@ const fixedPriceGraphRevision = {
 			{
 				key: "web-primary",
 				order: 0,
-				role: "primary",
+				role: "gallery",
 				assetId: "media-2",
 				altText: "A tapestry.",
 			},
@@ -267,6 +268,63 @@ const printSetGraphRevision = {
 		{ relationKey: "member-b-source", asset: { assetId: "source-b" } },
 	],
 	paidFileAsset: null,
+};
+const digitalDownloadGraphRevision = {
+	revisionId: "graph-revision-download",
+	schemaVersion: 2,
+	productKind: "digital_download",
+	createdAt: 1,
+	draft: {
+		schemaVersion: 2,
+		productKind: "digital_download",
+		title: "Time-aware theme",
+		slug: "time-aware-theme",
+		description: "Imported digital download.",
+		seoDescription: "Imported download SEO copy.",
+		currency: "usd",
+		fulfillmentMode: "digital_delivery",
+		saleAvailability: "available",
+		shopPlacement: { featured: false, orderRank: "e0" },
+		variants: [
+			{
+				key: "default",
+				order: 0,
+				retailPriceCents: 1200,
+				status: "enabled",
+			},
+		],
+		webMedia: [
+			{
+				key: "web-primary",
+				order: 0,
+				role: "gallery",
+				assetId: "media-download",
+				altText: "A time-aware theme preview.",
+			},
+		],
+		paidFile: {
+			key: "download",
+			assetId: "paid-file-1",
+			version: "1.0.0",
+		},
+	},
+	webMediaAssets: [
+		{ placementKey: "web-primary", asset: { assetId: "media-download" } },
+	],
+	printSourceAssets: [],
+	paidFileAsset: {
+		relationKey: "download",
+		asset: {
+			kind: "paid_digital_file",
+			assetId: "paid-file-1",
+			status: "verified",
+			originalFilename: "time-aware-theme-v1.0.0.zip",
+			mimeType: "application/zip",
+			sizeBytes: 1_572_864,
+			version: "1.0.0",
+			createdAt: 1_750_000_000_000,
+		},
+	},
 };
 
 async function mountList() {
@@ -600,6 +658,9 @@ describe("draft-only product editor", () => {
 		);
 		expect(document.body.textContent).not.toContain("fulfillment");
 		expect(document.body.textContent).not.toContain("offer frame options");
+		expect(button("add variant")).toBeUndefined();
+		expect(input("material key")).toBeUndefined();
+		expect(input("size key")).toBeUndefined();
 
 		const name = input("product name");
 		name!.value = "Soft Portal revised";
@@ -635,7 +696,7 @@ describe("draft-only product editor", () => {
 		expect(saveCall?.[1].draft).not.toHaveProperty("printOptions");
 		expect(saveCall?.[1].draft.variants).toEqual([
 			expect.objectContaining({
-				key: "variant-small",
+				key: "default",
 				order: 0,
 				retailPriceCents: 9000,
 			}),
@@ -699,6 +760,95 @@ describe("draft-only product editor", () => {
 			expect.objectContaining({ key: "member-b", order: 0 }),
 			expect.objectContaining({ key: "member-a", order: 1 }),
 		]);
+	});
+
+	it("saves migrated digital-download drafts while showing only safe paid-file metadata", async () => {
+		mocks.enabledKinds = ["print", "digital_download"];
+		mocks.detailData = {
+			productId: "product-1",
+			productKey: "sanity.catalog.digitalDownload",
+			productKind: "digital_download",
+			graphVersion: 2,
+			slug: "time-aware-theme",
+			draft: digitalDownloadGraphRevision,
+			published: null,
+			updatedAt: 1,
+			publishedAt: null,
+		};
+		await mountDetail();
+		expect(document.body.textContent).toContain(
+			"Edit this private imported digital download draft",
+		);
+		expect(document.body.textContent).toContain("time-aware-theme-v1.0.0.zip");
+		expect(document.body.textContent).toContain("verified");
+		expect(document.body.textContent).toContain("application/zip");
+		expect(document.body.textContent).toContain("1.5 MB");
+		expect(document.body.textContent).toContain("1.0.0");
+		expect(document.querySelector('input[type="file"]')).toBeNull();
+		expect(button("replace file")).toBeUndefined();
+		expect(document.body.textContent).not.toContain("fulfillment");
+		expect(document.body.textContent).not.toContain("offer border options");
+		expect(document.body.textContent).not.toContain("offer frame options");
+		expect(document.body.textContent).not.toContain("set members");
+		expect(button("add variant")).toBeUndefined();
+		expect(input("material key")).toBeUndefined();
+		expect(input("size key")).toBeUndefined();
+
+		const name = input("product name");
+		name!.value = "Time-aware theme revised";
+		name!.dispatchEvent(new Event("input", { bubbles: true }));
+		const price = input("retail price (cents)");
+		price!.value = "";
+		price!.dispatchEvent(new Event("input", { bubbles: true }));
+		await tick();
+		expect(button("save draft")?.disabled).toBe(true);
+		expect(document.body.textContent).toContain(
+			"Retail price cents must be at least 1.",
+		);
+		price!.value = "0";
+		price!.dispatchEvent(new Event("input", { bubbles: true }));
+		await tick();
+		expect(button("save draft")?.disabled).toBe(true);
+		price!.value = "1500";
+		price!.dispatchEvent(new Event("input", { bubbles: true }));
+		await tick();
+		expect(button("save draft")?.disabled).toBe(false);
+
+		button("save draft")?.click();
+		await tick();
+		await Promise.resolve();
+
+		const saveCall = mocks.mutation.mock.calls.find(
+			([ref]) => ref === mocks.refs.saveDraft,
+		);
+		expect(saveCall?.[1]).toEqual(
+			expect.objectContaining({
+				productId: "product-1",
+				expectedDraftRevisionId: "graph-revision-download",
+			}),
+		);
+		expect(saveCall?.[1].draft).toEqual(
+			expect.objectContaining({
+				schemaVersion: 2,
+				productKind: "digital_download",
+				fulfillmentMode: "digital_delivery",
+				title: "Time-aware theme revised",
+				seoDescription: "Imported download SEO copy.",
+				shopPlacement: { featured: false, orderRank: "e0" },
+				webMedia: digitalDownloadGraphRevision.draft.webMedia,
+				paidFile: digitalDownloadGraphRevision.draft.paidFile,
+			}),
+		);
+		expect(saveCall?.[1].draft.variants).toEqual([
+			expect.objectContaining({
+				key: "default",
+				order: 0,
+				retailPriceCents: 1500,
+			}),
+		]);
+		expect(saveCall?.[1].draft).not.toHaveProperty("printOptions");
+		expect(saveCall?.[1].draft).not.toHaveProperty("printSources");
+		expect(saveCall?.[1].draft).not.toHaveProperty("setMembers");
 	});
 
 	it("accepts a delayed own-save query echo without replacing the next local edit", async () => {
