@@ -162,31 +162,25 @@ describe("catalog product editor helpers", () => {
 				description: "Imported tapestry.",
 				seoDescription: "Imported search copy.",
 				currency: "usd",
+				fulfillmentMode: "merchant_fulfilled",
 				saleAvailability: "available",
 				shopPlacement: { featured: true, orderRank: "b0" },
 				variants: [
 					{
-						key: "variant-large",
-						order: 1,
-						retailPriceCents: 12000,
-						status: "enabled",
-					},
-					{
-						key: "variant-small",
+						key: "default",
 						order: 0,
 						retailPriceCents: 8000,
-						status: "disabled",
+						status: "enabled",
 					},
 				],
-				webMedia: [{ key: "web-primary", order: 0, assetId: "media-1" }],
+				webMedia: [
+					{ key: "web-primary", order: 0, role: "gallery", assetId: "media-1" },
+				],
 			},
 		};
 		const form = catalogProductGraphDraftFromRevision(graphRevision);
 		expect(form.productKind).toBe("tapestry");
-		expect(form.variants.map(({ key }) => key)).toEqual([
-			"variant-small",
-			"variant-large",
-		]);
+		expect(form.variants.map(({ key }) => key)).toEqual(["default"]);
 		const draft = catalogProductGraphDraftFromForm(graphRevision, {
 			...form,
 			title: "Soft Portal revised",
@@ -205,8 +199,7 @@ describe("catalog product editor helpers", () => {
 		);
 		expect(draft).not.toHaveProperty("printOptions");
 		expect(draft.variants).toEqual([
-			expect.objectContaining({ key: "variant-small", order: 0 }),
-			expect.objectContaining({ key: "variant-large", order: 1 }),
+			expect.objectContaining({ key: "default", order: 0 }),
 		]);
 	});
 
@@ -224,7 +217,7 @@ describe("catalog product editor helpers", () => {
 				description: "Imported set.",
 				seoDescription: "Imported set search copy.",
 				currency: "usd",
-				fulfillmentMode: "production_partner",
+				fulfillmentMode: "merchant_fulfilled",
 				saleAvailability: "available",
 				shopPlacement: { featured: true, orderRank: "a0" },
 				printOptions: {
@@ -267,6 +260,7 @@ describe("catalog product editor helpers", () => {
 		};
 		const form = catalogProductGraphDraftFromRevision(graphRevision);
 		expect(form.productKind).toBe("print_set");
+		expect(form.fulfillmentMode).toBe("merchant_fulfilled");
 		const draft = catalogProductGraphDraftFromForm(graphRevision, {
 			...form,
 			title: "Twin Moons revised",
@@ -288,6 +282,77 @@ describe("catalog product editor helpers", () => {
 			expect.objectContaining({ key: "member-b", order: 0 }),
 			expect.objectContaining({ key: "member-a", order: 1 }),
 		]);
+		expect(draft.fulfillmentMode).toBe("merchant_fulfilled");
+	});
+
+	it("edits digital-download graph products without dropping the paid file or imported relations", () => {
+		const graphRevision: CatalogProductEditorRevision = {
+			revisionId: "revision-download",
+			schemaVersion: 2,
+			productKind: "digital_download",
+			createdAt: 1,
+			draft: {
+				schemaVersion: 2,
+				productKind: "digital_download",
+				title: "Time-aware theme",
+				slug: "time-aware-theme",
+				description: "Imported digital download.",
+				seoDescription: "Imported download search copy.",
+				currency: "usd",
+				fulfillmentMode: "digital_delivery",
+				saleAvailability: "available",
+				shopPlacement: { featured: false, orderRank: "e0" },
+				variants: [
+					{
+						key: "default",
+						order: 0,
+						retailPriceCents: 1200,
+						status: "enabled",
+					},
+				],
+				webMedia: [
+					{ key: "web-primary", order: 0, role: "gallery", assetId: "media-download" },
+				],
+				paidFile: {
+					key: "download",
+					assetId: "paid-file-1",
+					version: "1.0.0",
+				},
+			},
+		};
+		const form = catalogProductGraphDraftFromRevision(graphRevision);
+		expect(form.productKind).toBe("digital_download");
+		expect(form.variants[0]?.retailPriceCents).toBe(1200);
+		const draft = catalogProductGraphDraftFromForm(graphRevision, {
+			...form,
+			title: "Time-aware theme revised",
+			saleAvailability: "unavailable",
+			variants: [{ ...form.variants[0]!, retailPriceCents: 1500 }],
+		});
+		expect(draft).toEqual(
+			expect.objectContaining({
+				schemaVersion: 2,
+				productKind: "digital_download",
+				title: "Time-aware theme revised",
+				fulfillmentMode: "digital_delivery",
+				saleAvailability: "unavailable",
+				seoDescription: "Imported download search copy.",
+				shopPlacement: { featured: false, orderRank: "e0" },
+				webMedia: graphRevision.draft?.webMedia,
+				paidFile: graphRevision.draft?.paidFile,
+			}),
+		);
+		expect(draft.variants).toEqual([
+			{
+				key: "default",
+				order: 0,
+				retailPriceCents: 1500,
+				status: "enabled",
+			},
+		]);
+		expect(draft).not.toHaveProperty("printOptions");
+		expect(draft).not.toHaveProperty("printSources");
+		expect(draft).not.toHaveProperty("setMembers");
 	});
 
 	it("labels active and discarded private products", () => {

@@ -1,6 +1,6 @@
 <script lang="ts">
 import { addCatalogProductVariant, CATALOG_PRODUCT_VARIANT_LIMIT, moveCatalogProductVariant, parseCatalogPriceCents, removeCatalogProductVariant, slugifyCatalogOptionKey, type CatalogProductVariantDraftForm } from "../../catalogProductEditor";
-let { variants, disabled = false, productLabel = "print", onChange, onValidityChange = () => {} }: { variants: CatalogProductVariantDraftForm[]; disabled?: boolean; productLabel?: string; onChange: (variants: CatalogProductVariantDraftForm[]) => void; onValidityChange?: (valid: boolean) => void } = $props();
+let { variants, disabled = false, fixedPrice = false, productLabel = "print", onChange, onValidityChange = () => {} }: { variants: CatalogProductVariantDraftForm[]; disabled?: boolean; fixedPrice?: boolean; productLabel?: string; onChange: (variants: CatalogProductVariantDraftForm[]) => void; onValidityChange?: (valid: boolean) => void } = $props();
 let priceErrors = $state<Record<string, string>>({});
 function updateVariant(index: number, patch: Partial<CatalogProductVariantDraftForm>) {
 	onChange(variants.map((variant, itemIndex) => itemIndex === index ? { ...variant, ...patch } : variant));
@@ -10,6 +10,9 @@ function updatePrice(index: number, value: string) {
 	if (!variant) return;
 	try {
 		const retailPriceCents = parseCatalogPriceCents(value);
+		if (fixedPrice && (retailPriceCents === undefined || retailPriceCents <= 0)) {
+			throw new Error("Retail price cents must be at least 1.");
+		}
 		const nextErrors = { ...priceErrors, [variant.key]: "" };
 		priceErrors = nextErrors;
 		onValidityChange(!Object.values(nextErrors).some(Boolean));
@@ -28,7 +31,7 @@ function removeVariant(key: string) {
 }
 </script>
 <section aria-labelledby="catalog-variants-heading">
-	<div class="section-heading"><span>03</span><div><h2 id="catalog-variants-heading">prices and options</h2><p>{variants.length} {variants.length === 1 ? "variant" : "variants"}. Their order is saved exactly as shown.</p></div><button type="button" onclick={() => onChange(addCatalogProductVariant(variants))} disabled={disabled || variants.length >= CATALOG_PRODUCT_VARIANT_LIMIT}>add variant</button></div>
+	<div class="section-heading"><span>03</span><div><h2 id="catalog-variants-heading">{fixedPrice ? "price" : "prices and options"}</h2><p>{fixedPrice ? `Set the price and availability for this ${productLabel}.` : `${variants.length} ${variants.length === 1 ? "variant" : "variants"}. Their order is saved exactly as shown.`}</p></div>{#if !fixedPrice}<button type="button" onclick={() => onChange(addCatalogProductVariant(variants))} disabled={disabled || variants.length >= CATALOG_PRODUCT_VARIANT_LIMIT}>add variant</button>{/if}</div>
 	{#if variants.length >= CATALOG_PRODUCT_VARIANT_LIMIT}<p class="limit" role="status">This {productLabel} has reached the 100-variant limit.</p>{/if}
 	{#if variants.length === 0}
 		<p class="empty"><strong>No variants yet.</strong><span>Add a purchasable option when its price is known.</span></p>
@@ -37,17 +40,17 @@ function removeVariant(key: string) {
 			{#each variants as variant, index (variant.key)}
 				<li>
 					<div class="variant-heading"><span class="position">{String(index + 1).padStart(2, "0")}</span><div><strong>variant {index + 1}</strong><small>{variant.key}</small></div></div>
-					<div class="variant-fields">
-						<label>material key<input value={variant.materialOptionKey ?? ""} oninput={(event) => updateVariant(index, { materialOptionKey: slugifyCatalogOptionKey(event.currentTarget.value) || undefined })} maxlength="120" autocomplete="off" disabled={disabled} /></label>
-						<label>size key<input value={variant.sizeOptionKey ?? ""} oninput={(event) => updateVariant(index, { sizeOptionKey: slugifyCatalogOptionKey(event.currentTarget.value) || undefined })} maxlength="120" autocomplete="off" disabled={disabled} /></label>
+					<div class:fixed={fixedPrice} class="variant-fields">
+						{#if !fixedPrice}<label>material key<input value={variant.materialOptionKey ?? ""} oninput={(event) => updateVariant(index, { materialOptionKey: slugifyCatalogOptionKey(event.currentTarget.value) || undefined })} maxlength="120" autocomplete="off" disabled={disabled} /></label>{/if}
+						{#if !fixedPrice}<label>size key<input value={variant.sizeOptionKey ?? ""} oninput={(event) => updateVariant(index, { sizeOptionKey: slugifyCatalogOptionKey(event.currentTarget.value) || undefined })} maxlength="120" autocomplete="off" disabled={disabled} /></label>{/if}
 						<label>retail price (cents)<input inputmode="numeric" value={variant.retailPriceCents?.toString() ?? ""} oninput={(event) => updatePrice(index, event.currentTarget.value)} aria-invalid={Boolean(priceErrors[variant.key])} disabled={disabled} /><small>Enter whole cents; 1250 is $12.50.</small>{#if priceErrors[variant.key]}<small class="field-error">{priceErrors[variant.key]}</small>{/if}</label>
 						<label>availability<select value={variant.status} onchange={(event) => updateVariant(index, { status: event.currentTarget.value as "enabled" | "disabled" })} disabled={disabled}><option value="enabled">enabled</option><option value="disabled">disabled</option></select></label>
 					</div>
-					<div class="variant-actions" role="group" aria-label={`Reorder variant ${index + 1}`}>
+					{#if !fixedPrice}<div class="variant-actions" role="group" aria-label={`Reorder variant ${index + 1}`}>
 						<button type="button" onclick={() => onChange([...moveCatalogProductVariant(variants, index, -1)])} disabled={disabled || index === 0} aria-label={`Move variant ${index + 1} earlier`}>↑</button>
 						<button type="button" onclick={() => onChange([...moveCatalogProductVariant(variants, index, 1)])} disabled={disabled || index === variants.length - 1} aria-label={`Move variant ${index + 1} later`}>↓</button>
 						<button type="button" class="remove" onclick={() => removeVariant(variant.key)} disabled={disabled} aria-label={`Remove variant ${index + 1}`}>remove</button>
-					</div>
+					</div>{/if}
 				</li>
 			{/each}
 		</ol>
@@ -66,6 +69,7 @@ function removeVariant(key: string) {
 	.variant-heading strong, .variant-heading small { display: block; } .variant-heading strong { color: var(--admin-heading); font-size: .82rem; font-weight: 500; }
 	.variant-heading small { overflow: hidden; margin-top: 5px; color: var(--admin-text-subtle); font-size: .65rem; text-overflow: ellipsis; }
 	.variant-fields { display: grid; grid-template-columns: repeat(2, minmax(140px, 1fr)); gap: 14px; }
+	.variant-fields.fixed { grid-template-columns: repeat(2, minmax(180px, 1fr)); }
 	label { display: flex; flex-direction: column; gap: 7px; color: var(--admin-text-muted); font-size: .76rem; }
 	input, select { width: 100%; box-sizing: border-box; border: 1px solid var(--admin-border-strong); border-radius: 6px; padding: 10px 11px; background: var(--admin-bg); color: var(--admin-heading); font: inherit; text-transform: none; }
 	input:focus, select:focus, button:focus-visible { outline: 2px solid var(--admin-accent); outline-offset: 2px; } [aria-invalid="true"] { border-color: var(--status-rose); } .field-error { color: var(--status-rose); }
