@@ -1,6 +1,6 @@
 <script lang="ts">
 import { addCatalogProductVariant, CATALOG_PRODUCT_VARIANT_LIMIT, moveCatalogProductVariant, parseCatalogPriceCents, removeCatalogProductVariant, slugifyCatalogOptionKey, type CatalogProductVariantDraftForm } from "../../catalogProductEditor";
-let { variants, disabled = false, onChange, onValidityChange = () => {} }: { variants: CatalogProductVariantDraftForm[]; disabled?: boolean; onChange: (variants: CatalogProductVariantDraftForm[]) => void; onValidityChange?: (valid: boolean) => void } = $props();
+let { variants, disabled = false, productLabel = "print", onChange, onValidityChange = () => {} }: { variants: CatalogProductVariantDraftForm[]; disabled?: boolean; productLabel?: string; onChange: (variants: CatalogProductVariantDraftForm[]) => void; onValidityChange?: (valid: boolean) => void } = $props();
 let priceErrors = $state<Record<string, string>>({});
 function updateVariant(index: number, patch: Partial<CatalogProductVariantDraftForm>) {
 	onChange(variants.map((variant, itemIndex) => itemIndex === index ? { ...variant, ...patch } : variant));
@@ -28,10 +28,10 @@ function removeVariant(key: string) {
 }
 </script>
 <section aria-labelledby="catalog-variants-heading">
-	<div class="section-heading"><span>03</span><div><h2 id="catalog-variants-heading">sizes and materials</h2><p>{variants.length} {variants.length === 1 ? "variant" : "variants"}. Their order is saved exactly as shown.</p></div><button type="button" onclick={() => onChange(addCatalogProductVariant(variants))} disabled={disabled || variants.length >= CATALOG_PRODUCT_VARIANT_LIMIT}>add variant</button></div>
-	{#if variants.length >= CATALOG_PRODUCT_VARIANT_LIMIT}<p class="limit" role="status">This print has reached the 100-variant limit.</p>{/if}
+	<div class="section-heading"><span>03</span><div><h2 id="catalog-variants-heading">prices and options</h2><p>{variants.length} {variants.length === 1 ? "variant" : "variants"}. Their order is saved exactly as shown.</p></div><button type="button" onclick={() => onChange(addCatalogProductVariant(variants))} disabled={disabled || variants.length >= CATALOG_PRODUCT_VARIANT_LIMIT}>add variant</button></div>
+	{#if variants.length >= CATALOG_PRODUCT_VARIANT_LIMIT}<p class="limit" role="status">This {productLabel} has reached the 100-variant limit.</p>{/if}
 	{#if variants.length === 0}
-		<p class="empty"><strong>No variants yet.</strong><span>Add a size and material combination when its price is known.</span></p>
+		<p class="empty"><strong>No variants yet.</strong><span>Add a purchasable option when its price is known.</span></p>
 	{:else}
 		<ol>
 			{#each variants as variant, index (variant.key)}
