@@ -91,8 +91,8 @@ export interface CatalogProductEditorRevision {
 	source?: CatalogRevisionSource;
 	variants?: CatalogProductVariantProjection[];
 	draft?: CatalogProductGraphV2Draft;
-	webMediaAssets?: CatalogEditorWebMediaRelation[];
-	printSourceAssets?: CatalogEditorPrintSourceRelation[];
+	webMediaAssets?: CatalogEditorMediaRelation[];
+	printSourceAssets?: CatalogEditorMediaRelation[];
 	paidFileAsset?: CatalogEditorPaidFileRelation | null;
 }
 
@@ -120,7 +120,24 @@ export interface CatalogProductEditorState {
 	publishedAt: number | null;
 }
 
-export interface CatalogEditorWebMediaAsset {
+/** @deprecated Use the role-specific catalog media projection types instead. */
+export interface CatalogEditorMediaAsset {
+	assetId?: string;
+	filename?: string | null;
+	width?: number | null;
+	height?: number | null;
+	altText?: string | null;
+	url?: string | null;
+}
+
+/** @deprecated Use the role-specific catalog media relation types instead. */
+export interface CatalogEditorMediaRelation {
+	placementKey?: string;
+	relationKey?: string;
+	asset: CatalogEditorMediaAsset;
+}
+
+export interface CatalogEditorWebMediaAsset extends CatalogEditorMediaAsset {
 	mediaAssetId: string;
 	originalFilename: string;
 	status: "ready";
@@ -138,12 +155,12 @@ export interface CatalogEditorWebMediaAsset {
 	createdAt: number;
 }
 
-export interface CatalogEditorWebMediaRelation {
+export interface CatalogEditorWebMediaRelation extends CatalogEditorMediaRelation {
 	placementKey: string;
 	asset: CatalogEditorWebMediaAsset;
 }
 
-export interface CatalogEditorPrintSourceRelation {
+export interface CatalogEditorPrintSourceRelation extends CatalogEditorMediaRelation {
 	relationKey: string;
 	asset: {
 		kind: "print_source";
@@ -228,10 +245,10 @@ export interface CatalogProductGraphV2Draft {
 		framePriceMultiplierBasisPoints: number;
 	};
 	variants?: CatalogProductGraphV2VariantDraft[];
-	webMedia: CatalogProductGraphV2WebMediaDraft[];
-	printSources?: CatalogProductGraphV2PrintSourceDraft[];
+	webMedia?: unknown[];
+	printSources?: unknown[];
 	setMembers?: CatalogProductGraphV2SetMemberDraft[];
-	paidFile?: CatalogProductGraphV2PaidFileDraft;
+	paidFile?: unknown;
 }
 
 export type CatalogProductStatus = "draft" | "discarded";
@@ -379,6 +396,7 @@ export function catalogProductGraphDraftFromRevision(
 	) {
 		throw new Error("The print-family graph editor requires print options.");
 	}
+	const webMedia = catalogProductGraphWebMedia(draft.webMedia);
 	return {
 		productKind: draft.productKind,
 		title: optionalProjectionValue(draft.title),
@@ -409,7 +427,7 @@ export function catalogProductGraphDraftFromRevision(
 				mediaPlacementKey: member.mediaPlacementKey,
 				printSourceKey: member.printSourceKey,
 			})),
-		webMedia: canonicalCatalogProductWebMedia(draft.webMedia).map((placement) => ({
+		webMedia: canonicalCatalogProductWebMedia(webMedia).map((placement) => ({
 			key: placement.key,
 			role: placement.role,
 			assetId: placement.assetId,
@@ -497,6 +515,68 @@ const CATALOG_PRODUCT_WEB_MEDIA_ROLES: readonly CatalogProductWebMediaRole[] = [
 	"social_share",
 ];
 
+function isUnknownRecord(value: unknown): value is Record<string, unknown> {
+	return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function catalogProductGraphWebMedia(
+	value: unknown,
+): CatalogProductGraphV2WebMediaDraft[] {
+	if (value === undefined) return [];
+	if (!Array.isArray(value)) {
+		throw new Error("Catalog web media must be an ordered list.");
+	}
+	return value.map((placement) => {
+		if (
+			!isUnknownRecord(placement)
+			|| typeof placement.key !== "string"
+			|| !Number.isSafeInteger(placement.order)
+			|| (placement.order as number) < 0
+			|| !CATALOG_PRODUCT_WEB_MEDIA_ROLES.includes(
+				placement.role as CatalogProductWebMediaRole,
+			)
+			|| typeof placement.assetId !== "string"
+			|| (placement.altText !== undefined && typeof placement.altText !== "string")
+		) {
+			throw new Error("Catalog web media contains an invalid placement.");
+		}
+		return {
+			key: placement.key,
+			order: placement.order as number,
+			role: placement.role as CatalogProductWebMediaRole,
+			assetId: placement.assetId,
+			...(typeof placement.altText === "string"
+				? { altText: placement.altText }
+				: {}),
+		};
+	});
+}
+
+function catalogProductGraphPrintSources(
+	value: unknown,
+): CatalogProductGraphV2PrintSourceDraft[] {
+	if (value === undefined) return [];
+	if (!Array.isArray(value)) {
+		throw new Error("Catalog print sources must be an ordered list.");
+	}
+	return value.map((source) => {
+		if (
+			!isUnknownRecord(source)
+			|| typeof source.key !== "string"
+			|| !Number.isSafeInteger(source.order)
+			|| (source.order as number) < 0
+			|| typeof source.assetId !== "string"
+		) {
+			throw new Error("Catalog print sources contain an invalid relation.");
+		}
+		return {
+			key: source.key,
+			order: source.order as number,
+			assetId: source.assetId,
+		};
+	});
+}
+
 function canonicalCatalogProductWebMedia<T extends {
 	key: string;
 	order?: number;
@@ -574,7 +654,9 @@ export function catalogProductGraphDraftFromForm(
 	if (form.productKind !== draft.productKind) {
 		throw new Error("The catalog graph editor cannot change product kind.");
 	}
-	const webMedia = form.webMedia ?? draft.webMedia.map((placement) => ({
+	const currentWebMedia = catalogProductGraphWebMedia(draft.webMedia);
+	const currentPrintSources = catalogProductGraphPrintSources(draft.printSources);
+	const webMedia = form.webMedia ?? currentWebMedia.map((placement) => ({
 		key: placement.key,
 		role: placement.role,
 		assetId: placement.assetId,
@@ -582,7 +664,7 @@ export function catalogProductGraphDraftFromForm(
 	}));
 	const orderedPrintSources = draft.productKind === "print_set"
 		? (() => {
-			if (draft.printSources?.length !== form.setMembers.length) {
+			if (currentPrintSources.length !== form.setMembers.length) {
 				throw new Error("Print-set source relations must resolve exactly.");
 			}
 			const sourceKeys = new Set(form.setMembers.map((member) => member.printSourceKey));
@@ -590,14 +672,14 @@ export function catalogProductGraphDraftFromForm(
 				throw new Error("Print-set source relations must resolve exactly.");
 			}
 			return form.setMembers.map((member, order) => {
-				const source = draft.printSources?.find(
+				const source = currentPrintSources.find(
 					(candidate) => candidate.key === member.printSourceKey,
 				);
 				if (!source) throw new Error("Print-set source relations must resolve exactly.");
 				return { ...source, order };
 			});
 		})()
-		: draft.printSources;
+		: currentPrintSources;
 	return {
 		...draft,
 		title: form.title,
@@ -629,6 +711,9 @@ export function catalogProductGraphDraftFromForm(
 				: {}),
 			status: variant.status,
 			})),
+		...(draft.printSources !== undefined
+			? { printSources: currentPrintSources }
+			: {}),
 		...(draft.productKind === "print_set"
 			? {
 					printSources: orderedPrintSources,

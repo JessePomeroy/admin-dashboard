@@ -231,9 +231,11 @@ async function saveDraft() {
 	saveState = "saving";
 	saveError = "";
 	try {
+		const submittedForm = copyCatalogProductDraft(form);
+		const submittedJson = serializeCatalogProductDraft(submittedForm);
 		const draft = canEditGraphProduct
-			? catalogProductGraphDraftFromForm(editorState.draft, copyCatalogProductDraft(form))
-			: copyCatalogProductDraft(form);
+			? catalogProductGraphDraftFromForm(editorState.draft, submittedForm)
+			: submittedForm;
 		const result = await client.mutation(catalogApi.saveDraft, {
 			productId,
 			...(baseRevisionId ? { expectedDraftRevisionId: baseRevisionId } : {}),
@@ -241,8 +243,8 @@ async function saveDraft() {
 		}) as { revisionId: string };
 		baseRevisionId = result.revisionId;
 		rememberCommittedRevision(result.revisionId);
-		savedJson = serializeCatalogProductDraft(form);
-		saveState = "saved";
+		savedJson = submittedJson;
+		saveState = serializeCatalogProductDraft(form) === submittedJson ? "saved" : "dirty";
 	} catch (error) {
 		saveError = mutationError(error, "Could not save this product draft.");
 	}

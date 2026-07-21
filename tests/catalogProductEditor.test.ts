@@ -24,9 +24,43 @@ import {
 	serializeCatalogProductDraft,
 	slugifyCatalogOptionKey,
 	slugifyCatalogProductTitle,
+	type CatalogEditorMediaAsset,
+	type CatalogEditorMediaRelation,
+	type CatalogProductGraphV2Draft,
 	type CatalogProductEditorRevision,
 	type CatalogProductEditorSummary,
 } from "../src/lib/catalogProductEditor";
+
+const legacyCatalogMediaAsset: CatalogEditorMediaAsset = {
+	assetId: "legacy-asset",
+	filename: "legacy.jpg",
+};
+const legacyCatalogMediaRelation: CatalogEditorMediaRelation = {
+	placementKey: "legacy-placement",
+	asset: legacyCatalogMediaAsset,
+};
+const legacyLooseGraphDraft: CatalogProductGraphV2Draft = {
+	schemaVersion: 2,
+	productKind: "print",
+	currency: "usd",
+	saleAvailability: "available",
+	shopPlacement: { featured: false },
+	webMedia: [{ legacy: true }],
+	printSources: [{ legacy: true }],
+	paidFile: { legacy: true },
+};
+const legacyCatalogRevision: CatalogProductEditorRevision = {
+	revisionId: "legacy-revision",
+	schemaVersion: 2,
+	productKind: "print",
+	createdAt: 1,
+	draft: legacyLooseGraphDraft,
+	webMediaAssets: [legacyCatalogMediaRelation],
+	printSourceAssets: [{
+		relationKey: "legacy-source",
+		asset: { assetId: "legacy-private-source" },
+	}],
+};
 
 function revision(
 	overrides: Partial<CatalogProductEditorRevision> = {},
@@ -86,6 +120,12 @@ function summary(
 }
 
 describe("catalog product editor helpers", () => {
+	it("keeps the pre-3.29 catalog media types source compatible", () => {
+		expect(legacyCatalogMediaRelation.asset).toBe(legacyCatalogMediaAsset);
+		expect(legacyCatalogRevision.draft?.webMedia).toEqual([{ legacy: true }]);
+		expect(legacyCatalogRevision.webMediaAssets).toEqual([legacyCatalogMediaRelation]);
+	});
+
 	it("converts nullable projections, preserves zero, and strips order", () => {
 		const projected = revision();
 		const draft = catalogProductDraftFromRevision(projected);
