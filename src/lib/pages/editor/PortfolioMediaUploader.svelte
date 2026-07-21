@@ -2,10 +2,12 @@
 import { uploadCmsMediaFile, type CmsMediaUploadStatus } from "../../cmsMediaUpload";
 import type { PortfolioMediaAsset } from "../../portfolioEditor";
 
+type UploadItemStatus = CmsMediaUploadStatus | "library";
+
 interface UploadItem {
 	id: string;
 	file: File;
-	status: CmsMediaUploadStatus;
+	status: UploadItemStatus;
 	error: string;
 }
 
@@ -13,16 +15,23 @@ let {
 	endpoint,
 	onReady,
 	contextLabel = "gallery",
+	multiple = true,
+	maxFiles,
 }: {
 	endpoint: string;
-	onReady: (asset: PortfolioMediaAsset) => void;
+	onReady: (
+		asset: PortfolioMediaAsset,
+	) => boolean | void | Promise<boolean | void>;
 	contextLabel?: string;
+	multiple?: boolean;
+	maxFiles?: number;
 } = $props();
 
 let input: HTMLInputElement;
 let items = $state<UploadItem[]>([]);
 let active = 0;
 let sequence = 0;
+let limitNotice = $state("");
 
 function itemId() {
 	sequence += 1;
@@ -33,8 +42,29 @@ function update(id: string, change: Partial<Pick<UploadItem, "status" | "error">
 	items = items.map((item) => item.id === id ? { ...item, ...change } : item);
 }
 
+function reservedUploadCount() {
+	return items.filter((item) => [
+		"pending",
+		"authorizing",
+		"uploading",
+		"processing",
+	].includes(item.status)).length;
+}
+
 function enqueue(files: FileList | File[]) {
-	const next = [...files].map((file) => ({
+	const selectedFiles = [...files];
+	const remaining = maxFiles === undefined
+		? selectedFiles.length
+		: Math.max(0, maxFiles - reservedUploadCount());
+	const maximum = Math.max(0, Math.min(
+		multiple ? selectedFiles.length : 1,
+		remaining,
+	));
+	const acceptedFiles = selectedFiles.slice(0, maximum);
+	limitNotice = acceptedFiles.length < selectedFiles.length
+		? `Only ${acceptedFiles.length} ${acceptedFiles.length === 1 ? "image fits" : "images fit"} in this section.`
+		: "";
+	const next = acceptedFiles.map((file) => ({
 		id: itemId(),
 		file,
 		status: "pending" as const,
@@ -57,8 +87,11 @@ async function upload(item: UploadItem) {
 			endpoint,
 			onStatus: (status) => update(item.id, { status, error: "" }),
 		});
-		onReady(asset);
-		update(item.id, { status: "done", error: "" });
+		const attached = await onReady(asset);
+		update(item.id, {
+			status: attached === false ? "library" : "done",
+			error: "",
+		});
 	} catch (error) {
 		update(item.id, {
 			status: "error",
@@ -80,6 +113,10 @@ function processQueue() {
 }
 
 function retry(id: string) {
+	if (maxFiles !== undefined && reservedUploadCount() >= maxFiles) {
+		limitNotice = "No additional images fit in this section yet.";
+		return;
+	}
 	update(id, { status: "pending", error: "" });
 	processQueue();
 }
@@ -88,10 +125,11 @@ function remove(id: string) {
 	items = items.filter((item) => item.id !== id);
 }
 
-function statusLabel(status: CmsMediaUploadStatus) {
+function statusLabel(status: UploadItemStatus) {
 	if (status === "authorizing") return "preparing";
 	if (status === "processing") return "scaling for the site";
 	if (status === "done") return `added to this ${contextLabel}`;
+	if (status === "library") return "saved in the media library; not attached here";
 	return status;
 }
 </script>
@@ -103,9 +141,11 @@ function statusLabel(status: CmsMediaUploadStatus) {
 	</div>
 	<label class="upload-button">
 		<span>choose images</span>
-		<input bind:this={input} type="file" accept="image/jpeg,image/png,image/webp" multiple onchange={(event) => event.currentTarget.files && enqueue(event.currentTarget.files)} />
+		<input bind:this={input} type="file" accept="image/jpeg,image/png,image/webp" {multiple} onchange={(event) => event.currentTarget.files && enqueue(event.currentTarget.files)} />
 	</label>
 </div>
+
+{#if limitNotice}<p class="limit-notice" role="status">{limitNotice}</p>{/if}
 
 {#if items.length > 0}
 	<ul aria-label="Image upload queue" aria-live="polite">
@@ -116,7 +156,7 @@ function statusLabel(status: CmsMediaUploadStatus) {
 				{#if item.status === "error"}
 					<button type="button" onclick={() => retry(item.id)}>retry</button>
 					<button type="button" class="quiet" onclick={() => remove(item.id)}>remove</button>
-				{:else if item.status === "done"}
+				{:else if item.status === "done" || item.status === "library"}
 					<button type="button" class="quiet" onclick={() => remove(item.id)}>dismiss</button>
 				{/if}
 			</li>
@@ -139,6 +179,7 @@ function statusLabel(status: CmsMediaUploadStatus) {
 	li span { display: block; margin-top: 4px; color: var(--admin-text-subtle); font-size: .68rem; }
 	li p { grid-column: 1 / -1; margin: 0; color: var(--status-rose); font-size: .72rem; }
 	.quiet { color: var(--admin-text-muted); }
+	.limit-notice { margin: -8px 0 18px; color: var(--admin-text-muted); font-size: .72rem; }
 	@media (max-width: 700px) {
 		.uploader { align-items: stretch; flex-direction: column; }
 		.upload-button, button { min-height: 44px; justify-content: center; }

@@ -28,7 +28,20 @@ export function getCatalogProductEditorCapability(config: AdminConfig) {
 		graphApi.saveDraft &&
 		graphApi.discardDraft
 	) {
-		return { api: graphApi, enabledKinds, graphVersion: 2 as const, settings };
+		const mediaApi = settings.mediaBaseUrl
+			&& config.api.mediaAssets?.listForEditor
+			&& config.api.mediaAssets.getManyForEditor
+			? config.api.mediaAssets
+			: null;
+		return {
+			api: graphApi,
+			enabledKinds,
+			graphVersion: 2 as const,
+			settings,
+			media: mediaApi && settings.mediaBaseUrl
+				? { api: mediaApi, mediaBaseUrl: settings.mediaBaseUrl, uploadEndpoint: settings.uploadEndpoint }
+				: null,
+		};
 	}
 	const api = config.api.catalogProducts;
 	if (
@@ -42,5 +55,11 @@ export function getCatalogProductEditorCapability(config: AdminConfig) {
 	) {
 		return null;
 	}
-	return { api, enabledKinds: ["print"] as CatalogProductKind[], graphVersion: 1 as const, settings };
+	return {
+		api,
+		enabledKinds: ["print"] as CatalogProductKind[],
+		graphVersion: 1 as const,
+		settings,
+		media: null,
+	};
 }

@@ -3,6 +3,8 @@ import { useQuery } from "convex-svelte";
 import { useAdminClient } from "../../adminClient";
 import { getCatalogProductEditorCapability } from "../../catalogProductCapability";
 import {
+	addCatalogProductWebMedia,
+	alignCatalogProductWebMediaWithSetMembers,
 	catalogProductDraftFromRevision,
 	catalogProductEditorDescription,
 	catalogProductEditorSaleAvailability,
@@ -21,10 +23,17 @@ import {
 	type CatalogProductEditorState,
 } from "../../catalogProductEditor";
 import { getAdminConfig } from "../../config";
+import {
+	mergePortfolioMediaAssets,
+	type PortfolioMediaAsset,
+	type PortfolioMediaPage,
+} from "../../portfolioEditor";
 import "../../styles/editorial-page.css";
+import CatalogProductMedia from "./CatalogProductMedia.svelte";
 import CatalogProductPaidFile from "./CatalogProductPaidFile.svelte";
 import CatalogProductSetMembers from "./CatalogProductSetMembers.svelte";
 import CatalogProductVariants from "./CatalogProductVariants.svelte";
+import PortfolioMediaPicker from "./PortfolioMediaPicker.svelte";
 
 let { productId }: { productId: string } = $props();
 const config = getAdminConfig();
@@ -32,7 +41,7 @@ const capability = getCatalogProductEditorCapability(config);
 if (!capability) {
 	throw new Error("Single-print product editor is not configured for this host");
 }
-const { api: catalogApi, settings: productsConfig } = capability;
+const { api: catalogApi, settings: productsConfig, media: mediaCapability } = capability;
 
 const baseHref = productsConfig.baseHref ?? "/admin/editor/products";
 const client = useAdminClient();
@@ -51,6 +60,46 @@ let saveError = $state("");
 let multiplierInput = $state("10000");
 let multiplierError = $state("");
 let variantsValid = $state(true);
+let pickerOpen = $state(false);
+let uploadedAssets = $state<PortfolioMediaAsset[]>([]);
+let mediaActionError = $state("");
+const mediaListQuery = mediaCapability
+	? useQuery(mediaCapability.api.listForEditor, {
+			siteUrl: config.siteUrl,
+			paginationOpts: { numItems: 100, cursor: null },
+		})
+	: null;
+let mediaPage = $derived(mediaListQuery?.data as PortfolioMediaPage | undefined);
+let placedAssetIds = $derived([
+	...new Set((form.webMedia ?? []).map((placement) => placement.assetId)),
+]);
+const placedMediaQuery = mediaCapability
+	? useQuery(mediaCapability.api.getManyForEditor, () => ({
+			siteUrl: config.siteUrl,
+			ids: placedAssetIds,
+		}))
+	: null;
+let placedAssets = $derived((placedMediaQuery?.data ?? []) as PortfolioMediaAsset[]);
+let readyAssets = $derived(
+	[...new Map(
+		[
+			...uploadedAssets,
+			...((mediaPage?.page ?? []) as PortfolioMediaAsset[]),
+			...placedAssets,
+		]
+			.map((asset) => [asset._id, asset]),
+	).values()].filter((asset) => asset.status === "ready"),
+);
+let mediaById = $derived(mergePortfolioMediaAssets(
+	[...((mediaPage?.page ?? []) as PortfolioMediaAsset[]), ...uploadedAssets],
+	placedAssets,
+));
+let mediaQueryError = $derived(mediaListQuery?.error ?? placedMediaQuery?.error);
+let selectedAssetIds = $derived(new Set(
+	(form.webMedia ?? [])
+		.filter((placement) => placement.role !== "social_share")
+		.map((placement) => placement.assetId),
+));
 let currentJson = $derived(serializeCatalogProductDraft(form));
 let isGraphV2 = $derived(editorState?.graphVersion === 2 || editorState?.draft?.schemaVersion === 2 || editorState?.published?.schemaVersion === 2);
 let canEditGraphProduct = $derived(isGraphV2 && canEditCatalogProductGraphKind(editorState?.productKind) && Boolean(editorState?.draft));
@@ -179,12 +228,12 @@ function rememberCommittedRevision(revisionId: string | null) {
 async function saveDraft() {
 	if (!canSave) return;
 	if (!editorState?.draft) return;
-	const draft = canEditGraphProduct
-		? catalogProductGraphDraftFromForm(editorState.draft, copyCatalogProductDraft(form))
-		: copyCatalogProductDraft(form);
 	saveState = "saving";
 	saveError = "";
 	try {
+		const draft = canEditGraphProduct
+			? catalogProductGraphDraftFromForm(editorState.draft, copyCatalogProductDraft(form))
+			: copyCatalogProductDraft(form);
 		const result = await client.mutation(catalogApi.saveDraft, {
 			productId,
 			...(baseRevisionId ? { expectedDraftRevisionId: baseRevisionId } : {}),
@@ -235,6 +284,29 @@ async function startDraft() {
 		saveError = mutationError(error, "Could not start a new product draft.");
 	}
 }
+
+function addMediaAsset(asset: PortfolioMediaAsset) {
+	mediaActionError = "";
+	try {
+		form.webMedia = addCatalogProductWebMedia(
+			form.webMedia ?? [],
+			asset,
+			form.productKind,
+		);
+		pickerOpen = false;
+		return true;
+	} catch (error) {
+		mediaActionError = error instanceof Error
+			? error.message
+			: "This image could not be attached to the product.";
+		return false;
+	}
+}
+
+function addUploadedMediaAsset(asset: PortfolioMediaAsset) {
+	uploadedAssets = [asset, ...uploadedAssets.filter((item) => item._id !== asset._id)];
+	return addMediaAsset(asset);
+}
 </script>
 
 <svelte:head><title>Product — {config.siteName}</title></svelte:head>
@@ -249,6 +321,8 @@ async function startDraft() {
 			{#if hasActiveDraft && (!isGraphV2 || canEditGraphProduct)}<div class="actions"><span class="save-state" aria-live="polite">{saveState}</span><button type="button" class="primary" onclick={() => void saveDraft()} disabled={!canSave}>save draft</button></div>{/if}
 		</header>
 		{#if saveError}<p class="alert" role="alert">{saveError}</p>{/if}
+		{#if mediaActionError}<p class="alert" role="alert">{mediaActionError}</p>{/if}
+		{#if mediaQueryError}<p class="alert" role="alert">Could not load product images. Refresh this page to try again.</p>{/if}
 		{#if isGraphV2 && !canEditGraphProduct}
 			<section aria-labelledby="product-readback-heading">
 				<div class="section-heading"><span>01</span><div><h2 id="product-readback-heading">imported catalog draft</h2><p>This product is stored in the new graph model as an unpublished draft.</p></div></div>
@@ -291,8 +365,28 @@ async function startDraft() {
 				{/if}
 			</section>
 			<CatalogProductVariants variants={form.variants} productLabel={catalogProductKindLabel(form.productKind)} fixedPrice={usesSinglePrice} onChange={(variants) => { form.variants = variants; }} onValidityChange={(valid) => { variantsValid = valid; }} disabled={["saving", "discarding", "conflict"].includes(saveState)} />
+			{#if isGraphV2 && mediaCapability}
+				<CatalogProductMedia
+					placements={form.webMedia ?? []}
+					productKind={form.productKind}
+					members={form.setMembers}
+					{mediaById}
+					mediaBaseUrl={mediaCapability.mediaBaseUrl}
+					uploadEndpoint={mediaCapability.uploadEndpoint}
+					disabled={["saving", "discarding", "conflict"].includes(saveState)}
+					onChange={(placements) => { form.webMedia = placements; mediaActionError = ""; }}
+					onChooseMedia={() => { pickerOpen = true; mediaActionError = ""; }}
+					onUploadReady={addUploadedMediaAsset}
+				/>
+			{/if}
 			{#if form.productKind === "print_set"}
-				<CatalogProductSetMembers members={form.setMembers} onChange={(members) => { form.setMembers = members; }} disabled={["saving", "discarding", "conflict"].includes(saveState)} />
+				<CatalogProductSetMembers members={form.setMembers} onChange={(members) => {
+					form.setMembers = members;
+					form.webMedia = alignCatalogProductWebMediaWithSetMembers(
+						form.webMedia ?? [],
+						members,
+					);
+				}} disabled={["saving", "discarding", "conflict"].includes(saveState)} />
 			{/if}
 			{#if form.productKind === "digital_download"}
 				<CatalogProductPaidFile relation={readOnlyRevision?.paidFileAsset} />
@@ -305,6 +399,17 @@ async function startDraft() {
 			{/if}
 		{/if}
 	</div>
+{/if}
+
+{#if pickerOpen && mediaCapability}
+	<PortfolioMediaPicker
+		assets={readyAssets}
+		{selectedAssetIds}
+		mediaBaseUrl={mediaCapability.mediaBaseUrl}
+		hasMore={mediaPage ? !mediaPage.isDone : false}
+		onChoose={addMediaAsset}
+		onClose={() => (pickerOpen = false)}
+	/>
 {/if}
 <style>
 	.loading, .page-alert { margin: 48px 40px; } .loading { color: var(--admin-text-muted); } .product-page { max-width: 1040px; }

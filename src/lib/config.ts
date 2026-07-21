@@ -122,7 +122,9 @@ export interface AdminAPI {
 	};
 	/** Tenant-scoped CMS media reads shared by editor modules. */
 	mediaAssets?: {
+		listForEditor?: FnRef;
 		getManyForEditor: FnRef;
+		registerReadyWebAsset?: FnRef;
 	};
 	crm: {
 		createClient: FnRef;
@@ -464,6 +466,10 @@ export interface AdminEditorConfig {
 	products?: {
 		/** Shared workspace route; defaults to `/admin/editor/products`. */
 		baseHref?: string;
+		/** Public origin for immutable CMS image derivatives, without a trailing slash. */
+		mediaBaseUrl?: string;
+		/** Same-origin host endpoint that issues and completes CMS media uploads. */
+		uploadEndpoint?: string;
 		/** Product kinds exposed by this host's private draft editor. */
 		enabledKinds?: readonly (
 			| "print"

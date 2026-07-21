@@ -18,14 +18,31 @@ const SITE = "tenant.example";
 const ASSET_ID = "123e4567-e89b-42d3-a456-426614174000";
 const SOURCE_KEY = `sites/${SITE}/web/${ASSET_ID}/source.jpg`;
 
-function configure(verifyAdmin = vi.fn(async () => true)) {
+function configure(
+	verifyAdmin = vi.fn(async () => true),
+	registry: "generic" | "legacy" = "generic",
+) {
 	setServerConfig({
 		siteUrl: SITE,
 		siteName: "tenant",
 		fromEmail: "admin@tenant.example",
 		isCreator: false,
 		api: {
-			portfolioEditor: { registerReadyWebAsset: "mediaAssets.registerReadyWebAsset" },
+			...(registry === "generic"
+				? {
+						mediaAssets: {
+							getManyForEditor: "mediaAssets.getManyForEditor",
+							registerReadyWebAsset: "mediaAssets.registerReadyWebAsset",
+						},
+						portfolioEditor: {
+							registerReadyWebAsset: "portfolioEditor.registerReadyWebAsset",
+						},
+					}
+				: {
+						portfolioEditor: {
+							registerReadyWebAsset: "portfolioEditor.registerReadyWebAsset",
+						},
+					}),
 		} as never,
 		convexUrl: "https://convex.example",
 		resendApiKey: "",
@@ -175,6 +192,23 @@ describe("CMS media host handlers", () => {
 		expect(await response.json()).toMatchObject({
 			asset: { _id: "media-1", status: "ready", assetId: ASSET_ID },
 		});
+	});
+
+	it("keeps the legacy portfolio media registry as a compatibility fallback", async () => {
+		configure(vi.fn(async () => true), "legacy");
+		vi.stubGlobal("fetch", vi.fn()
+			.mockResolvedValueOnce(Response.json({ status: "uploaded", ready: false }))
+			.mockResolvedValueOnce(Response.json(readyWorkerAsset())));
+		mutation.mockResolvedValue({ id: "media-1", status: "ready" });
+
+		await createCmsMediaProcessHandler()({
+			request: request("/api/admin/media/process", { privateObjectKey: SOURCE_KEY }),
+		});
+
+		expect(mutation).toHaveBeenCalledWith(
+			"portfolioEditor.registerReadyWebAsset",
+			expect.objectContaining({ siteUrl: SITE }),
+		);
 	});
 
 	it("rejects a different missing-source response instead of bypassing finalization", async () => {

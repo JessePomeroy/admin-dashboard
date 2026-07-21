@@ -11,6 +11,12 @@ export type CatalogPrintFulfillmentMode =
 export type CatalogSaleAvailability = "available" | "unavailable";
 export type CatalogVariantStatus = "enabled" | "disabled";
 export type CatalogRevisionSource = "admin" | "sanityImport" | "restore";
+export type CatalogProductWebMediaRole =
+	| "primary"
+	| "cover"
+	| "gallery"
+	| "set_member"
+	| "social_share";
 
 export interface CatalogProductVariantDraftForm {
 	key: string;
@@ -26,6 +32,13 @@ export interface CatalogProductSetMemberDraftForm {
 	printSourceKey: string;
 }
 
+export interface CatalogProductWebMediaDraftForm {
+	key: string;
+	role: CatalogProductWebMediaRole;
+	assetId: string;
+	altText?: string;
+}
+
 export interface CatalogProductDraftForm {
 	productKind: CatalogProductKind;
 	title?: string;
@@ -38,6 +51,8 @@ export interface CatalogProductDraftForm {
 	framePriceMultiplierBasisPoints: number;
 	variants: CatalogProductVariantDraftForm[];
 	setMembers: CatalogProductSetMemberDraftForm[];
+	/** V2-only. Absent on the legacy V1 single-print form. */
+	webMedia?: CatalogProductWebMediaDraftForm[];
 }
 
 export interface CatalogProductRevisionSummary {
@@ -76,8 +91,8 @@ export interface CatalogProductEditorRevision {
 	source?: CatalogRevisionSource;
 	variants?: CatalogProductVariantProjection[];
 	draft?: CatalogProductGraphV2Draft;
-	webMediaAssets?: CatalogEditorMediaRelation[];
-	printSourceAssets?: CatalogEditorMediaRelation[];
+	webMediaAssets?: CatalogEditorWebMediaRelation[];
+	printSourceAssets?: CatalogEditorPrintSourceRelation[];
 	paidFileAsset?: CatalogEditorPaidFileRelation | null;
 }
 
@@ -105,19 +120,42 @@ export interface CatalogProductEditorState {
 	publishedAt: number | null;
 }
 
-export interface CatalogEditorMediaAsset {
-	assetId?: string;
-	filename?: string | null;
-	width?: number | null;
-	height?: number | null;
-	altText?: string | null;
-	url?: string | null;
+export interface CatalogEditorWebMediaAsset {
+	mediaAssetId: string;
+	originalFilename: string;
+	status: "ready";
+	source: {
+		contentType: string;
+		sizeBytes: number;
+		width: number;
+		height: number;
+	};
+	derivatives: Record<string, {
+		contentType: "image/webp";
+		width: number;
+		height: number;
+	}>;
+	createdAt: number;
 }
 
-export interface CatalogEditorMediaRelation {
-	placementKey?: string;
-	relationKey?: string;
-	asset: CatalogEditorMediaAsset;
+export interface CatalogEditorWebMediaRelation {
+	placementKey: string;
+	asset: CatalogEditorWebMediaAsset;
+}
+
+export interface CatalogEditorPrintSourceRelation {
+	relationKey: string;
+	asset: {
+		kind: "print_source";
+		assetId: string;
+		status: "verified";
+		originalFilename: string;
+		mimeType: "image/jpeg" | "image/png";
+		sizeBytes: number;
+		widthPixels: number;
+		heightPixels: number;
+		createdAt: number;
+	};
 }
 
 export interface CatalogEditorPaidFileRelation {
@@ -150,6 +188,26 @@ export interface CatalogProductGraphV2SetMemberDraft {
 	printSourceKey: string;
 }
 
+export interface CatalogProductGraphV2WebMediaDraft {
+	key: string;
+	order: number;
+	role: CatalogProductWebMediaRole;
+	assetId: string;
+	altText?: string;
+}
+
+export interface CatalogProductGraphV2PrintSourceDraft {
+	key: string;
+	order: number;
+	assetId: string;
+}
+
+export interface CatalogProductGraphV2PaidFileDraft {
+	key: string;
+	assetId: string;
+	version?: string;
+}
+
 export interface CatalogProductGraphV2Draft {
 	schemaVersion: 2;
 	productKind: CatalogProductKind;
@@ -170,16 +228,17 @@ export interface CatalogProductGraphV2Draft {
 		framePriceMultiplierBasisPoints: number;
 	};
 	variants?: CatalogProductGraphV2VariantDraft[];
-	webMedia?: unknown[];
-	printSources?: unknown[];
+	webMedia: CatalogProductGraphV2WebMediaDraft[];
+	printSources?: CatalogProductGraphV2PrintSourceDraft[];
 	setMembers?: CatalogProductGraphV2SetMemberDraft[];
-	paidFile?: unknown;
+	paidFile?: CatalogProductGraphV2PaidFileDraft;
 }
 
 export type CatalogProductStatus = "draft" | "discarded";
 const CATALOG_PRICE_CENTS_MAXIMUM = 100_000_000;
 const CATALOG_FRAME_MULTIPLIER_BASIS_POINTS_MAXIMUM = 1_000_000;
 export const CATALOG_PRODUCT_VARIANT_LIMIT = 100;
+export const CATALOG_PRODUCT_WEB_MEDIA_LIMIT = 50;
 export const CATALOG_EDITABLE_GRAPH_PRODUCT_KINDS = [
 	"print",
 	"print_set",
@@ -350,6 +409,12 @@ export function catalogProductGraphDraftFromRevision(
 				mediaPlacementKey: member.mediaPlacementKey,
 				printSourceKey: member.printSourceKey,
 			})),
+		webMedia: canonicalCatalogProductWebMedia(draft.webMedia).map((placement) => ({
+			key: placement.key,
+			role: placement.role,
+			assetId: placement.assetId,
+			altText: placement.altText,
+		})),
 	};
 }
 
@@ -382,6 +447,9 @@ export function copyCatalogProductDraft(
 			status: variant.status,
 		})),
 		setMembers: source.setMembers.map((member) => ({ ...member })),
+		...(source.webMedia
+			? { webMedia: source.webMedia.map((placement) => ({ ...placement })) }
+			: {}),
 	};
 }
 
@@ -408,6 +476,90 @@ export function serializeCatalogProductDraft(draft: CatalogProductDraftForm) {
 			mediaPlacementKey: member.mediaPlacementKey,
 			printSourceKey: member.printSourceKey,
 		})),
+		...(draft.webMedia
+			? {
+					webMedia: draft.webMedia.map((placement) => ({
+						key: placement.key,
+						role: placement.role,
+						assetId: placement.assetId,
+						altText: placement.altText ?? null,
+					})),
+				}
+			: {}),
+	});
+}
+
+const CATALOG_PRODUCT_WEB_MEDIA_ROLES: readonly CatalogProductWebMediaRole[] = [
+	"primary",
+	"cover",
+	"gallery",
+	"set_member",
+	"social_share",
+];
+
+function canonicalCatalogProductWebMedia<T extends {
+	key: string;
+	order?: number;
+	role: CatalogProductWebMediaRole;
+}>(placements: readonly T[]) {
+	return [...placements].sort((left, right) =>
+		CATALOG_PRODUCT_WEB_MEDIA_ROLES.indexOf(left.role)
+			- CATALOG_PRODUCT_WEB_MEDIA_ROLES.indexOf(right.role)
+			|| (left.order ?? 0) - (right.order ?? 0)
+			|| left.key.localeCompare(right.key)
+	);
+}
+
+function orderedCatalogProductWebMedia(
+	placements: readonly CatalogProductWebMediaDraftForm[],
+	members: readonly CatalogProductSetMemberDraftForm[],
+) {
+	const memberPlacementKeys = new Set(members.map((member) => member.mediaPlacementKey));
+	const memberPlacements = new Map(
+		placements
+			.filter((placement) => placement.role === "set_member")
+			.map((placement) => [placement.key, placement]),
+	);
+	if (
+		memberPlacementKeys.size !== members.length
+		|| memberPlacements.size !== memberPlacementKeys.size
+		|| [...memberPlacementKeys].some((key) => !memberPlacements.has(key))
+	) {
+		throw new Error("Print-set member image relations must resolve exactly.");
+	}
+	return CATALOG_PRODUCT_WEB_MEDIA_ROLES.flatMap((role) =>
+		role === "set_member"
+			? members.map(
+				(member) => memberPlacements.get(member.mediaPlacementKey) as CatalogProductWebMediaDraftForm,
+			)
+			: placements.filter((placement) => placement.role === role)
+	);
+}
+
+export function alignCatalogProductWebMediaWithSetMembers(
+	placements: readonly CatalogProductWebMediaDraftForm[],
+	members: readonly CatalogProductSetMemberDraftForm[],
+) {
+	return orderedCatalogProductWebMedia(placements, members).map(
+		(placement) => ({ ...placement }),
+	);
+}
+
+function graphWebMediaFromForm(
+	placements: readonly CatalogProductWebMediaDraftForm[],
+	members: readonly CatalogProductSetMemberDraftForm[],
+) {
+	const roleOrders = new Map<CatalogProductWebMediaRole, number>();
+	return alignCatalogProductWebMediaWithSetMembers(placements, members).map((placement) => {
+		const order = roleOrders.get(placement.role) ?? 0;
+		roleOrders.set(placement.role, order + 1);
+		return {
+			key: placement.key,
+			order,
+			role: placement.role,
+			assetId: placement.assetId,
+			...(placement.altText?.trim() ? { altText: placement.altText.trim() } : {}),
+		};
 	});
 }
 
@@ -422,6 +574,30 @@ export function catalogProductGraphDraftFromForm(
 	if (form.productKind !== draft.productKind) {
 		throw new Error("The catalog graph editor cannot change product kind.");
 	}
+	const webMedia = form.webMedia ?? draft.webMedia.map((placement) => ({
+		key: placement.key,
+		role: placement.role,
+		assetId: placement.assetId,
+		altText: placement.altText,
+	}));
+	const orderedPrintSources = draft.productKind === "print_set"
+		? (() => {
+			if (draft.printSources?.length !== form.setMembers.length) {
+				throw new Error("Print-set source relations must resolve exactly.");
+			}
+			const sourceKeys = new Set(form.setMembers.map((member) => member.printSourceKey));
+			if (sourceKeys.size !== form.setMembers.length) {
+				throw new Error("Print-set source relations must resolve exactly.");
+			}
+			return form.setMembers.map((member, order) => {
+				const source = draft.printSources?.find(
+					(candidate) => candidate.key === member.printSourceKey,
+				);
+				if (!source) throw new Error("Print-set source relations must resolve exactly.");
+				return { ...source, order };
+			});
+		})()
+		: draft.printSources;
 	return {
 		...draft,
 		title: form.title,
@@ -431,6 +607,7 @@ export function catalogProductGraphDraftFromForm(
 			? { fulfillmentMode: requirePrintFulfillmentMode(form.fulfillmentMode) }
 			: {}),
 		saleAvailability: form.saleAvailability,
+		webMedia: graphWebMediaFromForm(webMedia, form.setMembers),
 		...(draft.productKind === "print" || draft.productKind === "print_set"
 			? {
 					printOptions: {
@@ -454,6 +631,7 @@ export function catalogProductGraphDraftFromForm(
 			})),
 		...(draft.productKind === "print_set"
 			? {
+					printSources: orderedPrintSources,
 					setMembers: form.setMembers.map((member, order) => ({
 						key: member.key,
 						order,
@@ -463,6 +641,94 @@ export function catalogProductGraphDraftFromForm(
 				}
 			: {}),
 	};
+}
+
+function defaultCatalogProductWebMediaRole(
+	kind: CatalogProductKind,
+	placements: readonly CatalogProductWebMediaDraftForm[],
+): CatalogProductWebMediaRole {
+	if (kind === "print") {
+		return placements.some((placement) => placement.role === "primary")
+			? "gallery"
+			: "primary";
+	}
+	if (kind === "print_set") {
+		if (placements.some((placement) => placement.role === "cover")) {
+			throw new Error(
+				"This print set already has a cover. Remove the current cover before choosing another.",
+			);
+		}
+		return "cover";
+	}
+	return "gallery";
+}
+
+export function addCatalogProductWebMedia(
+	placements: readonly CatalogProductWebMediaDraftForm[],
+	asset: { _id: string; assetId: string },
+	productKind: CatalogProductKind,
+) {
+	if (placements.length >= CATALOG_PRODUCT_WEB_MEDIA_LIMIT) {
+		throw new Error(
+			`A product cannot exceed ${CATALOG_PRODUCT_WEB_MEDIA_LIMIT} web images.`,
+		);
+	}
+	if (placements.some(
+		(placement) => placement.role !== "social_share" && placement.assetId === asset._id,
+	)) {
+		throw new Error("This image is already attached to the product.");
+	}
+	const role = defaultCatalogProductWebMediaRole(productKind, placements);
+	const nextPlacement = {
+			key: `media-${role}-${asset.assetId}`,
+			role,
+			assetId: asset._id,
+			altText: "",
+	};
+	const roleIndex = CATALOG_PRODUCT_WEB_MEDIA_ROLES.indexOf(role);
+	const insertionIndex = placements.findIndex(
+		(placement) => CATALOG_PRODUCT_WEB_MEDIA_ROLES.indexOf(placement.role) > roleIndex,
+	);
+	const next = placements.map((placement) => ({ ...placement }));
+	next.splice(insertionIndex < 0 ? next.length : insertionIndex, 0, nextPlacement);
+	return next;
+}
+
+export function removeCatalogProductWebMedia(
+	placements: readonly CatalogProductWebMediaDraftForm[],
+	key: string,
+	members: readonly CatalogProductSetMemberDraftForm[] = [],
+) {
+	if (members.some((member) => member.mediaPlacementKey === key)) {
+		throw new Error(
+			"This image belongs to a print-set member and cannot be removed until that complete member workflow is available.",
+		);
+	}
+	return placements
+		.filter((placement) => placement.key !== key)
+		.map((placement) => ({ ...placement }));
+}
+
+export function moveCatalogProductWebMedia(
+	placements: readonly CatalogProductWebMediaDraftForm[],
+	key: string,
+	direction: -1 | 1,
+) {
+	const index = placements.findIndex((placement) => placement.key === key);
+	const placement = placements[index];
+	if (!placement || placement.role === "set_member") return placements;
+	const sameRoleIndexes = placements.flatMap((candidate, candidateIndex) =>
+		candidate.role === placement.role ? [candidateIndex] : []
+	);
+	const roleIndex = sameRoleIndexes.indexOf(index);
+	const destination = sameRoleIndexes[roleIndex + direction];
+	if (destination === undefined) return placements;
+	const reordered = placements.map((candidate) => ({ ...candidate }));
+	[reordered[index], reordered[destination]] = [
+		reordered[destination],
+		reordered[index],
+	];
+	return reordered;
 }
 
 export function catalogProductLabel(product: CatalogProductEditorSummary) {

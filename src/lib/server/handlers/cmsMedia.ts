@@ -13,10 +13,18 @@ function requireCmsMediaConfig() {
 	if (!config.cmsMediaWorkerUrl || !config.cmsMediaTenantSecret) {
 		throw error(500, "CMS media worker not configured");
 	}
-	if (!config.api.portfolioEditor?.registerReadyWebAsset) {
+	if (
+		!config.api.mediaAssets?.registerReadyWebAsset
+		&& !config.api.portfolioEditor?.registerReadyWebAsset
+	) {
 		throw error(500, "CMS media registry not configured");
 	}
 	return config;
+}
+
+function cmsMediaRegistry(config: ReturnType<typeof getServerConfig>) {
+	return config.api.mediaAssets?.registerReadyWebAsset
+		?? config.api.portfolioEditor!.registerReadyWebAsset;
 }
 
 function workerHeaders(secret: string) {
@@ -227,7 +235,7 @@ export function createCmsMediaProcessHandler() {
 				body: JSON.stringify({ privateObjectKey: input.privateObjectKey }),
 			})), config.siteUrl, privateKey.assetId);
 			const client = await getAuthenticatedConvex(request);
-			const registered = await client.mutation(config.api.portfolioEditor!.registerReadyWebAsset, {
+			const registered = await client.mutation(cmsMediaRegistry(config), {
 				siteUrl: config.siteUrl,
 				asset: ready,
 			}) as { id: string; status: "ready" };
