@@ -3,6 +3,7 @@ export {
 	getServerConfig,
 	type AdminAPI,
 	type AdminServerConfig,
+	type CatalogPrivateEditorUploadConfig,
 } from "./config.js";
 export { sendEmail, getResend, replaceTemplateVariables } from "./server/email.js";
 export { getConvex, getAuthenticatedConvex } from "./server/convexClient.js";
@@ -46,3 +47,18 @@ export {
 	createCmsMediaProcessHandler,
 } from "./server/handlers/cmsMedia.js";
 export { createCmsMediaDeleteHandler } from "./server/handlers/cmsMediaDeletion.js";
+export {
+	createCatalogPrivateEditorUploadCompleteHandler,
+	createCatalogPrivateEditorUploadPrepareHandler,
+	type CatalogPrivateEditorUploadAsset,
+	type CatalogPrivateEditorUploadCompleteRequest,
+	type CatalogPrivateEditorUploadCompleteResponse,
+	type CatalogPrivateEditorUploadDigitalAsset,
+	type CatalogPrivateEditorUploadDigitalPrepareRequest,
+	type CatalogPrivateEditorUploadPendingResponse,
+	type CatalogPrivateEditorUploadPrepareRequest,
+	type CatalogPrivateEditorUploadPrepareResponse,
+	type CatalogPrivateEditorUploadPrintAsset,
+	type CatalogPrivateEditorUploadPrintPrepareRequest,
+	type CatalogPrivateEditorUploadVerifiedResponse,
+} from "./server/handlers/catalogPrivateEditorUpload.js";

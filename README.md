@@ -125,6 +125,13 @@ export const adminServerConfig: AdminServerConfig = {
   cmsMediaConvexSiteUrl: privateEnv.CMS_MEDIA_CONVEX_SITE_URL ?? "",
   cmsMediaDeletionCompletionSecret:
     privateEnv.CMS_MEDIA_DELETION_COMPLETION_SECRET ?? "",
+  catalogPrivateEditorUpload: {
+    convexJournalOrigin: publicEnv.PUBLIC_CONVEX_SITE_URL ?? "",
+    hostJournalSecret: privateEnv.CATALOG_EDITOR_HOST_JOURNAL_SECRET ?? "",
+    workerOrigin: "https://cms-media-worker.thinkingofview.workers.dev",
+    storageCallerSecret: privateEnv.CATALOG_EDITOR_STORAGE_CALLER_SECRET ?? "",
+    browserOrigin: "https://www.angelsrest.online",
+  },
   verifyAdmin: adminAuth.verifyRequest,
   getConvexToken: adminAuth.getTokenFromRequest,
 };
@@ -183,6 +190,88 @@ CRM subscription onboarding and access changes are operator-run processes.
 - gallery upload-session, presign, upload, process, delete, and bulk-delete
   routes
 - CMS media upload/process and permanent asset-deletion routes
+- catalog private-editor upload prepare and storage-completion routes
+
+`createCatalogPrivateEditorUploadPrepareHandler` and
+`createCatalogPrivateEditorUploadCompleteHandler` implement the production
+Angels Rest private catalog upload bridge. The optional server config contains
+only the exact HTTPS Convex journal origin and host-journal bearer, the literal
+queryless production Worker origin
+`https://cms-media-worker.thinkingofview.workers.dev` and storage-caller bearer,
+and the exact `https://www.angelsrest.online` browser origin. Runtime validation
+rejects every alternate Worker host, path, query, and userinfo before reading the
+request body, authenticating, returning a browser upload URL, or sending storage
+authority. Convex alone owns Worker prepare,
+control authority, continuations, and durable operation facts. The host adapter
+returns only upload authority or verified editor-safe asset metadata; it never
+holds inspection, receipt-production, sealing-root, broad tenant, or Worker
+control credentials. Completion claims and invokes only storage work and leaves
+inspection to its separately authorized runner. `hostJournalSecret` and
+`storageCallerSecret` must be different; matching values disable both handlers
+before request-body reads or host authentication.
+
+The complete factory has a 52-second overall deadline below the documented
+60-second host limit. Within it, status and claim each receive at most 6 seconds,
+the Worker receives at most 24 seconds, and ACK and final reconciliation each
+receive at most 6 seconds. This reserves convergence time after an ambiguous or
+lost Worker response. Prepare has a 25-second overall deadline and a 10-second
+journal budget. The complete factory runs storage only and **never** runs or
+claims inspection; inspection remains a separately authorized runner.
+
+Consumers **MUST** export route configuration that deploys the complete route
+on Node 24 with a Vercel serverless `maxDuration` of at least 60 seconds:
+
+```ts
+import type { Config } from "@sveltejs/adapter-vercel";
+import { createCatalogPrivateEditorUploadCompleteHandler } from "@jessepomeroy/admin/server";
+
+export const config = {
+  runtime: "nodejs24.x",
+  maxDuration: 60,
+} satisfies Config;
+
+export const POST = createCatalogPrivateEditorUploadCompleteHandler();
+```
+
+Do not mount completion on Edge or an older Node runtime. Node 24 `fetch`
+generates exactly `Sec-Fetch-Mode: cors` on the Worker wire. The Worker's merged
+server-fetch classifier fix
+[`6de645b2`](https://github.com/JessePomeroy/gallery-worker/commit/6de645b2bfd6968c4e3cb32db35f44449ff6efa3)
+accepts that lone generated header while rejecting Origin, cookies, upload-token
+headers, and all additional browser Fetch Metadata. The adapter constructs a
+closed outbound header set and never forwards arbitrary browser headers.
+
+The direct browser upload has this exact wire contract:
+
+```ts
+const upload = await fetch(prepared.uploadUrl, {
+  method: "PUT",
+  credentials: "omit",
+  redirect: "error",
+  headers: {
+    "Content-Type": declaration.contentType,
+    "X-CMS-Editor-Upload-Token": prepared.uploadToken,
+  },
+  body: sourceFile,
+});
+```
+
+Use the returned `uploadUrl` unchanged: it is the fixed, queryless Worker source
+route, and redirects are errors. `sourceFile` must be the complete original
+`File`/`Blob`; its type must match the declaration's exact `Content-Type`, and
+its byte length and the browser-generated `Content-Length` must both equal the
+declared `sizeBytes`.
+Browser code must not try to set the forbidden `Content-Length` header. Do not
+send cookies, `Authorization`, content encoding, ranges, or any storage or
+inspection continuation in the URL, headers, or body. After a successful PUT,
+call the same-origin complete handler with only `{ uploadHandle }`.
+
+Both factories require exact same-origin Fetch Metadata and `application/json`,
+bound request and upstream bodies, authenticate before interpreting browser body
+semantics, use fixed queryless upstream paths with manual redirects and
+per-stage and overall deadlines, and return generic no-store JSON errors. Mount
+them on same-origin POST routes; do not proxy browser cookies or arbitrary
+headers to either upstream.
 
 `createCmsMediaDeleteHandler` accepts exactly `{ id }` from the browser. It
 authenticates the admin, asks Convex to mark that host tenant's unreferenced
