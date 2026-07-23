@@ -99,6 +99,61 @@ This boundary spans three repositories and must be verified end-to-end:
 - host app (`angelsrest` or `reflecting-pool`)
 - `gallery-worker`
 
+## Catalog private-editor upload boundary
+
+The additive catalog private-editor server factories are deliberately narrower
+than the general CMS media bridge and currently admit only the production Angels
+Rest contract. The browser host authenticates an exact same-origin request and
+holds two purpose-specific server bearers: one for the Convex durable journal
+and one for the Worker's storage-completion route. Convex owns Worker prepare,
+the control credential, immutable declaration binding, raw continuations,
+leases, receipt reconciliation, and the eventual editor-safe asset projection.
+The Worker owns upload-token enforcement, private storage evidence, and its own
+receipt producer.
+
+Prepare calls only the fixed journal begin action. It projects the returned
+upload token onto the Worker's configured fixed source URL and drops operation
+identity and replay state. Complete first reconciles the journal, claims only a
+storage continuation and lease, invokes only the fixed Worker storage route,
+ACKs the outcome, and reconciles again. It never calls inspection or accepts an
+inspection credential. Browser responses contain only upload authority, coarse
+pending state, or the closed verified asset metadata union; they never contain
+hashes, object keys, operation facts, continuations, leases, or receipts.
+
+The direct browser upload wire contract is one `PUT` to the returned `uploadUrl`
+without changing it or adding a query string, with redirects treated as errors.
+The request sends
+`X-CMS-Editor-Upload-Token: <uploadToken>`, the declaration's exact
+`Content-Type`, and the original `File`/`Blob` as the entire body. Its
+generated `Content-Length` and actual body length must both equal the declared
+`sizeBytes`; browser code must not set `Content-Length` itself. It omits
+credentials, authorization, encodings, ranges, and every storage or inspection
+continuation. Continuations are server-runner authority and never belong in a
+browser URL, header, or body.
+
+The optional config is purpose-separated and contains exactly a Convex journal
+origin, host-journal secret, the literal queryless production CMS Worker origin
+`https://cms-media-worker.thinkingofview.workers.dev`, a storage-caller secret,
+and the browser origin. Alternate Worker hosts, paths, queries, and userinfo fail
+closed before browser URL projection or storage authority can leave the host.
+The two secrets must be distinct; handlers fail closed before reading the request
+body or invoking host auth when they are equal. The config must not grow a Worker
+control secret, inspection claim secret, receipt-producer credential, sealing
+root, or broad tenant credential.
+
+All URLs are HTTPS origins combined with fixed queryless paths; requests use
+manual redirect handling, bounded bodies, bounded response reads, and finite
+timeouts. Complete has a 52-second overall deadline with 6-second status,
+6-second claim, 24-second Worker, 6-second ACK, and 6-second reconciliation
+budgets. That ordering preserves ACK/reconciliation time after an ambiguous
+Worker response while returning retryable before a host configured for the
+required 60-second maximum can terminate it. Prepare remains bounded by a
+25-second overall deadline. Consumers must mount complete on Node 24 with
+`maxDuration >= 60`; the factory itself never claims or invokes inspection.
+Node 24's lone generated `Sec-Fetch-Mode: cors` is accepted by the Worker
+classifier merged in gallery-worker commit `6de645b2`, while the adapter forwards
+no browser headers and the Worker continues to reject browser context.
+
 ## Change discipline
 
 - Prefer deep page/controller interfaces over exposing implementation helpers.

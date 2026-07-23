@@ -1,9 +1,19 @@
 import { execFileSync } from "node:child_process";
 import { describe, expect, it } from "vitest";
 
-describe("package server subpath Node import", () => {
-	it("loads server helpers from the packaged ESM server subpath", () => {
+describe("package server subpath", () => {
+	it("loads runtime exports and type-checks a consumer against generated declarations", () => {
 		execFileSync("corepack", ["pnpm", "build"], {
+			cwd: process.cwd(),
+			stdio: "pipe",
+		});
+		execFileSync("corepack", [
+			"pnpm",
+			"exec",
+			"tsc",
+			"--project",
+			"tests/fixtures/tsconfig.packageServerConsumer.json",
+		], {
 			cwd: process.cwd(),
 			stdio: "pipe",
 		});
@@ -18,6 +28,8 @@ describe("package server subpath Node import", () => {
 					"createAdminAuthValidator,",
 					"createAdminMutationHandler,",
 					"createAdminTokenHandler,",
+					"createCatalogPrivateEditorUploadCompleteHandler,",
+					"createCatalogPrivateEditorUploadPrepareHandler,",
 					"createCmsMediaDeleteHandler,",
 					"createContractSendHandler,",
 					"createGalleryDeleteHandler,",
@@ -45,6 +57,8 @@ describe("package server subpath Node import", () => {
 					"createAdminAuthValidator,",
 					"createAdminMutationHandler,",
 					"createAdminTokenHandler,",
+					"createCatalogPrivateEditorUploadCompleteHandler,",
+					"createCatalogPrivateEditorUploadPrepareHandler,",
 					"createCmsMediaDeleteHandler,",
 					"createContractSendHandler,",
 					"createGalleryDeleteHandler,",
@@ -77,6 +91,6 @@ describe("package server subpath Node import", () => {
 			},
 		);
 
-		expect(output).toBe(new Array(25).fill("function").join(","));
+		expect(output).toBe(new Array(27).fill("function").join(","));
 	}, 60_000);
 });

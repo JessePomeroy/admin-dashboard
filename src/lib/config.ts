@@ -617,6 +617,25 @@ export interface AdminConfig {
 	mutationEndpoint?: string;
 }
 
+export interface CatalogPrivateEditorUploadConfig {
+	/** Exact HTTPS `.convex.site` origin that owns the durable upload journal. */
+	convexJournalOrigin: string;
+	/**
+	 * Per-host bearer accepted only by the Convex editor-upload journal.
+	 * Must be purpose-unique.
+	 */
+	hostJournalSecret: string;
+	/** Exact, queryless production CMS Worker origin; no alternate host is accepted at runtime. */
+	workerOrigin: "https://cms-media-worker.thinkingofview.workers.dev";
+	/**
+	 * Bearer accepted only by the Worker's storage-completion route.
+	 * Must differ from the journal bearer.
+	 */
+	storageCallerSecret: string;
+	/** Exact browser origin admitted by the production upload contract. */
+	browserOrigin: string;
+}
+
 export interface AdminServerConfig extends AdminConfig {
 	convexUrl: string;
 	resendApiKey: string;
@@ -632,6 +651,8 @@ export interface AdminServerConfig extends AdminConfig {
 	cmsMediaConvexSiteUrl?: string;
 	/** Server-only, per-host bearer for the Convex deletion completion action. */
 	cmsMediaDeletionCompletionSecret?: string;
+	/** Server-only, purpose-separated catalog private-editor upload bridge. */
+	catalogPrivateEditorUpload?: CatalogPrivateEditorUploadConfig;
 	/**
 	 * Verify that a request comes from an authorized admin for the host-owned
 	 * tenant or creator scope. Every shared side-effect handler requires this
