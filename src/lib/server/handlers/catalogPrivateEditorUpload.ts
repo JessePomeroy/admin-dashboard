@@ -506,6 +506,11 @@ async function readBoundedUpstreamJson(
 		return null;
 	}
 	const contentLength = response.headers.get("Content-Length");
+	const hasNonIdentityEncoding = response.headers.get("Content-Encoding")
+		?.split(",").some((encoding) => {
+			const normalized = encoding.trim().toLowerCase();
+			return normalized !== "" && normalized !== "identity";
+		}) ?? false;
 	let expectedLength: number | null = null;
 	if (contentLength !== null) {
 		const parsed = Number(contentLength);
@@ -541,7 +546,7 @@ async function readBoundedUpstreamJson(
 	} finally {
 		reader.releaseLock();
 	}
-	if (expectedLength !== null && byteLength !== expectedLength) return null;
+	if (!hasNonIdentityEncoding && expectedLength !== null && byteLength !== expectedLength) return null;
 	const bytes = new Uint8Array(byteLength);
 	let offset = 0;
 	for (const chunk of chunks) {

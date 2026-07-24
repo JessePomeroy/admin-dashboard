@@ -1,4 +1,5 @@
 import { createServer } from "node:http";
+import { gzipSync } from "node:zlib";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { setServerConfig, type AdminServerConfig } from "../src/lib/config";
 import {
@@ -207,6 +208,22 @@ describe("catalog private editor upload prepare handler", () => {
 		});
 		expect(text).not.toMatch(/operationId|replayed|continuation|receipt|sha256|privateObjectKey/i);
 		expect(String(fetchMock.mock.calls[0]?.[1])).not.toContain("session=private");
+	});
+
+	it("accepts a Fetch-decoded gzip journal response with its wire Content-Length", async () => {
+		configure();
+		const decodedBody = JSON.stringify(prepareProjection());
+		const wireLength = gzipSync(decodedBody).byteLength;
+		expect(wireLength).not.toBe(Buffer.byteLength(decodedBody));
+		vi.stubGlobal("fetch", vi.fn(async () => new Response(decodedBody, {
+			headers: {
+				"Content-Type": "application/json",
+				"Content-Encoding": "gzip",
+				"Content-Length": String(wireLength),
+			},
+		})));
+
+		expect((await callPrepare()).status).toBe(200);
 	});
 
 	it("keeps prepare within a 25s overall and 10s journal budget", async () => {
