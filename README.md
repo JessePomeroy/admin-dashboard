@@ -93,22 +93,32 @@ export const adminConfig: AdminConfig = {
   editor: {
     products: {
       enabledKinds: ["print", "print_set", "postcard"],
+      publicationEnabled: true,
     },
   },
   api: new Proxy(api, {
     get(target, property, receiver) {
-      if (property === "catalogProductGraphs") return api.catalogProductGraphs;
+      if (property === "catalogProductGraphs") return {
+        listForEditor: api.catalogProductGraphs.listForEditor,
+        getEditorState: api.catalogProductGraphs.getEditorState,
+        createDraft: api.catalogProductGraphs.createDraft,
+        saveDraft: api.catalogProductGraphs.saveDraft,
+        discardDraft: api.catalogProductGraphs.discardDraft,
+        publishDraft: api.catalogProductGraphs.publishDraft,
+        unpublish: api.catalogProductGraphs.unpublish,
+      };
       return Reflect.get(target, property, receiver);
     },
   }),
 };
 ```
 
-The V2 graph capability is still private and publish-gated by the host. It does
-not expose a publish mutation, public-by-slug query, preview,
-checkout/provider identifiers, or public provider switch by itself. Sanity may
-remain the live public catalog until a later host slice deliberately connects
-publication and print-quality source media.
+Publication stays off unless `publicationEnabled` is exactly `true` and
+`publishDraft` plus `unpublish` are explicitly registered as own properties;
+dynamic Convex proxy truthiness is not a capability signal. The actions move
+only the per-product Convex CMS publication pointer. They do not expose a public
+query, preview, checkout/provider identifiers, or a provider switch, and they do
+not cut the Sanity-backed public Shop over to Convex.
 
 ## Server configuration
 
