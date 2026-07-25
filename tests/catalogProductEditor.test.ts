@@ -110,6 +110,33 @@ describe("catalog product editor helpers", () => {
 		expect(capability?.privateAssets).toBeNull();
 	});
 
+	it("requires explicit publication opt-in and explicitly registered refs", () => {
+		const proxyApi = new Proxy({}, {
+			get: (_, property) => ({ name: String(property) }),
+		});
+		const capability = (catalogProductGraphs: object, publicationEnabled?: boolean) =>
+			getCatalogProductEditorCapability({
+				editor: { products: { enabledKinds: ["print"], publicationEnabled } },
+				api: { catalogProductGraphs },
+			} as unknown as AdminConfig);
+		expect(capability(proxyApi, true)?.publication).toBeNull();
+		const explicitApi = {
+			listForEditor: { name: "list" },
+			getEditorState: { name: "get" },
+			createDraft: { name: "create" },
+			saveDraft: { name: "save" },
+			discardDraft: { name: "discard" },
+			publishDraft: { name: "publish" },
+			unpublish: { name: "unpublish" },
+		};
+		expect(capability(explicitApi)?.publication).toBeNull();
+		expect(capability(explicitApi, true)?.publication).toEqual({
+			publishDraft: explicitApi.publishDraft,
+			unpublish: explicitApi.unpublish,
+		});
+		expect(capability({ ...explicitApi, unpublish: undefined }, true)?.publication).toBeNull();
+	});
+
 	it("projects both private upload routes only behind replacement refs and rooted queryless endpoints", () => {
 		const graphApi = new Proxy({}, {
 			get: (_, property) => ({ name: String(property) }),

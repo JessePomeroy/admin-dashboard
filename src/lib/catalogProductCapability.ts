@@ -17,6 +17,13 @@ function normalizeEnabledKinds(
 	return kinds === undefined ? ["print"] : [...kinds];
 }
 
+function explicitOwnRef(value: object, key: string) {
+	const descriptor = Object.getOwnPropertyDescriptor(value, key);
+	return descriptor && "value" in descriptor && descriptor.value
+		? descriptor.value
+		: null;
+}
+
 export function getCatalogProductEditorCapability(config: AdminConfig) {
 	const settings = config.editor?.products;
 	const enabledKinds = normalizeEnabledKinds(settings?.enabledKinds);
@@ -51,6 +58,15 @@ export function getCatalogProductEditorCapability(config: AdminConfig) {
 						: null,
 				}
 			: null;
+		const publishDraft = settings.publicationEnabled === true
+			? explicitOwnRef(graphApi, "publishDraft")
+			: null;
+		const unpublish = settings.publicationEnabled === true
+			? explicitOwnRef(graphApi, "unpublish")
+			: null;
+		const publication = publishDraft && unpublish
+			? { publishDraft, unpublish }
+			: null;
 		return {
 			api: graphApi,
 			enabledKinds,
@@ -60,6 +76,7 @@ export function getCatalogProductEditorCapability(config: AdminConfig) {
 				? { api: mediaApi, mediaBaseUrl: settings.mediaBaseUrl, uploadEndpoint: settings.uploadEndpoint }
 				: null,
 			privateAssets,
+			publication,
 		};
 	}
 	const api = config.api.catalogProducts;
@@ -81,5 +98,6 @@ export function getCatalogProductEditorCapability(config: AdminConfig) {
 		settings,
 		media: null,
 		privateAssets: null,
+		publication: null,
 	};
 }

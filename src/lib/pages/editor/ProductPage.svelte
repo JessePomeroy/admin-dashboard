@@ -58,6 +58,7 @@ const {
 	settings: productsConfig,
 	media: mediaCapability,
 	privateAssets: privateAssetCapability,
+	publication: publicationCapability,
 } = capability;
 
 const baseHref = productsConfig.baseHref ?? "/admin/editor/products";
@@ -69,6 +70,8 @@ let form = $state<CatalogProductDraftForm>(emptyCatalogProductDraft());
 let initialized = $state(false);
 let hasActiveDraft = $state(false);
 let loadedServerRevisionId = $state<string | null>(null);
+let loadedPublishedRevisionId = $state<string | null>(null);
+let loadedUpdatedAt = $state<number | null>(null);
 let baseRevisionId = $state<string | undefined>();
 let locallyCommittedRevisionIds = $state<Array<string | null>>([]);
 let savedJson = $state("");
@@ -86,6 +89,26 @@ let replacementPending = $state(false);
 let replacementRevisionId = $state<string | null>(null);
 let replacementBaseRevisionId = $state<string | null>(null);
 let replacementSubmittedJson = $state("");
+type PublicationSnapshot = {
+	productId: string;
+	draftRevisionId: string | null;
+	publishedRevisionId: string | null;
+	updatedAt: number;
+	publishedAt: number | null;
+};
+type PublicationOperation = {
+	requestId: number;
+	action: "publish" | "unpublish";
+	before: PublicationSnapshot;
+	phase: "requesting" | "awaiting-echo" | "reconciling" | "reload-required";
+	result: PublicationSnapshot | null;
+};
+let publicationOperation = $state<PublicationOperation | null>(null);
+let publicationMessage = $state("");
+let publicationError = $state("");
+let publicationReconciliationTimer: ReturnType<typeof setTimeout> | undefined;
+let nextPublicationRequestId = 0;
+const PUBLICATION_RECONCILIATION_MS = 8_000;
 const privateAssetUpload = privateAssetCapability?.upload ?? null;
 type PrivateUploadPhase = "reading" | "preparing" | "uploading" | "completing" | "pending" | "verified";
 type PrivateUploadOperation = {
@@ -243,9 +266,38 @@ let usesSinglePrice = $derived(
 let dirty = $derived(initialized && hasActiveDraft && currentJson !== savedJson);
 let privateUploadBusy = $derived(["reading", "preparing", "uploading", "completing", "pending"].includes(privateUploadState));
 let privateUploadBlocked = $derived(privateUploadOperation !== null);
+let publicationRequestActive = $derived(publicationOperation !== null);
 let editorLocked = $derived(
-	replacementPending || privateUploadBusy || ["saving", "discarding", "conflict"].includes(saveState),
+	replacementPending || privateUploadBusy || publicationRequestActive
+		|| ["saving", "discarding", "conflict"].includes(saveState),
 );
+let publicationStatus = $derived.by(() => {
+	const draftRevisionId = editorState?.draft?.revisionId ?? null;
+	const publishedRevisionId = editorState?.published?.revisionId ?? null;
+	if (!publishedRevisionId) return "unpublished";
+	if (!draftRevisionId) return "published — no active draft";
+	return draftRevisionId === publishedRevisionId
+		? "published — current draft"
+		: "published — newer draft available";
+});
+let publicationQueryStale = $derived(initialized && Boolean(editorState) && (
+	editorState?.productId !== productId
+		|| (editorState?.draft?.revisionId ?? null) !== (baseRevisionId ?? null)
+		|| locallyCommittedRevisionIds.length > 0
+		|| (editorState?.published?.revisionId ?? null) !== loadedPublishedRevisionId
+		|| editorState?.updatedAt !== loadedUpdatedAt
+));
+let publicationActionsLocked = $derived(
+	dirty || saveState !== "saved" || replacementPending || privateUploadBlocked
+		|| publicationRequestActive || publicationQueryStale,
+);
+let canPublish = $derived(Boolean(
+	publicationCapability && editorState?.draft && !publicationActionsLocked
+		&& editorState.draft.revisionId !== editorState.published?.revisionId,
+));
+let canUnpublish = $derived(Boolean(
+	publicationCapability && editorState?.published && !publicationActionsLocked,
+));
 let canSave = $derived(
 	hasActiveDraft
 		&& variantsValid
@@ -254,12 +306,18 @@ let canSave = $derived(
 		&& (dirty || saveState === "error"),
 );
 
+function syncLoadedPublication(state: CatalogProductEditorState) {
+	loadedServerRevisionId = state.draft?.revisionId ?? null;
+	loadedPublishedRevisionId = state.published?.revisionId ?? null;
+	loadedUpdatedAt = state.updatedAt;
+}
+
 function loadServerDraft(state: CatalogProductEditorState) {
 	locallyCommittedRevisionIds = [];
 	form = catalogProductDraftFromRevision(state.draft);
 	hasActiveDraft = Boolean(state.draft);
 	baseRevisionId = state.draft?.revisionId;
-	loadedServerRevisionId = state.draft?.revisionId ?? null;
+	syncLoadedPublication(state);
 	savedJson = serializeCatalogProductDraft(form);
 	multiplierInput = String(form.framePriceMultiplierBasisPoints);
 	saveState = "saved";
@@ -279,7 +337,7 @@ function loadServerGraphProductDraft(state: CatalogProductEditorState) {
 	form = catalogProductGraphDraftFromRevision(state.draft);
 	hasActiveDraft = Boolean(state.draft);
 	baseRevisionId = state.draft?.revisionId;
-	loadedServerRevisionId = state.draft?.revisionId ?? null;
+	syncLoadedPublication(state);
 	savedJson = serializeCatalogProductDraft(form);
 	multiplierInput = String(form.framePriceMultiplierBasisPoints);
 	saveState = "saved";
@@ -288,20 +346,109 @@ function loadServerGraphProductDraft(state: CatalogProductEditorState) {
 	initialized = true;
 }
 
+function publicationSnapshot(state: CatalogProductEditorState): PublicationSnapshot {
+	return {
+		productId: state.productId,
+		draftRevisionId: state.draft?.revisionId ?? null,
+		publishedRevisionId: state.published?.revisionId ?? null,
+		updatedAt: state.updatedAt,
+		publishedAt: state.publishedAt,
+	};
+}
+
+function samePublicationSnapshot(left: PublicationSnapshot, right: PublicationSnapshot) {
+	return left.productId === right.productId
+		&& left.draftRevisionId === right.draftRevisionId
+		&& left.publishedRevisionId === right.publishedRevisionId
+		&& left.updatedAt === right.updatedAt
+		&& left.publishedAt === right.publishedAt;
+}
+
+function matchesAmbiguousPublication(
+	current: PublicationSnapshot,
+	operation: PublicationOperation,
+) {
+	const publishedRevisionId = operation.action === "publish"
+		? operation.before.draftRevisionId
+		: null;
+	return current.productId === operation.before.productId
+		&& current.draftRevisionId === operation.before.draftRevisionId
+		&& current.publishedRevisionId === publishedRevisionId
+		&& current.updatedAt > operation.before.updatedAt
+		&& (operation.action === "publish"
+			? current.publishedAt === current.updatedAt
+			: current.publishedAt === null);
+}
+
+function clearPublicationReconciliationTimer() {
+	if (publicationReconciliationTimer) clearTimeout(publicationReconciliationTimer);
+	publicationReconciliationTimer = undefined;
+}
+
+function completePublication(operation: PublicationOperation, state: CatalogProductEditorState) {
+	clearPublicationReconciliationTimer();
+	syncLoadedPublication(state);
+	publicationOperation = null;
+	publicationError = "";
+	publicationMessage = operation.action === "publish"
+		? "Published in Convex CMS."
+		: "Unpublished from Convex CMS.";
+}
+
+function publicationConflict() {
+	clearPublicationReconciliationTimer();
+	publicationOperation = null;
+	publicationMessage = "";
+	publicationError = "Publication state changed unexpectedly. Reload this product before continuing.";
+	saveState = "conflict";
+}
+
+function reconcilePublicationState(state: CatalogProductEditorState) {
+	const operation = publicationOperation;
+	if (!operation || operation.phase === "requesting") return;
+	const current = publicationSnapshot(state);
+	if (operation.result && samePublicationSnapshot(current, operation.result)) {
+		completePublication(operation, state);
+		return;
+	}
+	if (!operation.result && matchesAmbiguousPublication(current, operation)) {
+		completePublication(operation, state);
+		return;
+	}
+	if (!samePublicationSnapshot(current, operation.before)) publicationConflict();
+}
+
 $effect(() => {
 	if (!editorState) return;
 	if (isGraphV2) {
-		if (!canEditGraphProduct) {
+		const serverRevisionId = editorState.draft?.revisionId ?? null;
+		const serverPublishedRevisionId = editorState.published?.revisionId ?? null;
+		if (!initialized) {
+			if (canEditGraphProduct) return loadServerGraphProductDraft(editorState);
+			hasActiveDraft = Boolean(editorState.draft);
+			baseRevisionId = editorState.draft?.revisionId;
+			syncLoadedPublication(editorState);
 			saveState = "saved";
 			initialized = true;
 			return;
 		}
-		const serverRevisionId = editorState.draft?.revisionId ?? null;
-		if (!initialized) return loadServerGraphProductDraft(editorState);
+		if (publicationOperation) {
+			reconcilePublicationState(editorState);
+			return;
+		}
+		if (!canEditGraphProduct) {
+			syncLoadedPublication(editorState);
+			if (saveState !== "conflict") saveState = "saved";
+			return;
+		}
+		if (saveState === "conflict") return;
 		if (replacementPending) {
 			if (!replacementRevisionId) return;
-			if (serverRevisionId === replacementRevisionId) {
-				loadedServerRevisionId = serverRevisionId;
+			if (
+				serverRevisionId === replacementRevisionId
+				&& serverPublishedRevisionId === loadedPublishedRevisionId
+			) {
+				syncLoadedPublication(editorState);
 				baseRevisionId = serverRevisionId;
 				savedJson = replacementSubmittedJson;
 				replacementPending = false;
@@ -329,17 +476,24 @@ $effect(() => {
 			return;
 		}
 		if (["saving", "discarding"].includes(saveState)) return;
-		if (serverRevisionId === loadedServerRevisionId) return;
+		if (
+			serverRevisionId === loadedServerRevisionId
+			&& serverPublishedRevisionId === loadedPublishedRevisionId
+			&& editorState.updatedAt === loadedUpdatedAt
+		) return;
 		const localEchoIndex = locallyCommittedRevisionIds.indexOf(serverRevisionId);
-		if (localEchoIndex >= 0) {
-			loadedServerRevisionId = serverRevisionId;
+		if (
+			localEchoIndex >= 0
+			&& serverPublishedRevisionId === loadedPublishedRevisionId
+		) {
+			syncLoadedPublication(editorState);
 			baseRevisionId = serverRevisionId ?? undefined;
 			locallyCommittedRevisionIds = locallyCommittedRevisionIds.slice(localEchoIndex + 1);
 			return;
 		}
 		if (dirty) {
 			saveState = "conflict";
-			saveError = "A newer server draft arrived while this page had unsaved changes. Reload before continuing.";
+			saveError = "A newer server state arrived while this page had unsaved changes. Reload before continuing.";
 			return;
 		}
 		loadServerGraphProductDraft(editorState);
@@ -394,6 +548,87 @@ function mutationError(error: unknown, fallback: string) {
 
 function rememberCommittedRevision(revisionId: string | null) {
 	locallyCommittedRevisionIds = [...locallyCommittedRevisionIds, revisionId];
+}
+
+function exactPublicationResult(value: unknown, operation: PublicationOperation) {
+	if (!value || typeof value !== "object") return null;
+	const result = value as Record<string, unknown>;
+	const expectedPublishedRevisionId = operation.action === "publish"
+		? operation.before.draftRevisionId
+		: null;
+	if (
+		result.productId !== operation.before.productId
+		|| result.draftRevisionId !== operation.before.draftRevisionId
+		|| result.publishedRevisionId !== expectedPublishedRevisionId
+		|| typeof result.updatedAt !== "number"
+		|| !Number.isSafeInteger(result.updatedAt)
+		|| result.updatedAt <= operation.before.updatedAt
+		|| (operation.action === "publish"
+			? result.publishedAt !== result.updatedAt
+			: result.publishedAt !== null)
+	) return null;
+	return result as PublicationSnapshot;
+}
+
+function schedulePublicationReconciliation(operation: PublicationOperation) {
+	clearPublicationReconciliationTimer();
+	publicationReconciliationTimer = setTimeout(() => {
+		if (publicationOperation?.requestId !== operation.requestId) return;
+		publicationOperation.phase = "reload-required";
+		publicationMessage = "";
+		publicationError = "The Convex CMS publication result could not be confirmed. Reload this product; do not submit the action again.";
+	}, PUBLICATION_RECONCILIATION_MS);
+}
+
+async function runPublication(action: "publish" | "unpublish") {
+	if (!publicationCapability || !editorState) return;
+	if (action === "publish" ? !canPublish : !canUnpublish) return;
+	if (action === "unpublish" && !globalThis.confirm(
+		"Unpublish this product from Convex CMS? The Sanity-backed public Shop is unchanged.",
+	)) return;
+	const before = publicationSnapshot(editorState);
+	const operation: PublicationOperation = {
+		requestId: ++nextPublicationRequestId,
+		action,
+		before,
+		phase: "requesting",
+		result: null,
+	};
+	publicationOperation = operation;
+	publicationError = "";
+	publicationMessage = action === "publish"
+		? "Publishing once to Convex CMS…"
+		: "Unpublishing once from Convex CMS…";
+	const mutation = action === "publish"
+		? publicationCapability.publishDraft
+		: publicationCapability.unpublish;
+	try {
+		const value = await client.mutation(mutation, {
+			productId: before.productId,
+			expectedDraftRevisionId: before.draftRevisionId,
+			expectedPublishedRevisionId: before.publishedRevisionId,
+			expectedUpdatedAt: before.updatedAt,
+		});
+		if (publicationOperation?.requestId !== operation.requestId) return;
+		const result = exactPublicationResult(value, operation);
+		if (!result) return publicationConflict();
+		publicationOperation.result = result;
+		publicationOperation.phase = "awaiting-echo";
+		publicationMessage = "Confirming the exact Convex CMS publication state…";
+		schedulePublicationReconciliation(publicationOperation);
+		reconcilePublicationState(editorState);
+	} catch (error) {
+		if (publicationOperation?.requestId !== operation.requestId) return;
+		const message = error instanceof Error ? error.message : "";
+		if (message.toLowerCase().includes("catalog publication conflict")) {
+			publicationConflict();
+			return;
+		}
+		publicationOperation.phase = "reconciling";
+		publicationMessage = "The response was uncertain. Reconciling from the current Editor query without resubmitting…";
+		schedulePublicationReconciliation(publicationOperation);
+		reconcilePublicationState(editorState);
+	}
 }
 
 function formatPrivateAssetSize(sizeBytes: number) {
@@ -612,7 +847,9 @@ function cancelPrivateUpload() {
 onDestroy(() => {
 	const controller = privateUploadOperation?.controller;
 	clearCompletionCheckTimer();
+	clearPublicationReconciliationTimer();
 	privateUploadOperation = null;
+	publicationOperation = null;
 	controller?.abort();
 });
 
@@ -715,6 +952,7 @@ async function discardDraft() {
 	}
 }
 async function startDraft() {
+	if (editorLocked) return;
 	const draft = catalogProductDraftFromRevision(editorState?.published);
 	saveState = "saving";
 	saveError = "";
@@ -764,16 +1002,30 @@ function addUploadedMediaAsset(asset: PortfolioMediaAsset) {
 {:else}
 		<div class="settings-page product-page">
 		<header class="settings-header">
-			<div><a class="back" href={baseHref}>← products</a><h1>{canEditGraphProduct || !isGraphV2 ? form.title?.trim() || editorState.productKey : catalogProductEditorTitle(readOnlyRevision)?.trim() || editorState.productKey}</h1><p class="description">{canEditGraphProduct ? `Edit this private imported ${catalogProductKindLabel(editorState.productKind)} draft. This is still not connected to the public shop.` : isGraphV2 ? "Review the imported private catalog graph. Product-specific editing arrives in a later slice." : "Edit the private product definition and ordered price variants. This draft is not connected to the public shop."}</p></div>
+			<div><a class="back" href={baseHref}>← products</a><h1>{canEditGraphProduct || !isGraphV2 ? form.title?.trim() || editorState.productKey : catalogProductEditorTitle(readOnlyRevision)?.trim() || editorState.productKey}</h1><p class="description">{canEditGraphProduct ? publicationCapability ? `Edit this private imported ${catalogProductKindLabel(editorState.productKind)} draft. Convex CMS publication is separate from the Sanity-backed public Shop.` : `Edit this private imported ${catalogProductKindLabel(editorState.productKind)} draft. This is still not connected to the public shop.` : isGraphV2 ? "Review the imported private catalog graph. Product-specific editing arrives in a later slice." : "Edit the private product definition and ordered price variants. This draft is not connected to the public shop."}</p></div>
 			{#if hasActiveDraft && (!isGraphV2 || canEditGraphProduct)}<div class="actions"><span class="save-state" aria-live="polite">{saveState}</span><button type="button" class="primary" onclick={() => void saveDraft()} disabled={!canSave}>save draft</button></div>{/if}
 		</header>
 		{#if saveError}<p class="alert" role="alert">{saveError}</p>{/if}
+		{#if publicationError}<div class="alert publication-alert" role="alert"><span>{publicationError}</span>{#if publicationOperation?.phase === "reload-required"}<button type="button" onclick={() => globalThis.location.reload()}>reload product</button>{/if}</div>{/if}
 		{#if mediaActionError}<p class="alert" role="alert">{mediaActionError}</p>{/if}
 		{#if mediaQueryError}<p class="alert" role="alert">Could not load product images. Refresh this page to try again.</p>{/if}
 		{#if privateAssetCandidateQuery?.error}<p class="alert" role="alert">Could not load verified replacement assets. The draft may have changed; reload this product before continuing.</p>{/if}
+		{#if publicationCapability && isGraphV2}
+			<section class="publication" aria-labelledby="catalog-publication-heading">
+				<div><h2 id="catalog-publication-heading">Convex CMS publication</h2><p>The Sanity-backed public Shop has not cut over; these controls change only the Convex CMS publication pointer.</p></div>
+				<div class="publication-controls">
+					<p class="publication-status" role="status" aria-live="polite">{publicationStatus}</p>
+					<div class="publication-actions">
+						<button type="button" class="primary" onclick={() => void runPublication("publish")} disabled={!canPublish}>publish</button>
+						<button type="button" class="danger" onclick={() => void runPublication("unpublish")} disabled={!canUnpublish}>unpublish</button>
+					</div>
+				</div>
+				{#if publicationMessage}<p class="publication-message" role="status" aria-live="polite">{publicationMessage}</p>{/if}
+			</section>
+		{/if}
 		{#if isGraphV2 && !canEditGraphProduct}
 			<section aria-labelledby="product-readback-heading">
-				<div class="section-heading"><span>01</span><div><h2 id="product-readback-heading">imported catalog draft</h2><p>This product is stored in the new graph model as an unpublished draft.</p></div></div>
+				<div class="section-heading"><span>01</span><div><h2 id="product-readback-heading">imported catalog draft</h2><p>{publicationCapability ? "This product is stored in the Convex CMS catalog graph." : "This product is stored in the new graph model as an unpublished draft."}</p></div></div>
 				<dl class="readback-grid">
 					<div><dt>kind</dt><dd>{catalogProductKindLabel(editorState.productKind)}</dd></div>
 					<div><dt>URL name</dt><dd>{editorState.slug ? `/${editorState.slug}` : "not set"}</dd></div>
@@ -785,12 +1037,12 @@ function addUploadedMediaAsset(asset: PortfolioMediaAsset) {
 				{#if catalogProductEditorDescription(readOnlyRevision)}
 					<p class="readback-description">{catalogProductEditorDescription(readOnlyRevision)}</p>
 				{/if}
-				<p class="readback-note">Read-only for this slice: this confirms the Sanity import is visible to the protected Editor without connecting it to the public shop or checkout flow.</p>
+				<p class="readback-note">{publicationCapability ? "Convex CMS publication does not switch the Sanity-backed public Shop or checkout flow." : "Read-only for this slice: this confirms the Sanity import is visible to the protected Editor without connecting it to the public shop or checkout flow."}</p>
 			</section>
 		{:else if !hasActiveDraft}
 			<section aria-labelledby="discarded-product-heading">
 				<div class="section-heading"><span>01</span><div><h2 id="discarded-product-heading">no active draft</h2><p>This product identity remains in the catalog, but its editable draft was discarded. No product details are currently staged.</p></div></div>
-				<button type="button" onclick={() => void startDraft()} disabled={saveState === "saving"}>{saveState === "saving" ? "starting…" : "start a new draft"}</button>
+				<button type="button" onclick={() => void startDraft()} disabled={editorLocked}>{saveState === "saving" ? "starting…" : "start a new draft"}</button>
 			</section>
 		{:else}
 			<section aria-labelledby="product-identity-heading">
@@ -904,6 +1156,10 @@ function addUploadedMediaAsset(asset: PortfolioMediaAsset) {
 	.option-grid { display: flex; flex-wrap: wrap; gap: 18px 28px; margin-top: 22px; }
 	.check { flex-direction: row !important; align-items: center; color: var(--admin-text) !important; } .check input { width: auto !important; }
 	.multiplier { max-width: 360px; margin-top: 20px; }
+	.publication { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 18px; align-items: center; border: 1px solid var(--admin-border); border-radius: 10px; padding: 18px; }
+	.publication h2, .publication p { margin: 0; } .publication h2 { color: var(--admin-heading); font-size: 1rem; } .publication > div > p, .publication-message { margin-top: 6px; color: var(--admin-text-muted); font-size: .78rem; line-height: 1.5; }
+	.publication-controls { display: grid; justify-items: end; gap: 8px; } .publication-status { color: var(--admin-heading); font-size: .78rem; font-weight: 600; } .publication-actions { display: flex; gap: 8px; } .publication-message { grid-column: 1 / -1; }
+	.publication-alert { display: flex; justify-content: space-between; gap: 12px; align-items: center; }
 	.readback-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 14px; margin: 0; }
 	.readback-grid div { border: 1px solid var(--admin-border); border-radius: 10px; padding: 14px; background: color-mix(in srgb, var(--admin-surface) 82%, transparent); }
 	.readback-grid dt { margin: 0 0 6px; color: var(--admin-text-muted); font-size: .68rem; text-transform: lowercase; letter-spacing: .08em; }
@@ -927,5 +1183,5 @@ function addUploadedMediaAsset(asset: PortfolioMediaAsset) {
 	.private-upload .upload-error { color: var(--admin-danger, var(--status-rose)); }
 	.private-asset-note { margin: 16px 0 0; }
 	.danger { border-color: color-mix(in srgb, var(--admin-danger, var(--status-rose)) 55%, transparent) !important; color: var(--admin-danger, var(--status-rose)) !important; }
-	@media (max-width: 720px) { .private-asset-list li { grid-template-columns: 1fr; } .replacement-action label { min-width: 0; } .private-upload-actions, .replacement-confirm { align-items: stretch; flex-direction: column; } }
+	@media (max-width: 720px) { .publication { grid-template-columns: 1fr; } .publication-controls { justify-items: start; } .private-asset-list li { grid-template-columns: 1fr; } .replacement-action label { min-width: 0; } .private-upload-actions, .replacement-confirm { align-items: stretch; flex-direction: column; } }
 </style>

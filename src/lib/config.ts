@@ -104,7 +104,7 @@ export interface AdminAPI {
 		archive: FnRef;
 		restore: FnRef;
 	};
-	/** Private catalog draft operations. Public catalog reads and publication stay host-owned. */
+	/** Private catalog draft operations. Public catalog reads and V1 publication stay host-owned. */
 	catalogProducts?: {
 		listForEditor: FnRef;
 		getEditorState: FnRef;
@@ -122,6 +122,9 @@ export interface AdminAPI {
 		/** Optional verified private-asset selection capability; both refs are required. */
 		listDraftPrivateAssetCandidates?: FnRef;
 		replaceDraftPrivateAsset?: FnRef;
+		/** Optional per-product Convex CMS publication capability; both refs are required. */
+		publishDraft?: FnRef;
+		unpublish?: FnRef;
 	};
 	/** Tenant-scoped CMS media reads shared by editor modules. */
 	mediaAssets?: {
@@ -475,6 +478,8 @@ export interface AdminEditorConfig {
 		uploadEndpoint?: string;
 		/** Explicitly enables verified private-asset replacement when both API refs are configured. */
 		privateAssetReplacementEnabled?: boolean;
+		/** Explicitly enables per-product Convex CMS publication when both API refs are configured. */
+		publicationEnabled?: boolean;
 		/** Optional purpose-specific private upload routes; both rooted queryless paths are required. */
 		privateAssetUpload?: {
 			prepareEndpoint: string;

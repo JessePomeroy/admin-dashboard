@@ -30,6 +30,8 @@ const mocks = vi.hoisted(() => ({
 	enabledKinds: ["print"] as string[],
 	graphApiEnabled: false,
 	privateAssetEnabled: false,
+	publicationEnabled: false,
+	publicationRefsEnabled: false,
 	mediaEnabled: false,
 	mediaRegisterEnabled: true,
 	refs: {
@@ -40,6 +42,8 @@ const mocks = vi.hoisted(() => ({
 		discardDraft: { name: "catalog:discardDraft" },
 		listDraftPrivateAssetCandidates: { name: "catalog:listDraftPrivateAssetCandidates" },
 		replaceDraftPrivateAsset: { name: "catalog:replaceDraftPrivateAsset" },
+		publishDraft: { name: "catalog:publishDraft" },
+		unpublish: { name: "catalog:unpublish" },
 	},
 	mediaRefs: {
 		listForEditor: { name: "media:listForEditor" },
@@ -100,16 +104,23 @@ vi.mock("../src/lib/config", () => ({
 			...(mocks.graphApiEnabled
 				? {
 						catalogProductGraphs: {
-							...mocks.refs,
+							listForEditor: mocks.refs.listForEditor,
+							getEditorState: mocks.refs.getEditorState,
+							createDraft: mocks.refs.createDraft,
+							saveDraft: mocks.refs.saveDraft,
+							discardDraft: mocks.refs.discardDraft,
 							...(mocks.privateAssetEnabled
 								? {
 										listDraftPrivateAssetCandidates: mocks.refs.listDraftPrivateAssetCandidates,
 										replaceDraftPrivateAsset: mocks.refs.replaceDraftPrivateAsset,
 									}
-								: {
-										listDraftPrivateAssetCandidates: undefined,
-										replaceDraftPrivateAsset: undefined,
-									}),
+								: {}),
+							...(mocks.publicationRefsEnabled
+								? {
+										publishDraft: mocks.refs.publishDraft,
+										unpublish: mocks.refs.unpublish,
+									}
+								: {}),
 						},
 					}
 				: {}),
@@ -129,6 +140,7 @@ vi.mock("../src/lib/config", () => ({
 			products: {
 				baseHref: "/admin/editor/products",
 				enabledKinds: mocks.enabledKinds,
+				...(mocks.publicationEnabled ? { publicationEnabled: true } : {}),
 				...(mocks.privateAssetEnabled
 					? {
 							privateAssetReplacementEnabled: true,
@@ -492,6 +504,28 @@ async function updateDetailQuery(value: unknown) {
 	await tick();
 	await tick();
 }
+function enablePublication() {
+	mocks.graphApiEnabled = true;
+	mocks.publicationEnabled = true;
+	mocks.publicationRefsEnabled = true;
+}
+function graphDetail(
+	draft: typeof graphRevision | null = graphRevision,
+	published: typeof graphRevision | null = null,
+	updatedAt = 10,
+) {
+	return {
+		productId: "product-1",
+		productKey: "sanity.catalog.print",
+		productKind: "print",
+		graphVersion: 2,
+		slug: "avant-alien-2-2",
+		draft,
+		published,
+		updatedAt,
+		publishedAt: published ? updatedAt : null,
+	};
+}
 
 describe("draft-only product editor", () => {
 	beforeEach(() => {
@@ -521,6 +555,8 @@ describe("draft-only product editor", () => {
 		mocks.enabledKinds = ["print"];
 		mocks.graphApiEnabled = false;
 		mocks.privateAssetEnabled = false;
+		mocks.publicationEnabled = false;
+		mocks.publicationRefsEnabled = false;
 		mocks.mediaEnabled = false;
 		mocks.mediaRegisterEnabled = true;
 	});
@@ -781,6 +817,134 @@ describe("draft-only product editor", () => {
 			expect.objectContaining({ order: 0 }),
 			expect.objectContaining({ key: "variant-original", order: 1 }),
 		]);
+	});
+
+	it("shows the three active-draft Convex CMS publication states without claiming a Shop cutover", async () => {
+		enablePublication();
+		mocks.detailData = graphDetail();
+		await mountDetail();
+		const status = () => document.querySelector(".publication-status")?.textContent;
+		expect(status()).toBe("unpublished");
+		expect(document.body.textContent).toContain("The Sanity-backed public Shop has not cut over");
+
+		await updateDetailQuery(graphDetail(graphRevision, graphRevision, 11));
+		expect(status()).toBe("published — current draft");
+		const newerDraft = { ...graphRevision, revisionId: "graph-revision-2", createdAt: 12 };
+		await updateDetailQuery(graphDetail(newerDraft, graphRevision, 12));
+		expect(status()).toBe("published — newer draft available");
+	});
+
+	it("publishes once with exact CAS args and waits for an exact result/query echo", async () => {
+		enablePublication();
+		mocks.detailData = graphDetail();
+		mocks.mutation.mockResolvedValueOnce({
+			productId: "product-1",
+			draftRevisionId: "graph-revision-1",
+			publishedRevisionId: "graph-revision-1",
+			updatedAt: 11,
+			publishedAt: 11,
+		});
+		await mountDetail();
+		button("publish")?.click();
+		await tick();
+		await Promise.resolve();
+		expect(mocks.mutation).toHaveBeenCalledWith(mocks.refs.publishDraft, {
+			productId: "product-1",
+			expectedDraftRevisionId: "graph-revision-1",
+			expectedPublishedRevisionId: null,
+			expectedUpdatedAt: 10,
+		});
+		expect(button("publish")?.disabled).toBe(true);
+		expect(document.body.textContent).toContain("Confirming the exact Convex CMS publication state");
+		expect(document.querySelector(".publication-status")?.textContent).toBe("unpublished");
+
+		await updateDetailQuery(graphDetail(graphRevision, graphRevision, 11));
+		expect(document.querySelector(".publication-status")?.textContent).toBe("published — current draft");
+		expect(document.body.textContent).toContain("Published in Convex CMS.");
+		expect(mocks.mutation).toHaveBeenCalledTimes(1);
+	});
+
+	it("locks publication while dirty, saving, and waiting for a save query echo", async () => {
+		enablePublication();
+		mocks.detailData = graphDetail();
+		let finishSave: ((value: { revisionId: string }) => void) | undefined;
+		mocks.mutation.mockImplementation(() => new Promise((resolve) => {
+			finishSave = resolve;
+		}));
+		await mountDetail();
+		expect(button("publish")?.disabled).toBe(false);
+		const name = input("product name")!;
+		name.value = "Revised while private";
+		name.dispatchEvent(new Event("input", { bubbles: true }));
+		await tick();
+		expect(button("publish")?.disabled).toBe(true);
+		button("save draft")?.click();
+		await tick();
+		expect(button("publish")?.disabled).toBe(true);
+		finishSave?.({ revisionId: "graph-revision-2" });
+		await Promise.resolve();
+		await tick();
+		expect(button("publish")?.disabled).toBe(true);
+
+		const savedDraft = {
+			...graphRevision,
+			revisionId: "graph-revision-2",
+			draft: { ...graphRevision.draft, title: "Revised while private" },
+		};
+		await updateDetailQuery(graphDetail(savedDraft, null, 11));
+		expect(button("publish")?.disabled).toBe(false);
+	});
+
+	it("reconciles an ambiguous publish from query state without a duplicate call", async () => {
+		vi.useFakeTimers();
+		enablePublication();
+		mocks.detailData = graphDetail();
+		mocks.mutation.mockRejectedValueOnce(new Error("Network response was lost"));
+		await mountDetail();
+		button("publish")?.click();
+		await tick();
+		await Promise.resolve();
+		expect(document.body.textContent).toContain("without resubmitting");
+		button("publish")?.click();
+		expect(mocks.mutation).toHaveBeenCalledTimes(1);
+		await vi.advanceTimersByTimeAsync(8_000);
+		await tick();
+		expect(document.querySelector(".publication-alert")?.textContent).toContain("Reload this product");
+		expect(button("reload product")).toBeDefined();
+
+		await updateDetailQuery(graphDetail(graphRevision, graphRevision, 11));
+		expect(document.body.textContent).toContain("Published in Convex CMS.");
+		expect(mocks.mutation).toHaveBeenCalledTimes(1);
+	});
+
+	it("confirms unpublish, sends a nullable draft pointer, and surfaces CAS conflict generically", async () => {
+		enablePublication();
+		mocks.detailData = graphDetail(null, graphRevision, 20);
+		const confirm = vi.spyOn(globalThis, "confirm")
+			.mockReturnValueOnce(false)
+			.mockReturnValueOnce(true);
+		mocks.mutation.mockRejectedValueOnce(
+			new Error("Catalog publication conflict: reload before retrying"),
+		);
+		await mountDetail();
+		expect(document.querySelector(".publication-status")?.textContent).toBe("published — no active draft");
+		button("unpublish")?.click();
+		await tick();
+		expect(mocks.mutation).not.toHaveBeenCalled();
+		button("unpublish")?.click();
+		await tick();
+		await Promise.resolve();
+		expect(confirm).toHaveBeenCalledTimes(2);
+		expect(mocks.mutation).toHaveBeenCalledWith(mocks.refs.unpublish, {
+			productId: "product-1",
+			expectedDraftRevisionId: null,
+			expectedPublishedRevisionId: "graph-revision-1",
+			expectedUpdatedAt: 20,
+		});
+		expect(document.querySelector(".publication-alert")?.textContent).toContain(
+			"Publication state changed unexpectedly",
+		);
+		expect(button("unpublish")?.disabled).toBe(true);
 	});
 
 	it("saves migrated fixed-price graph product drafts without exposing print-only controls", async () => {
@@ -1222,7 +1386,7 @@ describe("draft-only product editor", () => {
 
 	it("stages one paid upload unattached, then uses the existing confirmed CAS replacement", async () => {
 		vi.useFakeTimers();
-		mocks.graphApiEnabled = true;
+		enablePublication();
 		mocks.privateAssetEnabled = true;
 		mocks.enabledKinds = ["print", "digital_download"];
 		mocks.detailData = {
@@ -1276,6 +1440,7 @@ describe("draft-only product editor", () => {
 		vi.spyOn(globalThis, "confirm").mockReturnValueOnce(false).mockReturnValueOnce(true);
 
 		await mountDetail();
+		expect(button("publish")?.disabled).toBe(false);
 		button("choose replacement")?.click();
 		await tick();
 		expect(mocks.candidateArgs).toEqual({
@@ -1300,6 +1465,7 @@ describe("draft-only product editor", () => {
 		await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3));
 		await tick();
 		expect(document.body.textContent).toContain("It will be checked automatically.");
+		expect(button("publish")?.disabled).toBe(true);
 		const completionCalls = () => fetchMock.mock.calls.filter(
 			([input]) => input === "/api/admin/catalog/private-upload/complete",
 		);
@@ -1365,6 +1531,7 @@ describe("draft-only product editor", () => {
 		});
 		expect(document.querySelector(".save-state")?.textContent).toBe("saved");
 		expect(input("product name")?.disabled).toBe(false);
+		expect(button("publish")?.disabled).toBe(false);
 	});
 
 	it("starts a distinct upload after the first replacement echo and cleans up pending checks", async () => {
