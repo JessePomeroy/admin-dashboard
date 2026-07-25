@@ -475,6 +475,11 @@ export interface AdminEditorConfig {
 		uploadEndpoint?: string;
 		/** Explicitly enables verified private-asset replacement when both API refs are configured. */
 		privateAssetReplacementEnabled?: boolean;
+		/** Optional purpose-specific private upload routes; both rooted queryless paths are required. */
+		privateAssetUpload?: {
+			prepareEndpoint: string;
+			completeEndpoint: string;
+		};
 		/** Product kinds exposed by this host's private draft editor. */
 		enabledKinds?: readonly (
 			| "print"

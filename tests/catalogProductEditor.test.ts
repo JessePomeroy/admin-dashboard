@@ -110,6 +110,34 @@ describe("catalog product editor helpers", () => {
 		expect(capability?.privateAssets).toBeNull();
 	});
 
+	it("projects both private upload routes only behind replacement refs and rooted queryless endpoints", () => {
+		const graphApi = new Proxy({}, {
+			get: (_, property) => ({ name: String(property) }),
+		});
+		const configured = (privateAssetUpload: { prepareEndpoint: string; completeEndpoint: string }) =>
+			getCatalogProductEditorCapability({
+				editor: {
+					products: {
+						enabledKinds: ["digital_download"],
+						privateAssetReplacementEnabled: true,
+						privateAssetUpload,
+					},
+				},
+				api: { catalogProductGraphs: graphApi },
+			} as unknown as AdminConfig);
+		expect(configured({
+			prepareEndpoint: "/api/private/prepare",
+			completeEndpoint: "/api/private/complete",
+		})?.privateAssets?.upload).toEqual({
+			prepareEndpoint: "/api/private/prepare",
+			completeEndpoint: "/api/private/complete",
+		});
+		expect(configured({
+			prepareEndpoint: "/api/private/prepare",
+			completeEndpoint: "/api/private/complete?retry=1",
+		})?.privateAssets?.upload).toBeNull();
+	});
+
 	it("converts nullable projections, preserves zero, and strips order", () => {
 		const projected = revision();
 		const draft = catalogProductDraftFromRevision(projected);

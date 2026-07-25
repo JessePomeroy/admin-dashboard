@@ -33,6 +33,15 @@ const serverConfig: AdminServerConfig = {
 	api: {} as AdminServerConfig["api"],
 	convexUrl: "https://example.convex.cloud",
 	resendApiKey: "",
+	editor: {
+		products: {
+			privateAssetReplacementEnabled: true,
+			privateAssetUpload: {
+				prepareEndpoint: "/api/admin/catalog/private-upload/prepare",
+				completeEndpoint: "/api/admin/catalog/private-upload/complete",
+			},
+		},
+	},
 	catalogPrivateEditorUpload: uploadConfig,
 	verifyAdmin: async () => true,
 };
