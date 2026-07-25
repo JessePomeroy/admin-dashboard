@@ -99,7 +99,7 @@ describe("catalog private editor browser upload protocol", () => {
 		)).rejects.toThrow();
 	});
 
-	it("uses exact host requests, one opaque PUT, and handle-only manual reconciliation", async () => {
+	it("uses exact host requests, one opaque PUT, and handle-only completion reconciliation", async () => {
 		const file = new File(["zip"], "download.zip", { type: "application/zip" });
 		const fetchMock = vi.fn()
 			.mockResolvedValueOnce(Response.json({
@@ -166,7 +166,7 @@ describe("catalog private editor browser upload protocol", () => {
 		}
 	});
 
-	it("falls back to a five-second manual check after ambiguous completion", async () => {
+	it("falls back to a five-second completion check delay after ambiguous completion", async () => {
 		vi.stubGlobal("fetch", vi.fn(async () => {
 			throw new TypeError("lost response");
 		}));

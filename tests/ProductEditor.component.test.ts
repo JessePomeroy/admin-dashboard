@@ -527,6 +527,7 @@ describe("draft-only product editor", () => {
 	afterEach(() => {
 		for (const component of components.splice(0)) unmount(component);
 		document.body.innerHTML = "";
+		vi.useRealTimers();
 		vi.restoreAllMocks();
 	});
 
@@ -1220,6 +1221,7 @@ describe("draft-only product editor", () => {
 	});
 
 	it("stages one paid upload unattached, then uses the existing confirmed CAS replacement", async () => {
+		vi.useFakeTimers();
 		mocks.graphApiEnabled = true;
 		mocks.privateAssetEnabled = true;
 		mocks.enabledKinds = ["print", "digital_download"];
@@ -1250,6 +1252,10 @@ describe("draft-only product editor", () => {
 			},
 			page: [digitalDownloadGraphRevision.paidFileAsset.asset],
 		};
+		const pendingCompletion = () => Response.json(
+			{ status: "pending_inspection" },
+			{ status: 202, headers: { "Retry-After": "1" } },
+		);
 		const fetchMock = vi.fn()
 			.mockResolvedValueOnce(Response.json({
 				status: "upload_required",
@@ -1259,10 +1265,10 @@ describe("draft-only product editor", () => {
 				uploadExpiresAt: "2026-01-01T00:00:00.000Z",
 			}))
 			.mockResolvedValueOnce(new Response(null, { status: 204 }))
-			.mockResolvedValueOnce(Response.json(
-				{ status: "pending_inspection" },
-				{ status: 202, headers: { "Retry-After": "1" } },
-			))
+			.mockResolvedValueOnce(pendingCompletion())
+			.mockResolvedValueOnce(pendingCompletion())
+			.mockResolvedValueOnce(pendingCompletion())
+			.mockResolvedValueOnce(pendingCompletion())
 			.mockResolvedValueOnce(Response.json({ status: "verified", asset: replacement }));
 		vi.stubGlobal("fetch", fetchMock);
 		const randomUUID = vi.spyOn(globalThis.crypto, "randomUUID")
@@ -1293,19 +1299,30 @@ describe("draft-only product editor", () => {
 		stageUpload?.click();
 		await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3));
 		await tick();
-		expect(button("check again")?.disabled).toBe(true);
-		expect(fetchMock).toHaveBeenCalledTimes(3);
-		await new Promise((resolve) => setTimeout(resolve, 1_050));
-		await tick();
-		expect(button("check again")?.disabled).toBe(false);
-		expect(fetchMock).toHaveBeenCalledTimes(3);
-		button("check again")?.click();
-		await vi.waitFor(() => expect(document.body.textContent).toContain("verified, staged unattached, and selected"));
-		await tick();
-
+		expect(document.body.textContent).toContain("It will be checked automatically.");
+		const completionCalls = () => fetchMock.mock.calls.filter(
+			([input]) => input === "/api/admin/catalog/private-upload/complete",
+		);
 		const putCalls = () => fetchMock.mock.calls.filter(([, init]) =>
 			(init as RequestInit).method === "PUT");
+		for (let automaticCheck = 0; automaticCheck < 3; automaticCheck += 1) {
+			expect(completionCalls()).toHaveLength(automaticCheck + 1);
+			expect(button("check again")).toBeUndefined();
+			await vi.advanceTimersByTimeAsync(65_000);
+			await tick();
+		}
+		expect(completionCalls()).toHaveLength(4);
+		expect(new Set(completionCalls().map(([, init]) => (init as RequestInit).body)).size).toBe(1);
+		expect(fetchMock.mock.calls.filter(
+			([input]) => input === "/api/admin/catalog/private-upload/prepare",
+		)).toHaveLength(1);
 		expect(putCalls()).toHaveLength(1);
+		expect(button("check again")?.disabled).toBe(true);
+		await vi.advanceTimersByTimeAsync(1_000);
+		await tick();
+		expect(button("check again")?.disabled).toBe(false);
+		button("check again")?.click();
+		await vi.waitFor(() => expect(document.body.textContent).toContain("verified, staged unattached, and selected"));
 		expect(document.body.textContent).toContain("verified, staged unattached, and selected");
 		expect(randomUUID).toHaveBeenCalledOnce();
 		expect(button("stage verified asset")?.disabled).toBe(true);
@@ -1350,14 +1367,14 @@ describe("draft-only product editor", () => {
 		expect(input("product name")?.disabled).toBe(false);
 	});
 
-	it("starts a distinct upload for another print-set relation only after the first replacement echo", async () => {
+	it("starts a distinct upload after the first replacement echo and cleans up pending checks", async () => {
+		vi.useFakeTimers();
 		mocks.graphApiEnabled = true;
 		mocks.privateAssetEnabled = true;
 		mocks.enabledKinds = ["print", "print_set"];
 		const firstCurrent = privatePrintAsset("source-a", "member-a.png");
 		const secondCurrent = privatePrintAsset("source-b", "member-b.png");
 		const firstStaged = privatePrintAsset("source-a-2", "member-a-2.png");
-		const secondStaged = privatePrintAsset("source-b-2", "member-b-2.png");
 		const detail = {
 			productId: "product-1",
 			productKey: "sanity.catalog.printSet",
@@ -1396,13 +1413,18 @@ describe("draft-only product editor", () => {
 			uploadToken,
 			uploadExpiresAt: "2026-01-01T00:00:00.000Z",
 		});
+		const pendingCompletion = () => Response.json(
+			{ status: "pending_inspection" },
+			{ status: 202, headers: { "Retry-After": "1" } },
+		);
 		const fetchMock = vi.fn()
 			.mockResolvedValueOnce(prepared(handles[0], "first-token"))
 			.mockResolvedValueOnce(new Response(null, { status: 204 }))
+			.mockResolvedValueOnce(pendingCompletion())
 			.mockResolvedValueOnce(Response.json({ status: "verified", asset: firstStaged }))
 			.mockResolvedValueOnce(prepared(handles[1], "second-token"))
 			.mockResolvedValueOnce(new Response(null, { status: 204 }))
-			.mockResolvedValueOnce(Response.json({ status: "verified", asset: secondStaged }));
+			.mockResolvedValueOnce(pendingCompletion());
 		vi.stubGlobal("fetch", fetchMock);
 		const randomUUID = vi.spyOn(globalThis.crypto, "randomUUID")
 			.mockReturnValueOnce(handles[0])
@@ -1419,6 +1441,14 @@ describe("draft-only product editor", () => {
 		);
 		await tick();
 		button("stage verified asset")?.click();
+		await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3));
+		await tick();
+		vi.setSystemTime(Date.now() + 306_000);
+		await vi.advanceTimersByTimeAsync(65_000);
+		await tick();
+		expect(fetchMock).toHaveBeenCalledTimes(3);
+		expect(button("check again")?.disabled).toBe(false);
+		button("check again")?.click();
 		await vi.waitFor(() => expect(document.body.textContent).toContain("member-a-2.png is verified"));
 		const putCalls = () => fetchMock.mock.calls.filter(([, init]) =>
 			(init as RequestInit).method === "PUT");
@@ -1464,9 +1494,13 @@ describe("draft-only product editor", () => {
 		);
 		await tick();
 		button("stage verified asset")?.click();
-		await vi.waitFor(() => expect(document.body.textContent).toContain("member-b-2.png is verified"));
+		await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(7));
+		await tick();
 		expect(randomUUID).toHaveBeenCalledTimes(2);
 		expect(putCalls()).toHaveLength(2);
+		unmount(components.pop()!);
+		await vi.advanceTimersByTimeAsync(65_000);
+		expect(fetchMock).toHaveBeenCalledTimes(7);
 	});
 
 	it("accepts a delayed own-save query echo without replacing the next local edit", async () => {
