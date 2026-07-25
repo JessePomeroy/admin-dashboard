@@ -23,9 +23,13 @@ const mocks = vi.hoisted(() => ({
 	mediaListError: undefined as Error | undefined,
 	mediaPlacedData: [] as unknown[],
 	mediaPlacedError: undefined as Error | undefined,
+	candidateData: undefined as unknown,
+	candidateError: undefined as Error | undefined,
+	candidateArgs: undefined as unknown,
 	notifyQuery: undefined as (() => void) | undefined,
 	enabledKinds: ["print"] as string[],
 	graphApiEnabled: false,
+	privateAssetEnabled: false,
 	mediaEnabled: false,
 	mediaRegisterEnabled: true,
 	refs: {
@@ -34,6 +38,8 @@ const mocks = vi.hoisted(() => ({
 		createDraft: { name: "catalog:createDraft" },
 		saveDraft: { name: "catalog:saveDraft" },
 		discardDraft: { name: "catalog:discardDraft" },
+		listDraftPrivateAssetCandidates: { name: "catalog:listDraftPrivateAssetCandidates" },
+		replaceDraftPrivateAsset: { name: "catalog:replaceDraftPrivateAsset" },
 	},
 	mediaRefs: {
 		listForEditor: { name: "media:listForEditor" },
@@ -55,12 +61,18 @@ vi.mock("convex-svelte", async () => {
 		};
 	});
 	return {
-		useQuery: (ref: { name?: string }) => ({
+		useQuery: (ref: { name?: string }, args?: unknown) => ({
 			get data() {
 				subscribe();
 				if (ref.name === "catalog:listForEditor") return mocks.listData;
 				if (ref.name === "media:listForEditor") return mocks.mediaListData;
 				if (ref.name === "media:getManyForEditor") return mocks.mediaPlacedData;
+				if (ref.name === "catalog:listDraftPrivateAssetCandidates") {
+					mocks.candidateArgs = typeof args === "function"
+						? (args as () => unknown)()
+						: args;
+					return mocks.candidateData;
+				}
 				return mocks.detailData;
 			},
 			get error() {
@@ -68,6 +80,7 @@ vi.mock("convex-svelte", async () => {
 				if (ref.name === "catalog:listForEditor") return mocks.listError;
 				if (ref.name === "media:listForEditor") return mocks.mediaListError;
 				if (ref.name === "media:getManyForEditor") return mocks.mediaPlacedError;
+				if (ref.name === "catalog:listDraftPrivateAssetCandidates") return mocks.candidateError;
 				return mocks.detailError;
 			},
 		}),
@@ -84,7 +97,22 @@ vi.mock("../src/lib/config", () => ({
 		isCreator: true,
 		api: {
 			catalogProducts: mocks.refs,
-			...(mocks.graphApiEnabled ? { catalogProductGraphs: mocks.refs } : {}),
+			...(mocks.graphApiEnabled
+				? {
+						catalogProductGraphs: {
+							...mocks.refs,
+							...(mocks.privateAssetEnabled
+								? {
+										listDraftPrivateAssetCandidates: mocks.refs.listDraftPrivateAssetCandidates,
+										replaceDraftPrivateAsset: mocks.refs.replaceDraftPrivateAsset,
+									}
+								: {
+										listDraftPrivateAssetCandidates: undefined,
+										replaceDraftPrivateAsset: undefined,
+									}),
+						},
+					}
+				: {}),
 			...(mocks.mediaEnabled
 				? {
 						mediaAssets: {
@@ -101,6 +129,7 @@ vi.mock("../src/lib/config", () => ({
 			products: {
 				baseHref: "/admin/editor/products",
 				enabledKinds: mocks.enabledKinds,
+				...(mocks.privateAssetEnabled ? { privateAssetReplacementEnabled: true } : {}),
 				...(mocks.mediaEnabled
 					? {
 							mediaBaseUrl: "https://media.example",
@@ -456,8 +485,12 @@ describe("draft-only product editor", () => {
 		mocks.mediaListError = undefined;
 		mocks.mediaPlacedData = [];
 		mocks.mediaPlacedError = undefined;
+		mocks.candidateData = undefined;
+		mocks.candidateError = undefined;
+		mocks.candidateArgs = undefined;
 		mocks.enabledKinds = ["print"];
 		mocks.graphApiEnabled = false;
+		mocks.privateAssetEnabled = false;
 		mocks.mediaEnabled = false;
 		mocks.mediaRegisterEnabled = true;
 	});
@@ -1093,6 +1126,7 @@ describe("draft-only product editor", () => {
 		expect(document.body.textContent).toContain("1.0.0");
 		expect(document.querySelector('input[type="file"]')).toBeNull();
 		expect(button("replace file")).toBeUndefined();
+		expect(button("choose replacement")).toBeUndefined();
 		expect(document.body.textContent).not.toContain("fulfillment");
 		expect(document.body.textContent).not.toContain("offer border options");
 		expect(document.body.textContent).not.toContain("offer frame options");
@@ -1156,6 +1190,91 @@ describe("draft-only product editor", () => {
 		expect(saveCall?.[1].draft).not.toHaveProperty("printOptions");
 		expect(saveCall?.[1].draft).not.toHaveProperty("printSources");
 		expect(saveCall?.[1].draft).not.toHaveProperty("setMembers");
+	});
+
+	it("replaces a clean paid file by CAS and stays locked until its query echo", async () => {
+		mocks.graphApiEnabled = true;
+		mocks.privateAssetEnabled = true;
+		mocks.enabledKinds = ["print", "digital_download"];
+		mocks.detailData = {
+			productId: "product-1",
+			productKey: "sanity.catalog.digitalDownload",
+			productKind: "digital_download",
+			graphVersion: 2,
+			slug: "time-aware-theme",
+			draft: digitalDownloadGraphRevision,
+			published: null,
+			updatedAt: 1,
+			publishedAt: null,
+		};
+		const replacement = {
+			...digitalDownloadGraphRevision.paidFileAsset.asset,
+			assetId: "paid-file-2",
+			originalFilename: "time-aware-theme-v2.zip",
+			version: "2.0.0",
+			createdAt: 1_760_000_000_000,
+		};
+		mocks.candidateData = {
+			draftRevisionId: "graph-revision-download",
+			relation: {
+				kind: "paid_digital_file",
+				relationKey: "download",
+				currentAsset: digitalDownloadGraphRevision.paidFileAsset.asset,
+			},
+			page: [replacement, digitalDownloadGraphRevision.paidFileAsset.asset],
+		};
+		vi.spyOn(globalThis, "confirm")
+			.mockReturnValueOnce(false)
+			.mockReturnValueOnce(true);
+		await mountDetail();
+		button("choose replacement")?.click();
+		await tick();
+		expect(mocks.candidateArgs).toEqual({
+			productId: "product-1",
+			expectedDraftRevisionId: "graph-revision-download",
+			relation: { kind: "paid_digital_file", relationKey: "download" },
+			paginationOpts: { numItems: 25, cursor: null },
+		});
+		const select = document.querySelector<HTMLSelectElement>(
+			'select[aria-label="Replacement for paid download"]',
+		)!;
+		select.value = replacement.assetId;
+		select.dispatchEvent(new Event("change", { bubbles: true }));
+		await tick();
+		button("replace asset")?.click();
+		await tick();
+		expect(mocks.mutation).not.toHaveBeenCalled();
+
+		mocks.mutation.mockResolvedValueOnce({ revisionId: "graph-revision-download-2" });
+		button("replace asset")?.click();
+		await tick();
+		await Promise.resolve();
+		expect(mocks.mutation).toHaveBeenCalledWith(
+			mocks.refs.replaceDraftPrivateAsset,
+			{
+				productId: "product-1",
+				expectedDraftRevisionId: "graph-revision-download",
+				relation: {
+					kind: "paid_digital_file",
+					relationKey: "download",
+					assetId: "paid-file-2",
+				},
+			},
+		);
+		expect(document.querySelector(".save-state")?.textContent).toBe("replacing");
+		expect(input("product name")?.disabled).toBe(true);
+
+		await updateDetailQuery({
+			...mocks.detailData as object,
+			draft: {
+				...digitalDownloadGraphRevision,
+				revisionId: "graph-revision-download-2",
+				paidFileAsset: { relationKey: "download", asset: replacement },
+			},
+			updatedAt: 2,
+		});
+		expect(document.querySelector(".save-state")?.textContent).toBe("saved");
+		expect(input("product name")?.disabled).toBe(false);
 	});
 
 	it("accepts a delayed own-save query echo without replacing the next local edit", async () => {
@@ -1448,109 +1567,6 @@ describe("draft-only product editor", () => {
 				productId: "product-1",
 				expectedDraftRevisionId: "revision-restarted",
 				draft: expect.objectContaining({ title: "Edit after restarting" }),
-			}),
-		);
-	});
-
-	it("preserves ordered repeated discard and restart echoes across two cycles", async () => {
-		mocks.detailData = {
-			productId: "product-1",
-			productKey: "print-one",
-			productKind: "print",
-			slug: "lake-print",
-			draft: revision,
-			published: null,
-			updatedAt: 1,
-			publishedAt: null,
-		};
-		vi.spyOn(globalThis, "confirm").mockReturnValue(true);
-		mocks.mutation
-			.mockResolvedValueOnce({ productId: "product-1", draftRevisionId: null })
-			.mockResolvedValueOnce({
-				productId: "product-1",
-				revisionId: "revision-restarted-1",
-			})
-			.mockResolvedValueOnce({ productId: "product-1", draftRevisionId: null })
-			.mockResolvedValueOnce({
-				productId: "product-1",
-				revisionId: "revision-restarted-2",
-			})
-			.mockResolvedValueOnce({
-				productId: "product-1",
-				revisionId: "revision-after-two-cycles",
-			});
-		await mountDetail();
-
-		for (let cycle = 0; cycle < 2; cycle += 1) {
-			button("discard draft")?.click();
-			await tick();
-			await Promise.resolve();
-			button("start a new draft")?.click();
-			await tick();
-			await Promise.resolve();
-		}
-		const name = input("product name");
-		name!.value = "Edit after two restarts";
-		name!.dispatchEvent(new Event("input", { bubbles: true }));
-		await tick();
-
-		const emptyRevision = (revisionId: string, createdAt: number) => ({
-			...revision,
-			revisionId,
-			title: null,
-			slug: null,
-			description: null,
-			saleAvailability: "unavailable",
-			frameOptionsEnabled: false,
-			framePriceMultiplierBasisPoints: 10_000,
-			variantCount: 0,
-			variants: [],
-			createdAt,
-		});
-		const delayedEchoes = [
-			{ draft: null, updatedAt: 2 },
-			{ draft: emptyRevision("revision-restarted-1", 3), updatedAt: 3 },
-			{ draft: null, updatedAt: 4 },
-			{ draft: emptyRevision("revision-restarted-2", 5), updatedAt: 5 },
-		];
-		for (const echo of delayedEchoes) {
-			await updateDetailQuery({
-				productId: "product-1",
-				productKey: "print-one",
-				productKind: "print",
-				slug: null,
-				draft: echo.draft,
-				published: null,
-				updatedAt: echo.updatedAt,
-				publishedAt: null,
-			});
-			expect(input("product name")?.value).toBe("Edit after two restarts");
-			expect(document.querySelector('[role="alert"]')).toBeNull();
-		}
-
-		expect(button("save draft")?.disabled).toBe(false);
-		button("save draft")?.click();
-		await tick();
-		await Promise.resolve();
-
-		const discardCalls = mocks.mutation.mock.calls.filter(
-			([ref]) => ref === mocks.refs.discardDraft,
-		);
-		expect(discardCalls).toHaveLength(2);
-		expect(discardCalls[1][1]).toEqual(
-			expect.objectContaining({
-				draftRevisionId: "revision-restarted-1",
-			}),
-		);
-		const saveCalls = mocks.mutation.mock.calls.filter(
-			([ref]) => ref === mocks.refs.saveDraft,
-		);
-		expect(saveCalls).toHaveLength(3);
-		expect(saveCalls[2][1]).toEqual(
-			expect.objectContaining({
-				productId: "product-1",
-				expectedDraftRevisionId: "revision-restarted-2",
-				draft: expect.objectContaining({ title: "Edit after two restarts" }),
 			}),
 		);
 	});

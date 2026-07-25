@@ -119,6 +119,9 @@ export interface AdminAPI {
 		createDraft: FnRef;
 		saveDraft: FnRef;
 		discardDraft: FnRef;
+		/** Optional verified private-asset selection capability; both refs are required. */
+		listDraftPrivateAssetCandidates?: FnRef;
+		replaceDraftPrivateAsset?: FnRef;
 	};
 	/** Tenant-scoped CMS media reads shared by editor modules. */
 	mediaAssets?: {
@@ -470,6 +473,8 @@ export interface AdminEditorConfig {
 		mediaBaseUrl?: string;
 		/** Same-origin host endpoint that issues and completes CMS media uploads. */
 		uploadEndpoint?: string;
+		/** Explicitly enables verified private-asset replacement when both API refs are configured. */
+		privateAssetReplacementEnabled?: boolean;
 		/** Product kinds exposed by this host's private draft editor. */
 		enabledKinds?: readonly (
 			| "print"

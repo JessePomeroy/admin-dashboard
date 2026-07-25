@@ -33,6 +33,14 @@ export function getCatalogProductEditorCapability(config: AdminConfig) {
 			&& config.api.mediaAssets.getManyForEditor
 			? config.api.mediaAssets
 			: null;
+		const privateAssets = settings.privateAssetReplacementEnabled === true
+			&& graphApi.listDraftPrivateAssetCandidates
+			&& graphApi.replaceDraftPrivateAsset
+			? {
+					listCandidates: graphApi.listDraftPrivateAssetCandidates,
+					replace: graphApi.replaceDraftPrivateAsset,
+				}
+			: null;
 		return {
 			api: graphApi,
 			enabledKinds,
@@ -41,6 +49,7 @@ export function getCatalogProductEditorCapability(config: AdminConfig) {
 			media: mediaApi && settings.mediaBaseUrl
 				? { api: mediaApi, mediaBaseUrl: settings.mediaBaseUrl, uploadEndpoint: settings.uploadEndpoint }
 				: null,
+			privateAssets,
 		};
 	}
 	const api = config.api.catalogProducts;
@@ -61,5 +70,6 @@ export function getCatalogProductEditorCapability(config: AdminConfig) {
 		graphVersion: 1 as const,
 		settings,
 		media: null,
+		privateAssets: null,
 	};
 }
