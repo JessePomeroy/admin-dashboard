@@ -1,5 +1,6 @@
 import type { AdminConfig } from "./config";
 import type { CatalogProductKind } from "./catalogProductEditor";
+import { isRootedQuerylessEndpoint } from "./catalogPrivateEditorUpload";
 
 export const CATALOG_PRODUCT_KINDS = [
 	"print",
@@ -33,12 +34,21 @@ export function getCatalogProductEditorCapability(config: AdminConfig) {
 			&& config.api.mediaAssets.getManyForEditor
 			? config.api.mediaAssets
 			: null;
+		const privateAssetUpload = settings.privateAssetUpload;
 		const privateAssets = settings.privateAssetReplacementEnabled === true
 			&& graphApi.listDraftPrivateAssetCandidates
 			&& graphApi.replaceDraftPrivateAsset
 			? {
 					listCandidates: graphApi.listDraftPrivateAssetCandidates,
 					replace: graphApi.replaceDraftPrivateAsset,
+					upload: privateAssetUpload
+						&& isRootedQuerylessEndpoint(privateAssetUpload.prepareEndpoint)
+						&& isRootedQuerylessEndpoint(privateAssetUpload.completeEndpoint)
+						? {
+								prepareEndpoint: privateAssetUpload.prepareEndpoint,
+								completeEndpoint: privateAssetUpload.completeEndpoint,
+							}
+						: null,
 				}
 			: null;
 		return {

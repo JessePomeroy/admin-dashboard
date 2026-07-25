@@ -48,8 +48,6 @@ export {
 } from "./server/handlers/cmsMedia.js";
 export { createCmsMediaDeleteHandler } from "./server/handlers/cmsMediaDeletion.js";
 export {
-	createCatalogPrivateEditorUploadCompleteHandler,
-	createCatalogPrivateEditorUploadPrepareHandler,
 	type CatalogPrivateEditorUploadAsset,
 	type CatalogPrivateEditorUploadCompleteRequest,
 	type CatalogPrivateEditorUploadCompleteResponse,
@@ -61,4 +59,8 @@ export {
 	type CatalogPrivateEditorUploadPrintAsset,
 	type CatalogPrivateEditorUploadPrintPrepareRequest,
 	type CatalogPrivateEditorUploadVerifiedResponse,
+} from "./catalogPrivateEditorUpload.js";
+export {
+	createCatalogPrivateEditorUploadCompleteHandler,
+	createCatalogPrivateEditorUploadPrepareHandler,
 } from "./server/handlers/catalogPrivateEditorUpload.js";

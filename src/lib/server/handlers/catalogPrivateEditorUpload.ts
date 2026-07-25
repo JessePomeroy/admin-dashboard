@@ -1,3 +1,10 @@
+import {
+	type CatalogPrivateEditorUploadAsset,
+	type CatalogPrivateEditorUploadDigitalAsset,
+	type CatalogPrivateEditorUploadPendingResponse,
+	type CatalogPrivateEditorUploadPrepareRequest,
+	type CatalogPrivateEditorUploadPrintAsset,
+} from "../../catalogPrivateEditorUpload.js";
 import { getServerConfig, type CatalogPrivateEditorUploadConfig } from "../../config.js";
 import { requireAdmin } from "../requireAdmin.js";
 
@@ -39,83 +46,6 @@ const SAFE_HEADERS = {
 	"Cache-Control": "no-store",
 	"X-Content-Type-Options": "nosniff",
 } as const;
-
-export type CatalogPrivateEditorUploadPrintPrepareRequest = {
-	uploadHandle: string;
-	productKind: "print" | "print_set";
-	originalFilename: string;
-	contentType: "image/jpeg" | "image/png";
-	sizeBytes: number;
-	sha256: string;
-	widthPixels: number;
-	heightPixels: number;
-};
-
-export type CatalogPrivateEditorUploadDigitalPrepareRequest = {
-	uploadHandle: string;
-	productKind: "digital_download";
-	originalFilename: string;
-	contentType: "application/zip";
-	sizeBytes: number;
-	sha256: string;
-	version?: string;
-};
-
-export type CatalogPrivateEditorUploadPrepareRequest =
-	| CatalogPrivateEditorUploadPrintPrepareRequest
-	| CatalogPrivateEditorUploadDigitalPrepareRequest;
-
-export type CatalogPrivateEditorUploadPrepareResponse = {
-	status: "upload_required";
-	uploadHandle: string;
-	uploadUrl: string;
-	uploadToken: string;
-	uploadExpiresAt: string;
-};
-
-export type CatalogPrivateEditorUploadCompleteRequest = {
-	uploadHandle: string;
-};
-
-export type CatalogPrivateEditorUploadPrintAsset = {
-	kind: "print_source";
-	assetId: string;
-	status: "verified";
-	originalFilename: string;
-	mimeType: "image/jpeg" | "image/png";
-	sizeBytes: number;
-	widthPixels: number;
-	heightPixels: number;
-	createdAt: number;
-};
-
-export type CatalogPrivateEditorUploadDigitalAsset = {
-	kind: "paid_digital_file";
-	assetId: string;
-	status: "verified";
-	originalFilename: string;
-	mimeType: "application/zip";
-	sizeBytes: number;
-	version?: string;
-	createdAt: number;
-};
-
-export type CatalogPrivateEditorUploadAsset =
-	| CatalogPrivateEditorUploadPrintAsset
-	| CatalogPrivateEditorUploadDigitalAsset;
-
-export type CatalogPrivateEditorUploadVerifiedResponse = {
-	status: "verified";
-	asset: CatalogPrivateEditorUploadAsset;
-};
-
-export type CatalogPrivateEditorUploadPendingResponse = {
-	status: "pending_inspection" | "storage_pending" | "retry_later";
-};
-
-export type CatalogPrivateEditorUploadCompleteResponse =
-	| CatalogPrivateEditorUploadVerifiedResponse
-	| CatalogPrivateEditorUploadPendingResponse;
 
 type HandlerEvent = { request: Request };
 type PrepareInput = CatalogPrivateEditorUploadPrepareRequest;

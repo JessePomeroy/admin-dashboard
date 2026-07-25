@@ -1,6 +1,14 @@
 <script lang="ts">
+import { onDestroy } from "svelte";
 import { useQuery } from "convex-svelte";
 import { useAdminClient } from "../../adminClient";
+import {
+	completeCatalogPrivateEditorUpload,
+	declareCatalogPrivateEditorUpload,
+	newCatalogPrivateEditorUploadHandle,
+	prepareCatalogPrivateEditorUpload,
+	putCatalogPrivateEditorUpload,
+} from "../../catalogPrivateEditorUpload";
 import { getCatalogProductEditorCapability } from "../../catalogProductCapability";
 import {
 	addCatalogProductWebMedia,
@@ -78,6 +86,26 @@ let replacementPending = $state(false);
 let replacementRevisionId = $state<string | null>(null);
 let replacementBaseRevisionId = $state<string | null>(null);
 let replacementSubmittedJson = $state("");
+const privateAssetUpload = privateAssetCapability?.upload ?? null;
+type PrivateUploadPhase = "reading" | "preparing" | "uploading" | "completing" | "pending" | "verified";
+type PrivateUploadOperation = {
+	uploadHandle: string;
+	snapshot: { draftRevisionId: string; relation: CatalogEditorPrivateAssetRelation };
+	phase: PrivateUploadPhase;
+	controller: AbortController | null;
+	putIssued: boolean;
+	stagedAsset: CatalogEditorPrivateAsset | null;
+	replacementRevisionId: string | null;
+};
+let selectedPrivateFile = $state<File | null>(null);
+let privateFileInput = $state<HTMLInputElement | null>(null);
+let privateZipVersion = $state("");
+let privateUploadOperation = $state<PrivateUploadOperation | null>(null);
+let privateUploadFallbackState = $state<"idle" | "error">("idle");
+let privateUploadMessage = $state("");
+let manualCheckReady = $state(false);
+let manualCheckTimer: ReturnType<typeof setTimeout> | undefined;
+const usedPrivateUploadHandles = new Set<string>();
 const privateAssetCandidateQuery = privateAssetCapability
 	? useQuery(privateAssetCapability.listCandidates, () =>
 		activePrivateAssetRelation && baseRevisionId
@@ -188,10 +216,17 @@ let activeCandidatePage = $derived(
 		? candidatePage
 		: undefined,
 );
+let stagedPrivateAsset = $derived(privateUploadOperation?.stagedAsset ?? null);
+let privateUploadState = $derived(privateUploadOperation?.phase ?? privateUploadFallbackState);
 let candidateOptions = $derived(activeCandidatePage
 	? [...new Map([
 		activeCandidatePage.relation.currentAsset,
 		...activeCandidatePage.page,
+		...(stagedPrivateAsset
+			&& privateUploadOperation?.snapshot.relation.kind === activeCandidatePage.relation.kind
+			&& privateUploadOperation.snapshot.relation.relationKey === activeCandidatePage.relation.relationKey
+			? [stagedPrivateAsset]
+			: []),
 	].map((asset) => [asset.assetId, asset])).values()]
 	: []);
 let usesSinglePrice = $derived(
@@ -201,8 +236,10 @@ let usesSinglePrice = $derived(
 		|| form.productKind === "digital_download",
 );
 let dirty = $derived(initialized && hasActiveDraft && currentJson !== savedJson);
+let privateUploadBusy = $derived(["reading", "preparing", "uploading", "completing", "pending"].includes(privateUploadState));
+let privateUploadBlocked = $derived(privateUploadOperation !== null);
 let editorLocked = $derived(
-	replacementPending || ["saving", "discarding", "conflict"].includes(saveState),
+	replacementPending || privateUploadBusy || ["saving", "discarding", "conflict"].includes(saveState),
 );
 let canSave = $derived(
 	hasActiveDraft
@@ -261,6 +298,14 @@ $effect(() => {
 				replacementBaseRevisionId = null;
 				activePrivateAssetRelation = null;
 				selectedPrivateAssetId = "";
+				if (
+					privateUploadOperation?.replacementRevisionId === serverRevisionId
+					&& stagedUploadMatchesQuery(privateUploadOperation)
+				) {
+					privateUploadOperation = null;
+					privateUploadFallbackState = "idle";
+					privateUploadMessage = "";
+				}
 				saveState = currentJson === savedJson ? "saved" : "dirty";
 				return;
 			}
@@ -360,7 +405,177 @@ function choosePrivateAssetRelation(
 	if (editorLocked || dirty) return;
 	activePrivateAssetRelation = relation;
 	selectedPrivateAssetId = currentAssetId ?? "";
+	selectedPrivateFile = null;
+	if (privateFileInput) privateFileInput.value = "";
+	privateZipVersion = "";
+	privateUploadMessage = "";
 	saveError = "";
+}
+
+function scheduleManualCheck(delay: number) {
+	if (manualCheckTimer) clearTimeout(manualCheckTimer);
+	manualCheckReady = false;
+	manualCheckTimer = setTimeout(() => {
+		manualCheckReady = true;
+		manualCheckTimer = undefined;
+	}, delay);
+}
+
+function operationStillActive(uploadHandle: string) {
+	return privateUploadOperation?.uploadHandle === uploadHandle;
+}
+
+function stagedUploadMatchesQuery(operation: PrivateUploadOperation) {
+	const assetId = operation.stagedAsset?.assetId;
+	const relation = operation.snapshot.relation;
+	if (!assetId || !editorState?.draft) return false;
+	if (relation.kind === "paid_digital_file") {
+		return editorState.draft.paidFileAsset?.relationKey === relation.relationKey
+			&& editorState.draft.paidFileAsset.asset.assetId === assetId;
+	}
+	return editorState.draft.printSourceAssets?.some(
+		(item) => item.relationKey === relation.relationKey && item.asset.assetId === assetId,
+	) ?? false;
+}
+
+function uploadSnapshotStillActive(operation: PrivateUploadOperation) {
+	return baseRevisionId === operation.snapshot.draftRevisionId
+		&& activePrivateAssetRelation?.kind === operation.snapshot.relation.kind
+		&& activePrivateAssetRelation.relationKey === operation.snapshot.relation.relationKey
+		&& !dirty;
+}
+
+async function reconcilePrivateUpload() {
+	const operation = privateUploadOperation;
+	if (!privateAssetUpload || !operation) return;
+	operation.phase = "completing";
+	privateUploadMessage = "Checking verified asset status…";
+	const result = await completeCatalogPrivateEditorUpload(
+		privateAssetUpload.completeEndpoint,
+		operation.uploadHandle,
+	);
+	if (!operationStillActive(operation.uploadHandle)) return;
+	if (result.status === "verified") {
+		if (!uploadSnapshotStillActive(operation) || result.asset.kind !== operation.snapshot.relation.kind) {
+			privateUploadOperation = null;
+			privateUploadFallbackState = "error";
+			privateUploadMessage = "The draft relation changed. Reload this product before using the verified asset.";
+			return;
+		}
+		operation.stagedAsset = result.asset;
+		operation.phase = "verified";
+		selectedPrivateAssetId = result.asset.assetId;
+		privateUploadMessage = `${result.asset.originalFilename} is verified, staged unattached, and selected below.`;
+		return;
+	}
+	if (result.status === "pending") {
+		operation.phase = "pending";
+		privateUploadMessage = "Verification is still pending. Check again when the action becomes available.";
+		scheduleManualCheck(result.retryAfterMs);
+		return;
+	}
+	privateUploadOperation = null;
+	privateUploadFallbackState = "error";
+	privateUploadMessage = "This upload reached a terminal outcome. Select the file again to begin a new upload.";
+}
+
+async function startPrivateUpload() {
+	if (
+		!privateAssetUpload
+		|| !selectedPrivateFile
+		|| !activePrivateAssetRelation
+		|| !activeCandidatePage
+		|| !baseRevisionId
+		|| dirty
+		|| editorLocked
+		|| privateUploadOperation
+	) return;
+	let file: File | null = selectedPrivateFile;
+	const productKind = form.productKind;
+	const uploadHandle = newCatalogPrivateEditorUploadHandle();
+	if (usedPrivateUploadHandles.has(uploadHandle)) {
+		privateUploadFallbackState = "error";
+		privateUploadMessage = "A brand-new upload handle could not be created. Try again.";
+		return;
+	}
+	usedPrivateUploadHandles.add(uploadHandle);
+	const controller = new AbortController();
+	const operation: PrivateUploadOperation = {
+		uploadHandle,
+		snapshot: {
+			draftRevisionId: baseRevisionId,
+			relation: { ...activePrivateAssetRelation },
+		},
+		phase: "reading",
+		controller,
+		putIssued: false,
+		stagedAsset: null,
+		replacementRevisionId: null,
+	};
+	privateUploadOperation = operation;
+	privateUploadFallbackState = "idle";
+	privateUploadMessage = "Reading and hashing the selected file…";
+	try {
+		let declaration: Awaited<ReturnType<typeof declareCatalogPrivateEditorUpload>> | null = await declareCatalogPrivateEditorUpload(
+			file,
+			productKind,
+			uploadHandle,
+			privateZipVersion,
+			controller.signal,
+		);
+		if (!operationStillActive(uploadHandle)) return;
+		operation.phase = "preparing";
+		privateUploadMessage = "Preparing one private upload…";
+		let prepared: Awaited<ReturnType<typeof prepareCatalogPrivateEditorUpload>> | null = await prepareCatalogPrivateEditorUpload(
+			privateAssetUpload.prepareEndpoint,
+			declaration,
+			controller.signal,
+		);
+		if (!operationStillActive(uploadHandle) || operation.putIssued) return;
+		operation.putIssued = true;
+		operation.controller = null;
+		selectedPrivateFile = null;
+		if (privateFileInput) privateFileInput.value = "";
+		privateZipVersion = "";
+		operation.phase = "uploading";
+		privateUploadMessage = "Uploading once. This transfer will not be retried.";
+		try {
+			await putCatalogPrivateEditorUpload(prepared, file, declaration.contentType);
+		} catch {
+			// A lost or rejected PUT response is reconciled only through completion.
+		}
+		prepared = null;
+		declaration = null;
+		file = null;
+		await reconcilePrivateUpload();
+	} catch {
+		if (!operationStillActive(uploadHandle)) return;
+		privateUploadOperation = null;
+		privateUploadFallbackState = "error";
+		privateUploadMessage = "The file could not be prepared safely. Review it and try again.";
+	}
+}
+
+function cancelPrivateUpload() {
+	const operation = privateUploadOperation;
+	if (!operation?.controller || !["reading", "preparing"].includes(operation.phase)) return;
+	operation.controller.abort();
+	privateUploadOperation = null;
+	privateUploadFallbackState = "idle";
+	selectedPrivateFile = null;
+	if (privateFileInput) privateFileInput.value = "";
+	privateUploadMessage = "Upload cancelled before transfer.";
+}
+
+onDestroy(() => {
+	if (manualCheckTimer) clearTimeout(manualCheckTimer);
+	privateUploadOperation?.controller?.abort();
+});
+
+async function checkPrivateUploadAgain() {
+	if (!manualCheckReady || privateUploadState !== "pending") return;
+	manualCheckReady = false;
+	await reconcilePrivateUpload();
 }
 
 async function replacePrivateAsset() {
@@ -397,6 +612,12 @@ async function replacePrivateAsset() {
 			relation: { ...activePrivateAssetRelation, assetId: candidate.assetId },
 		}) as { revisionId: string };
 		replacementRevisionId = result.revisionId;
+		if (
+			privateUploadOperation?.phase === "verified"
+			&& privateUploadOperation.stagedAsset?.assetId === candidate.assetId
+			&& privateUploadOperation.snapshot.relation.kind === activePrivateAssetRelation.kind
+			&& privateUploadOperation.snapshot.relation.relationKey === activePrivateAssetRelation.relationKey
+		) privateUploadOperation.replacementRevisionId = result.revisionId;
 	} catch (error) {
 		replacementPending = false;
 		replacementRevisionId = null;
@@ -584,9 +805,20 @@ function addUploadedMediaAsset(asset: PortfolioMediaAsset) {
 									{#if privateAssetCapability && row.asset}
 										{#if activePrivateAssetRelation?.kind === row.relation.kind && activePrivateAssetRelation.relationKey === row.relation.relationKey}
 											<div class="replacement-action">
+												{#if privateAssetUpload}
+													<div class="private-upload">
+														<label>new private {row.relation.kind === "print_source" ? "JPEG or PNG" : "ZIP"}<input bind:this={privateFileInput} type="file" accept={row.relation.kind === "print_source" ? "image/jpeg,image/png" : "application/zip,.zip"} onchange={(event) => { selectedPrivateFile = event.currentTarget.files?.[0] ?? null; privateUploadMessage = ""; }} disabled={privateUploadBlocked || dirty} /></label>
+														{#if row.relation.kind === "paid_digital_file"}<label>version (optional)<input maxlength="64" value={privateZipVersion} oninput={(event) => (privateZipVersion = event.currentTarget.value)} disabled={privateUploadBlocked || dirty} /></label>{/if}
+														<div class="private-upload-actions">
+															<button type="button" onclick={() => void startPrivateUpload()} disabled={!selectedPrivateFile || privateUploadBlocked || dirty || !activeCandidatePage}>stage verified asset</button>
+															{#if privateUploadState === "reading" || privateUploadState === "preparing"}<button type="button" class="secondary" onclick={cancelPrivateUpload}>cancel before upload</button>{/if}
+															{#if privateUploadState === "pending"}<button type="button" class="secondary" onclick={() => void checkPrivateUploadAgain()} disabled={!manualCheckReady}>check again</button>{/if}
+														</div>
+														{#if privateUploadMessage}<p class:upload-error={privateUploadState === "error"} role={privateUploadState === "error" ? "alert" : "status"}>{privateUploadMessage}</p>{/if}
+													</div>
+												{/if}
 												{#if activeCandidatePage}
-													<label>verified replacement<select aria-label={`Replacement for ${row.label}`} bind:value={selectedPrivateAssetId} disabled={editorLocked || dirty}>{#each candidateOptions as asset (asset.assetId)}<option value={asset.assetId}>{asset.originalFilename} — {formatPrivateAssetSize(asset.sizeBytes)}</option>{/each}</select></label>
-													<button type="button" onclick={() => void replacePrivateAsset()} disabled={editorLocked || dirty || !selectedPrivateAssetId || selectedPrivateAssetId === activeCandidatePage.relation.currentAsset.assetId}>replace asset</button>
+													<div class="replacement-confirm"><label>verified replacement<select aria-label={`Replacement for ${row.label}`} bind:value={selectedPrivateAssetId} disabled={editorLocked || dirty}>{#each candidateOptions as asset (asset.assetId)}<option value={asset.assetId}>{asset.originalFilename} — {formatPrivateAssetSize(asset.sizeBytes)}</option>{/each}</select></label><button type="button" onclick={() => void replacePrivateAsset()} disabled={editorLocked || dirty || !selectedPrivateAssetId || selectedPrivateAssetId === activeCandidatePage.relation.currentAsset.assetId}>replace asset</button></div>
 												{:else if !privateAssetCandidateQuery?.error}<span role="status">Loading verified choices…</span>{/if}
 											</div>
 										{:else}
@@ -597,7 +829,7 @@ function addUploadedMediaAsset(asset: PortfolioMediaAsset) {
 							{/each}
 						</ul>
 					{/if}
-					<p class="private-asset-note">Only the selected verified relation changes. Uploading a new file is not available here.</p>
+					<p class="private-asset-note">A verified upload is staged unattached. Only the separate confirmed replacement action changes the selected relation.</p>
 				</section>
 			{/if}
 			{#if !isGraphV2}
@@ -641,10 +873,15 @@ function addUploadedMediaAsset(asset: PortfolioMediaAsset) {
 	.private-asset-metadata strong { font-size: .76rem; font-weight: 500; }
 	.private-asset-metadata span { font-size: .88rem; }
 	.private-asset-metadata small, .replacement-action > span, .private-asset-note, .private-asset-empty { color: var(--admin-text-muted); font-size: .72rem; }
-	.replacement-action { display: flex; gap: 8px; align-items: end; }
+	.replacement-action, .private-upload { display: grid; gap: 10px; }
 	.replacement-action label { min-width: 240px; color: var(--admin-text-muted); font-size: .68rem; }
-	.replacement-action button { white-space: nowrap; }
+	.private-upload { border-bottom: 1px solid var(--admin-border); padding-bottom: 12px; }
+	.private-upload input { box-sizing: border-box; width: 100%; }
+	.private-upload-actions, .replacement-confirm { display: flex; gap: 8px; align-items: end; }
+	.private-upload-actions button, .replacement-confirm button { white-space: nowrap; }
+	.private-upload p { margin: 0; color: var(--admin-text-muted); font-size: .72rem; }
+	.private-upload .upload-error { color: var(--admin-danger, var(--status-rose)); }
 	.private-asset-note { margin: 16px 0 0; }
 	.danger { border-color: color-mix(in srgb, var(--admin-danger, var(--status-rose)) 55%, transparent) !important; color: var(--admin-danger, var(--status-rose)) !important; }
-	@media (max-width: 720px) { .private-asset-list li { grid-template-columns: 1fr; } .replacement-action { align-items: stretch; flex-direction: column; } .replacement-action label { min-width: 0; } }
+	@media (max-width: 720px) { .private-asset-list li { grid-template-columns: 1fr; } .replacement-action label { min-width: 0; } .private-upload-actions, .replacement-confirm { align-items: stretch; flex-direction: column; } }
 </style>

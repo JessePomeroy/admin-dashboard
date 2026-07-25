@@ -129,7 +129,15 @@ vi.mock("../src/lib/config", () => ({
 			products: {
 				baseHref: "/admin/editor/products",
 				enabledKinds: mocks.enabledKinds,
-				...(mocks.privateAssetEnabled ? { privateAssetReplacementEnabled: true } : {}),
+				...(mocks.privateAssetEnabled
+					? {
+							privateAssetReplacementEnabled: true,
+							privateAssetUpload: {
+								prepareEndpoint: "/api/admin/catalog/private-upload/prepare",
+								completeEndpoint: "/api/admin/catalog/private-upload/complete",
+							},
+						}
+					: {}),
 				...(mocks.mediaEnabled
 					? {
 							mediaBaseUrl: "https://media.example",
@@ -393,6 +401,28 @@ const digitalDownloadGraphRevision = {
 		},
 	},
 };
+
+function privatePrintAsset(assetId: string, originalFilename: string) {
+	return {
+		kind: "print_source" as const,
+		assetId,
+		status: "verified" as const,
+		originalFilename,
+		mimeType: "image/png" as const,
+		sizeBytes: 24,
+		widthPixels: 1,
+		heightPixels: 1,
+		createdAt: 1_750_000_000_000,
+	};
+}
+
+function encodedPng() {
+	const bytes = new Uint8Array(24);
+	bytes.set([137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 13, 73, 72, 68, 82]);
+	new DataView(bytes.buffer).setUint32(16, 1);
+	new DataView(bytes.buffer).setUint32(20, 1);
+	return bytes;
+}
 
 function mediaAsset(
 	_id: string,
@@ -1124,9 +1154,6 @@ describe("draft-only product editor", () => {
 		expect(document.body.textContent).toContain("application/zip");
 		expect(document.body.textContent).toContain("1.5 MB");
 		expect(document.body.textContent).toContain("1.0.0");
-		expect(document.querySelector('input[type="file"]')).toBeNull();
-		expect(button("replace file")).toBeUndefined();
-		expect(button("choose replacement")).toBeUndefined();
 		expect(document.body.textContent).not.toContain("fulfillment");
 		expect(document.body.textContent).not.toContain("offer border options");
 		expect(document.body.textContent).not.toContain("offer frame options");
@@ -1192,7 +1219,7 @@ describe("draft-only product editor", () => {
 		expect(saveCall?.[1].draft).not.toHaveProperty("setMembers");
 	});
 
-	it("replaces a clean paid file by CAS and stays locked until its query echo", async () => {
+	it("stages one paid upload unattached, then uses the existing confirmed CAS replacement", async () => {
 		mocks.graphApiEnabled = true;
 		mocks.privateAssetEnabled = true;
 		mocks.enabledKinds = ["print", "digital_download"];
@@ -1221,11 +1248,27 @@ describe("draft-only product editor", () => {
 				relationKey: "download",
 				currentAsset: digitalDownloadGraphRevision.paidFileAsset.asset,
 			},
-			page: [replacement, digitalDownloadGraphRevision.paidFileAsset.asset],
+			page: [digitalDownloadGraphRevision.paidFileAsset.asset],
 		};
-		vi.spyOn(globalThis, "confirm")
-			.mockReturnValueOnce(false)
-			.mockReturnValueOnce(true);
+		const fetchMock = vi.fn()
+			.mockResolvedValueOnce(Response.json({
+				status: "upload_required",
+				uploadHandle: "123e4567-e89b-42d3-a456-426614174000",
+				uploadUrl: "https://cms-media-worker.thinkingofview.workers.dev/v1/catalog-assets/editor-uploads/source",
+				uploadToken: "opaque-token",
+				uploadExpiresAt: "2026-01-01T00:00:00.000Z",
+			}))
+			.mockResolvedValueOnce(new Response(null, { status: 204 }))
+			.mockResolvedValueOnce(Response.json(
+				{ status: "pending_inspection" },
+				{ status: 202, headers: { "Retry-After": "1" } },
+			))
+			.mockResolvedValueOnce(Response.json({ status: "verified", asset: replacement }));
+		vi.stubGlobal("fetch", fetchMock);
+		const randomUUID = vi.spyOn(globalThis.crypto, "randomUUID")
+			.mockReturnValue("123e4567-e89b-42d3-a456-426614174000");
+		vi.spyOn(globalThis, "confirm").mockReturnValueOnce(false).mockReturnValueOnce(true);
+
 		await mountDetail();
 		button("choose replacement")?.click();
 		await tick();
@@ -1235,32 +1278,62 @@ describe("draft-only product editor", () => {
 			relation: { kind: "paid_digital_file", relationKey: "download" },
 			paginationOpts: { numItems: 25, cursor: null },
 		});
+		const file = new File(["zip"], "time-aware-theme-v2.zip", { type: "application/zip" });
+		Object.defineProperty(file, "arrayBuffer", {
+			value: vi.fn(async () => new TextEncoder().encode("zip").buffer),
+		});
+		chooseFile(document.querySelector<HTMLInputElement>('.private-upload input[type="file"]')!, file);
+		const version = input("version (optional)");
+		version!.value = " 2.0.0 ";
+		version!.dispatchEvent(new Event("input", { bubbles: true }));
+		await tick();
+		const stageUpload = button("stage verified asset");
+		expect(stageUpload, document.body.textContent ?? "").toBeDefined();
+		expect(stageUpload?.disabled, document.body.textContent ?? "").toBe(false);
+		stageUpload?.click();
+		await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3));
+		await tick();
+		expect(button("check again")?.disabled).toBe(true);
+		expect(fetchMock).toHaveBeenCalledTimes(3);
+		await new Promise((resolve) => setTimeout(resolve, 1_050));
+		await tick();
+		expect(button("check again")?.disabled).toBe(false);
+		expect(fetchMock).toHaveBeenCalledTimes(3);
+		button("check again")?.click();
+		await vi.waitFor(() => expect(document.body.textContent).toContain("verified, staged unattached, and selected"));
+		await tick();
+
+		const putCalls = () => fetchMock.mock.calls.filter(([, init]) =>
+			(init as RequestInit).method === "PUT");
+		expect(putCalls()).toHaveLength(1);
+		expect(document.body.textContent).toContain("verified, staged unattached, and selected");
+		expect(randomUUID).toHaveBeenCalledOnce();
+		expect(button("stage verified asset")?.disabled).toBe(true);
+		button("stage verified asset")?.click();
+		await tick();
+		expect(putCalls()).toHaveLength(1);
 		const select = document.querySelector<HTMLSelectElement>(
 			'select[aria-label="Replacement for paid download"]',
 		)!;
-		select.value = replacement.assetId;
-		select.dispatchEvent(new Event("change", { bubbles: true }));
-		await tick();
+		expect(select.value).toBe(replacement.assetId);
+		expect(mocks.mutation).not.toHaveBeenCalled();
+
 		button("replace asset")?.click();
 		await tick();
 		expect(mocks.mutation).not.toHaveBeenCalled();
-
 		mocks.mutation.mockResolvedValueOnce({ revisionId: "graph-revision-download-2" });
 		button("replace asset")?.click();
 		await tick();
 		await Promise.resolve();
-		expect(mocks.mutation).toHaveBeenCalledWith(
-			mocks.refs.replaceDraftPrivateAsset,
-			{
-				productId: "product-1",
-				expectedDraftRevisionId: "graph-revision-download",
-				relation: {
-					kind: "paid_digital_file",
-					relationKey: "download",
-					assetId: "paid-file-2",
-				},
+		expect(mocks.mutation).toHaveBeenCalledWith(mocks.refs.replaceDraftPrivateAsset, {
+			productId: "product-1",
+			expectedDraftRevisionId: "graph-revision-download",
+			relation: {
+				kind: "paid_digital_file",
+				relationKey: "download",
+				assetId: "paid-file-2",
 			},
-		);
+		});
 		expect(document.querySelector(".save-state")?.textContent).toBe("replacing");
 		expect(input("product name")?.disabled).toBe(true);
 
@@ -1275,6 +1348,125 @@ describe("draft-only product editor", () => {
 		});
 		expect(document.querySelector(".save-state")?.textContent).toBe("saved");
 		expect(input("product name")?.disabled).toBe(false);
+	});
+
+	it("starts a distinct upload for another print-set relation only after the first replacement echo", async () => {
+		mocks.graphApiEnabled = true;
+		mocks.privateAssetEnabled = true;
+		mocks.enabledKinds = ["print", "print_set"];
+		const firstCurrent = privatePrintAsset("source-a", "member-a.png");
+		const secondCurrent = privatePrintAsset("source-b", "member-b.png");
+		const firstStaged = privatePrintAsset("source-a-2", "member-a-2.png");
+		const secondStaged = privatePrintAsset("source-b-2", "member-b-2.png");
+		const detail = {
+			productId: "product-1",
+			productKey: "sanity.catalog.printSet",
+			productKind: "print_set",
+			graphVersion: 2,
+			slug: "twin-moons",
+			draft: {
+				...printSetGraphRevision,
+				printSourceAssets: [
+					{ relationKey: "member-a-source", asset: firstCurrent },
+					{ relationKey: "member-b-source", asset: secondCurrent },
+				],
+			},
+			published: null,
+			updatedAt: 1,
+			publishedAt: null,
+		};
+		mocks.detailData = detail;
+		mocks.candidateData = {
+			draftRevisionId: "graph-revision-set",
+			relation: {
+				kind: "print_source",
+				relationKey: "member-a-source",
+				currentAsset: firstCurrent,
+			},
+			page: [firstCurrent],
+		};
+		const handles = [
+			"123e4567-e89b-42d3-a456-426614174000",
+			"123e4567-e89b-42d3-a456-426614174001",
+		] as const;
+		const prepared = (uploadHandle: string, uploadToken: string) => Response.json({
+			status: "upload_required",
+			uploadHandle,
+			uploadUrl: "https://cms-media-worker.thinkingofview.workers.dev/v1/catalog-assets/editor-uploads/source",
+			uploadToken,
+			uploadExpiresAt: "2026-01-01T00:00:00.000Z",
+		});
+		const fetchMock = vi.fn()
+			.mockResolvedValueOnce(prepared(handles[0], "first-token"))
+			.mockResolvedValueOnce(new Response(null, { status: 204 }))
+			.mockResolvedValueOnce(Response.json({ status: "verified", asset: firstStaged }))
+			.mockResolvedValueOnce(prepared(handles[1], "second-token"))
+			.mockResolvedValueOnce(new Response(null, { status: 204 }))
+			.mockResolvedValueOnce(Response.json({ status: "verified", asset: secondStaged }));
+		vi.stubGlobal("fetch", fetchMock);
+		const randomUUID = vi.spyOn(globalThis.crypto, "randomUUID")
+			.mockReturnValueOnce(handles[0])
+			.mockReturnValueOnce(handles[1]);
+		vi.spyOn(globalThis, "confirm").mockReturnValue(true);
+		mocks.mutation.mockResolvedValueOnce({ revisionId: "graph-revision-set-2" });
+
+		await mountDetail();
+		button("choose replacement")?.click();
+		await tick();
+		chooseFile(
+			document.querySelector<HTMLInputElement>('.private-upload input[type="file"]')!,
+			new File([encodedPng()], "member-a-2.png", { type: "image/png" }),
+		);
+		await tick();
+		button("stage verified asset")?.click();
+		await vi.waitFor(() => expect(document.body.textContent).toContain("member-a-2.png is verified"));
+		const putCalls = () => fetchMock.mock.calls.filter(([, init]) =>
+			(init as RequestInit).method === "PUT");
+		expect(putCalls()).toHaveLength(1);
+		button("stage verified asset")?.click();
+		await tick();
+		expect(putCalls()).toHaveLength(1);
+
+		button("replace asset")?.click();
+		await vi.waitFor(() => expect(mocks.mutation).toHaveBeenCalledOnce());
+		expect(randomUUID).toHaveBeenCalledOnce();
+		expect(input("product name")?.disabled).toBe(true);
+		await updateDetailQuery({
+			...detail,
+			draft: {
+				...detail.draft,
+				revisionId: "graph-revision-set-2",
+				printSourceAssets: [
+					{ relationKey: "member-a-source", asset: firstStaged },
+					{ relationKey: "member-b-source", asset: secondCurrent },
+				],
+			},
+			updatedAt: 2,
+		});
+
+		mocks.candidateData = {
+			draftRevisionId: "graph-revision-set-2",
+			relation: {
+				kind: "print_source",
+				relationKey: "member-b-source",
+				currentAsset: secondCurrent,
+			},
+			page: [secondCurrent],
+		};
+		const secondRelation = Array.from(document.querySelectorAll<HTMLButtonElement>("button"))
+			.find((item) => item.textContent?.trim() === "choose replacement"
+				&& item.closest("li")?.textContent?.includes("member 2"));
+		secondRelation?.click();
+		await tick();
+		chooseFile(
+			document.querySelector<HTMLInputElement>('.private-upload input[type="file"]')!,
+			new File([encodedPng()], "member-b-2.png", { type: "image/png" }),
+		);
+		await tick();
+		button("stage verified asset")?.click();
+		await vi.waitFor(() => expect(document.body.textContent).toContain("member-b-2.png is verified"));
+		expect(randomUUID).toHaveBeenCalledTimes(2);
+		expect(putCalls()).toHaveLength(2);
 	});
 
 	it("accepts a delayed own-save query echo without replacing the next local edit", async () => {
