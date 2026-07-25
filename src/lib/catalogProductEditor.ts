@@ -189,6 +189,20 @@ export interface CatalogEditorPaidFileRelation {
 	};
 }
 
+export type CatalogEditorPrivateAsset =
+	| CatalogEditorPrintSourceRelation["asset"]
+	| CatalogEditorPaidFileRelation["asset"];
+export type CatalogEditorPrivateAssetRelation =
+	| { kind: "print_source"; relationKey: string }
+	| { kind: "paid_digital_file"; relationKey: string };
+export interface CatalogEditorPrivateAssetCandidatePage {
+	draftRevisionId: string;
+	relation: CatalogEditorPrivateAssetRelation & {
+		currentAsset: CatalogEditorPrivateAsset;
+	};
+	page: CatalogEditorPrivateAsset[];
+}
+
 export interface CatalogProductGraphV2VariantDraft {
 	key: string;
 	order: number;
