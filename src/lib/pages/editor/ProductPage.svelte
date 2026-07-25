@@ -104,7 +104,12 @@ let privateUploadOperation = $state<PrivateUploadOperation | null>(null);
 let privateUploadFallbackState = $state<"idle" | "error">("idle");
 let privateUploadMessage = $state("");
 let manualCheckReady = $state(false);
-let manualCheckTimer: ReturnType<typeof setTimeout> | undefined;
+let automaticChecksRemaining = $state(0);
+let automaticCheckDeadline = 0;
+let completionCheckTimer: ReturnType<typeof setTimeout> | undefined;
+const PRIVATE_UPLOAD_AUTO_CHECKS = 3;
+const PRIVATE_UPLOAD_AUTO_INTERVAL_MS = 65_000;
+const PRIVATE_UPLOAD_AUTO_WINDOW_MS = 305_000;
 const usedPrivateUploadHandles = new Set<string>();
 const privateAssetCandidateQuery = privateAssetCapability
 	? useQuery(privateAssetCapability.listCandidates, () =>
@@ -265,6 +270,12 @@ function loadServerDraft(state: CatalogProductEditorState) {
 
 function loadServerGraphProductDraft(state: CatalogProductEditorState) {
 	locallyCommittedRevisionIds = [];
+	if (privateUploadOperation && state.draft?.revisionId !== privateUploadOperation.snapshot.draftRevisionId) {
+		clearCompletionCheckTimer();
+		privateUploadOperation = null;
+		privateUploadFallbackState = "error";
+		privateUploadMessage = "The draft relation changed. Reload this product before starting another upload.";
+	}
 	form = catalogProductGraphDraftFromRevision(state.draft);
 	hasActiveDraft = Boolean(state.draft);
 	baseRevisionId = state.draft?.revisionId;
@@ -302,6 +313,7 @@ $effect(() => {
 					privateUploadOperation?.replacementRevisionId === serverRevisionId
 					&& stagedUploadMatchesQuery(privateUploadOperation)
 				) {
+					clearCompletionCheckTimer();
 					privateUploadOperation = null;
 					privateUploadFallbackState = "idle";
 					privateUploadMessage = "";
@@ -403,6 +415,7 @@ function choosePrivateAssetRelation(
 	currentAssetId: string | undefined,
 ) {
 	if (editorLocked || dirty) return;
+	clearCompletionCheckTimer();
 	activePrivateAssetRelation = relation;
 	selectedPrivateAssetId = currentAssetId ?? "";
 	selectedPrivateFile = null;
@@ -412,13 +425,38 @@ function choosePrivateAssetRelation(
 	saveError = "";
 }
 
-function scheduleManualCheck(delay: number) {
-	if (manualCheckTimer) clearTimeout(manualCheckTimer);
+function clearCompletionCheckTimer() {
+	if (completionCheckTimer) clearTimeout(completionCheckTimer);
+	completionCheckTimer = undefined;
 	manualCheckReady = false;
-	manualCheckTimer = setTimeout(() => {
-		manualCheckReady = true;
-		manualCheckTimer = undefined;
-	}, delay);
+}
+
+function exposeManualCheck() {
+	automaticChecksRemaining = 0;
+	manualCheckReady = true;
+	completionCheckTimer = undefined;
+	privateUploadMessage = "Automatic verification checks are complete. Manual checking is available.";
+}
+
+function scheduleCompletionCheck(retryAfterMs: number) {
+	clearCompletionCheckTimer();
+	if (automaticCheckDeadline === 0) automaticCheckDeadline = Date.now() + PRIVATE_UPLOAD_AUTO_WINDOW_MS;
+	const autoDelay = Math.max(retryAfterMs, PRIVATE_UPLOAD_AUTO_INTERVAL_MS);
+	if (automaticChecksRemaining > 0 && Date.now() + autoDelay <= automaticCheckDeadline) {
+		privateUploadMessage = "Verification is still pending. It will be checked automatically.";
+		const automaticCheck = { uploadHandle: privateUploadOperation?.uploadHandle, deadline: automaticCheckDeadline };
+		completionCheckTimer = setTimeout(() => {
+			completionCheckTimer = undefined;
+			if (!automaticCheck.uploadHandle || !operationStillActive(automaticCheck.uploadHandle)) return;
+			if (Date.now() >= automaticCheck.deadline) return exposeManualCheck();
+			automaticChecksRemaining -= 1;
+			void reconcilePrivateUpload();
+		}, autoDelay);
+		return;
+	}
+	automaticChecksRemaining = 0;
+	privateUploadMessage = "Automatic verification checks are complete. Check again when the action becomes available.";
+	completionCheckTimer = setTimeout(exposeManualCheck, retryAfterMs);
 }
 
 function operationStillActive(uploadHandle: string) {
@@ -456,6 +494,7 @@ async function reconcilePrivateUpload() {
 	);
 	if (!operationStillActive(operation.uploadHandle)) return;
 	if (result.status === "verified") {
+		clearCompletionCheckTimer();
 		if (!uploadSnapshotStillActive(operation) || result.asset.kind !== operation.snapshot.relation.kind) {
 			privateUploadOperation = null;
 			privateUploadFallbackState = "error";
@@ -470,10 +509,10 @@ async function reconcilePrivateUpload() {
 	}
 	if (result.status === "pending") {
 		operation.phase = "pending";
-		privateUploadMessage = "Verification is still pending. Check again when the action becomes available.";
-		scheduleManualCheck(result.retryAfterMs);
+		scheduleCompletionCheck(result.retryAfterMs);
 		return;
 	}
+	clearCompletionCheckTimer();
 	privateUploadOperation = null;
 	privateUploadFallbackState = "error";
 	privateUploadMessage = "This upload reached a terminal outcome. Select the file again to begin a new upload.";
@@ -499,6 +538,7 @@ async function startPrivateUpload() {
 		return;
 	}
 	usedPrivateUploadHandles.add(uploadHandle);
+	clearCompletionCheckTimer();
 	const controller = new AbortController();
 	const operation: PrivateUploadOperation = {
 		uploadHandle,
@@ -547,6 +587,8 @@ async function startPrivateUpload() {
 		prepared = null;
 		declaration = null;
 		file = null;
+		automaticChecksRemaining = PRIVATE_UPLOAD_AUTO_CHECKS;
+		automaticCheckDeadline = 0;
 		await reconcilePrivateUpload();
 	} catch {
 		if (!operationStillActive(uploadHandle)) return;
@@ -568,8 +610,10 @@ function cancelPrivateUpload() {
 }
 
 onDestroy(() => {
-	if (manualCheckTimer) clearTimeout(manualCheckTimer);
-	privateUploadOperation?.controller?.abort();
+	const controller = privateUploadOperation?.controller;
+	clearCompletionCheckTimer();
+	privateUploadOperation = null;
+	controller?.abort();
 });
 
 async function checkPrivateUploadAgain() {
@@ -812,7 +856,7 @@ function addUploadedMediaAsset(asset: PortfolioMediaAsset) {
 														<div class="private-upload-actions">
 															<button type="button" onclick={() => void startPrivateUpload()} disabled={!selectedPrivateFile || privateUploadBlocked || dirty || !activeCandidatePage}>stage verified asset</button>
 															{#if privateUploadState === "reading" || privateUploadState === "preparing"}<button type="button" class="secondary" onclick={cancelPrivateUpload}>cancel before upload</button>{/if}
-															{#if privateUploadState === "pending"}<button type="button" class="secondary" onclick={() => void checkPrivateUploadAgain()} disabled={!manualCheckReady}>check again</button>{/if}
+															{#if privateUploadState === "pending" && automaticChecksRemaining === 0}<button type="button" class="secondary" onclick={() => void checkPrivateUploadAgain()} disabled={!manualCheckReady}>check again</button>{/if}
 														</div>
 														{#if privateUploadMessage}<p class:upload-error={privateUploadState === "error"} role={privateUploadState === "error" ? "alert" : "status"}>{privateUploadMessage}</p>{/if}
 													</div>
