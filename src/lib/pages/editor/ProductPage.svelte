@@ -305,6 +305,8 @@ let canSave = $derived(
 		&& !editorLocked
 		&& (dirty || saveState === "error"),
 );
+let publicationUpdatedAtIso = $derived(formatPublicationTime(editorState?.updatedAt ?? null));
+let publicationPublishedAtIso = $derived(formatPublicationTime(editorState?.publishedAt ?? null));
 
 function syncLoadedPublication(state: CatalogProductEditorState) {
 	loadedServerRevisionId = state.draft?.revisionId ?? null;
@@ -383,6 +385,31 @@ function matchesAmbiguousPublication(
 function clearPublicationReconciliationTimer() {
 	if (publicationReconciliationTimer) clearTimeout(publicationReconciliationTimer);
 	publicationReconciliationTimer = undefined;
+}
+
+function formatPublicationTime(value: number | null) {
+	if (value === null || !Number.isSafeInteger(value)) return null;
+	try { return new Date(value).toISOString(); } catch { return null; }
+}
+
+const publicationCompleteness = [
+	[["Product title is required before publishing", "Product slug is required before publishing"], "Add the missing product name or URL name, save the draft, then publish to Convex CMS again."],
+	[["An available product needs an enabled variant before publishing", "Every enabled variant needs a retail price before publishing"], "Enable a variant and set every enabled variant's retail price, then save the draft and publish to Convex CMS again."],
+	[["Every enabled print variant needs a material and size before publishing", "Every enabled print variant needs a supported material and size pair"], "Choose a supported material and size for every enabled print variant, then save the draft and publish to Convex CMS again."],
+	[["A print needs one verified print source before publishing", "A non-empty print set is required before publishing", "A digital download needs a verified paid file before publishing"], "Attach the required verified print source, print-set member, or paid file, then save the draft and publish to Convex CMS again."],
+	[[...(["print", "print_set", "postcard", "tapestry", "digital_download", "merchandise"] as const).map((kind) => `Catalog ${kind} needs required display media before publishing`), "Catalog display media needs alternative text before publishing"], "Add the required display media and alternative text, then save the draft and publish to Convex CMS again."],
+] as const;
+
+function publicationCompletenessMessage(error: unknown) {
+	if (!(error instanceof Error)) return null;
+	for (const line of error.message.split(/\r?\n/)) {
+		const detail = line.trim()
+			.replace(/^(?:\[CONVEX [^\]]+\]\s*)?(?:\[Request ID: [^\]]+\]\s*)?Server Error\s*/, "")
+			.replace(/^Uncaught Error:\s*/, "");
+		const match = publicationCompleteness.find(([details]) => (details as readonly string[]).includes(detail));
+		if (match) return `Convex CMS did not publish this draft. ${match[1]}`;
+	}
+	return null;
 }
 
 function completePublication(operation: PublicationOperation, state: CatalogProductEditorState) {
@@ -584,7 +611,7 @@ async function runPublication(action: "publish" | "unpublish") {
 	if (!publicationCapability || !editorState) return;
 	if (action === "publish" ? !canPublish : !canUnpublish) return;
 	if (action === "unpublish" && !globalThis.confirm(
-		"Unpublish this product from Convex CMS? The Sanity-backed public Shop is unchanged.",
+		"Unpublish this product from Convex CMS?",
 	)) return;
 	const before = publicationSnapshot(editorState);
 	const operation: PublicationOperation = {
@@ -622,6 +649,14 @@ async function runPublication(action: "publish" | "unpublish") {
 		const message = error instanceof Error ? error.message : "";
 		if (message.toLowerCase().includes("catalog publication conflict")) {
 			publicationConflict();
+			return;
+		}
+		const completenessMessage = action === "publish" ? publicationCompletenessMessage(error) : null;
+		if (completenessMessage) {
+			clearPublicationReconciliationTimer();
+			publicationOperation = null;
+			publicationMessage = "";
+			publicationError = completenessMessage;
 			return;
 		}
 		publicationOperation.phase = "reconciling";
@@ -1002,7 +1037,7 @@ function addUploadedMediaAsset(asset: PortfolioMediaAsset) {
 {:else}
 		<div class="settings-page product-page">
 		<header class="settings-header">
-			<div><a class="back" href={baseHref}>← products</a><h1>{canEditGraphProduct || !isGraphV2 ? form.title?.trim() || editorState.productKey : catalogProductEditorTitle(readOnlyRevision)?.trim() || editorState.productKey}</h1><p class="description">{canEditGraphProduct ? publicationCapability ? `Edit this private imported ${catalogProductKindLabel(editorState.productKind)} draft. Convex CMS publication is separate from the Sanity-backed public Shop.` : `Edit this private imported ${catalogProductKindLabel(editorState.productKind)} draft. This is still not connected to the public shop.` : isGraphV2 ? "Review the imported private catalog graph. Product-specific editing arrives in a later slice." : "Edit the private product definition and ordered price variants. This draft is not connected to the public shop."}</p></div>
+			<div><a class="back" href={baseHref}>← products</a><h1>{canEditGraphProduct || !isGraphV2 ? form.title?.trim() || editorState.productKey : catalogProductEditorTitle(readOnlyRevision)?.trim() || editorState.productKey}</h1><p class="description">{canEditGraphProduct ? `Edit this private imported ${catalogProductKindLabel(editorState.productKind)} draft. Public Shop authority is configured separately.` : isGraphV2 ? "Review the imported private catalog graph. Product-specific editing arrives in a later slice." : "Edit the private product definition and ordered price variants. Public Shop authority is configured separately."}</p></div>
 			{#if hasActiveDraft && (!isGraphV2 || canEditGraphProduct)}<div class="actions"><span class="save-state" aria-live="polite">{saveState}</span><button type="button" class="primary" onclick={() => void saveDraft()} disabled={!canSave}>save draft</button></div>{/if}
 		</header>
 		{#if saveError}<p class="alert" role="alert">{saveError}</p>{/if}
@@ -1012,14 +1047,20 @@ function addUploadedMediaAsset(asset: PortfolioMediaAsset) {
 		{#if privateAssetCandidateQuery?.error}<p class="alert" role="alert">Could not load verified replacement assets. The draft may have changed; reload this product before continuing.</p>{/if}
 		{#if publicationCapability && isGraphV2}
 			<section class="publication" aria-labelledby="catalog-publication-heading">
-				<div><h2 id="catalog-publication-heading">Convex CMS publication</h2><p>The Sanity-backed public Shop has not cut over; these controls change only the Convex CMS publication pointer.</p></div>
+				<div><h2 id="catalog-publication-heading">Convex CMS publication</h2><p>Convex publication is separate; public Shop authority is configured separately.</p></div>
 				<div class="publication-controls">
 					<p class="publication-status" role="status" aria-live="polite">{publicationStatus}</p>
 					<div class="publication-actions">
-						<button type="button" class="primary" onclick={() => void runPublication("publish")} disabled={!canPublish}>publish</button>
-						<button type="button" class="danger" onclick={() => void runPublication("unpublish")} disabled={!canUnpublish}>unpublish</button>
+						<button type="button" class="primary" onclick={() => void runPublication("publish")} disabled={!canPublish}>publish to Convex CMS</button>
+						<button type="button" class="danger" onclick={() => void runPublication("unpublish")} disabled={!canUnpublish}>unpublish from Convex CMS</button>
 					</div>
 				</div>
+				<dl class="publication-evidence">
+					<div><dt>draft revision ID</dt><dd><code>{editorState.draft?.revisionId ?? "none — no active draft"}</code></dd></div>
+					<div><dt>published revision ID</dt><dd><code>{editorState.published?.revisionId ?? "none — not published"}</code></dd></div>
+					<div><dt>product updatedAt</dt><dd>{#if publicationUpdatedAtIso}<time datetime={publicationUpdatedAtIso}>{publicationUpdatedAtIso}</time>{:else}invalid timestamp{/if} · <code>{editorState.updatedAt}</code></dd></div>
+					<div><dt>publishedAt</dt><dd>{#if editorState.publishedAt === null}not published{:else if publicationPublishedAtIso}<time datetime={publicationPublishedAtIso}>{publicationPublishedAtIso}</time> · <code>{editorState.publishedAt}</code>{:else}invalid timestamp · <code>{editorState.publishedAt}</code>{/if}</dd></div>
+				</dl>
 				{#if publicationMessage}<p class="publication-message" role="status" aria-live="polite">{publicationMessage}</p>{/if}
 			</section>
 		{/if}
@@ -1037,7 +1078,7 @@ function addUploadedMediaAsset(asset: PortfolioMediaAsset) {
 				{#if catalogProductEditorDescription(readOnlyRevision)}
 					<p class="readback-description">{catalogProductEditorDescription(readOnlyRevision)}</p>
 				{/if}
-				<p class="readback-note">{publicationCapability ? "Convex CMS publication does not switch the Sanity-backed public Shop or checkout flow." : "Read-only for this slice: this confirms the Sanity import is visible to the protected Editor without connecting it to the public shop or checkout flow."}</p>
+				<p class="readback-note">{publicationCapability ? "Convex publication is separate; public Shop authority is configured separately." : "Read-only for this slice: this imported product is visible to the protected Editor. Public Shop authority is configured separately."}</p>
 			</section>
 		{:else if !hasActiveDraft}
 			<section aria-labelledby="discarded-product-heading">
@@ -1158,7 +1199,8 @@ function addUploadedMediaAsset(asset: PortfolioMediaAsset) {
 	.multiplier { max-width: 360px; margin-top: 20px; }
 	.publication { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 18px; align-items: center; border: 1px solid var(--admin-border); border-radius: 10px; padding: 18px; }
 	.publication h2, .publication p { margin: 0; } .publication h2 { color: var(--admin-heading); font-size: 1rem; } .publication > div > p, .publication-message { margin-top: 6px; color: var(--admin-text-muted); font-size: .78rem; line-height: 1.5; }
-	.publication-controls { display: grid; justify-items: end; gap: 8px; } .publication-status { color: var(--admin-heading); font-size: .78rem; font-weight: 600; } .publication-actions { display: flex; gap: 8px; } .publication-message { grid-column: 1 / -1; }
+	.publication-controls { display: grid; justify-items: end; gap: 8px; } .publication-status { color: var(--admin-heading); font-size: .78rem; font-weight: 600; } .publication-actions { display: flex; gap: 8px; } .publication-message, .publication-evidence { grid-column: 1 / -1; }
+	.publication-evidence { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 18px; margin: 0; } .publication-evidence div { min-width: 0; } .publication-evidence dt { color: var(--admin-text-muted); font-size: .68rem; } .publication-evidence dd { margin: 3px 0 0; overflow-wrap: anywhere; color: var(--admin-heading); font-size: .72rem; } .publication-evidence code { font-size: inherit; }
 	.publication-alert { display: flex; justify-content: space-between; gap: 12px; align-items: center; }
 	.readback-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 14px; margin: 0; }
 	.readback-grid div { border: 1px solid var(--admin-border); border-radius: 10px; padding: 14px; background: color-mix(in srgb, var(--admin-surface) 82%, transparent); }

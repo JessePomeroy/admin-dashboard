@@ -475,8 +475,10 @@ async function mountDetail() {
 	await tick();
 }
 function button(label: string) {
+	const visibleLabel = label === "publish" ? "publish to Convex CMS"
+		: label === "unpublish" ? "unpublish from Convex CMS" : label;
 	return Array.from(document.querySelectorAll("button")).find(
-		(item) => item.textContent?.trim() === label,
+		(item) => item.textContent?.trim() === visibleLabel,
 	) as HTMLButtonElement | undefined;
 }
 function input(label: string) {
@@ -526,6 +528,20 @@ function graphDetail(
 		publishedAt: published ? updatedAt : null,
 	};
 }
+
+const completenessErrors = [
+	["Product title is required before publishing", "product name or URL name"],
+	["Product slug is required before publishing", "product name or URL name"],
+	["An available product needs an enabled variant before publishing", "Enable a variant"],
+	["Every enabled variant needs a retail price before publishing", "retail price"],
+	["Every enabled print variant needs a material and size before publishing", "supported material and size"],
+	["Every enabled print variant needs a supported material and size pair", "supported material and size"],
+	["A print needs one verified print source before publishing", "verified print source"],
+	["A non-empty print set is required before publishing", "print-set member"],
+	["A digital download needs a verified paid file before publishing", "paid file"],
+	["Catalog print needs required display media before publishing", "display media and alternative text"],
+	["Catalog display media needs alternative text before publishing", "display media and alternative text"],
+] as const;
 
 describe("draft-only product editor", () => {
 	beforeEach(() => {
@@ -713,7 +729,7 @@ describe("draft-only product editor", () => {
 		};
 		await mountDetail();
 		expect(document.body.textContent).toContain(
-			"not connected to the public shop",
+			"Public Shop authority is configured separately",
 		);
 		expect(document.body.textContent).not.toContain("publish");
 		button("add variant")?.click();
@@ -764,8 +780,11 @@ describe("draft-only product editor", () => {
 		};
 		await mountDetail();
 		expect(document.body.textContent).toContain(
-			"still not connected to the public shop",
+			"Public Shop authority is configured separately",
 		);
+		expect(document.querySelector(".publication")).toBeNull();
+		expect(document.querySelector(".publication-evidence")).toBeNull();
+		expect(button("publish")).toBeUndefined();
 		expect(document.body.textContent).not.toContain("discard draft");
 
 		const name = input("product name");
@@ -819,18 +838,33 @@ describe("draft-only product editor", () => {
 		]);
 	});
 
-	it("shows the three active-draft Convex CMS publication states without claiming a Shop cutover", async () => {
+	it("shows exact publication evidence from the current query without a Shop authority claim", async () => {
 		enablePublication();
-		mocks.detailData = graphDetail();
+		mocks.detailData = graphDetail(graphRevision, null, 1_750_000_000_000);
 		await mountDetail();
 		const status = () => document.querySelector(".publication-status")?.textContent;
+		const evidence = () => document.querySelector(".publication-evidence")!;
 		expect(status()).toBe("unpublished");
-		expect(document.body.textContent).toContain("The Sanity-backed public Shop has not cut over");
+		expect(evidence().tagName).toBe("DL");
+		expect(Array.from(evidence().querySelectorAll("code"), (node) => node.textContent)).toEqual([
+			"graph-revision-1", "none — not published", "1750000000000",
+		]);
+		expect(evidence().querySelector("time")?.getAttribute("datetime")).toBe("2025-06-15T15:06:40.000Z");
+		expect(evidence().textContent).toContain("not published");
+		expect(document.body.textContent).toContain("Convex publication is separate; public Shop authority is configured separately.");
+		expect(document.body.textContent).not.toMatch(/Sanity-backed public Shop|cut over|still not connected|public Shop is unchanged/i);
+		expect(button("publish")?.textContent).toBe("publish to Convex CMS");
 
-		await updateDetailQuery(graphDetail(graphRevision, graphRevision, 11));
+		await updateDetailQuery(graphDetail(graphRevision, graphRevision, 1_750_000_000_001));
 		expect(status()).toBe("published — current draft");
+		expect(Array.from(evidence().querySelectorAll("code"), (node) => node.textContent)).toEqual([
+			"graph-revision-1", "graph-revision-1", "1750000000001", "1750000000001",
+		]);
+		expect(Array.from(evidence().querySelectorAll("time"), (node) => node.getAttribute("datetime"))).toEqual([
+			"2025-06-15T15:06:40.001Z", "2025-06-15T15:06:40.001Z",
+		]);
 		const newerDraft = { ...graphRevision, revisionId: "graph-revision-2", createdAt: 12 };
-		await updateDetailQuery(graphDetail(newerDraft, graphRevision, 12));
+		await updateDetailQuery(graphDetail(newerDraft, graphRevision, 1_750_000_000_002));
 		expect(status()).toBe("published — newer draft available");
 	});
 
@@ -895,11 +929,16 @@ describe("draft-only product editor", () => {
 		expect(button("publish")?.disabled).toBe(false);
 	});
 
-	it("reconciles an ambiguous publish from query state without a duplicate call", async () => {
+	it.each([
+		"Network response was lost",
+		"[CONVEX M(catalogProductGraphs:publishDraft)] Server Error\nUncaught Error: Not authorized to publish this product",
+		"[CONVEX M(catalogProductGraphs:publishDraft)] Server Error\nUncaught Error: Product slug must be unique before publishing",
+		"Product slug belongs to another catalog identity",
+	])("reconciles an ambiguous publish error without a duplicate call: %s", async (message) => {
 		vi.useFakeTimers();
 		enablePublication();
 		mocks.detailData = graphDetail();
-		mocks.mutation.mockRejectedValueOnce(new Error("Network response was lost"));
+		mocks.mutation.mockRejectedValueOnce(new Error(message));
 		await mountDetail();
 		button("publish")?.click();
 		await tick();
@@ -915,6 +954,29 @@ describe("draft-only product editor", () => {
 		await updateDetailQuery(graphDetail(graphRevision, graphRevision, 11));
 		expect(document.body.textContent).toContain("Published in Convex CMS.");
 		expect(mocks.mutation).toHaveBeenCalledTimes(1);
+	});
+
+	it.each(completenessErrors)("stops immediately for reviewed completeness rejection: %s", async (serverMessage, ownerText) => {
+		vi.useFakeTimers();
+		enablePublication();
+		mocks.detailData = graphDetail();
+		mocks.mutation.mockRejectedValueOnce(new Error(
+			`[CONVEX M(catalogProductGraphs:publishDraft)] [Request ID: abc] Server Error\nUncaught Error: ${serverMessage}`,
+		));
+		await mountDetail();
+		button("publish")?.click();
+		await tick();
+		await Promise.resolve();
+		const alert = document.querySelector(".publication-alert")?.textContent ?? "";
+		expect(alert).toContain(ownerText);
+		expect(alert).not.toContain(serverMessage);
+		expect(document.body.textContent).not.toContain("response was uncertain");
+		expect(button("publish")?.disabled).toBe(false);
+		expect(button("retry")).toBeUndefined();
+		expect(vi.getTimerCount()).toBe(0);
+		await vi.advanceTimersByTimeAsync(8_000);
+		expect(mocks.mutation).toHaveBeenCalledTimes(1);
+		expect(button("reload product")).toBeUndefined();
 	});
 
 	it("confirms unpublish, sends a nullable draft pointer, and surfaces CAS conflict generically", async () => {
@@ -935,6 +997,7 @@ describe("draft-only product editor", () => {
 		await tick();
 		await Promise.resolve();
 		expect(confirm).toHaveBeenCalledTimes(2);
+		expect(confirm).toHaveBeenLastCalledWith("Unpublish this product from Convex CMS?");
 		expect(mocks.mutation).toHaveBeenCalledWith(mocks.refs.unpublish, {
 			productId: "product-1",
 			expectedDraftRevisionId: null,
