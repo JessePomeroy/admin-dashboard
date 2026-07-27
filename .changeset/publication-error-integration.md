@@ -1,5 +1,5 @@
 ---
-"@jessepomeroy/admin": minor
+"@jessepomeroy/admin": patch
 ---
 
-Add an integration seam covering publication-completeness errors across the server mutation proxy, HTTP transport, and owner UI classifier.
+Refactor publication-completeness error handling through an internal test seam while preserving server mutation proxy, HTTP transport, and owner UI behavior.
