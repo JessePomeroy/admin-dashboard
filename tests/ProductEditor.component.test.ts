@@ -540,7 +540,6 @@ const completenessErrors = [
 	["A non-empty print set is required before publishing", "print-set member"],
 	["A digital download needs a verified paid file before publishing", "paid file"],
 	["Catalog print needs required display media before publishing", "display media and alternative text"],
-	["Catalog display media needs alternative text before publishing", "display media and alternative text"],
 ] as const;
 
 describe("draft-only product editor", () => {
@@ -973,6 +972,30 @@ describe("draft-only product editor", () => {
 		expect(document.body.textContent).not.toContain("response was uncertain");
 		expect(button("publish")?.disabled).toBe(false);
 		expect(button("retry")).toBeUndefined();
+		expect(vi.getTimerCount()).toBe(0);
+		await vi.advanceTimersByTimeAsync(8_000);
+		expect(mocks.mutation).toHaveBeenCalledTimes(1);
+		expect(button("reload product")).toBeUndefined();
+	});
+
+	it("shows the exact closed completeness alert without reconciliation or a timer", async () => {
+		vi.useFakeTimers();
+		enablePublication();
+		mocks.detailData = graphDetail();
+		mocks.mutation.mockRejectedValueOnce(new Error([
+			"[CONVEX M(catalogProductGraphs:publishDraft)] [Request ID: request-id-redacted] Server Error",
+			"Uncaught Error: Catalog display media needs alternative text before publishing",
+		].join("\n")));
+		await mountDetail();
+		button("publish")?.click();
+		await tick();
+		await Promise.resolve();
+
+		expect(document.querySelector(".publication-alert")?.textContent).toBe(
+			"Convex CMS did not publish this draft. Add the required display media and alternative text, then save the draft and publish to Convex CMS again.",
+		);
+		expect(document.body.textContent).not.toContain("response was uncertain");
+		expect(button("publish")?.disabled).toBe(false);
 		expect(vi.getTimerCount()).toBe(0);
 		await vi.advanceTimersByTimeAsync(8_000);
 		expect(mocks.mutation).toHaveBeenCalledTimes(1);
