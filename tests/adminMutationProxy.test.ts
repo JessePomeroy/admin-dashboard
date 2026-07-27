@@ -1,4 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
+import { requestAdminMutation } from "../src/lib/adminClient";
+import { publicationCompletenessMessage } from "../src/lib/pages/editor/publicationCompleteness";
 import {
 	createAdminMutationHandler,
 	resolveConvexFunction,
@@ -185,5 +187,48 @@ describe("createAdminMutationHandler", () => {
 			status: 500,
 			body: { error: "No site admin" },
 		});
+	});
+
+	it("composes handler serialization, HTTP rethrow, and closed publication classification", async () => {
+		const canonicalReason = "Catalog display media needs alternative text before publishing";
+		const convexMessage = [
+			"[CONVEX M(catalogProductGraphs:publishDraft)] [Request ID: request-id-redacted] Server Error",
+			`Uncaught Error: ${canonicalReason}`,
+		].join("\n");
+		const handler = createAdminMutationHandler({
+			api: { catalogProductGraphs: { publishDraft: {} } },
+			getConvexUrl: () => "https://convex.example",
+			requireAuth: vi.fn(async () => "token"),
+			createClient: vi.fn(() => ({
+				setAuth: vi.fn(),
+				mutation: vi.fn(async () => { throw new Error(convexMessage); }),
+			})),
+		});
+		const transport = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) =>
+			handler({
+				request: new Request(input, init),
+				cookies: makeCookies(),
+			} as Parameters<typeof handler>[0]) as Promise<Response>);
+
+		const error = await requestAdminMutation(
+			"https://example.com/api/admin/mutation",
+			"catalogProductGraphs:publishDraft",
+			{ productId: "product-redacted" },
+			transport as typeof fetch,
+		).catch((reason: unknown) => reason);
+
+		expect(error).toBeInstanceOf(Error);
+		expect((error as Error).message).toBe(convexMessage);
+		expect(publicationCompletenessMessage(error)).toBe(
+			"Convex CMS did not publish this draft. Add the required display media and alternative text, then save the draft and publish to Convex CMS again.",
+		);
+		for (const unreviewed of [
+			canonicalReason,
+			{ message: canonicalReason },
+			new Error("Network response was lost"),
+			new Error("Unauthorized"),
+			new Error("Identity does not have publication access"),
+			new Error(`Uncaught Error: ${canonicalReason} with extra detail`),
+		]) expect(publicationCompletenessMessage(unreviewed)).toBeNull();
 	});
 });
