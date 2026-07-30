@@ -562,6 +562,78 @@ describe("catalog product editor helpers", () => {
 		expect(shareReuse.map(({ role }) => role)).toEqual(["gallery", "social_share"]);
 	});
 
+	it("reuses a set-member asset once as the missing print-set cover", () => {
+		const memberPlacements = [
+			{
+				key: "member-a-media",
+				role: "set_member" as const,
+				assetId: "member-media",
+				altText: "First member",
+			},
+			{
+				key: "member-b-media",
+				role: "set_member" as const,
+				assetId: "member-media",
+				altText: "Second member",
+			},
+		];
+		const withCover = addCatalogProductWebMedia(
+			memberPlacements,
+			{
+				_id: "member-media",
+				assetId: "55555555-5555-4555-8555-555555555555",
+			},
+			"print_set",
+		);
+
+		expect(withCover.filter(({ role }) => role === "cover")).toEqual([
+			expect.objectContaining({
+				key: "media-cover-55555555-5555-4555-8555-555555555555",
+				assetId: "member-media",
+			}),
+		]);
+		expect(withCover[0]?.key).not.toBe(memberPlacements[0]?.key);
+		expect(withCover.slice(1)).toEqual(memberPlacements);
+		expect(memberPlacements).toEqual([
+			expect.objectContaining({ key: "member-a-media", role: "set_member" }),
+			expect.objectContaining({ key: "member-b-media", role: "set_member" }),
+		]);
+		expect(() => addCatalogProductWebMedia(
+			withCover,
+			{
+				_id: "another-media",
+				assetId: "66666666-6666-4666-8666-666666666666",
+			},
+			"print_set",
+		)).toThrow(/already has a cover/i);
+	});
+
+	it("rejects set-member asset duplicates outside the missing print-set cover case", () => {
+		const memberPlacement = {
+			key: "member-media",
+			role: "set_member" as const,
+			assetId: "member-asset",
+		};
+		const asset = {
+			_id: "member-asset",
+			assetId: "77777777-7777-4777-8777-777777777777",
+		};
+
+		expect(() => addCatalogProductWebMedia(
+			[memberPlacement],
+			asset,
+			"print",
+		)).toThrow(/already attached/i);
+		expect(() => addCatalogProductWebMedia(
+			[
+				memberPlacement,
+				{ key: "gallery", role: "gallery", assetId: "member-asset" },
+			],
+			asset,
+			"print_set",
+		)).toThrow(/already attached/i);
+	});
+
 	it("keeps same-role gallery order, alt text, and detach operations immutable", () => {
 		const placements = [
 			{ key: "gallery-z", role: "gallery" as const, assetId: "media-z", altText: "Z image" },

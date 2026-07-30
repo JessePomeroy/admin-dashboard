@@ -772,12 +772,17 @@ export function addCatalogProductWebMedia(
 			`A product cannot exceed ${CATALOG_PRODUCT_WEB_MEDIA_LIMIT} web images.`,
 		);
 	}
-	if (placements.some(
+	const role = defaultCatalogProductWebMediaRole(productKind, placements);
+	const matchingPlacements = placements.filter(
 		(placement) => placement.role !== "social_share" && placement.assetId === asset._id,
-	)) {
+	);
+	const reusesSetMemberAsCover = productKind === "print_set"
+		&& role === "cover"
+		&& matchingPlacements.length > 0
+		&& matchingPlacements.every((placement) => placement.role === "set_member");
+	if (matchingPlacements.length > 0 && !reusesSetMemberAsCover) {
 		throw new Error("This image is already attached to the product.");
 	}
-	const role = defaultCatalogProductWebMediaRole(productKind, placements);
 	const nextPlacement = {
 			key: `media-${role}-${asset.assetId}`,
 			role,

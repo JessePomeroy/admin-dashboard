@@ -178,11 +178,21 @@ let mediaById = $derived(mergePortfolioMediaAssets(
 	placedAssets,
 ));
 let mediaQueryError = $derived(mediaListQuery?.error ?? placedMediaQuery?.error);
-let selectedAssetIds = $derived(new Set(
-	(form.webMedia ?? [])
-		.filter((placement) => placement.role !== "social_share")
-		.map((placement) => placement.assetId),
-));
+let selectedAssetIds = $derived.by(() => {
+	const placements = form.webMedia ?? [];
+	const canChooseMemberAssetForCover = form.productKind === "print_set"
+		&& !placements.some((placement) => placement.role === "cover");
+	return new Set(
+		placements
+			.filter((placement) => placement.role !== "social_share")
+			.filter((placement) => !canChooseMemberAssetForCover || placements.some(
+				(candidate) => candidate.assetId === placement.assetId
+					&& candidate.role !== "set_member"
+					&& candidate.role !== "social_share",
+			))
+			.map((placement) => placement.assetId),
+	);
+});
 let currentJson = $derived(serializeCatalogProductDraft(form));
 let isGraphV2 = $derived(editorState?.graphVersion === 2 || editorState?.draft?.schemaVersion === 2 || editorState?.published?.schemaVersion === 2);
 let canEditGraphProduct = $derived(isGraphV2 && canEditCatalogProductGraphKind(editorState?.productKind) && Boolean(editorState?.draft));
