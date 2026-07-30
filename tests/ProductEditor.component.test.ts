@@ -1317,6 +1317,110 @@ describe("draft-only product editor", () => {
 		);
 	});
 
+	it("allows a set-member asset to become the single missing cover without changing its member relation", async () => {
+		mocks.graphApiEnabled = true;
+		mocks.mediaEnabled = true;
+		mocks.enabledKinds = ["print", "print_set"];
+		const firstMemberAsset = mediaAsset(
+			"media-a",
+			"55555555-5555-4555-8555-555555555555",
+			"first-member.jpg",
+		);
+		const secondMemberAsset = mediaAsset(
+			"media-b",
+			"66666666-6666-4666-8666-666666666666",
+			"second-member.jpg",
+		);
+		const revisionWithoutCover = {
+			...printSetGraphRevision,
+			draft: {
+				...printSetGraphRevision.draft,
+				webMedia: printSetGraphRevision.draft.webMedia.filter(
+					(placement) => placement.role !== "cover",
+				),
+			},
+			webMediaAssets: printSetGraphRevision.webMediaAssets.filter(
+				(relation) => relation.placementKey !== "cover",
+			),
+		};
+		mocks.mediaListData = {
+			page: [firstMemberAsset, secondMemberAsset],
+			isDone: true,
+			continueCursor: "",
+		};
+		mocks.mediaPlacedData = [firstMemberAsset, secondMemberAsset];
+		mocks.detailData = {
+			productId: "product-1",
+			productKey: "sanity.catalog.printSet",
+			productKind: "print_set",
+			graphVersion: 2,
+			slug: "twin-moons",
+			draft: revisionWithoutCover,
+			published: null,
+			updatedAt: 1,
+			publishedAt: null,
+		};
+
+		await mountDetail();
+		button("choose from media")?.click();
+		await tick();
+		const memberPickerRow = Array.from(document.querySelectorAll(".picker li"))
+			.find((row) => row.textContent?.includes("first-member.jpg"));
+		const addMemberAsCover = memberPickerRow?.querySelector("button") as HTMLButtonElement;
+		expect(addMemberAsCover.textContent?.trim()).toBe("add");
+		expect(addMemberAsCover.disabled).toBe(false);
+
+		addMemberAsCover.click();
+		await tick();
+		expect(document.querySelector(".picker")).toBeNull();
+		expect(button("choose from media")).toBeUndefined();
+		const mediaRows = document.querySelectorAll(
+			'section[aria-labelledby="catalog-product-media-heading"] li',
+		);
+		expect(mediaRows).toHaveLength(3);
+
+		button("save draft")?.click();
+		await tick();
+		await Promise.resolve();
+		const savedDraft = mocks.mutation.mock.calls.find(
+			([ref]) => ref === mocks.refs.saveDraft,
+		)?.[1].draft;
+		expect(savedDraft.webMedia).toEqual([
+			expect.objectContaining({
+				key: "media-cover-55555555-5555-4555-8555-555555555555",
+				role: "cover",
+				assetId: "media-a",
+				order: 0,
+			}),
+			expect.objectContaining({
+				key: "member-a-media",
+				role: "set_member",
+				assetId: "media-a",
+				order: 0,
+			}),
+			expect.objectContaining({
+				key: "member-b-media",
+				role: "set_member",
+				assetId: "media-b",
+				order: 1,
+			}),
+		]);
+		expect(savedDraft.setMembers).toEqual([
+			{
+				key: "member-a",
+				order: 0,
+				mediaPlacementKey: "member-a-media",
+				printSourceKey: "member-a-source",
+			},
+			{
+				key: "member-b",
+				order: 1,
+				mediaPlacementKey: "member-b-media",
+				printSourceKey: "member-b-source",
+			},
+		]);
+	});
+
 	it("saves migrated print-set graph drafts with ordered member references", async () => {
 		mocks.detailData = {
 			productId: "product-1",
