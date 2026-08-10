@@ -6,6 +6,11 @@ import LoadingState from "../components/LoadingState.svelte";
 import type { Invoice, InvoiceItem, Quote } from "../types";
 import { getOrderStatsPresentation } from "./dashboard/orderStatsPresentation";
 import {
+	formatStripeMinorUnits,
+	getStripeFeeCapturePresentation,
+	normalizeStripeCurrency,
+} from "./orders/orderPresentation";
+import {
 	formatCents,
 	formatDate,
 	formatStatus,
@@ -26,7 +31,44 @@ interface RecentOrderUI {
 	customerEmail: string;
 	customerName?: string;
 	total: number;
+	stripePaymentCurrency?: string;
+	stripeFees?: number;
+	stripeFeeCurrency?: string;
+	stripeFeeChargeId?: string;
+	stripeFeeBalanceTransactionId?: string;
+	stripeFeeCapturedAt?: number;
+	stripeFeeProvenanceVersion?: number;
+	stripeFeeProvenance?: "provider_verified" | "legacy_unverified";
+	stripeFeeCaptureStatus?: "pending" | "captured" | "failed" | "canceled" | "legacy_unverified";
+	stripeFeeCaptureAttempts?: number;
+	stripeFeeCaptureLastAttemptAt?: number;
+	stripeFeeCaptureNextAttemptAt?: number;
+	stripeFeeCaptureError?:
+		| "authority_configuration_invalid"
+		| "balance_transaction_not_ready"
+		| "fee_breakdown_not_ready"
+		| "stripe_api_error"
+		| "stripe_secret_key_missing"
+		| "payment_intent_missing"
+		| "payment_not_ready"
+		| "payment_projection_invalid"
+		| "provider_object_mismatch";
 	status: string;
+}
+
+interface GrossPaymentStats {
+	currency: string;
+	orderCount: number;
+	todayMinorUnits: number;
+	weekMinorUnits: number;
+	monthMinorUnits: number;
+	allTimeMinorUnits: number;
+}
+
+interface DailyGrossPayment {
+	date: string;
+	currency: string;
+	amountMinorUnits: number;
 }
 
 let { data } = $props();
@@ -54,8 +96,23 @@ const stats = $derived(
 		scanLimit: 0,
 	},
 );
-const orderStatsPresentation = $derived(getOrderStatsPresentation(stats));
-const dailyRevenue = $derived(orderStatsData?.dailyRevenue ?? []);
+const grossPayments = $derived((orderStatsData?.grossPayments ?? []) as GrossPaymentStats[]);
+const unknownCurrencyOrderCount = $derived(orderStatsData?.unknownCurrencyOrderCount ?? 0);
+const invalidGrossAmountOrderCount = $derived(orderStatsData?.invalidGrossAmountOrderCount ?? 0);
+const orderStatsPresentation = $derived(getOrderStatsPresentation({
+	...stats,
+	currencyGroupedTotalsAvailable: Array.isArray(orderStatsData?.grossPayments),
+	unknownCurrencyOrderCount,
+	invalidGrossAmountOrderCount,
+}));
+const chartCurrency = $derived(grossPayments.length === 1 ? grossPayments[0].currency : null);
+const dailyRevenue = $derived(
+	chartCurrency === null
+		? []
+		: ((orderStatsData?.dailyGrossPayments ?? []) as DailyGrossPayment[])
+			.filter((row) => row.currency === chartCurrency)
+			.map((row) => ({ date: row.date, amount: row.amountMinorUnits })),
+);
 const recentOrders = $derived(orderStatsData?.recentOrders ?? []);
 
 // CRM stats
@@ -187,26 +244,37 @@ let sparklineArea = $derived(() => {
 		class="stats-line"
 		class:has-completeness-note={orderStatsPresentation.completenessNote !== null}
 	>
-		<span class="stat-item">
-			<span class="stat-label">today</span>
-			<span class="stat-value">{formatCents(stats.todayRevenue)}</span>
-		</span>
-		<span class="stat-sep">&middot;</span>
-		<span class="stat-item">
-			<span class="stat-label">this week</span>
-			<span class="stat-value">{formatCents(stats.weekRevenue)}</span>
-		</span>
-		<span class="stat-sep">&middot;</span>
-		<span class="stat-item">
-			<span class="stat-label">this month</span>
-			<span class="stat-value">{formatCents(stats.monthRevenue)}</span>
-		</span>
-		<span class="stat-sep">&middot;</span>
-		<span class="stat-item">
-			<span class="stat-label">{orderStatsPresentation.scopeLabel}</span>
-			<span class="stat-value">{formatCents(stats.allTimeRevenue)}</span>
-			<span class="stat-sub">{orderStatsPresentation.orderCountLabel}</span>
-		</span>
+		{#if grossPayments.length === 0}
+			<span class="stat-item">
+				<span class="stat-label">gross payments</span>
+				<span class="stat-value">unavailable</span>
+				<span class="stat-sub">{orderStatsPresentation.orderCountLabel}</span>
+			</span>
+		{:else}
+			{#each grossPayments as gross, index}
+				{#if index > 0}<span class="stat-sep">&middot;</span>{/if}
+				<span class="stat-item">
+					<span class="stat-label">today gross</span>
+					<span class="stat-value">{formatStripeMinorUnits(gross.todayMinorUnits, gross.currency)}</span>
+				</span>
+				<span class="stat-sep">&middot;</span>
+				<span class="stat-item">
+					<span class="stat-label">week gross</span>
+					<span class="stat-value">{formatStripeMinorUnits(gross.weekMinorUnits, gross.currency)}</span>
+				</span>
+				<span class="stat-sep">&middot;</span>
+				<span class="stat-item">
+					<span class="stat-label">month gross</span>
+					<span class="stat-value">{formatStripeMinorUnits(gross.monthMinorUnits, gross.currency)}</span>
+				</span>
+				<span class="stat-sep">&middot;</span>
+				<span class="stat-item">
+					<span class="stat-label">{orderStatsPresentation.scopeLabel}</span>
+					<span class="stat-value">{formatStripeMinorUnits(gross.allTimeMinorUnits, gross.currency)}</span>
+					<span class="stat-sub">{gross.orderCount} orders</span>
+				</span>
+			{/each}
+		{/if}
 	</div>
 	{#if orderStatsPresentation.completenessNote}
 		<p class="stats-completeness-note">{orderStatsPresentation.completenessNote}</p>
@@ -214,8 +282,15 @@ let sparklineArea = $derived(() => {
 
 	<!-- Sparkline chart -->
 	<div class="chart-section">
-		<h2 class="section-label">revenue — last 30 days</h2>
-		<div class="chart-container" role="img" aria-label="Revenue sparkline chart" onmouseleave={() => { hoveredIndex = null; }}>
+		<h2 class="section-label">gross payments — last 30 days</h2>
+		{#if chartCurrency === null}
+			<p class="stats-completeness-note">
+				{grossPayments.length > 1
+					? "Multiple currencies are not combined into one chart."
+					: "Currency-grouped payment history is unavailable."}
+			</p>
+		{:else}
+		<div class="chart-container" role="img" aria-label="Gross payment sparkline chart for {chartCurrency.toUpperCase()}" onmouseleave={() => { hoveredIndex = null; }}>
 			<svg viewBox="0 0 {chartWidth} {chartHeight}" preserveAspectRatio="none" class="chart-svg" aria-hidden="true">
 				<path d={sparklineArea()} fill="var(--admin-active)" />
 				<path d={sparklinePath()} fill="none" stroke="var(--admin-accent)" stroke-width="1.5" stroke-opacity="0.5" />
@@ -240,11 +315,12 @@ let sparklineArea = $derived(() => {
 			{#if hoveredIndex !== null && chartPoints[hoveredIndex]}
 				{@const point = chartPoints[hoveredIndex]}
 				<div class="chart-tooltip" style="left: {(point.x / chartWidth) * 100}%">
-					<span class="tooltip-amount">{formatCents(point.amount)}</span>
+					<span class="tooltip-amount">{formatStripeMinorUnits(point.amount, chartCurrency)}</span>
 					<span class="tooltip-date">{formatDate(point.date)}</span>
 				</div>
 			{/if}
 		</div>
+		{/if}
 	</div>
 
 	<!-- Activity summary -->
@@ -318,11 +394,14 @@ let sparklineArea = $derived(() => {
 							<th scope="col">date</th>
 							<th scope="col">customer</th>
 							<th scope="col">total</th>
+							<th scope="col">processing fee</th>
 							<th scope="col">status</th>
 						</tr>
 					</thead>
 					<tbody>
 						{#each recentOrders as order (order._id)}
+							{@const paymentCurrency = normalizeStripeCurrency(order.stripePaymentCurrency)}
+							{@const fee = getStripeFeeCapturePresentation({ ...order, currency: paymentCurrency })}
 							<tr>
 								<td class="mono">{order.orderNumber}</td>
 								<td>{formatDate(order.createdAt)}</td>
@@ -332,7 +411,8 @@ let sparklineArea = $derived(() => {
 										<span class="email">{order.customerEmail || ""}</span>
 									</div>
 								</td>
-								<td class="bold">{formatCents(order.total)}</td>
+								<td class="bold">{formatStripeMinorUnits(order.total, paymentCurrency)}</td>
+								<td><span class="fee-state fee-state--{fee.tone}">{fee.label}</span></td>
 								<td>
 									<span class="status-indicator">
 										<span class="status-dot" style="background: {getStatusColor(ORDER_STATUS_COLORS, order.status)}"></span>
@@ -537,6 +617,24 @@ let sparklineArea = $derived(() => {
 		height: 7px;
 		border-radius: 50%;
 		flex-shrink: 0;
+	}
+
+	.fee-state {
+		font-size: 0.72rem;
+		color: var(--admin-text-muted);
+		white-space: nowrap;
+	}
+
+	.fee-state--pending {
+		color: var(--status-amber);
+	}
+
+	.fee-state--captured {
+		color: var(--status-sage);
+	}
+
+	.fee-state--failed {
+		color: var(--status-rose);
 	}
 
 	.view-all {

@@ -1,7 +1,11 @@
 <script lang="ts">
 import type { OrderStatus } from "../../types";
-import type { AdminOrder } from "./orderPresentation";
-import { formatCents, formatDateTime, getStatusColor, ORDER_STATUS_COLORS } from "../../utils";
+import {
+	formatStripeMinorUnits,
+	getStripeFeeCapturePresentation,
+	type AdminOrder,
+} from "./orderPresentation";
+import { formatDateTime, getStatusColor, ORDER_STATUS_COLORS } from "../../utils";
 
 interface Props {
 	orders: AdminOrder[];
@@ -34,11 +38,13 @@ const statuses: OrderStatus[] = [
 					<th scope="col">customer</th>
 					<th scope="col">items</th>
 					<th scope="col">total</th>
+					<th scope="col">processing fee</th>
 					<th scope="col">status</th>
 				</tr>
 			</thead>
 			<tbody>
 				{#each orders as order (order._id)}
+					{@const stripeFee = getStripeFeeCapturePresentation(order)}
 					<tr
 						class="order-row"
 						role="button"
@@ -57,7 +63,10 @@ const statuses: OrderStatus[] = [
 						<td class="td-items">
 							{order.items?.length || 0} item{(order.items?.length || 0) !== 1 ? "s" : ""}
 						</td>
-						<td class="td-total">{formatCents(order.total, order.currency)}</td>
+						<td class="td-total">{formatStripeMinorUnits(order.total, order.currency)}</td>
+						<td>
+							<span class="fee-state fee-state--{stripeFee.tone}">{stripeFee.label}</span>
+						</td>
 						<!-- svelte-ignore a11y_no_static_element_interactions a11y_click_events_have_key_events -->
 						<td onclick={(e) => e.stopPropagation()}>
 							<div class="status-cell">
@@ -117,6 +126,24 @@ const statuses: OrderStatus[] = [
 	.td-total {
 		font-weight: 500;
 		color: var(--admin-heading);
+	}
+
+	.fee-state {
+		font-size: 0.76rem;
+		color: var(--admin-text-muted);
+		white-space: nowrap;
+	}
+
+	.fee-state--pending {
+		color: var(--status-amber);
+	}
+
+	.fee-state--captured {
+		color: var(--status-sage);
+	}
+
+	.fee-state--failed {
+		color: var(--status-rose);
 	}
 
 	.status-cell {

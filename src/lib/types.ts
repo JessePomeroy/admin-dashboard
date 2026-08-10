@@ -172,6 +172,8 @@ export interface Order extends ConvexDocument<"orders"> {
 	orderNumber: string;
 	stripeSessionId: string;
 	stripePaymentIntentId?: string;
+	stripePaymentCurrency?: string;
+	stripePaymentLivemode?: boolean;
 	customerEmail: string;
 	customerName?: string;
 	shippingAddress?: {
@@ -186,6 +188,12 @@ export interface Order extends ConvexDocument<"orders"> {
 	subtotal?: number;
 	total: number;
 	stripeFees?: number;
+	stripeFeeCurrency?: string;
+	stripeFeeChargeId?: string;
+	stripeFeeBalanceTransactionId?: string;
+	stripeFeeCapturedAt?: number;
+	stripeFeeProvenanceVersion?: number;
+	stripeFeeProvenance?: StripeFeeProvenance;
 	stripeFeeCaptureStatus?: StripeFeeCaptureStatus;
 	stripeFeeCaptureAttempts?: number;
 	stripeFeeCaptureLastAttemptAt?: number;
@@ -203,12 +211,23 @@ export interface Order extends ConvexDocument<"orders"> {
 	notes?: string;
 }
 export type OrderId = GenericId<"orders">;
-export type StripeFeeCaptureStatus = "pending" | "captured" | "failed";
+export type StripeFeeCaptureStatus =
+	| "pending"
+	| "captured"
+	| "failed"
+	| "canceled"
+	| "legacy_unverified";
+export type StripeFeeProvenance = "provider_verified" | "legacy_unverified";
 export type StripeFeeCaptureError =
+	| "authority_configuration_invalid"
 	| "balance_transaction_not_ready"
+	| "fee_breakdown_not_ready"
 	| "stripe_api_error"
 	| "stripe_secret_key_missing"
-	| "payment_intent_missing";
+	| "payment_intent_missing"
+	| "payment_not_ready"
+	| "payment_projection_invalid"
+	| "provider_object_mismatch";
 export type OrderStatus =
 	| "new"
 	| "printing"

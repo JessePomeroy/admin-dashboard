@@ -13,13 +13,16 @@ import { getAdminConfig } from "../config";
 import { addToast } from "../toast";
 import { logger } from "../logger";
 import type { Order, OrderStatus } from "../types";
-import { formatCents, getStatusColor, ORDER_STATUS_COLORS, toId } from "../utils";
+import { toId } from "../utils";
 import LoadingState from "../components/LoadingState.svelte";
 import OrderDetailModal from "./orders/OrderDetailModal.svelte";
 import OrderTable from "./orders/OrderTable.svelte";
 import {
 	buildOrdersCsv,
+	formatStripeMinorUnits,
+	groupGrossPayments,
 	type AdminOrder,
+	normalizeStripeCurrency,
 } from "./orders/orderPresentation";
 
 let { data } = $props();
@@ -39,13 +42,19 @@ let orders = $derived(
 		customerName: order.customerName || "",
 		total: order.total,
 		stripeFees: order.stripeFees,
+		stripeFeeCurrency: order.stripeFeeCurrency,
+		stripeFeeChargeId: order.stripeFeeChargeId,
+		stripeFeeBalanceTransactionId: order.stripeFeeBalanceTransactionId,
+		stripeFeeCapturedAt: order.stripeFeeCapturedAt,
+		stripeFeeProvenanceVersion: order.stripeFeeProvenanceVersion,
+		stripeFeeProvenance: order.stripeFeeProvenance,
 		stripeFeeCaptureStatus: order.stripeFeeCaptureStatus,
 		stripeFeeCaptureAttempts: order.stripeFeeCaptureAttempts,
 		stripeFeeCaptureLastAttemptAt: order.stripeFeeCaptureLastAttemptAt,
 		stripeFeeCaptureNextAttemptAt: order.stripeFeeCaptureNextAttemptAt,
 		stripeFeeCaptureError: order.stripeFeeCaptureError,
 		status: order.status,
-		currency: "usd",
+		currency: normalizeStripeCurrency(order.stripePaymentCurrency),
 		items: order.items,
 		shippingAddress: order.shippingAddress || null,
 		notes: order.notes || "",
@@ -166,16 +175,8 @@ let filteredOrders = $derived(
 	}),
 );
 
-let totalRevenue = $derived(
-	filteredOrders.reduce(
-		(sum: number, order: AdminOrder) => sum + (order.total || 0),
-		0,
-	),
-);
-
-let allTimeRevenue = $derived(
-	orders.reduce((sum: number, order: AdminOrder) => sum + (order.total || 0), 0),
-);
+let filteredGrossPayments = $derived(groupGrossPayments(filteredOrders));
+let allGrossPayments = $derived(groupGrossPayments(orders));
 
 async function updateStatus(orderId: string, newStatus: string) {
 	try {
@@ -241,24 +242,41 @@ function exportCSV() {
 	</header>
 
 	<!-- Revenue as inline text -->
-	<div class="stats-line">
-		<span class="stat-item">
-			<span class="stat-label">filtered</span>
-			<span class="stat-value">{formatCents(totalRevenue)}</span>
-			<span class="stat-sub">{filteredOrders.length} orders</span>
-		</span>
-		<span class="stat-sep">&middot;</span>
-		<span class="stat-item">
-			<span class="stat-label">all time</span>
-			<span class="stat-value">{formatCents(allTimeRevenue)}</span>
-			<span class="stat-sub">{orders.length} orders</span>
-		</span>
-		<span class="stat-sep">&middot;</span>
-		<span class="stat-item">
-			<span class="stat-label">avg</span>
-			<span class="stat-value">{formatCents(orders.length > 0 ? allTimeRevenue / orders.length : 0)}</span>
-		</span>
+	<div class="stats-line" aria-label="gross payment totals">
+		{#each filteredGrossPayments.groups as gross, index}
+			{#if index > 0}<span class="stat-sep">&middot;</span>{/if}
+			<span class="stat-item">
+				<span class="stat-label">filtered gross</span>
+				<span class="stat-value">{formatStripeMinorUnits(gross.totalMinorUnits, gross.currency)}</span>
+				<span class="stat-sub">{gross.orderCount} orders</span>
+			</span>
+		{/each}
+		{#if filteredGrossPayments.groups.length > 0 && allGrossPayments.groups.length > 0}
+			<span class="stat-sep">&middot;</span>
+		{/if}
+		{#each allGrossPayments.groups as gross, index}
+			{#if index > 0}<span class="stat-sep">&middot;</span>{/if}
+			<span class="stat-item">
+				<span class="stat-label">all-time gross</span>
+				<span class="stat-value">{formatStripeMinorUnits(gross.totalMinorUnits, gross.currency)}</span>
+				<span class="stat-sub">{gross.orderCount} orders</span>
+			</span>
+		{/each}
+		{#if filteredGrossPayments.groups.length === 0 && allGrossPayments.groups.length === 0}
+			<span class="stat-item"><span class="stat-label">gross payments unavailable</span></span>
+		{/if}
 	</div>
+	{#if allGrossPayments.unknownCurrencyOrderCount > 0 || allGrossPayments.invalidAmountOrderCount > 0}
+		<p class="stats-note">
+			{#if allGrossPayments.unknownCurrencyOrderCount > 0}
+				{allGrossPayments.unknownCurrencyOrderCount} orders have unknown payment currency.
+			{/if}
+			{#if allGrossPayments.invalidAmountOrderCount > 0}
+				{allGrossPayments.invalidAmountOrderCount} orders have invalid gross amounts.
+			{/if}
+			Affected orders are excluded from monetary totals.
+		</p>
+	{/if}
 
 	<!-- Filters -->
 	<div class="filter-bar">
@@ -339,6 +357,12 @@ function exportCSV() {
 		margin-bottom: 32px;
 		padding-bottom: 24px;
 		border-bottom: 1px solid var(--admin-border);
+	}
+
+	.stats-note {
+		margin: -20px 0 32px;
+		font-size: 0.78rem;
+		color: var(--admin-text-subtle);
 	}
 
 	.stat-item {
