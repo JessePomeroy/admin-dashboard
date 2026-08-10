@@ -1,9 +1,10 @@
 <script lang="ts">
 import AdminModal from "../../components/AdminModal.svelte";
-import { formatCents, formatDateTime, formatTimestamp } from "../../utils";
+import { formatDateTime, formatTimestamp } from "../../utils";
 import type { OrderStatus } from "../../types";
 import {
 	getStripeFeeCapturePresentation,
+	formatStripeMinorUnits,
 	type AdminOrder,
 } from "./orderPresentation";
 
@@ -87,22 +88,31 @@ async function saveNotes() {
 			<ul class="items-list">
 				{#each order.items || [] as item}
 					<li>
-						{item.productName} x {item.quantity} — {formatCents(item.price, order.currency)}
+						{item.productName} x {item.quantity} — {formatStripeMinorUnits(item.price, order.currency)}
 					</li>
 				{/each}
 			</ul>
-			<p class="items-total">total: {formatCents(order.total, order.currency)}</p>
+			<p class="items-total">total: {formatStripeMinorUnits(order.total, order.currency)}</p>
 		</div>
 
 		<div class="modal-section fee-section">
 			<h3 class="section-label">stripe fee capture</h3>
 			<p class="fee-status fee-status--{stripeFee.tone}">{stripeFee.label}</p>
 			<p class="section-text-muted">{stripeFee.detail}</p>
-			{#if stripeFee.feeCents !== null}
+			{#if stripeFee.actualFeeMinorUnits !== null && stripeFee.feeCurrency !== null}
 				<p class="fee-amounts">
-					fee: {formatCents(stripeFee.feeCents, order.currency)}
-					<span aria-hidden="true">&middot;</span>
-					net: {formatCents(stripeFee.netRevenueCents ?? 0, order.currency)}
+					actual processing fee: {formatStripeMinorUnits(stripeFee.actualFeeMinorUnits, stripeFee.feeCurrency)}
+					{#if stripeFee.grossLessActualFeeMinorUnits !== null}
+						<span aria-hidden="true">&middot;</span>
+						gross less actual fee: {formatStripeMinorUnits(stripeFee.grossLessActualFeeMinorUnits, order.currency)}
+					{/if}
+				</p>
+			{:else if stripeFee.unverifiedRecordedFeeMinorUnits !== null}
+				<p class="fee-amounts">
+					recorded fee (unverified): {formatStripeMinorUnits(
+						stripeFee.unverifiedRecordedFeeMinorUnits,
+						stripeFee.feeCurrency,
+					)}
 				</p>
 			{/if}
 			{#if stripeFee.nextAttemptAt !== null}
@@ -232,7 +242,15 @@ async function saveNotes() {
 		color: var(--status-rose);
 	}
 
+	.fee-status--canceled {
+		color: var(--admin-text-muted);
+	}
+
 	.fee-status--legacy {
+		color: var(--admin-text-muted);
+	}
+
+	.fee-status--unknown {
 		color: var(--admin-text-muted);
 	}
 

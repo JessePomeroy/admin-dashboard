@@ -20,6 +20,13 @@ function order(overrides: Partial<AdminOrder> = {}): AdminOrder {
 	};
 }
 
+const providerProvenanceV1 = {
+	stripeFeeChargeId: "ch_verified",
+	stripeFeeBalanceTransactionId: "txn_verified",
+	stripeFeeCapturedAt: 1_720_000_000_000,
+	stripeFeeProvenanceVersion: 1,
+} as const;
+
 function mountModal(value: AdminOrder) {
 	return mount(OrderDetailModal, {
 		target: document.body,
@@ -40,6 +47,7 @@ describe("OrderDetailModal", () => {
 	it("shows pending capture without presenting an invented fee", () => {
 		const component = mountModal(
 			order({
+				...providerProvenanceV1,
 				stripeFeeCaptureStatus: "pending",
 				stripeFeeCaptureAttempts: 1,
 				stripeFeeCaptureError: "balance_transaction_not_ready",
@@ -54,22 +62,61 @@ describe("OrderDetailModal", () => {
 		unmount(component);
 	});
 
-	it("shows known captured fee and net amounts, including a zero fee", () => {
+	it("shows provider-verified fee and derived gross subtraction, including zero", () => {
 		const component = mountModal(
 			order({
+				...providerProvenanceV1,
 				stripeFeeCaptureStatus: "captured",
+				stripeFeeProvenance: "provider_verified",
+				stripeFeeCurrency: "usd",
 				stripeFeeCaptureAttempts: 1,
 				stripeFees: 0,
 			}),
 		);
 
-		expect(document.querySelector(".fee-status")?.textContent).toBe("captured");
-		expect(document.querySelector(".fee-amounts")?.textContent).toContain(
-			"fee: $0.00",
+		expect(document.querySelector(".fee-status")?.textContent).toBe(
+			"provider verified",
 		);
 		expect(document.querySelector(".fee-amounts")?.textContent).toContain(
-			"net: $100.00",
+			"actual processing fee: $0.00 USD",
 		);
+		expect(document.querySelector(".fee-amounts")?.textContent).toContain(
+			"gross less actual fee: $100.00 USD",
+		);
+		unmount(component);
+	});
+
+	it("shows legacy amounts only as unverified and never derives a net", () => {
+		const component = mountModal(
+			order({
+				stripeFeeCaptureStatus: "legacy_unverified",
+				stripeFeeProvenance: "legacy_unverified",
+				stripeFees: 325,
+			}),
+		);
+
+		expect(document.querySelector(".fee-status")?.textContent).toBe(
+			"recorded (unverified)",
+		);
+		expect(document.querySelector(".fee-amounts")?.textContent).toContain(
+			"recorded fee (unverified): 325 minor units (currency unavailable)",
+		);
+		expect(document.querySelector(".fee-amounts")?.textContent).not.toContain(
+			"gross less",
+		);
+		unmount(component);
+	});
+
+	it("shows canceled capture without any fee amount", () => {
+		const component = mountModal(
+			order({ stripeFeeCaptureStatus: "canceled", stripeFees: 325 }),
+		);
+
+		expect(document.querySelector(".fee-status")?.textContent).toBe("canceled");
+		expect(document.querySelector(".fee-section")?.textContent).toContain(
+			"actual Stripe processing fee is unavailable",
+		);
+		expect(document.querySelector(".fee-amounts")).toBeNull();
 		unmount(component);
 	});
 });

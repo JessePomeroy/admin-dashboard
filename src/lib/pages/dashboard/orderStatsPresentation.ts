@@ -2,6 +2,9 @@ export interface OrderStatsCompleteness {
 	totalOrders: number;
 	isTruncated?: boolean;
 	scanLimit?: number;
+	currencyGroupedTotalsAvailable?: boolean;
+	unknownCurrencyOrderCount?: number;
+	invalidGrossAmountOrderCount?: number;
 }
 
 export interface OrderStatsPresentation {
@@ -13,19 +16,38 @@ export interface OrderStatsPresentation {
 export function getOrderStatsPresentation(
 	stats: OrderStatsCompleteness,
 ): OrderStatsPresentation {
+	const notes: string[] = [];
+	if (stats.currencyGroupedTotalsAvailable === false) {
+		notes.push("Currency-grouped gross payment metrics are unavailable.");
+	}
+	if ((stats.unknownCurrencyOrderCount ?? 0) > 0) {
+		const count = stats.unknownCurrencyOrderCount!;
+		notes.push(
+			`${formatCount(count)} ${count === 1 ? "order is" : "orders are"} excluded from monetary totals because payment currency is unavailable.`,
+		);
+	}
+	if ((stats.invalidGrossAmountOrderCount ?? 0) > 0) {
+		const count = stats.invalidGrossAmountOrderCount!;
+		notes.push(
+			`${formatCount(count)} ${count === 1 ? "order is" : "orders are"} excluded from monetary totals because ${count === 1 ? "its" : "their"} gross amount is invalid.`,
+		);
+	}
 	if (stats.isTruncated !== true) {
 		return {
 			scopeLabel: "all time",
 			orderCountLabel: `${formatCount(stats.totalOrders)} orders`,
-			completenessNote: null,
+			completenessNote: notes.length > 0 ? notes.join(" ") : null,
 		};
 	}
 
 	const scanLimit = positiveInteger(stats.scanLimit) ?? stats.totalOrders;
+	notes.unshift(
+		`Gross payment metrics are based on the latest ${formatCount(scanLimit)} orders.`,
+	);
 	return {
 		scopeLabel: `latest ${formatCount(scanLimit)} orders`,
 		orderCountLabel: `${formatCount(stats.totalOrders)} orders · partial total`,
-		completenessNote: `Revenue metrics are based on the latest ${formatCount(scanLimit)} orders.`,
+		completenessNote: notes.join(" "),
 	};
 }
 
