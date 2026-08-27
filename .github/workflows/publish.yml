@@ -61,7 +61,3 @@ jobs:
         env:
           NPM_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Trigger Vercel rebuild
-        if: steps.publish.outputs.published == 'true'
-        run: curl -s -X POST "${{ secrets.VERCEL_DEPLOY_HOOK }}"

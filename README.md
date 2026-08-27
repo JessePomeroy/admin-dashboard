@@ -330,6 +330,10 @@ Releases use a dedicated version-only PR after the implementation has merged:
 4. Verify the registry version and publish workflow.
 5. Update consumers only after the package is available.
 
+Package publication and consumer deployment are separate effects. Publishing
+must not invoke a consumer deployment hook; deploy each host only under its own
+explicit authority after its exact package and lock update is verified.
+
 For unpublished cross-repo work, consumers may temporarily use
 `link:../admin-dashboard`; do not commit that link unless the change explicitly
 requires a coordinated local-development branch.
