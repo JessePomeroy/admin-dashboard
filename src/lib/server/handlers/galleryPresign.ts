@@ -293,7 +293,7 @@ function requireV2WorkerPresignResult(
 		siteUrl: string;
 		galleryId: string;
 	},
-): { r2Key: string; uploadUrl: string; uploadToken: string } {
+) {
 	if (!value || typeof value !== "object" || Array.isArray(value)) {
 		throw error(502, "Gallery worker returned an invalid upload capability");
 	}
