@@ -53,13 +53,18 @@ export interface GalleryStoragePort {
 	}): Promise<void>;
 }
 
+type GalleryFetch = (
+	input: RequestInfo | URL,
+	init?: RequestInit,
+) => Promise<Response>;
+
 interface GalleryStoragePortOptions {
-	fetch?: typeof fetch;
+	fetch?: GalleryFetch;
 	galleryWorkerUrl?: string;
 }
 
 async function fetchWithTimeout(
-	fetcher: typeof fetch,
+	fetcher: GalleryFetch,
 	input: RequestInfo | URL,
 	init: RequestInit,
 	timeoutMs: number,

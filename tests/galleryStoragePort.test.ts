@@ -9,11 +9,20 @@ function textResponse(body: string, init?: ResponseInit): Response {
 	return new Response(body, init);
 }
 
+function createFetchMock(
+	implementation: (
+		input: RequestInfo | URL,
+		init?: RequestInit,
+	) => Promise<Response> = async () => new Response(),
+) {
+	return vi.fn(implementation);
+}
+
 describe("createGalleryStoragePort", () => {
 	it("starts upload sessions through the host endpoint", async () => {
-		const fetcher = vi.fn(async () =>
+		const fetcher = createFetchMock(async () =>
 			jsonResponse({ uploadSessionToken: "session-token", expiresAt: 1234 })
-		) as unknown as typeof fetch;
+		);
 		const port = createGalleryStoragePort({ fetch: fetcher });
 
 		await expect(port.startUploadSession({
@@ -31,11 +40,11 @@ describe("createGalleryStoragePort", () => {
 	});
 
 	it("presigns with the exact size and retains a separate v2 upload capability", async () => {
-		const fetcher = vi.fn(async () => jsonResponse({
+		const fetcher = createFetchMock(async () => jsonResponse({
 			r2Key: "angelsrest.online/gallery-1/original/photo.jpg",
 			uploadUrl: "/upload/put?key=angelsrest.online%2Fgallery-1%2Foriginal%2Fphoto.jpg",
 			uploadToken: "worker-upload-token",
-		})) as unknown as typeof fetch;
+		}));
 		const port = createGalleryStoragePort({ fetch: fetcher });
 
 		await expect(port.presign({
@@ -64,7 +73,7 @@ describe("createGalleryStoragePort", () => {
 			uploadToken: "legacy",
 		}],
 	])("rejects a presign response with %s", async (_label, body) => {
-		const fetcher = vi.fn(async () => jsonResponse(body)) as unknown as typeof fetch;
+		const fetcher = createFetchMock(async () => jsonResponse(body));
 		const port = createGalleryStoragePort({ fetch: fetcher });
 
 		await expect(port.presign({
@@ -78,7 +87,7 @@ describe("createGalleryStoragePort", () => {
 	});
 
 	it("rejects a missing presign size before contacting the host", async () => {
-		const fetcher = vi.fn() as unknown as typeof fetch;
+		const fetcher = createFetchMock();
 		const port = createGalleryStoragePort({ fetch: fetcher });
 
 		await expect(port.presign({
@@ -92,7 +101,7 @@ describe("createGalleryStoragePort", () => {
 	});
 
 	it("uploads directly to the Worker when the direct PUT succeeds", async () => {
-		const fetcher = vi.fn(async () => jsonResponse({ success: true })) as unknown as typeof fetch;
+		const fetcher = createFetchMock(async () => jsonResponse({ success: true }));
 		const port = createGalleryStoragePort({
 			fetch: fetcher,
 			galleryWorkerUrl: "https://gallery-worker.example",
@@ -123,9 +132,9 @@ describe("createGalleryStoragePort", () => {
 	it.each([401, 403, 404])(
 		"falls back to the host proxy when direct upload returns %i",
 		async (status) => {
-			const fetcher = vi.fn()
+			const fetcher = createFetchMock()
 				.mockResolvedValueOnce(textResponse("nope", { status }))
-				.mockResolvedValueOnce(jsonResponse({ success: true })) as unknown as typeof fetch;
+				.mockResolvedValueOnce(jsonResponse({ success: true }));
 			const port = createGalleryStoragePort({
 				fetch: fetcher,
 				galleryWorkerUrl: "https://gallery-worker.example",
@@ -156,9 +165,9 @@ describe("createGalleryStoragePort", () => {
 	);
 
 	it("does not fall back when direct upload returns a non-auth failure", async () => {
-		const fetcher = vi.fn(async () =>
+		const fetcher = createFetchMock(async () =>
 			textResponse("worker exploded", { status: 500 })
-		) as unknown as typeof fetch;
+		);
 		const port = createGalleryStoragePort({
 			fetch: fetcher,
 			galleryWorkerUrl: "https://gallery-worker.example",
@@ -177,9 +186,9 @@ describe("createGalleryStoragePort", () => {
 	});
 
 	it("falls back to the host proxy when the direct upload has a network-style failure", async () => {
-		const fetcher = vi.fn()
+		const fetcher = createFetchMock()
 			.mockRejectedValueOnce(new TypeError("Failed to fetch"))
-			.mockResolvedValueOnce(jsonResponse({ success: true })) as unknown as typeof fetch;
+			.mockResolvedValueOnce(jsonResponse({ success: true }));
 		const port = createGalleryStoragePort({
 			fetch: fetcher,
 			galleryWorkerUrl: "https://gallery-worker.example",
@@ -198,9 +207,9 @@ describe("createGalleryStoragePort", () => {
 	});
 
 	it("does not fall back after an atomic Worker collision", async () => {
-		const fetcher = vi.fn(async () =>
+		const fetcher = createFetchMock(async () =>
 			textResponse("Upload key already exists", { status: 409 })
-		) as unknown as typeof fetch;
+		);
 		const port = createGalleryStoragePort({
 			fetch: fetcher,
 			galleryWorkerUrl: "https://gallery-worker.example",
@@ -219,7 +228,7 @@ describe("createGalleryStoragePort", () => {
 	});
 
 	it("requires an upload capability before direct or proxy upload", async () => {
-		const fetcher = vi.fn() as unknown as typeof fetch;
+		const fetcher = createFetchMock();
 		const port = createGalleryStoragePort({
 			fetch: fetcher,
 			galleryWorkerUrl: "https://gallery-worker.example",
@@ -236,9 +245,9 @@ describe("createGalleryStoragePort", () => {
 	});
 
 	it("throws clear errors for failed process responses", async () => {
-		const fetcher = vi.fn(async () =>
+		const fetcher = createFetchMock(async () =>
 			textResponse("missing", { status: 404 })
-		) as unknown as typeof fetch;
+		);
 		const port = createGalleryStoragePort({ fetch: fetcher });
 
 		await expect(port.process({

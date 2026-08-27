@@ -133,11 +133,7 @@ export interface GrossPaymentGroup {
 
 export function groupGrossPayments(
 	orders: readonly Pick<AdminOrder, "currency" | "total">[],
-): {
-	groups: GrossPaymentGroup[];
-	unknownCurrencyOrderCount: number;
-	invalidAmountOrderCount: number;
-} {
+) {
 	const grouped = new Map<string, { totalMinorUnits: number; orderCount: number }>();
 	const invalidCurrencies = new Set<string>();
 	let unknownCurrencyOrderCount = 0;
@@ -169,7 +165,7 @@ export function groupGrossPayments(
 	return {
 		groups: [...grouped.entries()]
 			.sort(([left], [right]) => left.localeCompare(right))
-			.map(([currency, values]) => ({ currency, ...values })),
+			.map<GrossPaymentGroup>(([currency, values]) => ({ currency, ...values })),
 		unknownCurrencyOrderCount,
 		invalidAmountOrderCount,
 	};
