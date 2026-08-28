@@ -259,7 +259,7 @@ async function createPost() {
 		border: 1px solid transparent;
 		border-radius: 6px;
 		padding: 8px 10px;
-		background: var(--admin-accent);
+		background: var(--admin-accent-strong);
 		color: var(--admin-bg);
 		font-size: 0.72rem;
 		cursor: pointer;
@@ -345,7 +345,7 @@ async function createPost() {
 	}
 
 	.post-list small {
-		color: var(--admin-accent);
+		color: var(--admin-accent-strong);
 		letter-spacing: 0.05em;
 		text-transform: uppercase;
 	}
@@ -383,7 +383,7 @@ async function createPost() {
 	button:focus-visible,
 	input:focus-visible,
 	a:focus-visible {
-		outline: 2px solid var(--admin-accent);
+		outline: 2px solid var(--admin-accent-strong);
 		outline-offset: 2px;
 	}
 
