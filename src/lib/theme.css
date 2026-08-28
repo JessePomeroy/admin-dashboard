@@ -30,7 +30,7 @@
 	--admin-text-subtle: rgba(var(--_light), 0.55);
 	--admin-accent: var(--admin-accent-color, rgba(var(--_light), 0.85));
 	--admin-accent-hover: var(--admin-accent-color-hover, rgba(var(--_light), 1));
-	--admin-accent-strong: var(--admin-accent);
+	--admin-accent-strong: color-mix(in srgb, var(--admin-accent) 75%, rgb(var(--_light)));
 	--admin-active: rgba(var(--_light), 0.06);
 	--status-slate: #94a3b8;
 	--status-amber: #d4a053;

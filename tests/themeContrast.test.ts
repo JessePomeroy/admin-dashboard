@@ -9,17 +9,20 @@ const blogWorkbench = readFileSync(
 	"utf8",
 );
 
-function alpha(pattern: RegExp) {
-	const match = themeCss.match(pattern);
+function alpha(pattern: RegExp, source = themeCss) {
+	const match = source.match(pattern);
 	if (!match) throw new Error(`Missing reviewed theme token: ${pattern.source}`);
 	return Number(match[1]);
 }
 
 const darkMutedAlpha = alpha(/--admin-text-muted:\s*rgba\(var\(--_light\),\s*([0-9.]+)\)/);
 const darkSubtleAlpha = alpha(/--admin-text-subtle:\s*rgba\(var\(--_light\),\s*([0-9.]+)\)/);
+const darkStrongAccentMix = alpha(/--admin-accent-strong:\s*color-mix\(in srgb, var\(--admin-accent\)\s*([0-9.]+)%,/)
+	/ 100;
 const lightMutedAlpha = alpha(/--admin-text-muted:\s*rgba\(var\(--_dark\),\s*([0-9.]+)\)/);
 const lightSubtleAlpha = alpha(/--admin-text-subtle:\s*rgba\(var\(--_dark\),\s*([0-9.]+)\)/);
-const lightStrongAccentMix = alpha(/--admin-accent-strong:\s*color-mix\(in srgb, var\(--admin-accent\)\s*([0-9.]+)%,/)
+const lightThemeCss = themeCss.slice(themeCss.indexOf("html:not(.dark)"));
+const lightStrongAccentMix = alpha(/--admin-accent-strong:\s*color-mix\(in srgb, var\(--admin-accent\)\s*([0-9.]+)%,/, lightThemeCss)
 	/ 100;
 
 function blend(foreground: Rgb, background: Rgb, opacity: number): Rgb {
@@ -59,12 +62,16 @@ describe.each(hostPalettes)("$name admin text contrast", ({ dark, light, accent 
 
 	it("keeps Blog accent text, controls, and focus indicators perceivable in both modes", () => {
 		const darkAccent = accent ?? blend(light, dark, 0.85);
+		const darkStrongAccent = blend(darkAccent, light, darkStrongAccentMix);
+		const darkCollectionSurface = blend(light, dark, 0.03);
+		const darkSelectedRow = blend(light, darkCollectionSurface, 0.06);
 		const lightAccent = accent ?? blend(dark, light, 0.75);
 		const lightStrongAccent = blend(lightAccent, dark, lightStrongAccentMix);
 
-		expect(contrast(darkAccent, dark)).toBeGreaterThanOrEqual(4.5);
+		expect(contrast(darkStrongAccent, darkCollectionSurface)).toBeGreaterThanOrEqual(4.5);
+		expect(contrast(darkStrongAccent, darkSelectedRow)).toBeGreaterThanOrEqual(4.5);
 		expect(contrast(lightStrongAccent, light)).toBeGreaterThanOrEqual(4.5);
-		expect(contrast(darkAccent, dark)).toBeGreaterThanOrEqual(3);
+		expect(contrast(darkStrongAccent, dark)).toBeGreaterThanOrEqual(3);
 		expect(contrast(lightStrongAccent, light)).toBeGreaterThanOrEqual(3);
 	});
 });
