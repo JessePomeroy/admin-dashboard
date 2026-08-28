@@ -16,7 +16,9 @@ const mocks = vi.hoisted(() => ({
 		postList: { name: "post:listForEditor" },
 		postState: { name: "post:getEditorState" },
 		postCreate: { name: "post:createDraft" },
+		postSave: { name: "post:saveDraft" },
 		mediaGetMany: { name: "media:getManyForEditor" },
+		mediaList: { name: "media:listForEditor" },
 	},
 }));
 
@@ -64,9 +66,15 @@ vi.mock("../src/lib/config", () => ({
 				listForEditor: mocks.refs.postList,
 				getEditorState: mocks.refs.postState,
 				createDraft: mocks.refs.postCreate,
+				saveDraft: mocks.refs.postSave,
 			},
 			...(mocks.mediaEnabled
-				? { mediaAssets: { getManyForEditor: mocks.refs.mediaGetMany } }
+				? {
+					mediaAssets: {
+						getManyForEditor: mocks.refs.mediaGetMany,
+						listForEditor: mocks.refs.mediaList,
+					},
+				}
 				: {}),
 		},
 		editor: {
@@ -102,6 +110,21 @@ function postEditorState() {
 		updatedAt: 1,
 		publishedAt: null,
 		archivedAt: null,
+	};
+}
+
+function mediaAsset(id: string) {
+	return {
+		_id: id,
+		assetId: id,
+		originalFilename: `${id}.jpg`,
+		status: "ready",
+		source: { contentType: "image/jpeg", sizeBytes: 100, width: 1200, height: 800 },
+		derivatives: {
+			thumb: { key: `${id}/thumb.jpg`, width: 160, height: 107 },
+			card: { key: `${id}/card.jpg`, width: 800, height: 533 },
+		},
+		createdAt: 1,
 	};
 }
 
@@ -199,6 +222,7 @@ describe("Blog query states", () => {
 		mocks.states.set("blog:listForEditor:author", { isLoading: true });
 		mocks.states.set("blog:listForEditor:category", { data: [] });
 		mocks.states.set("media:getManyForEditor", { isLoading: true });
+		mocks.states.set("media:listForEditor", { isLoading: true });
 		components.push(mount(BlogPostPage, {
 			target: document.body,
 			props: { documentId: "post-1" },
@@ -210,7 +234,102 @@ describe("Blog query states", () => {
 		expect(document.querySelector('#references-heading')?.parentElement?.parentElement?.querySelector("select")).toBeNull();
 		expect(document.body.textContent).not.toContain("No published or currently linked categories.");
 		expect(document.body.textContent).toContain("loading linked image details…");
+		expect(document.body.textContent).toContain("loading the ready image library…");
 		expect(document.body.textContent).not.toContain("preview unavailable");
+	});
+
+	it("distinguishes a failed ready-media library from an empty library", async () => {
+		mocks.mediaEnabled = true;
+		const state = postEditorState();
+		state.draft.draft.body = {
+			version: 1,
+			blocks: [{
+				type: "image",
+				key: "linked-image",
+				assetId: "asset-1",
+				altText: "Linked image",
+			}],
+		};
+		mocks.states.set("post:getEditorState", { data: state });
+		mocks.states.set("media:getManyForEditor", { data: [mediaAsset("asset-1")] });
+		mocks.states.set("media:listForEditor", { error: new Error("private media detail") });
+		components.push(mount(BlogPostPage, {
+			target: document.body,
+			props: { documentId: "post-1" },
+		}));
+		await tick();
+		await tick();
+
+		expect(document.body.textContent).toContain("Could not load the ready image library.");
+		expect(document.body.textContent).not.toContain("private media detail");
+		expect(Array.from(document.querySelectorAll("button"))
+			.some((candidate) => candidate.textContent?.trim() === "add image")).toBe(false);
+	});
+
+	it("keeps main-image review and body-image editing at separate authorities", async () => {
+		mocks.mediaEnabled = true;
+		const state = postEditorState();
+		state.draft.draft.mainImage = {
+			key: "main-image",
+			assetId: "asset-main",
+			altText: "Original main alt",
+		};
+		state.draft.draft.body = {
+			version: 1,
+			blocks: [{
+				type: "image",
+				key: "body-image",
+				assetId: "asset-1",
+				altText: "Original alt",
+				caption: "Original caption",
+			}],
+		};
+		mocks.states.set("post:getEditorState", { data: state });
+		mocks.states.set("media:getManyForEditor", {
+			data: [mediaAsset("asset-main"), mediaAsset("asset-1")],
+		});
+		mocks.states.set("media:listForEditor", {
+			data: { page: [mediaAsset("asset-1")], isDone: true, continueCursor: "" },
+		});
+		mocks.mutation.mockResolvedValue({ revisionId: "revision-2" });
+		components.push(mount(BlogPostPage, {
+			target: document.body,
+			props: { documentId: "post-1" },
+		}));
+		await vi.waitFor(() => {
+			expect(document.querySelector('input[aria-label="Image alt text"]')).toBeTruthy();
+		});
+
+		const reviewAlt = document.querySelector<HTMLInputElement>("#blog-media-alt-0");
+		expect(reviewAlt).toBeTruthy();
+		expect(document.querySelector("#blog-media-alt-1")).toBeNull();
+		expect(document.body.textContent).not.toContain("alt text for body image");
+		reviewAlt!.value = "Main review alt";
+		reviewAlt!.dispatchEvent(new Event("input", { bubbles: true }));
+		await tick();
+
+		const bodyAlt = document.querySelector<HTMLInputElement>('input[aria-label="Image alt text"]');
+		const caption = document.querySelector<HTMLInputElement>('input[aria-label="Image caption"]');
+		expect(bodyAlt).toBeTruthy();
+		expect(caption).toBeTruthy();
+		bodyAlt!.value = "Editor body alt";
+		bodyAlt!.dispatchEvent(new Event("change", { bubbles: true }));
+		caption!.value = "Editor caption";
+		caption!.dispatchEvent(new Event("change", { bubbles: true }));
+		await tick();
+		button("save draft")?.click();
+		await tick();
+
+		const saveCall = mocks.mutation.mock.calls.find((call) =>
+			(call[0] as { name?: string }).name === "post:saveDraft");
+		expect(saveCall?.[1]).toMatchObject({
+			draft: {
+				mainImage: { altText: "Main review alt" },
+				body: {
+					blocks: [{ altText: "Editor body alt", caption: "Editor caption" }],
+				},
+			},
+		});
 	});
 
 	it("holds author portrait review while linked media is loading", async () => {
