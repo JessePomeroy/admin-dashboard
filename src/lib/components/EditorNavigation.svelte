@@ -82,7 +82,7 @@ function isCurrent(href: string) {
 	.editor-navigation {
 		position: fixed;
 		inset: 0 auto 0 var(--editor-rail-width, 72px);
-		width: var(--editor-panel-width, 272px);
+		width: var(--editor-panel-width, 220px);
 		box-sizing: border-box;
 		padding: 34px 24px;
 		background: var(--admin-surface);
