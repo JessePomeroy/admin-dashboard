@@ -28,6 +28,7 @@ import { getAdminConfig } from "../../config";
 import { type PortfolioMediaAsset } from "../../portfolioEditor";
 import "../../styles/editorial-page.css";
 import BlogMediaReview from "./BlogMediaReview.svelte";
+import BlogWorkbench from "./BlogWorkbench.svelte";
 
 let { documentId }: { documentId: string } = $props();
 
@@ -58,6 +59,7 @@ const categoriesQuery = useQuery(blogApi.listForEditor, {
 });
 
 let editorState = $derived(editorQuery.data as PostEditorState | undefined);
+let editorError = $derived(editorQuery.error);
 let form = $state<PostDraft>(copyPostDraft(undefined));
 let authorDocuments = $derived(
 	((authorsQuery.data as BlogSupportingEditorSummary[] | undefined) ?? []),
@@ -65,6 +67,8 @@ let authorDocuments = $derived(
 let categoryDocuments = $derived(
 	((categoriesQuery.data as BlogSupportingEditorSummary[] | undefined) ?? []),
 );
+let referenceError = $derived(authorsQuery.error || categoriesQuery.error);
+let referenceLoading = $derived(authorsQuery.isLoading || categoriesQuery.isLoading);
 let authors = $derived(
 	blogSupportingReferenceOptions(
 		authorDocuments,
@@ -107,6 +111,8 @@ const mediaQuery = getManyMediaAssets
 let mediaById = $derived(new Map(
 	((mediaQuery?.data ?? []) as PortfolioMediaAsset[]).map((asset) => [asset._id, asset]),
 ));
+let mediaError = $derived(mediaQuery?.error);
+let mediaLoading = $derived(mediaPlacements.length > 0 && Boolean(mediaQuery?.isLoading));
 let mediaReviewItems = $derived(mediaPlacements.map((placement) => ({
 	id: placement.fieldId,
 	assetId: placement.assetId,
@@ -321,7 +327,10 @@ async function restoreDocument() {
 
 <svelte:head><title>post — {config.siteName}</title></svelte:head>
 
-{#if editorState === undefined}
+<BlogWorkbench selectedDocumentId={documentId} selectedKind="post">
+{#if editorError}
+	<div class="settings-page"><p class="error" role="alert">Could not load this post.</p></div>
+{:else if editorState === undefined}
 	<p class="loading" role="status">loading post…</p>
 {:else}
 	<div class="settings-page">
@@ -429,34 +438,40 @@ async function restoreDocument() {
 					<p>Published records are available for new links. Existing draft links remain visible so imported relationships are never silently removed.</p>
 				</div>
 			</div>
-			<div class="fields two">
-				<label>
-					author
-					<select bind:value={form.authorDocumentId} aria-invalid={Boolean(fieldErrors.authorDocumentId)}>
-						<option value="">choose an author</option>
-						{#each authors as author}
-							<option value={author.documentId}>{supportingOptionLabel(author)}</option>
+			{#if referenceLoading}
+				<p class="empty-inline" role="status">loading author and category options…</p>
+			{:else if referenceError}
+				<p class="error" role="alert">Could not load author and category options.</p>
+			{:else}
+				<div class="fields two">
+					<label>
+						author
+						<select bind:value={form.authorDocumentId} aria-invalid={Boolean(fieldErrors.authorDocumentId)}>
+							<option value="">choose an author</option>
+							{#each authors as author}
+								<option value={author.documentId}>{supportingOptionLabel(author)}</option>
+							{/each}
+						</select>
+						{#if fieldErrors.authorDocumentId}<small class="field-error">{fieldErrors.authorDocumentId}</small>{/if}
+					</label>
+				</div>
+				<div class="checkbox-list" aria-label="categories">
+					{#if categories.length === 0}
+						<p class="empty-inline">No published or currently linked categories.</p>
+					{:else}
+						{#each categories as category}
+							<label class="check">
+								<input
+									type="checkbox"
+									checked={categoryChecked(category.documentId)}
+									onchange={(event) => toggleCategory(category.documentId, event.currentTarget.checked)}
+								/>
+								<span>{supportingOptionLabel(category)}</span>
+							</label>
 						{/each}
-					</select>
-					{#if fieldErrors.authorDocumentId}<small class="field-error">{fieldErrors.authorDocumentId}</small>{/if}
-				</label>
-			</div>
-			<div class="checkbox-list" aria-label="categories">
-				{#if categories.length === 0}
-					<p class="empty-inline">No published or currently linked categories.</p>
-				{:else}
-					{#each categories as category}
-						<label class="check">
-							<input
-								type="checkbox"
-								checked={categoryChecked(category.documentId)}
-								onchange={(event) => toggleCategory(category.documentId, event.currentTarget.checked)}
-							/>
-							<span>{supportingOptionLabel(category)}</span>
-						</label>
-					{/each}
-				{/if}
-			</div>
+					{/if}
+				</div>
+			{/if}
 		</section>
 
 		<section aria-labelledby="seo-heading">
@@ -513,7 +528,11 @@ async function restoreDocument() {
 					<p>Images remain in their exact main/body order. This review changes alt text only.</p>
 				</div>
 			</div>
-			{#if mediaReviewItems.length > 0}
+			{#if mediaLoading}
+				<p class="empty-inline" role="status">loading linked image details…</p>
+			{:else if mediaError}
+				<p class="error" role="alert">Could not load linked image details.</p>
+			{:else if mediaReviewItems.length > 0}
 				<BlogMediaReview
 					items={mediaReviewItems}
 					{mediaById}
@@ -574,6 +593,7 @@ async function restoreDocument() {
 		</section>
 	</div>
 {/if}
+</BlogWorkbench>
 
 <style>
 	.loading {

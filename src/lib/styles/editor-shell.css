@@ -1,6 +1,6 @@
 [data-admin] {
 	--editor-rail-width: 72px;
-	--editor-panel-width: 272px;
+	--editor-panel-width: 220px;
 }
 
 [data-admin] .sidebar.editor-compact {
@@ -50,9 +50,9 @@
 	max-width: calc(100vw - var(--editor-rail-width) - var(--editor-panel-width));
 }
 
-@media (min-width: 641px) and (max-width: 1024px) {
+@media (min-width: 641px) and (max-width: 1179px) {
 	[data-admin] {
-		--editor-panel-width: 240px;
+		--editor-panel-width: 200px;
 	}
 }
 

@@ -20,6 +20,7 @@ import { getAdminConfig } from "../../config";
 import { type PortfolioMediaAsset } from "../../portfolioEditor";
 import "../../styles/editorial-page.css";
 import BlogMediaReview from "./BlogMediaReview.svelte";
+import BlogWorkbench from "./BlogWorkbench.svelte";
 
 let {
 	documentId,
@@ -47,6 +48,7 @@ const client = useAdminClient();
 const editorQuery = useQuery(editorApi.getEditorState, () => ({ documentId }));
 
 let editorState = $derived(editorQuery.data as BlogSupportingEditorState | undefined);
+let editorError = $derived(editorQuery.error);
 let form = $state<BlogSupportingDraft>({ kind: "author", name: "", slug: "" });
 let bioText = $state("");
 let initializedBioText = $state("");
@@ -88,6 +90,8 @@ const mediaQuery = getManyMediaAssets
 let mediaById = $derived(new Map(
 	((mediaQuery?.data ?? []) as PortfolioMediaAsset[]).map((asset) => [asset._id, asset]),
 ));
+let mediaError = $derived(mediaQuery?.error);
+let mediaLoading = $derived(portraitItems.length > 0 && Boolean(mediaQuery?.isLoading));
 
 $effect(() => {
 	if (!activeRevision || initializedRevisionId === activeRevision.revisionId) return;
@@ -260,7 +264,10 @@ async function restoreDocument() {
 
 <svelte:head><title>{kind} — {config.siteName}</title></svelte:head>
 
-{#if editorState === undefined}
+<BlogWorkbench selectedDocumentId={documentId} selectedKind={kind}>
+{#if editorError}
+	<div class="settings-page"><p class="error" role="alert">Could not load this {kind}.</p></div>
+{:else if editorState === undefined}
 	<p class="loading" role="status">loading {kind}…</p>
 {:else if editorState.kind !== kind}
 	<section class="settings-page">
@@ -347,7 +354,11 @@ async function restoreDocument() {
 					</label>
 				</div>
 			</section>
-			{#if portraitItems.length > 0}
+			{#if mediaLoading}
+				<p class="empty-inline" role="status">loading linked portrait…</p>
+			{:else if mediaError}
+				<p class="error" role="alert">Could not load the linked portrait.</p>
+			{:else if portraitItems.length > 0}
 				<section aria-labelledby="portrait-heading">
 					<div class="section-heading">
 						<span>03</span>
@@ -432,6 +443,7 @@ async function restoreDocument() {
 		</section>
 	</div>
 {/if}
+</BlogWorkbench>
 
 <style>
 	.loading {

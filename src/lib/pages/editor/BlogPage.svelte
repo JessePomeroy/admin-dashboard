@@ -5,15 +5,14 @@ import { useAdminClient } from "../../adminClient";
 import {
 	blogDocumentLabel,
 	blogDocumentStatus,
-	emptyPostDraft,
 	newBlogDocumentKey,
 	slugifyBlogTitle,
 	type BlogSupportingEditorSummary,
 	type BlogSupportingKind,
-	type PostEditorSummary,
 } from "../../blogEditor";
 import { getAdminConfig } from "../../config";
 import "../../styles/editorial-page.css";
+import BlogWorkbench from "./BlogWorkbench.svelte";
 
 const config = getAdminConfig();
 const blogApi = config.api.blogContent;
@@ -24,7 +23,6 @@ if (!blogApi || !postApi || !blogConfig) {
 }
 
 const editorApi = blogApi;
-const postEditorApi = postApi;
 const baseHref = blogConfig.baseHref ?? "/admin/editor/blog";
 const client = useAdminClient();
 const authorsQuery = useQuery(editorApi.listForEditor, {
@@ -35,21 +33,21 @@ const categoriesQuery = useQuery(editorApi.listForEditor, {
 	siteUrl: config.siteUrl,
 	kind: "category",
 });
-const postsQuery = useQuery(postEditorApi.listForEditor, {
-	siteUrl: config.siteUrl,
-});
 
 let authors = $derived(
 	(authorsQuery.data as BlogSupportingEditorSummary[] | undefined) ?? [],
 );
+let authorsLoading = $derived(authorsQuery.isLoading);
+let authorsError = $derived(authorsQuery.error);
 let categories = $derived(
 	(categoriesQuery.data as BlogSupportingEditorSummary[] | undefined) ?? [],
 );
-let posts = $derived((postsQuery.data as PostEditorSummary[] | undefined) ?? []);
+let categoriesLoading = $derived(categoriesQuery.isLoading);
+let categoriesError = $derived(categoriesQuery.error);
 let createState = $state<"idle" | "saving" | "error">("idle");
 let createError = $state("");
 
-function statusLabel(document: BlogSupportingEditorSummary | PostEditorSummary) {
+function statusLabel(document: BlogSupportingEditorSummary) {
 	const status = blogDocumentStatus(document);
 	if (status === "changed") return "draft changes";
 	return status;
@@ -75,31 +73,11 @@ async function createSupporting(kind: BlogSupportingKind) {
 	}
 }
 
-async function createPost() {
-	createState = "saving";
-	createError = "";
-	try {
-		const title = "new post";
-		const result = await client.mutation(postEditorApi.createDraft, {
-			siteUrl: config.siteUrl,
-			documentKey: newBlogDocumentKey("post"),
-			draft: {
-				...emptyPostDraft(),
-				title,
-				slug: slugifyBlogTitle(title),
-			},
-		}) as { documentId: string };
-		createState = "idle";
-		await goto(`${baseHref}/posts/${result.documentId}`);
-	} catch (error) {
-		createState = "error";
-		createError = error instanceof Error ? error.message : "Could not create the draft.";
-	}
-}
 </script>
 
 <svelte:head><title>Blog — {config.siteName}</title></svelte:head>
 
+<BlogWorkbench>
 <div class="settings-page">
 	<header class="settings-header">
 		<div>
@@ -108,35 +86,7 @@ async function createPost() {
 		</div>
 	</header>
 
-	<section aria-labelledby="posts-heading">
-		<div class="section-heading">
-			<span>01</span>
-			<div>
-				<h2 id="posts-heading">posts</h2>
-				<p>Draft and published Post records, newest public ordering handled by the content service.</p>
-			</div>
-			<button type="button" onclick={() => void createPost()} disabled={createState === "saving"}>
-				new post
-			</button>
-		</div>
-		{#if posts.length === 0}
-			<p class="empty">No posts yet.</p>
-		{:else}
-			<div class="entry-list">
-				{#each posts as post}
-					<a class="page-entry" href={`${baseHref}/posts/${post.documentId}`}>
-						<span>
-							<strong>{blogDocumentLabel(post)}</strong>
-							<small>{post.slug ? `/${post.slug}` : "No public slug yet"} · {statusLabel(post)}</small>
-						</span>
-						<span aria-hidden="true">→</span>
-					</a>
-				{/each}
-			</div>
-		{/if}
-	</section>
-
-	<section aria-labelledby="supporting-heading">
+	<section aria-labelledby="supporting-heading" id="supporting-content">
 		<div class="section-heading">
 			<span>02</span>
 			<div>
@@ -148,14 +98,18 @@ async function createPost() {
 			<p class="error" role="alert">{createError}</p>
 		{/if}
 		<div class="support-grid">
-			<div>
+			<div id="authors">
 				<div class="group-heading">
 					<h3>authors</h3>
 					<button type="button" onclick={() => void createSupporting("author")} disabled={createState === "saving"}>
 						new author
 					</button>
 				</div>
-				{#if authors.length === 0}
+				{#if authorsLoading}
+					<p class="empty" role="status">loading authors…</p>
+				{:else if authorsError}
+					<p class="error" role="alert">Could not load authors.</p>
+				{:else if authors.length === 0}
 					<p class="empty">No authors yet.</p>
 				{:else}
 					<div class="entry-list compact">
@@ -171,14 +125,18 @@ async function createPost() {
 					</div>
 				{/if}
 			</div>
-			<div>
+			<div id="categories">
 				<div class="group-heading">
 					<h3>categories</h3>
 					<button type="button" onclick={() => void createSupporting("category")} disabled={createState === "saving"}>
 						new category
 					</button>
 				</div>
-				{#if categories.length === 0}
+				{#if categoriesLoading}
+					<p class="empty" role="status">loading categories…</p>
+				{:else if categoriesError}
+					<p class="error" role="alert">Could not load categories.</p>
+				{:else if categories.length === 0}
 					<p class="empty">No categories yet.</p>
 				{:else}
 					<div class="entry-list compact">
@@ -197,6 +155,7 @@ async function createPost() {
 		</div>
 	</section>
 </div>
+</BlogWorkbench>
 
 <style>
 	.entry-list {
