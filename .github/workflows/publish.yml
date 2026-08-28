@@ -42,8 +42,14 @@ jobs:
       - name: Publish to GitHub Packages
         id: publish
         run: |
+          version=$(node -p "require('./package.json').version")
+          dist_tag=latest
+          if [[ "$version" == *-* ]]; then
+            dist_tag=r8-preview
+          fi
+          echo "Publishing $version with dist-tag $dist_tag"
           set +e
-          output=$(corepack pnpm publish --no-git-checks 2>&1)
+          output=$(corepack pnpm publish --no-git-checks --tag "$dist_tag" 2>&1)
           status=$?
           set -e
           echo "$output"
