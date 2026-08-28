@@ -30,6 +30,7 @@
 	--admin-text-subtle: rgba(var(--_light), 0.55);
 	--admin-accent: var(--admin-accent-color, rgba(var(--_light), 0.85));
 	--admin-accent-hover: var(--admin-accent-color-hover, rgba(var(--_light), 1));
+	--admin-accent-strong: var(--admin-accent);
 	--admin-active: rgba(var(--_light), 0.06);
 	--status-slate: #94a3b8;
 	--status-amber: #d4a053;
@@ -52,6 +53,7 @@ html:not(.dark) [data-admin] {
 	--admin-text-subtle: rgba(var(--_dark), 0.65);
 	--admin-accent: var(--admin-accent-color, rgba(var(--_dark), 0.75));
 	--admin-accent-hover: var(--admin-accent-color-hover, rgba(var(--_dark), 0.9));
+	--admin-accent-strong: color-mix(in srgb, var(--admin-accent) 55%, rgb(var(--_dark)));
 	--admin-active: rgba(var(--_dark), 0.06);
 	--status-slate: #64748b;
 	--status-amber: #b8860b;

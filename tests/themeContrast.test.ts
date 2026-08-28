@@ -4,6 +4,10 @@ import { describe, expect, it } from "vitest";
 type Rgb = readonly [number, number, number];
 
 const themeCss = readFileSync(new URL("../src/lib/theme.css", import.meta.url), "utf8");
+const blogWorkbench = readFileSync(
+	new URL("../src/lib/pages/editor/BlogWorkbench.svelte", import.meta.url),
+	"utf8",
+);
 
 function alpha(pattern: RegExp) {
 	const match = themeCss.match(pattern);
@@ -15,6 +19,8 @@ const darkMutedAlpha = alpha(/--admin-text-muted:\s*rgba\(var\(--_light\),\s*([0
 const darkSubtleAlpha = alpha(/--admin-text-subtle:\s*rgba\(var\(--_light\),\s*([0-9.]+)\)/);
 const lightMutedAlpha = alpha(/--admin-text-muted:\s*rgba\(var\(--_dark\),\s*([0-9.]+)\)/);
 const lightSubtleAlpha = alpha(/--admin-text-subtle:\s*rgba\(var\(--_dark\),\s*([0-9.]+)\)/);
+const lightStrongAccentMix = alpha(/--admin-accent-strong:\s*color-mix\(in srgb, var\(--admin-accent\)\s*([0-9.]+)%,/)
+	/ 100;
 
 function blend(foreground: Rgb, background: Rgb, opacity: number): Rgb {
 	return foreground.map((channel, index) => (
@@ -39,15 +45,32 @@ function contrast(foreground: Rgb, background: Rgb) {
 }
 
 const hostPalettes = [
-	{ name: "Angels Rest", dark: [30, 41, 59], light: [241, 245, 249] },
-	{ name: "Reflecting Pool", dark: [26, 31, 46], light: [240, 244, 248] },
+	{ name: "Angels Rest", dark: [30, 41, 59], light: [241, 245, 249], accent: [129, 140, 248] },
+	{ name: "Reflecting Pool", dark: [26, 31, 46], light: [240, 244, 248], accent: undefined },
 ] as const;
 
-describe.each(hostPalettes)("$name admin text contrast", ({ dark, light }) => {
+describe.each(hostPalettes)("$name admin text contrast", ({ dark, light, accent }) => {
 	it("keeps muted and subtle normal text at WCAG AA contrast in both modes", () => {
 		expect(contrast(blend(light, dark, darkMutedAlpha), dark)).toBeGreaterThanOrEqual(4.5);
 		expect(contrast(blend(light, dark, darkSubtleAlpha), dark)).toBeGreaterThanOrEqual(4.5);
 		expect(contrast(blend(dark, light, lightMutedAlpha), light)).toBeGreaterThanOrEqual(4.5);
 		expect(contrast(blend(dark, light, lightSubtleAlpha), light)).toBeGreaterThanOrEqual(4.5);
 	});
+
+	it("keeps Blog accent text, controls, and focus indicators perceivable in both modes", () => {
+		const darkAccent = accent ?? blend(light, dark, 0.85);
+		const lightAccent = accent ?? blend(dark, light, 0.75);
+		const lightStrongAccent = blend(lightAccent, dark, lightStrongAccentMix);
+
+		expect(contrast(darkAccent, dark)).toBeGreaterThanOrEqual(4.5);
+		expect(contrast(lightStrongAccent, light)).toBeGreaterThanOrEqual(4.5);
+		expect(contrast(darkAccent, dark)).toBeGreaterThanOrEqual(3);
+		expect(contrast(lightStrongAccent, light)).toBeGreaterThanOrEqual(3);
+	});
+});
+
+it("uses the strong accent for Blog normal text, primary control, and focus indicators", () => {
+	expect(blogWorkbench).toMatch(/\.new-post\s*\{[\s\S]*background:\s*var\(--admin-accent-strong\)/);
+	expect(blogWorkbench).toMatch(/\.post-list small\s*\{[\s\S]*color:\s*var\(--admin-accent-strong\)/);
+	expect(blogWorkbench).toMatch(/:focus-visible[\s\S]*outline:\s*2px solid var\(--admin-accent-strong\)/);
 });
