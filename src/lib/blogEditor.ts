@@ -265,52 +265,6 @@ export function emptyPostBody(): PostRichTextDocument {
 	return { version: 1, blocks: [] };
 }
 
-export function postBodyToPlainText(body: PostRichTextDocument | undefined) {
-	return (body?.blocks ?? [])
-		.map((block) => {
-			if (
-				typeof block === "object"
-				&& block
-				&& "children" in block
-				&& Array.isArray(block.children)
-			) {
-				return block.children
-					.map((child) =>
-						typeof child === "object"
-						&& child
-						&& "text" in child
-						&& typeof child.text === "string"
-							? child.text
-							: ""
-					)
-					.join("");
-			}
-			return "";
-		})
-		.filter(Boolean)
-		.join("\n\n");
-}
-
-export function postBodyFromPlainText(value: string): PostRichTextDocument {
-	const paragraphs = value
-		.split(/\n{2,}/)
-		.map((paragraph) => paragraph.trim())
-		.filter(Boolean);
-	return {
-		version: 1,
-		blocks: paragraphs.map((paragraph, index) => ({
-			type: "paragraph",
-			key: `paragraph-${index + 1}`,
-			children: [{
-				type: "text",
-				key: `paragraph-${index + 1}-text`,
-				text: paragraph,
-				marks: [],
-			}],
-		})),
-	};
-}
-
 function isRecord(value: unknown): value is Record<string, unknown> {
 	return typeof value === "object" && value !== null && !Array.isArray(value);
 }
@@ -352,33 +306,9 @@ function isExactlyPlainTextParagraphBlock(block: unknown) {
 	);
 }
 
-/**
- * Plain-text editing is deliberately conservative: any additional structure,
- * mark, or block type stays locked until the rich editor can represent it.
- */
-export function postBodySupportsPlainTextEditing(body: PostRichTextDocument | undefined) {
-	return (body?.blocks ?? []).every(isExactlyPlainTextParagraphBlock);
-}
-
 function copyPostBody(body: PostRichTextDocument | undefined): PostRichTextDocument {
 	if (!body) return emptyPostBody();
 	return cloneJsonValue(body);
-}
-
-/**
- * Resolve the body for a plain-text form without ever flattening rich content.
- * Returning a copy also keeps UI state isolated from the query payload.
- */
-export function resolvePostBodyPlainTextEdit(
-	body: PostRichTextDocument | undefined,
-	initializedText: string,
-	nextText: string,
-): PostRichTextDocument {
-	if (
-		nextText === initializedText
-		|| !postBodySupportsPlainTextEditing(body)
-	) return copyPostBody(body);
-	return postBodyFromPlainText(nextText);
 }
 
 export function emptyPostDraft(): PostDraft {

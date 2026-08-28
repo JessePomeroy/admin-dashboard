@@ -13,12 +13,8 @@ import {
 	hasPostErrors,
 	newBlogDocumentKey,
 	presentationMatchesFormat,
-	postBodyFromPlainText,
-	postBodySupportsPlainTextEditing,
-	postBodyToPlainText,
 	postMediaReviewPlacements,
 	resolveAuthorBioPlainTextEdit,
-	resolvePostBodyPlainTextEdit,
 	serializeBlogSupportingDraft,
 	serializePostDraft,
 	slugifyBlogTitle,
@@ -279,81 +275,6 @@ describe("Blog editor helpers", () => {
 		expect(original.mainImage?.caption).toBe("Main image caption.");
 	});
 
-	it("converts simple Post body paragraphs to and from plain text", () => {
-		const body = postBodyFromPlainText("First paragraph.\n\nSecond paragraph.");
-		expect(body.blocks).toHaveLength(2);
-		expect(body.blocks[0]).toMatchObject({
-			type: "paragraph",
-			children: [{ text: "First paragraph.", marks: [] }],
-		});
-		expect(postBodyToPlainText(body)).toBe("First paragraph.\n\nSecond paragraph.");
-		expect(postBodyFromPlainText("   ").blocks).toEqual([]);
-	});
-
-	it("only permits plain-text editing for exactly representable bodies", () => {
-		const simple = postBodyFromPlainText("Original paragraph.");
-		expect(postBodySupportsPlainTextEditing(simple)).toBe(true);
-		expect(postBodySupportsPlainTextEditing({ version: 1, blocks: [] })).toBe(true);
-		expect(postBodySupportsPlainTextEditing({
-			version: 1,
-			blocks: [{
-				type: "paragraph",
-				key: "marked-paragraph",
-				children: [{
-					type: "text",
-					key: "marked-text",
-					text: "Marked text.",
-					marks: ["em"],
-				}],
-			}],
-		})).toBe(false);
-		expect(postBodySupportsPlainTextEditing({
-			version: 1,
-			blocks: [{ type: "image", key: "image", assetId: "asset" }],
-		})).toBe(false);
-		expect(postBodySupportsPlainTextEditing({
-			version: 1,
-			blocks: [{
-				type: "paragraph",
-				key: "styled-paragraph",
-				style: "normal",
-				children: [],
-			}],
-		})).toBe(false);
-		expect(postBodyToPlainText(resolvePostBodyPlainTextEdit(
-			simple,
-			"Original paragraph.",
-			"Updated paragraph.",
-		))).toBe("Updated paragraph.");
-	});
-
-	it("refuses to flatten rich bodies even if plain text changes", () => {
-		const richBody = {
-			version: 1 as const,
-			blocks: [
-				{
-					type: "paragraph",
-					key: "paragraph",
-					children: [{
-						type: "text",
-						key: "text",
-						text: "Existing paragraph.",
-						marks: [],
-					}],
-				},
-				{ type: "image", key: "image", assetId: "asset", altText: "Existing alt." },
-			],
-		};
-		const resolved = resolvePostBodyPlainTextEdit(
-			richBody,
-			"Existing paragraph.",
-			"Attempted replacement.",
-		);
-		expect(resolved).toEqual(richBody);
-		expect(resolved).not.toBe(richBody);
-		expect(resolved.blocks[0]).not.toBe(richBody.blocks[0]);
-	});
-
 	it("reviews Post media in public order and updates only the selected alt", () => {
 		const draft: PostDraft = {
 			...emptyPostDraft(),
@@ -447,7 +368,19 @@ describe("Blog editor helpers", () => {
 			slug: "field-notes",
 			summary: "A short public summary.",
 			authorDocumentId: "author-id",
-			body: postBodyFromPlainText("A complete body."),
+			body: {
+				version: 1,
+				blocks: [{
+					type: "paragraph",
+					key: "body-paragraph",
+					children: [{
+						type: "text",
+						key: "body-text",
+						text: "A complete body.",
+						marks: [],
+					}],
+				}],
+			},
 		}).body).toBeUndefined();
 		expect(validatePostMetadataForPublish({
 			...emptyPostDraft(),

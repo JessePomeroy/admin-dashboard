@@ -1,7 +1,7 @@
 <script lang="ts">
 import { goto } from "$app/navigation";
 import { useQuery } from "convex-svelte";
-import { untrack } from "svelte";
+import { onMount, untrack } from "svelte";
 import { useAdminClient } from "../../adminClient";
 import {
 	blogDocumentLabel,
@@ -9,10 +9,7 @@ import {
 	copyPostDraft,
 	defaultPresentationForFormat,
 	hasPostErrors,
-	postBodySupportsPlainTextEditing,
-	postBodyToPlainText,
 	postMediaReviewPlacements,
-	resolvePostBodyPlainTextEdit,
 	serializePostDraft,
 	slugifyBlogTitle,
 	updatePostMediaAltText,
@@ -26,12 +23,25 @@ import {
 	type PostMediaPublishIssue,
 } from "../../blogEditor";
 import { getAdminConfig } from "../../config";
-import { type PortfolioMediaAsset } from "../../portfolioEditor";
+import { type PortfolioMediaAsset, type PortfolioMediaPage } from "../../portfolioEditor";
 import "../../styles/editorial-page.css";
 import BlogMediaReview from "./BlogMediaReview.svelte";
 import BlogWorkbench from "./BlogWorkbench.svelte";
 
 let { documentId }: { documentId: string } = $props();
+type RichBodyEditorComponent = typeof import("./RichBodyEditor.svelte").default;
+let RichBodyEditor = $state<RichBodyEditorComponent>();
+let richEditorLoadError = $state(false);
+
+onMount(() => {
+	void import("./RichBodyEditor.svelte")
+		.then((module) => {
+			RichBodyEditor = module.default;
+		})
+		.catch(() => {
+			richEditorLoadError = true;
+		});
+});
 
 const config = getAdminConfig();
 const blogApi = config.api.blogContent;
@@ -44,6 +54,7 @@ if (!blogApi || !postApi || !blogConfig) {
 const baseHref = blogConfig.baseHref ?? "/admin/editor/blog";
 const mediaBaseUrl = blogConfig.mediaBaseUrl;
 const getManyMediaAssets = mediaBaseUrl ? config.api.mediaAssets?.getManyForEditor : undefined;
+const listMediaAssets = mediaBaseUrl ? config.api.mediaAssets?.listForEditor : undefined;
 if (mediaBaseUrl && !getManyMediaAssets) {
 	throw new Error("Blog media review API is incomplete for this host");
 }
@@ -82,8 +93,6 @@ let categories = $derived(
 		form.categories.map((category) => category.documentId),
 	),
 );
-let bodyText = $state("");
-let initializedBodyText = $state("");
 let initializedRevisionId = $state<string | null>(null);
 let saveState = $state<"loading" | "saved" | "dirty" | "saving" | "error">("loading");
 let saveError = $state("");
@@ -103,18 +112,47 @@ let publishedSlug = $derived(publishedDraft?.slug?.trim() || "");
 let draftSlug = $derived(form.slug?.trim() || "");
 let slugChanged = $derived(Boolean(publishedSlug && draftSlug && publishedSlug !== draftSlug));
 let archived = $derived(Boolean(editorState?.archivedAt));
-let bodyPlainTextEditable = $derived(postBodySupportsPlainTextEditing(form.body));
 let mediaPlacements = $derived(postMediaReviewPlacements(form));
 let mediaAssetIds = $derived([...new Set(mediaPlacements.map((placement) => placement.assetId))]);
 const mediaQuery = getManyMediaAssets
 	? useQuery(getManyMediaAssets, () => ({ siteUrl: config.siteUrl, ids: mediaAssetIds }))
 	: null;
+const mediaListQuery = listMediaAssets
+	? useQuery(listMediaAssets, {
+			siteUrl: config.siteUrl,
+			paginationOpts: { numItems: 100, cursor: null },
+		})
+	: null;
 let mediaById = $derived(new Map(
 	((mediaQuery?.data ?? []) as PortfolioMediaAsset[]).map((asset) => [asset._id, asset]),
 ));
+let readyMediaLibraryAssets = $derived(
+	(((mediaListQuery?.data as PortfolioMediaPage | undefined)?.page ?? []) as PortfolioMediaAsset[])
+		.filter((asset) => asset.status === "ready"),
+);
+let readyMediaAssets = $derived([
+	...new Map([
+		...readyMediaLibraryAssets,
+		...((mediaQuery?.data ?? []) as PortfolioMediaAsset[]),
+	].map((asset) => [asset._id, asset])).values(),
+].filter((asset) => asset.status === "ready"));
+let linkedBodyAssetIds = $derived(new Set(
+	mediaPlacements
+		.filter((placement) => placement.kind === "body")
+		.map((placement) => placement.assetId),
+));
+let mediaLibraryError = $derived(mediaListQuery?.error);
+let mediaLibraryLoading = $derived(Boolean(mediaListQuery?.isLoading));
+let addableReadyMediaAssets = $derived(
+	mediaLibraryLoading || mediaLibraryError
+		? []
+		: readyMediaLibraryAssets.filter((asset) => !linkedBodyAssetIds.has(asset._id)),
+);
 let mediaError = $derived(mediaQuery?.error);
 let mediaLoading = $derived(mediaPlacements.length > 0 && Boolean(mediaQuery?.isLoading));
-let mediaReviewItems = $derived(mediaPlacements.map((placement) => ({
+let mediaReviewItems = $derived(mediaPlacements
+	.filter((placement) => placement.kind === "main")
+	.map((placement) => ({
 	id: placement.fieldId,
 	assetId: placement.assetId,
 	label: placement.kind === "main"
@@ -128,8 +166,6 @@ let mediaReviewItems = $derived(mediaPlacements.map((placement) => ({
 $effect(() => {
 	if (!activeRevision || initializedRevisionId === activeRevision.revisionId) return;
 	form = copyPostDraft(activeRevision.draft);
-	bodyText = postBodyToPlainText(form.body);
-	initializedBodyText = bodyText;
 	initializedRevisionId = activeRevision.revisionId;
 	lastSavedJson = serializePostDraft(form);
 	saveState = "saved";
@@ -149,7 +185,6 @@ function normalizedDraft(): PostDraft {
 	const draft = copyPostDraft(form);
 	return {
 		...draft,
-		body: resolvePostBodyPlainTextEdit(draft.body, initializedBodyText, bodyText),
 		authorDocumentId: draft.authorDocumentId || undefined,
 		categories: draft.categories.filter((category) => category.documentId),
 	};
@@ -273,8 +308,6 @@ async function discardDraft() {
 		});
 		if (editorState.published) {
 			form = copyPostDraft(editorState.published.draft);
-			bodyText = postBodyToPlainText(form.body);
-			initializedBodyText = bodyText;
 			lastSavedJson = serializePostDraft(form);
 		}
 	} catch (error) {
@@ -506,21 +539,37 @@ async function restoreDocument() {
 				<span>05</span>
 				<div>
 					<h2 id="body-heading">body</h2>
-					<p>Simple paragraph-only Posts can be edited here. Rich imported structure remains protected until the full rich editor is available.</p>
+					<p>Write and structure the article while preserving its supported imported document shape.</p>
 				</div>
 			</div>
-			<div class="fields">
-				<label>
-					body text
-					<textarea rows="12" bind:value={bodyText} readonly={!bodyPlainTextEditable || archived} aria-readonly={!bodyPlainTextEditable || archived} aria-invalid={Boolean(fieldErrors.body)}></textarea>
-					{#if bodyPlainTextEditable}
-						<small>Separate paragraphs with a blank line.</small>
-					{:else}
-						<small>This body contains images, marks, or other rich structure. It is read-only here and will be saved unchanged.</small>
-					{/if}
-					{#if fieldErrors.body}<small class="field-error">{fieldErrors.body}</small>{/if}
-				</label>
-			</div>
+			<p id="body-help" class="empty-inline">Supported schema-v1 paragraphs, H2–H4 headings, quotes, flat lists, links, emphasis, and linked images are editable. Unsupported future structures stay read-only and unchanged.</p>
+			{#if mediaLibraryLoading}
+				<p class="empty-inline" role="status">loading the ready image library…</p>
+			{:else if mediaLibraryError}
+				<p class="error" role="alert">Could not load the ready image library. Existing linked images remain editable.</p>
+			{/if}
+			{#if richEditorLoadError}
+				<p class="error" role="alert">Could not load the rich body editor. The existing body remains unchanged.</p>
+			{:else if !RichBodyEditor}
+				<p class="empty-inline" role="status">loading rich body editor…</p>
+			{:else}
+				{#key initializedRevisionId}
+					<RichBodyEditor
+						document={form.body}
+						disabled={archived}
+						labelledBy="body-heading"
+						describedBy="body-help"
+						mediaAssets={readyMediaAssets}
+						addableMediaAssets={addableReadyMediaAssets}
+						{mediaBaseUrl}
+						onDocumentChange={(body) => {
+							form.body = body;
+							fieldErrors = { ...fieldErrors, body: undefined };
+						}}
+					/>
+				{/key}
+			{/if}
+			{#if fieldErrors.body}<small class="field-error">{fieldErrors.body}</small>{/if}
 		</section>
 
 		<section aria-labelledby="media-heading">
@@ -528,7 +577,7 @@ async function restoreDocument() {
 				<span>06</span>
 				<div>
 					<h2 id="media-heading">image review</h2>
-					<p>Images remain in their exact main/body order. This review changes alt text only.</p>
+					<p>Review the main image alt text here. Body-image order, alt text, and captions are edited in the rich body above.</p>
 				</div>
 			</div>
 			{#if mediaLoading}
@@ -544,7 +593,7 @@ async function restoreDocument() {
 					onAltTextChange={updateMediaAltText}
 				/>
 			{:else}
-				<p class="empty-inline">This Post has no linked images.</p>
+				<p class="empty-inline">This Post has no main image.</p>
 			{/if}
 		</section>
 
