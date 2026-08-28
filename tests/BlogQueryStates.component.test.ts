@@ -80,10 +80,47 @@ vi.mock("../src/lib/config", () => ({
 
 const components: ReturnType<typeof mount>[] = [];
 
+function postEditorState() {
+	return {
+		documentId: "post-1",
+		documentKey: "post-1",
+		kind: "post",
+		slug: "post-1",
+		rank: 0,
+		draft: {
+			revisionId: "revision-1",
+			schemaVersion: 1,
+			draft: {
+				...emptyPostDraft(),
+				title: "Post one",
+				slug: "post-1",
+			},
+			source: "admin",
+			createdAt: 1,
+		},
+		published: null,
+		updatedAt: 1,
+		publishedAt: null,
+		archivedAt: null,
+	};
+}
+
+function button(label: string) {
+	return Array.from(document.querySelectorAll("button"))
+		.find((candidate) => candidate.textContent?.trim() === label);
+}
+
+function postTitleInput() {
+	return Array.from(document.querySelectorAll("label"))
+		.find((label) => label.textContent?.includes("post title"))
+		?.querySelector<HTMLInputElement>("input");
+}
+
 describe("Blog query states", () => {
 	beforeEach(() => {
 		mocks.states.clear();
 		mocks.mediaEnabled = false;
+		mocks.mutation.mockReset().mockResolvedValue({ documentId: "created" });
 		mocks.states.set("post:listForEditor", { data: [], isLoading: false });
 		history.replaceState(null, "", "/");
 	});
@@ -213,5 +250,59 @@ describe("Blog query states", () => {
 
 		expect(document.body.textContent).toContain("loading linked portrait…");
 		expect(document.body.textContent).not.toContain("preview unavailable");
+	});
+
+	it("keeps the saving state visible until the save mutation settles", async () => {
+		mocks.states.set("post:getEditorState", { data: postEditorState() });
+		let finishSave: ((value: { revisionId: string }) => void) | undefined;
+		mocks.mutation.mockImplementation(() => new Promise((resolve) => {
+			finishSave = resolve;
+		}));
+		components.push(mount(BlogPostPage, {
+			target: document.body,
+			props: { documentId: "post-1" },
+		}));
+		await tick();
+		await tick();
+
+		const title = postTitleInput();
+		expect(title).toBeDefined();
+		title!.value = "Post one revised";
+		title!.dispatchEvent(new Event("input", { bubbles: true }));
+		await tick();
+		expect(document.querySelector(".save-status")?.textContent).toBe("dirty");
+
+		button("save draft")?.click();
+		await tick();
+		expect(document.querySelector(".save-status")?.textContent).toBe("saving");
+
+		finishSave?.({ revisionId: "revision-2" });
+		await tick();
+		await tick();
+		expect(document.querySelector(".save-status")?.textContent).toBe("saved");
+	});
+
+	it("keeps a failed save distinguishable and retryable", async () => {
+		mocks.states.set("post:getEditorState", { data: postEditorState() });
+		mocks.mutation.mockRejectedValue(new Error("deterministic save failure"));
+		components.push(mount(BlogPostPage, {
+			target: document.body,
+			props: { documentId: "post-1" },
+		}));
+		await tick();
+		await tick();
+
+		const title = postTitleInput();
+		expect(title).toBeDefined();
+		title!.value = "Post one revised";
+		title!.dispatchEvent(new Event("input", { bubbles: true }));
+		await tick();
+		button("save draft")?.click();
+		await tick();
+		await tick();
+
+		expect(document.querySelector(".save-status")?.textContent).toBe("error");
+		expect(document.querySelector('[role="alert"]')?.textContent).toContain("deterministic save failure");
+		expect(button("save draft")?.disabled).toBe(false);
 	});
 });

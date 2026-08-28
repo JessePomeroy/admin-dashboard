@@ -1,6 +1,7 @@
 <script lang="ts">
 import { goto } from "$app/navigation";
 import { useQuery } from "convex-svelte";
+import { untrack } from "svelte";
 import { useAdminClient } from "../../adminClient";
 import {
 	blogDocumentLabel,
@@ -138,8 +139,10 @@ $effect(() => {
 });
 
 $effect(() => {
-	if (saveState === "loading") return;
-	saveState = currentJson === lastSavedJson ? "saved" : "dirty";
+	const nextState = currentJson === lastSavedJson ? "saved" : "dirty";
+	const currentState = untrack(() => saveState);
+	if (currentState === "loading" || currentState === "saving" || currentState === "error") return;
+	saveState = nextState;
 });
 
 function normalizedDraft(): PostDraft {
