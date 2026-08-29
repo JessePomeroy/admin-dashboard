@@ -122,6 +122,11 @@ function handleDialogKeydown(event: KeyboardEvent) {
 	const first = focusable[0];
 	const last = focusable.at(-1);
 	if (!first || !last) return;
+	if (!focusable.includes(document.activeElement as HTMLElement)) {
+		event.preventDefault();
+		(event.shiftKey ? last : first).focus();
+		return;
+	}
 	if (event.shiftKey && document.activeElement === first) {
 		event.preventDefault();
 		last.focus();
@@ -206,7 +211,7 @@ async function moveGallery(index: number, direction: -1 | 1) {
 					<button type="button" class:active={filter === option} aria-pressed={filter === option} onclick={() => filter = option as typeof filter}>{option}</button>
 				{/each}
 			</div>
-			{#if orderingDisabled}<p class="ordering-note">Clear search and choose all to change public order.</p>{/if}
+			{#if orderingDisabled}<p class="ordering-note">Clear search and choose all to change {publishingEnabled ? "public" : "saved"} order.</p>{/if}
 
 			{#if galleriesQuery.isLoading}
 				<p class="collection-message" role="status">loading galleries…</p>
@@ -305,6 +310,10 @@ async function moveGallery(index: number, direction: -1 | 1) {
 		.portfolio-workbench.has-selection .collection-pane, .portfolio-workbench:not(.has-selection) .document-pane { display: none; }
 		.collection-pane, .document-pane { min-height: calc(100vh - 101px); }
 	}
+	@media (max-width: 768px) {
+		.order-actions button { width: 44px; height: 44px; }
+		.new-gallery, .filters button, .primary { min-height: 44px; }
+	}
 	@media (max-width: 640px) {
 		.workbench-heading { align-items: flex-start; padding: 18px 20px; flex-direction: column; }
 		.heading-meta { justify-items: start; }
@@ -313,8 +322,6 @@ async function moveGallery(index: number, direction: -1 | 1) {
 		.portfolio-workbench.has-selection .collection-pane, .portfolio-workbench:not(.has-selection) .document-pane { display: none; }
 		.create-backdrop { align-items: end; padding: 0; }
 		.create-panel { border-radius: 14px 14px 0 0; }
-		.order-actions button { width: 44px; height: 44px; }
-		.new-gallery, .filters button { min-height: 44px; }
 	}
 	@media (prefers-reduced-motion: no-preference) {
 		.gallery-list li, .filters button { transition: color .16s ease, background-color .16s ease, border-color .16s ease; }
