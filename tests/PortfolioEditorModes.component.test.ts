@@ -144,7 +144,9 @@ describe("Portfolio editor capability modes", () => {
 		expect(document.body.textContent).toContain(
 			"Public galleries, their order, and whether each one is ready for visitors.",
 		);
-		expect(document.querySelector(".status")?.textContent).toBe("published");
+		expect(document.querySelector(".status")?.textContent).toContain("published");
+		(document.querySelector(".new-gallery") as HTMLButtonElement).click();
+		await tick();
 		expect(buttonLabels()).toContain("create unpublished gallery");
 		expect(document.body.textContent).toContain("The public site follows this deliberate order.");
 	});
@@ -156,7 +158,9 @@ describe("Portfolio editor capability modes", () => {
 		expect(document.body.textContent).toContain(
 			"Gallery drafts, their saved order, and the images prepared for a future public rollout.",
 		);
-		expect(document.querySelector(".status")?.textContent).toBe("draft");
+		expect(document.querySelector(".status")?.textContent).toContain("draft");
+		(document.querySelector(".new-gallery") as HTMLButtonElement).click();
+		await tick();
 		expect(buttonLabels()).toContain("create gallery draft");
 		expect(document.body.textContent).toContain("This deliberate order is saved with the private drafts.");
 		expect(document.body.textContent).not.toContain("The public site follows this deliberate order.");
@@ -188,5 +192,28 @@ describe("Portfolio editor capability modes", () => {
 		expect(document.querySelector('[aria-live="polite"]')?.textContent).toBe("draft saved");
 		expect(document.body.textContent).toContain("Use the arrow controls to set their saved order.");
 		expect(document.body.textContent).not.toContain("available to the public site immediately");
+	});
+
+	it("keeps collection context beside the selected gallery and marks the current record", async () => {
+		await mountDetail();
+
+		expect(document.querySelector(".portfolio-workbench.has-selection")).not.toBeNull();
+		expect(document.querySelector('.gallery-list a[aria-current="page"]')?.textContent)
+			.toContain("Selected work");
+		expect(document.querySelector('.document-pane[aria-label="Portfolio gallery"]')).not.toBeNull();
+	});
+
+	it("filters the collection and opens the bounded new-gallery dialog", async () => {
+		await mountList();
+		const search = document.querySelector('input[type="search"]') as HTMLInputElement;
+		search.value = "missing gallery";
+		search.dispatchEvent(new Event("input", { bubbles: true }));
+		await tick();
+		expect(document.body.textContent).toContain("No galleries match this view.");
+
+		(document.querySelector(".new-gallery") as HTMLButtonElement).click();
+		await tick();
+		expect(document.querySelector('[role="dialog"][aria-modal="true"]')).not.toBeNull();
+		expect(document.querySelector("#create-gallery-heading")?.textContent).toBe("new gallery");
 	});
 });

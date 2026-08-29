@@ -20,6 +20,7 @@ import {
 import PortfolioGalleryImages from "./PortfolioGalleryImages.svelte";
 import PortfolioMediaPicker from "./PortfolioMediaPicker.svelte";
 import PortfolioPublishReview from "./PortfolioPublishReview.svelte";
+import PortfolioWorkbench from "./PortfolioWorkbench.svelte";
 
 type SaveState =
 	| "loading"
@@ -372,6 +373,7 @@ function reloadServerDraft() {
 
 <svelte:head><title>Edit portfolio gallery — {config.siteName}</title></svelte:head>
 
+<PortfolioWorkbench selectedGalleryId={galleryId}>
 {#if !initialized}
 	<p class="loading" role="status">loading gallery…</p>
 {:else}
@@ -438,10 +440,11 @@ function reloadServerDraft() {
 {#if pickerOpen}
 	<PortfolioMediaPicker assets={readyAssets} {selectedAssetIds} mediaBaseUrl={portfolioConfig.mediaBaseUrl} hasMore={mediaPage ? !mediaPage.isDone : false} onChoose={addAsset} onClose={() => (pickerOpen = false)} />
 {/if}
+</PortfolioWorkbench>
 
 <style>
 	.loading { padding: 48px 40px; color: var(--admin-text-muted); }
-	.gallery-page { max-width: 1120px; padding: 42px 40px 96px; }
+	.gallery-page { max-width: 1120px; padding: 32px 32px 96px; }
 	header { display: flex; justify-content: space-between; gap: 28px; align-items: flex-end; margin-bottom: 30px; }
 	.back { color: var(--admin-text-muted); font-size: .74rem; text-decoration: none; }
 	h1 { margin: 10px 0 0; color: var(--admin-heading); font-family: var(--admin-font-display); font-size: 1.8rem; font-weight: 500; }
@@ -464,7 +467,7 @@ function reloadServerDraft() {
 	input, textarea { width: 100%; box-sizing: border-box; border: 1px solid var(--admin-border-strong); border-radius: 6px; padding: 10px 11px; background: var(--admin-bg); color: var(--admin-heading); font: inherit; text-transform: none; }
 	[aria-invalid="true"] { border-color: var(--status-rose); }
 	@media (max-width: 820px) {
-		.gallery-page { padding: 28px 20px 72px; }
+		.gallery-page { padding: 24px 20px 72px; }
 		header { align-items: flex-start; flex-direction: column; }
 		.actions { justify-content: flex-start; }
 		.fields { grid-template-columns: 1fr; }
