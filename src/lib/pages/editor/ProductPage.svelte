@@ -46,6 +46,7 @@ import CatalogProductMedia from "./CatalogProductMedia.svelte";
 import CatalogProductSetMembers from "./CatalogProductSetMembers.svelte";
 import CatalogProductVariants from "./CatalogProductVariants.svelte";
 import PortfolioMediaPicker from "./PortfolioMediaPicker.svelte";
+import ProductWorkbench from "./ProductWorkbench.svelte";
 import { publicationCompletenessMessage } from "./publicationCompleteness";
 
 let { productId }: { productId: string } = $props();
@@ -1021,6 +1022,7 @@ function addUploadedMediaAsset(asset: PortfolioMediaAsset) {
 </script>
 
 <svelte:head><title>Product — {config.siteName}</title></svelte:head>
+<ProductWorkbench selectedProductId={productId}>
 {#if editorError}
 	<p class="alert page-alert" role="alert">Could not load this product draft. Refresh this page to try again.</p>
 {:else if editorState === undefined}
@@ -1169,6 +1171,7 @@ function addUploadedMediaAsset(asset: PortfolioMediaAsset) {
 		{/if}
 	</div>
 {/if}
+</ProductWorkbench>
 
 {#if pickerOpen && mediaCapability}
 	<PortfolioMediaPicker
