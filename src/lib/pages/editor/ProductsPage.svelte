@@ -9,7 +9,20 @@ const capability = getCatalogProductEditorCapability(config);
 if (!capability) {
 	throw new Error("Single-print product editor is not configured for this host");
 }
-const { graphVersion } = capability;
+const { graphVersion, media, privateAssets, publication } = capability;
+const recordAreas = [
+	"draft details",
+	"variants",
+	...(media ? ["media"] : []),
+	...(privateAssets ? ["verified asset replacement"] : []),
+	...(publication ? ["Convex publication evidence"] : []),
+];
+
+function readableList(values: string[]) {
+	if (values.length === 1) return values[0];
+	if (values.length === 2) return `${values[0]} and ${values[1]}`;
+	return `${values.slice(0, -1).join(", ")}, and ${values.at(-1)}`;
+}
 </script>
 
 <svelte:head><title>Products — {config.siteName}</title></svelte:head>
@@ -19,12 +32,14 @@ const { graphVersion } = capability;
 		<p class="eyebrow">workspace guide</p>
 		<h2>{graphVersion === 2 ? "review the private catalog" : "shape a product draft"}</h2>
 		<p>{graphVersion === 2
-			? "Use taxonomy and collection filters to find an imported product. The selected record keeps its draft, media, variant, fulfillment, and Convex publication evidence together."
-			: "Choose an existing single print or create a private draft. Pricing and fulfillment stay inside the selected record."}</p>
+			? `Use taxonomy and collection filters to find an imported product. The selected record keeps ${readableList(recordAreas)} together.`
+			: `Choose an existing single print or create a private draft. The selected record keeps ${readableList(recordAreas)} together.`}</p>
 		<div class="workflow-grid">
 			<div><span>01</span><strong>find</strong><p>Filter by the product kinds this host actually supports, then search by name or URL.</p></div>
-			<div><span>02</span><strong>shape</strong><p>Review product details, sale settings, variants, media, and verified fulfillment assets.</p></div>
-			<div><span>03</span><strong>release</strong><p>Save private draft work first. Convex publication and the public Shop remain explicit, separate authorities.</p></div>
+			<div><span>02</span><strong>shape</strong><p>Review only the draft details and controls this host exposes.</p></div>
+			<div><span>03</span><strong>release</strong><p>{publication
+				? "Save private draft work first. Convex publication and the public Shop remain explicit, separate authorities."
+				: "Save private draft work here. This host exposes no Convex publication control; the public Shop remains a separate authority."}</p></div>
 		</div>
 	</div>
 </ProductWorkbench>

@@ -754,6 +754,8 @@ describe("draft-only product editor", () => {
 		close?.focus();
 		dialog?.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", shiftKey: true, bubbles: true }));
 		expect(document.activeElement).toBe(submit);
+		dialog?.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", bubbles: true }));
+		expect(document.activeElement).toBe(close);
 
 		const name = input("product name");
 		name!.value = "Pending print";
@@ -766,6 +768,74 @@ describe("draft-only product editor", () => {
 		resolveCreate?.({ productId: "new-product" });
 		await tick();
 		await Promise.resolve();
+	});
+
+	it("closes the create dialog with Escape and returns focus to its trigger", async () => {
+		await mountList();
+		const trigger = document.querySelector<HTMLButtonElement>(".new-product");
+		trigger?.click();
+		await tick();
+		await tick();
+		document.querySelector('[role="dialog"]')?.dispatchEvent(
+			new KeyboardEvent("keydown", { key: "Escape", bubbles: true }),
+		);
+		await tick();
+		await tick();
+		expect(document.querySelector('[role="dialog"]')).toBeNull();
+		expect(document.activeElement).toBe(trigger);
+	});
+
+	it("keeps navigation failure recovery visible while goto is pending", async () => {
+		let rejectNavigation: ((reason: Error) => void) | undefined;
+		mocks.goto.mockImplementationOnce(() => new Promise((_, reject) => {
+			rejectNavigation = reject;
+		}));
+		await mountList();
+		(document.querySelector(".new-product") as HTMLButtonElement).click();
+		await tick();
+		const name = input("product name");
+		name!.value = "Slow navigation";
+		name!.dispatchEvent(new Event("input", { bubbles: true }));
+		button("create product draft")?.click();
+		await tick();
+		await Promise.resolve();
+
+		const dialog = document.querySelector<HTMLElement>('[role="dialog"]');
+		expect(button("draft created")?.disabled).toBe(true);
+		document.querySelector<HTMLButtonElement>('[aria-label="Close new product form"]')?.click();
+		dialog?.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+		await tick();
+		expect(document.querySelector('[role="dialog"]')).toBe(dialog);
+
+		rejectNavigation?.(new Error("navigation failed"));
+		await Promise.resolve();
+		await tick();
+		expect(document.querySelector('[role="alert"]')?.textContent).toContain(
+			"created, but it could not be opened automatically",
+		);
+		expect(document.querySelector('.success a[href="/admin/editor/products/new-product"]')).not.toBeNull();
+	});
+
+	it("describes graph publication only when the host exposes that capability", async () => {
+		await mountList();
+		expect(document.body.textContent).toContain("draft details and variants");
+		expect(document.body.textContent).not.toContain("Convex publication evidence");
+		expect(document.body.textContent).not.toContain("verified asset replacement");
+		for (const component of components.splice(0)) unmount(component);
+		document.body.innerHTML = "";
+
+		mocks.graphApiEnabled = true;
+		await mountList();
+		expect(document.body.textContent).toContain("This host exposes no Convex publication control");
+		expect(document.body.textContent).not.toContain("Convex publication evidence");
+		expect(document.body.textContent).not.toContain("verified asset replacement");
+		for (const component of components.splice(0)) unmount(component);
+		document.body.innerHTML = "";
+
+		enablePublication();
+		await mountList();
+		expect(document.body.textContent).toContain("Convex publication evidence");
+		expect(document.body.textContent).not.toContain("exposes no Convex publication control");
 	});
 
 	it("retains 44px taxonomy, filter, creation, and action targets through 768px", () => {

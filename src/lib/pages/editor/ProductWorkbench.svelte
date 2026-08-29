@@ -91,7 +91,7 @@ let creating = $state(false);
 let title = $state("");
 let slug = $state("");
 let slugEdited = $state(false);
-let createState = $state<"idle" | "saving" | "error">("idle");
+let createState = $state<"idle" | "saving" | "navigating" | "error">("idle");
 let createError = $state("");
 let pendingProductKey = $state("");
 let createdProductHref = $state("");
@@ -126,7 +126,7 @@ async function openCreate() {
 }
 
 async function closeCreate() {
-	if (createState === "saving") return;
+	if (createState === "saving" || createState === "navigating") return;
 	creating = false;
 	createError = "";
 	await tick();
@@ -187,7 +187,7 @@ async function createProduct() {
 	}
 	pendingProductKey = "";
 	createdProductHref = `${baseHref}/${result.productId}`;
-	createState = "idle";
+	createState = "navigating";
 	try {
 		await goto(createdProductHref);
 	} catch {
