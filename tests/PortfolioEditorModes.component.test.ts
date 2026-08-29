@@ -295,8 +295,6 @@ describe("Portfolio editor capability modes", () => {
 		submit?.click();
 		await tick();
 		expect(submit?.disabled).toBe(true);
-		expect(document.activeElement).toBe(submit);
-		submit?.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", bubbles: true }));
 		expect(document.activeElement).toBe(document.querySelector('[aria-label="Close new gallery form"]'));
 		resolveCreate?.({ revisionId: "created" });
 		await settle();

@@ -139,6 +139,7 @@ function handleDialogKeydown(event: KeyboardEvent) {
 async function createGallery() {
 	errors = validateNewPortfolioGallery(title, slug);
 	if (errors.title || errors.slug) return;
+	createDialog?.querySelector<HTMLButtonElement>(".close")?.focus();
 	createState = "saving";
 	createMessage = "";
 	try {
