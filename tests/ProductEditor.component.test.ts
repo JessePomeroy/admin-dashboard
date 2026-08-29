@@ -1,7 +1,13 @@
+import { readFileSync } from "node:fs";
 import { mount, tick, unmount } from "svelte";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import ProductPage from "../src/lib/pages/editor/ProductPage.svelte";
 import ProductsPage from "../src/lib/pages/editor/ProductsPage.svelte";
+
+const productWorkbenchSource = readFileSync(
+	"src/lib/pages/editor/ProductWorkbench.svelte",
+	"utf8",
+);
 
 const mocks = vi.hoisted(() => ({
 	upload: vi.fn(),
@@ -68,7 +74,16 @@ vi.mock("convex-svelte", async () => {
 		useQuery: (ref: { name?: string }, args?: unknown) => ({
 			get data() {
 				subscribe();
-				if (ref.name === "catalog:listForEditor") return mocks.listData;
+				if (ref.name === "catalog:listForEditor") {
+					const resolvedArgs = typeof args === "function" ? (args as () => unknown)() : args;
+					if (resolvedArgs === "skip") return undefined;
+					const kind = typeof resolvedArgs === "object" && resolvedArgs !== null && "productKind" in resolvedArgs
+						? (resolvedArgs as { productKind: string }).productKind
+						: undefined;
+					return kind && Array.isArray(mocks.listData)
+						? mocks.listData.filter((item) => (item as { productKind?: string }).productKind === kind)
+						: mocks.listData;
+				}
 				if (ref.name === "media:listForEditor") return mocks.mediaListData;
 				if (ref.name === "media:getManyForEditor") return mocks.mediaPlacedData;
 				if (ref.name === "catalog:listDraftPrivateAssetCandidates") {
@@ -623,6 +638,8 @@ describe("draft-only product editor", () => {
 				(item) => item.textContent,
 			),
 		).toEqual(["draft", "discarded"]);
+		(document.querySelector(".new-product") as HTMLButtonElement).click();
+		await tick();
 		const name = input("product name");
 		expect(name).not.toBeNull();
 		name!.value = "Winter Light";
@@ -645,6 +662,189 @@ describe("draft-only product editor", () => {
 		);
 	});
 
+	it("filters the enabled taxonomy and keeps the selected record current", async () => {
+		mocks.graphApiEnabled = true;
+		mocks.enabledKinds = ["print", "tapestry"];
+		mocks.listData = [
+			{
+				productId: "product-1",
+				productKey: "sanity.catalog.print",
+				productKind: "print",
+				slug: "lake-print",
+				draft: { revisionId: "print-revision", title: "Lake print", variantCount: 1, createdAt: 1 },
+				published: null,
+				createdAt: 1,
+				updatedAt: 1,
+				publishedAt: null,
+			},
+			{
+				productId: "product-2",
+				productKey: "sanity.catalog.tapestry",
+				productKind: "tapestry",
+				slug: "soft-portal",
+				draft: null,
+				published: { revisionId: "tapestry-revision", title: "Soft Portal", variantCount: 1, createdAt: 1 },
+				createdAt: 1,
+				updatedAt: 2,
+				publishedAt: null,
+			},
+		];
+		mocks.detailData = graphDetail();
+		await mountDetail();
+
+		expect(document.querySelector('[aria-current="page"]')?.getAttribute("href"))
+			.toBe("/admin/editor/products/product-1");
+		const tapestry = Array.from(document.querySelectorAll<HTMLButtonElement>(".kind-filters button"))
+			.find((item) => item.textContent?.includes("tapestries"));
+		tapestry?.click();
+		await tick();
+		expect(Array.from(document.querySelectorAll(".product-list strong"), (item) => item.textContent))
+			.toEqual(["Soft Portal"]);
+		expect(document.querySelector(".new-product")).toBeNull();
+		const allKinds = Array.from(document.querySelectorAll<HTMLButtonElement>(".kind-filters button"))
+			.find((item) => item.textContent?.includes("all products"));
+		allKinds?.click();
+		const draftStatus = Array.from(document.querySelectorAll<HTMLButtonElement>(".status-filters button"))
+			.find((item) => item.textContent === "draft");
+		draftStatus?.click();
+		await tick();
+		expect(Array.from(document.querySelectorAll(".product-list strong"), (item) => item.textContent))
+			.toEqual(["Lake print"]);
+		const search = document.querySelector<HTMLInputElement>('.search-field input[type="search"]');
+		search!.value = "missing";
+		search!.dispatchEvent(new Event("input", { bubbles: true }));
+		await tick();
+		expect(document.body.textContent).toContain("No products match these filters.");
+	});
+
+	it("distinguishes collection loading from empty and failure states", async () => {
+		mocks.listData = undefined as unknown as unknown[];
+		await mountList();
+		expect(document.querySelector('[role="status"]')?.textContent).toContain("loading product drafts");
+		for (const component of components.splice(0)) unmount(component);
+		document.body.innerHTML = "";
+
+		mocks.listData = [];
+		await mountList();
+		expect(document.body.textContent).toContain("No product drafts yet.");
+		for (const component of components.splice(0)) unmount(component);
+		document.body.innerHTML = "";
+
+		mocks.listError = new Error("list unavailable");
+		await mountList();
+		expect(document.querySelector('[role="alert"]')?.textContent).toContain("Could not load product drafts");
+	});
+
+	it("contains modal focus and moves it before native submit disabling", async () => {
+		let resolveCreate: ((value: { productId: string }) => void) | undefined;
+		mocks.mutation.mockImplementationOnce(() => new Promise((resolve) => {
+			resolveCreate = resolve;
+		}));
+		await mountList();
+		const trigger = document.querySelector<HTMLButtonElement>(".new-product");
+		trigger?.click();
+		await tick();
+		await tick();
+		const dialog = document.querySelector<HTMLElement>('[role="dialog"][aria-modal="true"]');
+		const close = document.querySelector<HTMLButtonElement>('[aria-label="Close new product form"]');
+		const submit = document.querySelector<HTMLButtonElement>(".create-panel .primary");
+		expect(dialog).not.toBeNull();
+		expect((document.querySelector(".product-workbench") as HTMLElement & { inert: boolean }).inert).toBe(true);
+		expect(document.activeElement).toBe(input("product name"));
+		close?.focus();
+		dialog?.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", shiftKey: true, bubbles: true }));
+		expect(document.activeElement).toBe(submit);
+		dialog?.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", bubbles: true }));
+		expect(document.activeElement).toBe(close);
+
+		const name = input("product name");
+		name!.value = "Pending print";
+		name!.dispatchEvent(new Event("input", { bubbles: true }));
+		submit?.focus();
+		submit?.click();
+		await tick();
+		expect(submit?.disabled).toBe(true);
+		expect(document.activeElement).toBe(close);
+		resolveCreate?.({ productId: "new-product" });
+		await tick();
+		await Promise.resolve();
+	});
+
+	it("closes the create dialog with Escape and returns focus to its trigger", async () => {
+		await mountList();
+		const trigger = document.querySelector<HTMLButtonElement>(".new-product");
+		trigger?.click();
+		await tick();
+		await tick();
+		document.querySelector('[role="dialog"]')?.dispatchEvent(
+			new KeyboardEvent("keydown", { key: "Escape", bubbles: true }),
+		);
+		await tick();
+		await tick();
+		expect(document.querySelector('[role="dialog"]')).toBeNull();
+		expect(document.activeElement).toBe(trigger);
+	});
+
+	it("keeps navigation failure recovery visible while goto is pending", async () => {
+		let rejectNavigation: ((reason: Error) => void) | undefined;
+		mocks.goto.mockImplementationOnce(() => new Promise((_, reject) => {
+			rejectNavigation = reject;
+		}));
+		await mountList();
+		(document.querySelector(".new-product") as HTMLButtonElement).click();
+		await tick();
+		const name = input("product name");
+		name!.value = "Slow navigation";
+		name!.dispatchEvent(new Event("input", { bubbles: true }));
+		button("create product draft")?.click();
+		await tick();
+		await Promise.resolve();
+
+		const dialog = document.querySelector<HTMLElement>('[role="dialog"]');
+		expect(button("draft created")?.disabled).toBe(true);
+		document.querySelector<HTMLButtonElement>('[aria-label="Close new product form"]')?.click();
+		dialog?.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+		await tick();
+		expect(document.querySelector('[role="dialog"]')).toBe(dialog);
+
+		rejectNavigation?.(new Error("navigation failed"));
+		await Promise.resolve();
+		await tick();
+		expect(document.querySelector('[role="alert"]')?.textContent).toContain(
+			"created, but it could not be opened automatically",
+		);
+		expect(document.querySelector('.success a[href="/admin/editor/products/new-product"]')).not.toBeNull();
+	});
+
+	it("describes graph publication only when the host exposes that capability", async () => {
+		await mountList();
+		expect(document.body.textContent).toContain("draft details and variants");
+		expect(document.body.textContent).not.toContain("Convex publication evidence");
+		expect(document.body.textContent).not.toContain("verified asset replacement");
+		for (const component of components.splice(0)) unmount(component);
+		document.body.innerHTML = "";
+
+		mocks.graphApiEnabled = true;
+		await mountList();
+		expect(document.body.textContent).toContain("This host exposes no Convex publication control");
+		expect(document.body.textContent).not.toContain("Convex publication evidence");
+		expect(document.body.textContent).not.toContain("verified asset replacement");
+		for (const component of components.splice(0)) unmount(component);
+		document.body.innerHTML = "";
+
+		enablePublication();
+		await mountList();
+		expect(document.body.textContent).toContain("Convex publication evidence");
+		expect(document.body.textContent).not.toContain("exposes no Convex publication control");
+	});
+
+	it("retains 44px taxonomy, filter, creation, and action targets through 768px", () => {
+		expect(productWorkbenchSource).toContain("@media (max-width: 768px)");
+		expect(productWorkbenchSource).toContain(
+			".kind-filters button, .new-product, .status-filters button, .primary { min-height: 44px; }",
+		);
+	});
+
 	it("reuses one product identity when an uncertain create is retried", async () => {
 		mocks.mutation
 			.mockRejectedValueOnce(
@@ -655,6 +855,8 @@ describe("draft-only product editor", () => {
 				revisionId: "new-revision",
 			});
 		await mountList();
+		(document.querySelector(".new-product") as HTMLButtonElement).click();
+		await tick();
 		const name = input("product name");
 		name!.value = "Winter Light";
 		name!.dispatchEvent(new Event("input", { bubbles: true }));
@@ -673,6 +875,8 @@ describe("draft-only product editor", () => {
 	it("locks a successfully created product when automatic navigation fails", async () => {
 		mocks.goto.mockRejectedValueOnce(new Error("navigation failed"));
 		await mountList();
+		(document.querySelector(".new-product") as HTMLButtonElement).click();
+		await tick();
 		const name = input("product name");
 		name!.value = "Winter Light";
 		name!.dispatchEvent(new Event("input", { bubbles: true }));
@@ -730,7 +934,8 @@ describe("draft-only product editor", () => {
 		expect(document.body.textContent).toContain(
 			"Public Shop authority is configured separately",
 		);
-		expect(document.body.textContent).not.toContain("publish");
+		expect(button("publish")).toBeUndefined();
+		expect(document.querySelector("#catalog-publication-heading")).toBeNull();
 		button("add variant")?.click();
 		await tick();
 		(
