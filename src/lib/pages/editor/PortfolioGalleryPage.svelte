@@ -77,12 +77,14 @@ let uploadedAssets = $state<PortfolioMediaAsset[]>([]);
 let saveTimer: ReturnType<typeof setTimeout> | undefined;
 let locallySavedRevisionIds: string[] = [];
 let editorState = $derived(editorQuery.data as PortfolioGalleryEditorState | undefined);
+let editorError = $derived(editorQuery.error);
 let mediaPage = $derived(mediaQuery.data as PortfolioMediaPage | undefined);
 let placedAssetIds = $derived([...new Set(form.placements.map((placement) => placement.assetId))]);
 const placedMediaQuery = useQuery(getPlacedMediaAssets, () => ({
 	siteUrl: config.siteUrl,
 	ids: placedAssetIds,
 }));
+let mediaError = $derived(mediaQuery.error || placedMediaQuery.error);
 let placedAssets = $derived((placedMediaQuery.data ?? []) as PortfolioMediaAsset[]);
 let readyAssets = $derived((mediaPage?.page ?? []).filter((asset) => asset.status === "ready"));
 let mediaById = $derived(mergePortfolioMediaAssets(
@@ -374,7 +376,9 @@ function reloadServerDraft() {
 <svelte:head><title>Edit portfolio gallery — {config.siteName}</title></svelte:head>
 
 <PortfolioWorkbench selectedGalleryId={galleryId}>
-{#if !initialized}
+{#if editorError}
+	<p class="alert page-alert" role="alert">Could not load this gallery draft. Refresh this page to try again.</p>
+{:else if !initialized}
 	<p class="loading" role="status">loading gallery…</p>
 {:else}
 	<div class="gallery-page">
@@ -407,6 +411,7 @@ function reloadServerDraft() {
 		</header>
 
 		{#if saveError}<p class="alert" role="alert">{saveError}</p>{/if}
+		{#if mediaError}<p class="alert" role="alert">Could not load gallery media. Refresh this page to try again.</p>{/if}
 		{#if publishingEnabled && publishMessage}<p class="success" role="status">{publishMessage}</p>{/if}
 
 		{#if publishingEnabled}
@@ -443,7 +448,7 @@ function reloadServerDraft() {
 </PortfolioWorkbench>
 
 <style>
-	.loading { padding: 48px 40px; color: var(--admin-text-muted); }
+	.loading, .page-alert { margin: 32px; } .loading { padding: 16px 8px; color: var(--admin-text-muted); }
 	.gallery-page { max-width: 1120px; padding: 32px 32px 96px; }
 	header { display: flex; justify-content: space-between; gap: 28px; align-items: flex-end; margin-bottom: 30px; }
 	.back { color: var(--admin-text-muted); font-size: .74rem; text-decoration: none; }

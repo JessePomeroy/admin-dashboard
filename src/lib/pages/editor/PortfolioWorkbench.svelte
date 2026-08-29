@@ -1,6 +1,6 @@
 <script lang="ts">
 import { useQuery } from "convex-svelte";
-import type { Snippet } from "svelte";
+import { tick, type Snippet } from "svelte";
 import { useAdminClient } from "../../adminClient";
 import { getAdminConfig } from "../../config";
 import {
@@ -49,7 +49,14 @@ let slugWasEdited = $state(false);
 let errors = $state<{ title?: string; slug?: string }>({});
 let createState = $state<"idle" | "saving" | "error">("idle");
 let createMessage = $state("");
+let newGalleryButton = $state<HTMLButtonElement>();
+let createDialog = $state<HTMLDivElement>();
+let titleInput = $state<HTMLInputElement>();
 let normalizedSearch = $derived(search.trim().toLocaleLowerCase());
+let orderingDisabled = $derived(Boolean(normalizedSearch) || filter !== "all");
+let filterOptions = $derived(publishingEnabled
+	? (["all", "draft", "published", "changed"] as const)
+	: (["all", "draft"] as const));
 let visibleGalleries = $derived((galleries ?? []).filter((gallery) => {
 	const status = publishingEnabled ? portfolioGalleryStatus(gallery) : "draft";
 	if (filter === "published" && status !== "published") return false;
@@ -87,11 +94,41 @@ function updateSlug(event: Event) {
 	slug = slugifyPortfolioTitle((event.currentTarget as HTMLInputElement).value);
 }
 
-function closeCreate() {
+async function openCreate() {
+	creating = true;
+	await tick();
+	titleInput?.focus();
+}
+
+async function closeCreate() {
 	if (createState === "saving") return;
 	creating = false;
 	errors = {};
 	createMessage = "";
+	await tick();
+	newGalleryButton?.focus();
+}
+
+function handleDialogKeydown(event: KeyboardEvent) {
+	if (event.key === "Escape") {
+		event.preventDefault();
+		void closeCreate();
+		return;
+	}
+	if (event.key !== "Tab") return;
+	const focusable = Array.from(createDialog?.querySelectorAll<HTMLElement>(
+		'button:not([disabled]), input:not([disabled]), [href], [tabindex]:not([tabindex="-1"])',
+	) ?? []);
+	const first = focusable[0];
+	const last = focusable.at(-1);
+	if (!first || !last) return;
+	if (event.shiftKey && document.activeElement === first) {
+		event.preventDefault();
+		last.focus();
+	} else if (!event.shiftKey && document.activeElement === last) {
+		event.preventDefault();
+		first.focus();
+	}
 }
 
 async function createGallery() {
@@ -117,7 +154,7 @@ async function createGallery() {
 }
 
 async function moveGallery(index: number, direction: -1 | 1) {
-	if (!galleries || reorderState === "saving") return;
+	if (!galleries || reorderState === "saving" || orderingDisabled) return;
 	const destination = index + direction;
 	if (destination < 0 || destination >= galleries.length) return;
 	const previous = galleries;
@@ -141,7 +178,7 @@ async function moveGallery(index: number, direction: -1 | 1) {
 }
 </script>
 
-<div class="portfolio-workbench" class:has-selection={Boolean(selectedGalleryId)}>
+<div class="portfolio-workbench" class:has-selection={Boolean(selectedGalleryId)} inert={creating}>
 	<header class="workbench-heading">
 		<div>
 			<p class="eyebrow">content / portfolio</p>
@@ -157,18 +194,19 @@ async function moveGallery(index: number, direction: -1 | 1) {
 		<aside class="collection-pane" aria-label="Portfolio galleries">
 			<div class="collection-heading">
 				<div><span class="eyebrow">collection</span><h2>galleries</h2></div>
-				<button type="button" class="new-gallery" onclick={() => creating = true}>new</button>
+				<button bind:this={newGalleryButton} type="button" class="new-gallery" onclick={() => void openCreate()}>new</button>
 			</div>
 			<p class="collection-note">{publishingEnabled
 				? "The public site follows this deliberate order."
 				: "This deliberate order is saved with the private drafts."}</p>
 
 			<label class="search-field"><span>search galleries</span><input type="search" placeholder="Search title or URL" bind:value={search} /></label>
-			<div class="filters" aria-label="Filter galleries">
-				{#each ["all", "draft", "published", "changed"] as option}
+			<div class="filters" role="group" aria-label="Filter galleries">
+				{#each filterOptions as option}
 					<button type="button" class:active={filter === option} aria-pressed={filter === option} onclick={() => filter = option as typeof filter}>{option}</button>
 				{/each}
 			</div>
+			{#if orderingDisabled}<p class="ordering-note">Clear search and choose all to change public order.</p>{/if}
 
 			{#if galleriesQuery.isLoading}
 				<p class="collection-message" role="status">loading galleries…</p>
@@ -187,8 +225,8 @@ async function moveGallery(index: number, direction: -1 | 1) {
 								<small class="status">{statusLabel(gallery)} · {formatUpdatedAt(gallery.updatedAt)}</small>
 							</a>
 							<div class="order-actions" aria-label={`Reorder ${portfolioGalleryLabel(gallery)}`}>
-								<button type="button" onclick={() => void moveGallery(sourceIndex, -1)} disabled={sourceIndex <= 0 || reorderState === "saving"} aria-label="Move gallery earlier">↑</button>
-								<button type="button" onclick={() => void moveGallery(sourceIndex, 1)} disabled={!galleries || sourceIndex === galleries.length - 1 || reorderState === "saving"} aria-label="Move gallery later">↓</button>
+								<button type="button" onclick={() => void moveGallery(sourceIndex, -1)} disabled={orderingDisabled || sourceIndex <= 0 || reorderState === "saving"} aria-label="Move gallery earlier">↑</button>
+								<button type="button" onclick={() => void moveGallery(sourceIndex, 1)} disabled={orderingDisabled || !galleries || sourceIndex === galleries.length - 1 || reorderState === "saving"} aria-label="Move gallery later">↓</button>
 							</div>
 						</li>
 					{/each}
@@ -201,21 +239,22 @@ async function moveGallery(index: number, direction: -1 | 1) {
 		</section>
 	</div>
 
-	{#if creating}
-		<div class="create-backdrop" role="presentation" onclick={(event) => { if (event.currentTarget === event.target) closeCreate(); }}>
-			<div class="create-panel" role="dialog" aria-modal="true" aria-labelledby="create-gallery-heading">
-				<div class="create-heading"><div><span class="eyebrow">new record</span><h2 id="create-gallery-heading">new gallery</h2></div><button type="button" class="close" onclick={closeCreate} aria-label="Close new gallery form">×</button></div>
-				<p>{publishingEnabled ? "Create an unpublished gallery, then add details and images before publishing." : "Create and arrange a private gallery draft."}</p>
-				<form onsubmit={(event) => { event.preventDefault(); void createGallery(); }}>
-					<label>gallery name<input value={title} oninput={updateTitle} maxlength="120" autocomplete="off" aria-invalid={Boolean(errors.title)} />{#if errors.title}<small class="field-error">{errors.title}</small>{/if}</label>
-					<label>{publishingEnabled ? "public URL" : "URL name"}<div class="slug-field"><span>/</span><input value={slug} oninput={updateSlug} maxlength="80" autocomplete="off" spellcheck="false" aria-invalid={Boolean(errors.slug)} /></div>{#if errors.slug}<small class="field-error">{errors.slug}</small>{/if}</label>
-					<button type="submit" class="primary" disabled={createState === "saving"}>{createState === "saving" ? "creating…" : publishingEnabled ? "create unpublished gallery" : "create gallery draft"}</button>
-				</form>
-				{#if createMessage}<p class:error={createState === "error"} class="create-message" role={createState === "error" ? "alert" : "status"}>{createMessage}</p>{/if}
-			</div>
-		</div>
-	{/if}
 </div>
+
+{#if creating}
+	<div class="create-backdrop" role="presentation" onclick={(event) => { if (event.currentTarget === event.target) void closeCreate(); }}>
+		<div bind:this={createDialog} class="create-panel" role="dialog" aria-modal="true" aria-labelledby="create-gallery-heading" tabindex="-1" onkeydown={handleDialogKeydown}>
+			<div class="create-heading"><div><span class="eyebrow">new record</span><h2 id="create-gallery-heading">new gallery</h2></div><button type="button" class="close" onclick={() => void closeCreate()} aria-label="Close new gallery form">×</button></div>
+			<p>{publishingEnabled ? "Create an unpublished gallery, then add details and images before publishing." : "Create and arrange a private gallery draft."}</p>
+			<form onsubmit={(event) => { event.preventDefault(); void createGallery(); }}>
+				<label>gallery name<input bind:this={titleInput} value={title} oninput={updateTitle} maxlength="120" autocomplete="off" aria-invalid={Boolean(errors.title)} />{#if errors.title}<small class="field-error">{errors.title}</small>{/if}</label>
+				<label>{publishingEnabled ? "public URL" : "URL name"}<div class="slug-field"><span>/</span><input value={slug} oninput={updateSlug} maxlength="80" autocomplete="off" spellcheck="false" aria-invalid={Boolean(errors.slug)} /></div>{#if errors.slug}<small class="field-error">{errors.slug}</small>{/if}</label>
+				<button type="submit" class="primary" disabled={createState === "saving"}>{createState === "saving" ? "creating…" : publishingEnabled ? "create unpublished gallery" : "create gallery draft"}</button>
+			</form>
+			{#if createMessage}<p class:error={createState === "error"} class="create-message" role={createState === "error" ? "alert" : "status"}>{createMessage}</p>{/if}
+		</div>
+	</div>
+{/if}
 
 <style>
 	.portfolio-workbench { min-height: 100%; background: var(--admin-bg); color: var(--admin-text); }
@@ -236,6 +275,7 @@ async function moveGallery(index: number, direction: -1 | 1) {
 	.filters { display: flex; gap: 4px; margin: 12px 0 18px; overflow-x: auto; }
 	.filters button { border: 0; border-radius: 999px; padding: 6px 8px; background: transparent; color: var(--admin-text-subtle); font-size: .66rem; cursor: pointer; }
 	.filters button:hover, .filters button.active { background: var(--admin-active); color: var(--admin-heading); }
+	.ordering-note { margin: -10px 0 14px; color: var(--admin-text-subtle); font-size: .66rem; line-height: 1.4; }
 	.collection-message { margin: 0; padding: 16px 4px; color: var(--admin-text-muted); font-size: .76rem; }
 	.gallery-list { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
 	.gallery-list li { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 5px; border: 1px solid transparent; border-radius: 8px; }
@@ -255,7 +295,7 @@ async function moveGallery(index: number, direction: -1 | 1) {
 	.create-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; }
 	.create-panel > p { margin: 10px 0 0; color: var(--admin-text-muted); font-size: .78rem; line-height: 1.55; }
 	.create-panel form { display: grid; gap: 17px; margin-top: 22px; }
-	.close { width: 36px; height: 36px; font-size: 1.25rem; }
+	.close { width: 44px; height: 44px; font-size: 1.25rem; }
 	.slug-field { display: grid; grid-template-columns: auto 1fr; align-items: center; gap: 7px; color: var(--admin-text-subtle); }
 	.create-message { margin: 16px 0 0; color: var(--status-sage); font-size: .75rem; }
 	[aria-invalid="true"] { border-color: var(--status-rose) !important; }
@@ -273,6 +313,8 @@ async function moveGallery(index: number, direction: -1 | 1) {
 		.portfolio-workbench.has-selection .collection-pane, .portfolio-workbench:not(.has-selection) .document-pane { display: none; }
 		.create-backdrop { align-items: end; padding: 0; }
 		.create-panel { border-radius: 14px 14px 0 0; }
+		.order-actions button { width: 44px; height: 44px; }
+		.new-gallery, .filters button { min-height: 44px; }
 	}
 	@media (prefers-reduced-motion: no-preference) {
 		.gallery-list li, .filters button { transition: color .16s ease, background-color .16s ease, border-color .16s ease; }
