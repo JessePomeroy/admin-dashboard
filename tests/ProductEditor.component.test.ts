@@ -845,6 +845,15 @@ describe("draft-only product editor", () => {
 		);
 	});
 
+	it("reserves the three-pane product workspace for viewports that fit the record", () => {
+		expect(productWorkbenchSource).toContain(
+			"grid-template-columns: 156px 268px minmax(0, 1fr)",
+		);
+		expect(productWorkbenchSource).toContain(
+			"@media (min-width: 641px) and (max-width: 1399px)",
+		);
+	});
+
 	it("reuses one product identity when an uncertain create is retried", async () => {
 		mocks.mutation
 			.mockRejectedValueOnce(

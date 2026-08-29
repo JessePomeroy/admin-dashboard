@@ -281,7 +281,7 @@ async function createProduct() {
 	.eyebrow { color: var(--admin-text-subtle); font-size: .58rem; letter-spacing: .16em; text-transform: uppercase; }
 	.heading-meta { display: grid; justify-items: end; gap: 4px; color: var(--admin-heading); font-size: .75rem; white-space: nowrap; }
 	.heading-meta small { color: var(--admin-text-subtle); font-size: .63rem; }
-	.workbench-grid { display: grid; grid-template-columns: 178px 304px minmax(0, 1fr); min-height: calc(100vh - 101px); }
+	.workbench-grid { display: grid; grid-template-columns: 156px 268px minmax(0, 1fr); min-height: calc(100vh - 101px); }
 	.taxonomy-pane, .collection-pane { border-right: 1px solid var(--admin-border); background: color-mix(in srgb, var(--admin-surface) 45%, var(--admin-bg)); }
 	.taxonomy-pane { padding: 24px 14px; }
 	.kind-filters { display: grid; gap: 4px; margin-top: 14px; }
@@ -324,7 +324,7 @@ async function createProduct() {
 	.create-panel .error, .create-panel .success { margin: 16px 0 0; font-size: .75rem; }
 	.create-panel .success { color: var(--status-sage); } .create-panel .success a { color: inherit; }
 	button:focus-visible, input:focus-visible, a:focus-visible { outline: 2px solid var(--admin-accent-strong); outline-offset: 2px; }
-	@media (min-width: 641px) and (max-width: 1179px) {
+	@media (min-width: 641px) and (max-width: 1399px) {
 		.workbench-grid { grid-template-columns: 180px minmax(0, 1fr); }
 		.document-pane { display: none; }
 		.product-workbench.has-selection .taxonomy-pane, .product-workbench.has-selection .collection-pane { display: none; }
