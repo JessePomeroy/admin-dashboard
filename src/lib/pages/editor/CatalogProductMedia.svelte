@@ -173,7 +173,7 @@ function remove(key: string) {
 </section>
 
 <style>
-	section { margin-top: 20px; padding: 26px; border: 1px solid var(--admin-border); border-radius: 10px; background: var(--admin-surface); }
+	section { margin-top: 0; padding: 20px 0 24px; border-top: 1px solid var(--admin-border-strong); }
 	.section-heading { display: flex; justify-content: space-between; gap: 24px; align-items: flex-start; margin-bottom: 22px; }
 	.section-heading h2 { margin: 0; color: var(--admin-heading); font-size: 1rem; font-weight: 500; }
 	.section-heading p, .empty p, .note { margin: 5px 0 0; color: var(--admin-text-muted); font-size: .8rem; line-height: 1.5; }
@@ -198,7 +198,7 @@ function remove(key: string) {
 	.alert { margin: 0 0 16px; color: var(--status-rose); font-size: .76rem; }
 	.note { margin-top: 16px; }
 	@media (max-width: 820px) {
-		section { padding: 20px; }
+		section { padding: 18px 0 22px; }
 		.section-heading { flex-direction: column; }
 		.section-heading button { width: 100%; }
 		li { grid-template-columns: 72px minmax(0, 1fr) auto; }

@@ -15,7 +15,6 @@ const publishingEnabled = Boolean(portfolioApi.publish);
 
 <PortfolioWorkbench>
 	<div class="portfolio-overview">
-		<p class="eyebrow">workspace guide</p>
 		<h2>select a gallery</h2>
 		<p>{publishingEnabled
 			? "Public galleries, their order, and whether each one is ready for visitors. Choose a gallery to edit its details, review publication readiness, and arrange its public images."
@@ -29,15 +28,16 @@ const publishingEnabled = Boolean(portfolioApi.publish);
 </PortfolioWorkbench>
 
 <style>
-	.portfolio-overview { max-width: 820px; padding: clamp(36px, 6vw, 72px); }
-	.eyebrow { margin: 0 0 8px; color: var(--admin-text-subtle); font-size: .65rem; letter-spacing: .16em; text-transform: uppercase; }
-	h2 { margin: 0; color: var(--admin-heading); font-family: var(--admin-font-display); font-size: clamp(1.5rem, 3vw, 2.4rem); font-weight: 500; }
-	.portfolio-overview > p:not(.eyebrow) { max-width: 620px; margin: 12px 0 0; color: var(--admin-text-muted); line-height: 1.65; }
-	.workflow-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin-top: 36px; }
-	.workflow-grid div { min-height: 150px; padding: 20px; border: 1px solid var(--admin-border); border-radius: 10px; background: var(--admin-surface); }
+	.portfolio-overview { max-width: 820px; padding: clamp(26px, 4vw, 44px); }
+	h2 { margin: 0; color: var(--admin-heading); font-family: var(--admin-font-display); font-size: clamp(1.3rem, 2.2vw, 1.8rem); font-weight: 500; }
+	.portfolio-overview > p { max-width: 620px; margin: 12px 0 0; color: var(--admin-text-muted); line-height: 1.65; }
+	.workflow-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0; margin-top: 28px; border-top: 1px solid var(--admin-border-strong); }
+	.workflow-grid div { min-height: 0; padding: 16px 18px 16px 0; border-right: 1px solid var(--admin-border); background: transparent; }
+	.workflow-grid div + div { padding-left: 18px; }
+	.workflow-grid div:last-child { border-right: 0; }
 	.workflow-grid span, .workflow-grid strong { display: block; }
 	.workflow-grid span { color: var(--admin-accent-strong); font-size: .64rem; }
-	.workflow-grid strong { margin-top: 24px; color: var(--admin-heading); font-weight: 500; }
+	.workflow-grid strong { margin-top: 12px; color: var(--admin-heading); font-weight: 500; }
 	.workflow-grid p { margin: 7px 0 0; color: var(--admin-text-muted); font-size: .75rem; line-height: 1.5; }
 	@media (max-width: 760px) { .portfolio-overview { padding: 28px 20px 64px; } .workflow-grid { grid-template-columns: 1fr; } }
 </style>

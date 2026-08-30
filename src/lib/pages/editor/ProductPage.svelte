@@ -24,6 +24,7 @@ import {
 	canEditCatalogProductGraphKind,
 	copyCatalogProductDraft,
 	emptyCatalogProductDraft,
+	newCatalogPrivateRelationKey,
 	parseCatalogBasisPoints,
 	serializeCatalogProductDraft,
 	slugifyCatalogProductTitle,
@@ -61,6 +62,7 @@ const {
 	media: mediaCapability,
 	privateAssets: privateAssetCapability,
 	publication: publicationCapability,
+	publishesToShop,
 } = capability;
 
 const baseHref = productsConfig.baseHref ?? "/admin/editor/products";
@@ -83,14 +85,25 @@ let multiplierInput = $state("10000");
 let multiplierError = $state("");
 let variantsValid = $state(true);
 let pickerOpen = $state(false);
+let pickerPurpose = $state<"display-media" | "set-member">("display-media");
 let uploadedAssets = $state<PortfolioMediaAsset[]>([]);
+let uploadedPrivateAssets = $state<CatalogEditorPrivateAsset[]>([]);
 let mediaActionError = $state("");
 let activePrivateAssetRelation = $state<CatalogEditorPrivateAssetRelation | null>(null);
+type PrivateAssetAttachment =
+	| { kind: "single-print" }
+	| { kind: "paid-download" }
+	| {
+		kind: "set-member";
+		memberKey: string;
+		mediaPlacementKey: string;
+		media: PortfolioMediaAsset;
+	};
+let privateAssetAttachment = $state<PrivateAssetAttachment | null>(null);
 let selectedPrivateAssetId = $state("");
 let replacementPending = $state(false);
 let replacementRevisionId = $state<string | null>(null);
 let replacementBaseRevisionId = $state<string | null>(null);
-let replacementSubmittedJson = $state("");
 type PublicationSnapshot = {
 	productId: string;
 	draftRevisionId: string | null;
@@ -138,7 +151,7 @@ const PRIVATE_UPLOAD_AUTO_WINDOW_MS = 305_000;
 const usedPrivateUploadHandles = new Set<string>();
 const privateAssetCandidateQuery = privateAssetCapability
 	? useQuery(privateAssetCapability.listCandidates, () =>
-		activePrivateAssetRelation && baseRevisionId
+		activePrivateAssetRelation && !privateAssetAttachment && baseRevisionId
 			? {
 					productId,
 					expectedDraftRevisionId: baseRevisionId,
@@ -221,26 +234,39 @@ let privateAssetRows = $derived.by(() => {
 	if (!revision) return [];
 	const printSourceAssets = (revision.printSourceAssets ?? [])
 		.filter(isVerifiedPrintSourceRelation);
+	const privateAssetById = new Map<string, CatalogEditorPrivateAsset>([
+		...printSourceAssets.map((relation) => [relation.asset.assetId, relation.asset] as const),
+		...(revision.paidFileAsset
+			? [[revision.paidFileAsset.asset.assetId, revision.paidFileAsset.asset] as const]
+			: []),
+		...uploadedPrivateAssets.map((asset) => [asset.assetId, asset] as const),
+	]);
 	if (form.productKind === "digital_download") {
-		const relation = revision.paidFileAsset;
+		const relation = form.paidFile;
 		return relation
-			? [{ label: "paid download", relation: { kind: "paid_digital_file" as const, relationKey: relation.relationKey }, asset: relation.asset }]
+			? [{
+					label: "paid download",
+					relation: { kind: "paid_digital_file" as const, relationKey: relation.key },
+					asset: privateAssetById.get(relation.assetId),
+				}]
 			: [];
 	}
 	if (form.productKind === "print_set") {
 		return form.setMembers.map((member, index) => ({
 			label: `member ${index + 1} print master`,
 			relation: { kind: "print_source" as const, relationKey: member.printSourceKey },
-			asset: printSourceAssets.find(
-				(candidate) => candidate.relationKey === member.printSourceKey,
-			)?.asset,
+			asset: privateAssetById.get(
+				(form.printSources ?? []).find(
+					(candidate) => candidate.key === member.printSourceKey,
+				)?.assetId ?? "",
+			),
 		}));
 	}
 	if (form.productKind === "print") {
-		return printSourceAssets.slice(0, 1).map((relation) => ({
+		return (form.printSources ?? []).slice(0, 1).map((relation) => ({
 			label: "single-print master",
-			relation: { kind: "print_source" as const, relationKey: relation.relationKey },
-			asset: relation.asset,
+			relation: { kind: "print_source" as const, relationKey: relation.key },
+			asset: privateAssetById.get(relation.assetId),
 		}));
 	}
 	return [];
@@ -410,8 +436,8 @@ function completePublication(operation: PublicationOperation, state: CatalogProd
 	publicationOperation = null;
 	publicationError = "";
 	publicationMessage = operation.action === "publish"
-		? "Published in Convex CMS."
-		: "Unpublished from Convex CMS.";
+		? publishesToShop ? "Published to the Shop." : "Published in Convex CMS."
+		: publishesToShop ? "Removed from the Shop." : "Unpublished from Convex CMS.";
 }
 
 function publicationConflict() {
@@ -467,9 +493,12 @@ $effect(() => {
 				serverRevisionId === replacementRevisionId
 				&& serverPublishedRevisionId === loadedPublishedRevisionId
 			) {
+				const confirmedForm = catalogProductGraphDraftFromRevision(editorState.draft);
+				form = confirmedForm;
 				syncLoadedPublication(editorState);
 				baseRevisionId = serverRevisionId;
-				savedJson = replacementSubmittedJson;
+				savedJson = serializeCatalogProductDraft(confirmedForm);
+				multiplierInput = String(confirmedForm.framePriceMultiplierBasisPoints);
 				replacementPending = false;
 				replacementRevisionId = null;
 				replacementBaseRevisionId = null;
@@ -616,8 +645,8 @@ async function runPublication(action: "publish" | "unpublish") {
 	publicationOperation = operation;
 	publicationError = "";
 	publicationMessage = action === "publish"
-		? "Publishing once to Convex CMS…"
-		: "Unpublishing once from Convex CMS…";
+		? publishesToShop ? "Publishing once to the Shop…" : "Publishing once to Convex CMS…"
+		: publishesToShop ? "Removing once from the Shop…" : "Unpublishing once from Convex CMS…";
 	const mutation = action === "publish"
 		? publicationCapability.publishDraft
 		: publicationCapability.unpublish;
@@ -633,7 +662,9 @@ async function runPublication(action: "publish" | "unpublish") {
 		if (!result) return publicationConflict();
 		publicationOperation.result = result;
 		publicationOperation.phase = "awaiting-echo";
-		publicationMessage = "Confirming the exact Convex CMS publication state…";
+		publicationMessage = publishesToShop
+			? "Confirming the exact Shop publication state…"
+			: "Confirming the exact Convex CMS publication state…";
 		schedulePublicationReconciliation(publicationOperation);
 		reconcilePublicationState(editorState);
 	} catch (error) {
@@ -678,6 +709,7 @@ function choosePrivateAssetRelation(
 ) {
 	if (editorLocked || dirty) return;
 	clearCompletionCheckTimer();
+	privateAssetAttachment = null;
 	activePrivateAssetRelation = relation;
 	selectedPrivateAssetId = currentAssetId ?? "";
 	selectedPrivateFile = null;
@@ -685,6 +717,117 @@ function choosePrivateAssetRelation(
 	privateZipVersion = "";
 	privateUploadMessage = "";
 	saveError = "";
+}
+
+function resetPrivateAssetFlow(message = "") {
+	clearCompletionCheckTimer();
+	privateUploadOperation?.controller?.abort();
+	privateUploadOperation = null;
+	privateUploadFallbackState = "idle";
+	privateAssetAttachment = null;
+	activePrivateAssetRelation = null;
+	selectedPrivateAssetId = "";
+	selectedPrivateFile = null;
+	privateZipVersion = "";
+	if (privateFileInput) privateFileInput.value = "";
+	privateUploadMessage = message;
+}
+
+function beginPrivateAssetAttachment(
+	attachment: PrivateAssetAttachment,
+	relation: CatalogEditorPrivateAssetRelation,
+) {
+	if (editorLocked || dirty || !baseRevisionId) return;
+	resetPrivateAssetFlow();
+	privateAssetAttachment = attachment;
+	activePrivateAssetRelation = relation;
+}
+
+function beginSinglePrivateAssetAttachment() {
+	if (form.productKind === "print") {
+		beginPrivateAssetAttachment(
+			{ kind: "single-print" },
+			{ kind: "print_source", relationKey: newCatalogPrivateRelationKey("print") },
+		);
+		return;
+	}
+	if (form.productKind === "digital_download") {
+		beginPrivateAssetAttachment(
+			{ kind: "paid-download" },
+			{ kind: "paid_digital_file", relationKey: newCatalogPrivateRelationKey("download") },
+		);
+	}
+}
+
+function beginSetMemberAttachment(asset: PortfolioMediaAsset) {
+	const memberKey = newCatalogPrivateRelationKey("member");
+	beginPrivateAssetAttachment(
+		{
+			kind: "set-member",
+			memberKey,
+			mediaPlacementKey: `media-${memberKey}`,
+			media: asset,
+		},
+		{ kind: "print_source", relationKey: newCatalogPrivateRelationKey("print") },
+	);
+	pickerOpen = false;
+}
+
+function attachVerifiedPrivateAsset() {
+	const operation = privateUploadOperation;
+	const attachment = privateAssetAttachment;
+	const relation = activePrivateAssetRelation;
+	const asset = operation?.stagedAsset;
+	if (
+		!operation
+		|| operation.phase !== "verified"
+		|| !attachment
+		|| !relation
+		|| !asset
+		|| asset.kind !== relation.kind
+	) return;
+
+	uploadedPrivateAssets = [
+		asset,
+		...uploadedPrivateAssets.filter((candidate) => candidate.assetId !== asset.assetId),
+	];
+	if (attachment.kind === "single-print" && asset.kind === "print_source") {
+		form.printSources = [{ key: relation.relationKey, order: 0, assetId: asset.assetId }];
+	} else if (attachment.kind === "paid-download" && asset.kind === "paid_digital_file") {
+		form.paidFile = {
+			key: relation.relationKey,
+			assetId: asset.assetId,
+			...(asset.version ? { version: asset.version } : {}),
+		};
+	} else if (attachment.kind === "set-member" && asset.kind === "print_source") {
+		const order = form.setMembers.length;
+		form.printSources = [
+			...(form.printSources ?? []),
+			{ key: relation.relationKey, order, assetId: asset.assetId },
+		];
+		form.webMedia = [
+			...(form.webMedia ?? []),
+			{
+				key: attachment.mediaPlacementKey,
+				role: "set_member",
+				assetId: attachment.media._id,
+				altText: "",
+			},
+		];
+		form.setMembers = [
+			...form.setMembers,
+			{
+				key: attachment.memberKey,
+				mediaPlacementKey: attachment.mediaPlacementKey,
+				printSourceKey: relation.relationKey,
+			},
+		];
+		form.webMedia = alignCatalogProductWebMediaWithSetMembers(
+			form.webMedia,
+			form.setMembers,
+		);
+	} else return;
+	resetPrivateAssetFlow(`${asset.originalFilename} is attached to this draft. Save the draft to keep it.`);
 }
 
 function clearCompletionCheckTimer() {
@@ -766,7 +909,9 @@ async function reconcilePrivateUpload() {
 		operation.stagedAsset = result.asset;
 		operation.phase = "verified";
 		selectedPrivateAssetId = result.asset.assetId;
-		privateUploadMessage = `${result.asset.originalFilename} is verified, staged unattached, and selected below.`;
+		privateUploadMessage = privateAssetAttachment
+			? `${result.asset.originalFilename} is verified. Attach it to the draft, then save.`
+			: `${result.asset.originalFilename} is verified, staged unattached, and selected below.`;
 		return;
 	}
 	if (result.status === "pending") {
@@ -785,7 +930,6 @@ async function startPrivateUpload() {
 		!privateAssetUpload
 		|| !selectedPrivateFile
 		|| !activePrivateAssetRelation
-		|| !activeCandidatePage
 		|| !baseRevisionId
 		|| dirty
 		|| editorLocked
@@ -906,7 +1050,6 @@ async function replacePrivateAsset() {
 		`Replace ${activeCandidatePage.relation.currentAsset.originalFilename} with ${candidate.originalFilename}?`,
 	)) return;
 	const displayedRevisionId = baseRevisionId;
-	replacementSubmittedJson = currentJson;
 	replacementBaseRevisionId = displayedRevisionId;
 	replacementRevisionId = null;
 	replacementPending = true;
@@ -1019,6 +1162,21 @@ function addUploadedMediaAsset(asset: PortfolioMediaAsset) {
 	uploadedAssets = [asset, ...uploadedAssets.filter((item) => item._id !== asset._id)];
 	return addMediaAsset(asset);
 }
+
+function removeSetMember(member: CatalogProductDraftForm["setMembers"][number]) {
+	if (editorLocked) return;
+	form.setMembers = form.setMembers.filter((candidate) => candidate.key !== member.key);
+	form.printSources = (form.printSources ?? [])
+		.filter((source) => source.key !== member.printSourceKey)
+		.map((source, order) => ({ ...source, order }));
+	form.webMedia = (form.webMedia ?? []).filter(
+		(placement) => placement.key !== member.mediaPlacementKey,
+	);
+	form.webMedia = alignCatalogProductWebMediaWithSetMembers(
+		form.webMedia,
+		form.setMembers,
+	);
+}
 </script>
 
 <svelte:head><title>Product — {config.siteName}</title></svelte:head>
@@ -1030,7 +1188,11 @@ function addUploadedMediaAsset(asset: PortfolioMediaAsset) {
 {:else}
 		<div class="settings-page product-page">
 		<header class="settings-header">
-			<div><a class="back" href={baseHref}>← products</a><h1>{canEditGraphProduct || !isGraphV2 ? form.title?.trim() || editorState.productKey : catalogProductEditorTitle(readOnlyRevision)?.trim() || editorState.productKey}</h1><p class="description">{canEditGraphProduct ? `Edit this private imported ${catalogProductKindLabel(editorState.productKind)} draft. Public Shop authority is configured separately.` : isGraphV2 ? "Review the imported private catalog graph. Product-specific editing arrives in a later slice." : "Edit the private product definition and ordered price variants. Public Shop authority is configured separately."}</p></div>
+			<div><a class="back" href={baseHref}>← products</a><h1>{canEditGraphProduct || !isGraphV2 ? form.title?.trim() || editorState.productKey : catalogProductEditorTitle(readOnlyRevision)?.trim() || editorState.productKey}</h1><p class="description">{canEditGraphProduct
+				? publishesToShop
+					? `Prepare this ${catalogProductKindLabel(editorState.productKind)} and publish the exact saved revision to your Shop.`
+				: `Edit this private imported ${catalogProductKindLabel(editorState.productKind)} draft. Public Shop authority is configured separately.`
+				: isGraphV2 ? "Review this catalog graph." : "Edit the private product definition and ordered price variants. Public Shop authority is configured separately."}</p></div>
 			{#if hasActiveDraft && (!isGraphV2 || canEditGraphProduct)}<div class="actions"><span class="save-state" aria-live="polite">{saveState}</span><button type="button" class="primary" onclick={() => void saveDraft()} disabled={!canSave}>save draft</button></div>{/if}
 		</header>
 		{#if saveError}<p class="alert" role="alert">{saveError}</p>{/if}
@@ -1040,12 +1202,12 @@ function addUploadedMediaAsset(asset: PortfolioMediaAsset) {
 		{#if privateAssetCandidateQuery?.error}<p class="alert" role="alert">Could not load verified replacement assets. The draft may have changed; reload this product before continuing.</p>{/if}
 		{#if publicationCapability && isGraphV2}
 			<section class="publication" aria-labelledby="catalog-publication-heading">
-				<div><h2 id="catalog-publication-heading">Convex CMS publication</h2><p>Convex publication is separate; public Shop authority is configured separately.</p></div>
+				<div><h2 id="catalog-publication-heading">{publishesToShop ? "Shop publication" : "Convex CMS publication"}</h2><p>{publishesToShop ? "The published revision below is the exact product revision read by your public Shop." : "Convex publication is separate; public Shop authority is configured separately."}</p></div>
 				<div class="publication-controls">
 					<p class="publication-status" role="status" aria-live="polite">{publicationStatus}</p>
 					<div class="publication-actions">
-						<button type="button" class="primary" onclick={() => void runPublication("publish")} disabled={!canPublish}>publish to Convex CMS</button>
-						<button type="button" class="danger" onclick={() => void runPublication("unpublish")} disabled={!canUnpublish}>unpublish from Convex CMS</button>
+						<button type="button" class="primary" onclick={() => void runPublication("publish")} disabled={!canPublish}>{publishesToShop ? "publish to Shop" : "publish to Convex CMS"}</button>
+						<button type="button" class="danger" onclick={() => void runPublication("unpublish")} disabled={!canUnpublish}>{publishesToShop ? "remove from Shop" : "unpublish from Convex CMS"}</button>
 					</div>
 				</div>
 				<dl class="publication-evidence">
@@ -1109,7 +1271,7 @@ function addUploadedMediaAsset(asset: PortfolioMediaAsset) {
 					uploadEndpoint={mediaCapability.uploadEndpoint}
 					disabled={editorLocked}
 					onChange={(placements) => { form.webMedia = placements; mediaActionError = ""; }}
-					onChooseMedia={() => { pickerOpen = true; mediaActionError = ""; }}
+					onChooseMedia={() => { pickerPurpose = "display-media"; pickerOpen = true; mediaActionError = ""; }}
 					onUploadReady={addUploadedMediaAsset}
 				/>
 			{/if}
@@ -1120,13 +1282,43 @@ function addUploadedMediaAsset(asset: PortfolioMediaAsset) {
 						form.webMedia ?? [],
 						members,
 					);
-				}} disabled={editorLocked} />
+				}} onRemove={removeSetMember} disabled={editorLocked} />
 			{/if}
 			{#if ["print", "print_set", "digital_download"].includes(form.productKind)}
 				<section class="private-assets" aria-labelledby="catalog-private-assets-heading">
-					<div class="section-heading"><span>05</span><div><h2 id="catalog-private-assets-heading">verified private assets</h2><p>Current safe metadata and already-verified replacement choices for this draft.</p></div></div>
+					<div class="section-heading"><span>05</span><div><h2 id="catalog-private-assets-heading">fulfillment files</h2><p>Attach the verified production file that will fulfill this product. These private originals never become display images.</p></div></div>
+					{#if privateAssetCapability && privateAssetUpload}
+						<div class="private-asset-create">
+							{#if !privateAssetAttachment}
+								{#if form.productKind === "print" && privateAssetRows.length === 0}
+									<button type="button" onclick={beginSinglePrivateAssetAttachment} disabled={editorLocked || dirty}>upload print master</button>
+								{:else if form.productKind === "digital_download" && privateAssetRows.length === 0}
+									<button type="button" onclick={beginSinglePrivateAssetAttachment} disabled={editorLocked || dirty}>upload paid ZIP</button>
+								{:else if form.productKind === "print_set"}
+									<button type="button" onclick={() => { pickerPurpose = "set-member"; pickerOpen = true; }} disabled={editorLocked || dirty}>add print to set</button>
+								{/if}
+							{:else}
+								<div class="private-attachment-heading">
+									<div><strong>{privateAssetAttachment.kind === "set-member" ? "new set member" : privateAssetAttachment.kind === "single-print" ? "print master" : "paid download"}</strong>{#if privateAssetAttachment.kind === "set-member"}<small>{privateAssetAttachment.media.originalFilename}</small>{/if}</div>
+									<button type="button" class="secondary" onclick={() => resetPrivateAssetFlow()} disabled={privateUploadBusy}>cancel</button>
+								</div>
+								<div class="private-upload">
+									<label>private {activePrivateAssetRelation?.kind === "print_source" ? "JPEG or PNG" : "ZIP"}<input bind:this={privateFileInput} type="file" accept={activePrivateAssetRelation?.kind === "print_source" ? "image/jpeg,image/png" : "application/zip,.zip"} onchange={(event) => { selectedPrivateFile = event.currentTarget.files?.[0] ?? null; privateUploadMessage = ""; }} disabled={privateUploadBlocked} /></label>
+									{#if activePrivateAssetRelation?.kind === "paid_digital_file"}<label>version (optional)<input maxlength="64" value={privateZipVersion} oninput={(event) => (privateZipVersion = event.currentTarget.value)} disabled={privateUploadBlocked} /></label>{/if}
+									<div class="private-upload-actions">
+										<button type="button" onclick={() => void startPrivateUpload()} disabled={!selectedPrivateFile || privateUploadBlocked}>verify private file</button>
+										{#if privateUploadState === "reading" || privateUploadState === "preparing"}<button type="button" class="secondary" onclick={cancelPrivateUpload}>cancel before upload</button>{/if}
+										{#if privateUploadState === "pending" && automaticChecksRemaining === 0}<button type="button" class="secondary" onclick={() => void checkPrivateUploadAgain()} disabled={!manualCheckReady}>check again</button>{/if}
+										{#if privateUploadState === "verified"}<button type="button" class="primary" onclick={attachVerifiedPrivateAsset}>attach to draft</button>{/if}
+									</div>
+									{#if privateUploadMessage}<p class:upload-error={privateUploadState === "error"} role={privateUploadState === "error" ? "alert" : "status"}>{privateUploadMessage}</p>{/if}
+								</div>
+							{/if}
+						</div>
+					{/if}
+					{#if privateUploadMessage && !privateAssetAttachment && !activePrivateAssetRelation}<p class="private-upload-summary" role="status">{privateUploadMessage}</p>{/if}
 					{#if privateAssetRows.length === 0}
-						<p class="private-asset-empty" role="status">No verified private asset is linked to this draft.</p>
+						<p class="private-asset-empty" role="status">No fulfillment file is attached yet.</p>
 					{:else}
 						<ul class="private-asset-list">
 							{#each privateAssetRows as row (row.relation.relationKey)}
@@ -1159,7 +1351,7 @@ function addUploadedMediaAsset(asset: PortfolioMediaAsset) {
 							{/each}
 						</ul>
 					{/if}
-					<p class="private-asset-note">A verified upload is staged unattached. Only the separate confirmed replacement action changes the selected relation.</p>
+					<p class="private-asset-note">Uploads are verified before they can be attached. Save the draft after adding a new file or set member.</p>
 				</section>
 			{/if}
 			{#if !isGraphV2}
@@ -1179,7 +1371,7 @@ function addUploadedMediaAsset(asset: PortfolioMediaAsset) {
 		{selectedAssetIds}
 		mediaBaseUrl={mediaCapability.mediaBaseUrl}
 		hasMore={mediaPage ? !mediaPage.isDone : false}
-		onChoose={addMediaAsset}
+		onChoose={pickerPurpose === "set-member" ? beginSetMemberAttachment : addMediaAsset}
 		onClose={() => (pickerOpen = false)}
 	/>
 {/if}
@@ -1191,24 +1383,30 @@ function addUploadedMediaAsset(asset: PortfolioMediaAsset) {
 	.option-grid { display: flex; flex-wrap: wrap; gap: 18px 28px; margin-top: 22px; }
 	.check { flex-direction: row !important; align-items: center; color: var(--admin-text) !important; } .check input { width: auto !important; }
 	.multiplier { max-width: 360px; margin-top: 20px; }
-	.publication { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 18px; align-items: center; border: 1px solid var(--admin-border); border-radius: 10px; padding: 18px; }
+	.publication { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 18px; align-items: center; border-block: 1px solid var(--admin-border-strong); padding: 18px 0; }
 	.publication h2, .publication p { margin: 0; } .publication h2 { color: var(--admin-heading); font-size: 1rem; } .publication > div > p, .publication-message { margin-top: 6px; color: var(--admin-text-muted); font-size: .78rem; line-height: 1.5; }
 	.publication-controls { display: grid; justify-items: end; gap: 8px; } .publication-status { color: var(--admin-heading); font-size: .78rem; font-weight: 600; } .publication-actions { display: flex; gap: 8px; } .publication-message, .publication-evidence { grid-column: 1 / -1; }
 	.publication-evidence { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 18px; margin: 0; } .publication-evidence div { min-width: 0; } .publication-evidence dt { color: var(--admin-text-muted); font-size: .68rem; } .publication-evidence dd { margin: 3px 0 0; overflow-wrap: anywhere; color: var(--admin-heading); font-size: .72rem; } .publication-evidence code { font-size: inherit; }
 	.publication-alert { display: flex; justify-content: space-between; gap: 12px; align-items: center; }
-	.readback-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 14px; margin: 0; }
-	.readback-grid div { border: 1px solid var(--admin-border); border-radius: 10px; padding: 14px; background: color-mix(in srgb, var(--admin-surface) 82%, transparent); }
+	.readback-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 0; margin: 0; border-block: 1px solid var(--admin-border); }
+	.readback-grid div { min-width: 0; padding: 14px; border-left: 1px solid var(--admin-border); }
+	.readback-grid div:first-child { border-left: 0; }
 	.readback-grid dt { margin: 0 0 6px; color: var(--admin-text-muted); font-size: .68rem; text-transform: lowercase; letter-spacing: .08em; }
 	.readback-grid dd { margin: 0; color: var(--admin-heading); font-size: .95rem; }
 	.readback-description, .readback-note { margin: 18px 0 0; color: var(--admin-text-muted); line-height: 1.6; }
 	.readback-note { border-top: 1px solid var(--admin-border); padding-top: 18px; font-size: .84rem; }
+	.private-asset-create { margin: 0 0 16px; }
+	.private-attachment-heading { display: flex; justify-content: space-between; gap: 16px; align-items: start; margin-bottom: 12px; }
+	.private-attachment-heading > div { display: grid; gap: 4px; }
+	.private-attachment-heading strong { color: var(--admin-heading); font-size: .8rem; font-weight: 500; }
+	.private-attachment-heading small { color: var(--admin-text-muted); font-size: .7rem; }
 	.private-asset-list { display: grid; gap: 12px; margin: 0; padding: 0; list-style: none; }
-	.private-asset-list li { display: grid; grid-template-columns: minmax(220px, 1fr) minmax(240px, auto); gap: 18px; align-items: end; border: 1px solid var(--admin-border); border-radius: 8px; padding: 14px; }
+	.private-asset-list li { display: grid; grid-template-columns: minmax(220px, 1fr) minmax(240px, auto); gap: 18px; align-items: end; border: 1px solid var(--admin-border); border-radius: 3px; padding: 14px; }
 	.private-asset-metadata { display: grid; min-width: 0; gap: 5px; }
 	.private-asset-metadata strong, .private-asset-metadata span { overflow-wrap: anywhere; color: var(--admin-heading); }
 	.private-asset-metadata strong { font-size: .76rem; font-weight: 500; }
 	.private-asset-metadata span { font-size: .88rem; }
-	.private-asset-metadata small, .replacement-action > span, .private-asset-note, .private-asset-empty { color: var(--admin-text-muted); font-size: .72rem; }
+	.private-asset-metadata small, .replacement-action > span, .private-asset-note, .private-asset-empty, .private-upload-summary { color: var(--admin-text-muted); font-size: .72rem; }
 	.replacement-action, .private-upload { display: grid; gap: 10px; }
 	.replacement-action label { min-width: 240px; color: var(--admin-text-muted); font-size: .68rem; }
 	.private-upload { border-bottom: 1px solid var(--admin-border); padding-bottom: 12px; }

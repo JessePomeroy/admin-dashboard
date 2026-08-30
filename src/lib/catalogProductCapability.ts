@@ -77,6 +77,7 @@ export function getCatalogProductEditorCapability(config: AdminConfig) {
 				: null,
 			privateAssets,
 			publication,
+			publishesToShop: Boolean(publication && settings.publicShopEnabled === true),
 		};
 	}
 	const api = config.api.catalogProducts;
@@ -99,5 +100,6 @@ export function getCatalogProductEditorCapability(config: AdminConfig) {
 		media: null,
 		privateAssets: null,
 		publication: null,
+		publishesToShop: false,
 	};
 }

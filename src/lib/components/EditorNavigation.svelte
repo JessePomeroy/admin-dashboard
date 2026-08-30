@@ -59,7 +59,6 @@ function isCurrent(href: string) {
 	aria-hidden={mobile && !open ? "true" : undefined}
 >
 	<div class="editor-heading">
-		<span class="editor-kicker">workspace</span>
 		<strong>editor</strong>
 		{#if mobile}
 			<button type="button" onclick={onDismiss} aria-label="close editor sections">
@@ -81,33 +80,26 @@ function isCurrent(href: string) {
 <style>
 	.editor-navigation {
 		position: fixed;
-		inset: 0 auto 0 var(--editor-rail-width, 72px);
-		width: var(--editor-panel-width, 220px);
+		inset: 0 auto 0 var(--editor-rail-width, 52px);
+		width: var(--editor-panel-width, 168px);
 		box-sizing: border-box;
-		padding: 34px 24px;
-		background: var(--admin-surface);
+		padding: 20px 12px;
+		background: var(--editor-navigation);
 		border-right: 1px solid var(--admin-border);
-		box-shadow: 16px 0 36px color-mix(in srgb, var(--admin-bg) 24%, transparent);
 		z-index: 48;
 	}
 
 	.editor-heading {
 		display: flex;
 		flex-direction: column;
-		gap: 4px;
+		gap: 2px;
 		position: relative;
-		padding: 0 12px 30px;
-	}
-
-	.editor-kicker {
-		font-size: 0.64rem;
-		letter-spacing: 0.14em;
-		color: var(--admin-text-subtle);
+		padding: 0 8px 20px;
 	}
 
 	strong {
 		font-family: var(--admin-font-display);
-		font-size: 1.34rem;
+		font-size: 1.08rem;
 		font-weight: 500;
 		color: var(--admin-heading);
 	}
@@ -141,21 +133,43 @@ function isCurrent(href: string) {
 	nav {
 		display: flex;
 		flex-direction: column;
-		gap: 4px;
+		gap: 0;
+		border-left: 1px solid var(--admin-border);
 	}
 
 	a {
-		padding: 12px;
-		border-radius: 6px;
+		position: relative;
+		padding: 9px 8px 9px 13px;
 		color: var(--admin-text-muted);
 		text-decoration: none;
-		font-size: 0.9rem;
+		font-size: 0.76rem;
+		transition: color 0.15s ease, background-color 0.15s ease;
 	}
 
-	a:hover,
+	a:hover {
+		color: var(--admin-heading);
+		background: color-mix(in srgb, var(--admin-heading) 3%, transparent);
+	}
+
 	a.active {
 		color: var(--admin-heading);
-		background: var(--admin-active);
+		background: transparent;
+		font-weight: 500;
+	}
+
+	a.active::before {
+		position: absolute;
+		top: 7px;
+		bottom: 7px;
+		left: -2px;
+		width: 3px;
+		background: var(--admin-accent-strong);
+		content: "";
+	}
+
+	a:focus-visible {
+		outline: 1px solid var(--admin-accent-strong);
+		outline-offset: -1px;
 	}
 
 	.mobile {

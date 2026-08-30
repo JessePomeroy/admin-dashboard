@@ -480,6 +480,8 @@ export interface AdminEditorConfig {
 		privateAssetReplacementEnabled?: boolean;
 		/** Explicitly enables per-product Convex CMS publication when both API refs are configured. */
 		publicationEnabled?: boolean;
+		/** States that this host's public Shop reads the published Convex catalog directly. */
+		publicShopEnabled?: boolean;
 		/** Optional purpose-specific private upload routes; both rooted queryless paths are required. */
 		privateAssetUpload?: {
 			prepareEndpoint: string;

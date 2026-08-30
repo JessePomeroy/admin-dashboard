@@ -1,6 +1,6 @@
 [data-admin] {
-	--editor-rail-width: 72px;
-	--editor-panel-width: 220px;
+	--editor-rail-width: 52px;
+	--editor-panel-width: 168px;
 }
 
 [data-admin] .sidebar.editor-compact {
@@ -8,25 +8,48 @@
 }
 
 [data-admin] .sidebar.editor-compact .sidebar-brand {
-	padding-inline: 16px;
+	padding: 18px 10px 14px;
 	text-align: center;
 }
 
 [data-admin] .sidebar.editor-compact .brand-text {
 	display: block;
 	overflow: hidden;
-	width: 32px;
+	width: 30px;
 	white-space: nowrap;
 	font-size: 0;
 }
 
 [data-admin] .sidebar.editor-compact .brand-text::first-letter {
-	font-size: 1.15rem;
+	font-size: 1rem;
 }
 
 [data-admin] .sidebar.editor-compact .nav-item {
+	position: relative;
 	justify-content: center;
 	padding-inline: 0;
+	min-height: 34px;
+	border-radius: 0;
+	background: transparent;
+	box-shadow: none;
+}
+
+[data-admin] .sidebar.editor-compact .nav-item:hover {
+	background: color-mix(in srgb, var(--admin-heading) 3%, transparent);
+}
+
+[data-admin] .sidebar.editor-compact .nav-item.active {
+	background: transparent;
+}
+
+[data-admin] .sidebar.editor-compact .nav-item.active::before {
+	position: absolute;
+	top: 8px;
+	bottom: 8px;
+	left: -7px;
+	width: 3px;
+	background: var(--admin-accent-strong);
+	content: "";
 }
 
 [data-admin] .sidebar.editor-compact .nav-item > span:not(.nav-dot),
@@ -36,13 +59,39 @@
 }
 
 [data-admin] .sidebar.editor-compact .sidebar-footer {
-	padding-inline: 10px;
+	padding: 7px 9px;
+}
+
+[data-admin] .sidebar.editor-compact .sidebar-nav {
+	gap: 0;
+	padding: 2px 7px;
+	scrollbar-width: none;
+}
+
+[data-admin] .sidebar.editor-compact .sidebar-nav::-webkit-scrollbar {
+	display: none;
+}
+
+[data-admin] .sidebar.editor-compact .nav-separator {
+	margin: 3px 6px;
+}
+
+[data-admin] .sidebar.editor-compact .user-info {
+	display: none;
 }
 
 [data-admin] .sidebar.editor-compact .theme-toggle,
 [data-admin] .sidebar.editor-compact .back-link {
 	justify-content: center;
 	padding-inline: 0;
+	min-height: 34px;
+	border-radius: 0;
+	background: transparent;
+}
+
+[data-admin] .sidebar.editor-compact .theme-toggle:hover,
+[data-admin] .sidebar.editor-compact .back-link:hover {
+	background: color-mix(in srgb, var(--admin-heading) 3%, transparent);
 }
 
 [data-admin] .admin-main.editor-active {
@@ -52,7 +101,7 @@
 
 @media (min-width: 641px) and (max-width: 1179px) {
 	[data-admin] {
-		--editor-panel-width: 200px;
+		--editor-panel-width: 160px;
 	}
 }
 

@@ -17,6 +17,7 @@ import {
 	moveCatalogProductVariant,
 	moveCatalogProductWebMedia,
 	moveCatalogProductSetMember,
+	newCatalogProductGraphDraft,
 	newCatalogProductKey,
 	newCatalogProductVariant,
 	parseCatalogBasisPoints,
@@ -134,6 +135,16 @@ describe("catalog product editor helpers", () => {
 			publishDraft: explicitApi.publishDraft,
 			unpublish: explicitApi.unpublish,
 		});
+		expect(getCatalogProductEditorCapability({
+			editor: {
+				products: {
+					enabledKinds: ["print"],
+					publicationEnabled: true,
+					publicShopEnabled: true,
+				},
+			},
+			api: { catalogProductGraphs: explicitApi },
+		} as unknown as AdminConfig)?.publishesToShop).toBe(true);
 		expect(capability({ ...explicitApi, unpublish: undefined }, true)?.publication).toBeNull();
 	});
 
@@ -446,13 +457,90 @@ describe("catalog product editor helpers", () => {
 		expect(draft).not.toHaveProperty("setMembers");
 	});
 
-	it("labels active and discarded private products", () => {
+	it("labels unpublished, published, changed, and discarded products", () => {
 		expect(catalogProductLabel(summary())).toBe("Moonrise");
-		expect(catalogProductStatus(summary())).toBe("draft");
+		expect(catalogProductStatus(summary())).toBe("unpublished");
+		expect(catalogProductStatus(summary({
+			published: summary().draft,
+		}))).toBe("published");
+		expect(catalogProductStatus(summary({
+			published: { ...summary().draft!, revisionId: "published-revision" },
+		}))).toBe("changes");
 		expect(catalogProductLabel(summary({ draft: null, slug: null }))).toBe(
 			"untitled print",
 		);
 		expect(catalogProductStatus(summary({ draft: null }))).toBe("discarded");
+	});
+
+	it("creates valid unavailable graph drafts for every product kind", () => {
+		const kinds = ["print", "print_set", "postcard", "merchandise", "tapestry", "digital_download"] as const;
+		for (const kind of kinds) {
+			const draft = newCatalogProductGraphDraft(kind, {
+				title: "New product",
+				slug: "new-product",
+				...(["postcard", "merchandise", "tapestry", "digital_download"].includes(kind)
+					? { retailPriceCents: 2500 }
+					: {}),
+			});
+			expect(draft).toEqual(expect.objectContaining({
+				schemaVersion: 2,
+				productKind: kind,
+				saleAvailability: "unavailable",
+				title: "New product",
+				slug: "new-product",
+			}));
+			expect(draft.variants).toHaveLength(1);
+			expect(draft.variants?.[0]?.status).toBe("disabled");
+		}
+		expect(() => newCatalogProductGraphDraft("digital_download", {
+			title: "Download",
+			slug: "download",
+		})).toThrow(/starting retail price/i);
+	});
+
+	it("saves newly attached private files and complete print-set members", () => {
+		const printSetDraft = newCatalogProductGraphDraft("print_set", {
+			title: "New set",
+			slug: "new-set",
+		});
+		const revision: CatalogProductEditorRevision = {
+			revisionId: "new-set-revision",
+			schemaVersion: 2,
+			productKind: "print_set",
+			createdAt: 1,
+			draft: printSetDraft,
+		};
+		const form = catalogProductGraphDraftFromRevision(revision);
+		form.printSources = [{ key: "source-new", order: 0, assetId: "verified-source" }];
+		form.webMedia = [{
+			key: "member-media",
+			role: "set_member",
+			assetId: "ready-media",
+			altText: "Moonlit print",
+		}];
+		form.setMembers = [{
+			key: "member-new",
+			mediaPlacementKey: "member-media",
+			printSourceKey: "source-new",
+		}];
+		expect(catalogProductGraphDraftFromForm(revision, form)).toEqual(
+			expect.objectContaining({
+				printSources: [{ key: "source-new", order: 0, assetId: "verified-source" }],
+				setMembers: [{
+					key: "member-new",
+					order: 0,
+					mediaPlacementKey: "member-media",
+					printSourceKey: "source-new",
+				}],
+				webMedia: [{
+					key: "member-media",
+					order: 0,
+					role: "set_member",
+					assetId: "ready-media",
+					altText: "Moonlit print",
+				}],
+			}),
+		);
 	});
 
 	it("creates slugs independently from opaque identity", () => {

@@ -449,27 +449,27 @@ function reloadServerDraft() {
 
 <style>
 	.loading, .page-alert { margin: 32px; } .loading { padding: 16px 8px; color: var(--admin-text-muted); }
-	.gallery-page { max-width: 1120px; padding: 32px 32px 96px; }
-	header { display: flex; justify-content: space-between; gap: 28px; align-items: flex-end; margin-bottom: 30px; }
+	.gallery-page { max-width: 1120px; padding: 22px 24px 72px; }
+	header { display: flex; justify-content: space-between; gap: 20px; align-items: flex-end; margin-bottom: 18px; }
 	.back { color: var(--admin-text-muted); font-size: .74rem; text-decoration: none; }
-	h1 { margin: 10px 0 0; color: var(--admin-heading); font-family: var(--admin-font-display); font-size: 1.8rem; font-weight: 500; }
-	header p { max-width: 620px; margin: 8px 0 0; color: var(--admin-text-muted); line-height: 1.55; }
+	h1 { margin: 6px 0 0; color: var(--admin-heading); font-family: var(--admin-font-display); font-size: clamp(1.28rem, 1.8vw, 1.55rem); font-weight: 500; }
+	header p { max-width: 620px; margin: 4px 0 0; color: var(--admin-text-muted); font-size: .76rem; line-height: 1.45; }
 	.actions { display: flex; align-items: center; justify-content: flex-end; gap: 8px; flex-wrap: wrap; }
 	.actions span { color: var(--admin-text-subtle); font-size: .72rem; white-space: nowrap; }
-	button { min-height: 40px; border: 1px solid transparent; border-radius: 6px; padding: 9px 13px; background: var(--admin-accent); color: var(--admin-bg); font: inherit; font-size: .76rem; cursor: pointer; }
+	button { min-height: 36px; border: 1px solid transparent; border-radius: 3px; padding: 8px 11px; background: var(--admin-accent); color: var(--admin-bg); font: inherit; font-size: .72rem; cursor: pointer; }
 	button:disabled { opacity: .45; cursor: default; }
 	button:focus-visible, input:focus, textarea:focus, .back:focus-visible { outline: 2px solid var(--admin-accent); outline-offset: 2px; }
 	.secondary { border-color: var(--admin-border-strong); background: transparent; color: var(--admin-text); }
 	.alert { padding: 12px 14px; border: 1px solid color-mix(in srgb, var(--status-rose) 45%, transparent); border-radius: 6px; color: var(--status-rose); }
 	.success { padding: 12px 14px; border: 1px solid color-mix(in srgb, var(--status-sage) 45%, transparent); border-radius: 6px; color: var(--status-sage); }
-	section { margin-top: 20px; padding: 26px; border: 1px solid var(--admin-border); border-radius: 10px; background: var(--admin-surface); }
-	.section-heading { margin-bottom: 22px; }
-	.section-heading h2 { margin: 0; color: var(--admin-heading); font-size: 1rem; font-weight: 500; }
-	.section-heading p { margin: 5px 0 0; color: var(--admin-text-muted); font-size: .8rem; }
-	.fields { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+	section { margin-top: 0; padding: 20px 0 24px; border: 0; border-top: 1px solid var(--admin-border-strong); border-radius: 0; background: transparent; }
+	.section-heading { margin-bottom: 15px; }
+	.section-heading h2 { margin: 0; color: var(--admin-heading); font-size: .88rem; font-weight: 500; }
+	.section-heading p { margin: 4px 0 0; color: var(--admin-text-muted); font-size: .74rem; }
+	.fields { display: grid; grid-template-columns: 1fr 1fr; gap: 13px; }
 	.wide { grid-column: 1 / -1; }
-	label { display: flex; flex-direction: column; gap: 7px; color: var(--admin-text-muted); font-size: .76rem; }
-	input, textarea { width: 100%; box-sizing: border-box; border: 1px solid var(--admin-border-strong); border-radius: 6px; padding: 10px 11px; background: var(--admin-bg); color: var(--admin-heading); font: inherit; text-transform: none; }
+	label { display: flex; flex-direction: column; gap: 6px; color: var(--admin-text-muted); font-size: .72rem; }
+	input, textarea { width: 100%; box-sizing: border-box; border: 1px solid var(--admin-border-strong); border-radius: 3px; padding: 9px 10px; background: var(--editor-control); color: var(--admin-heading); font: inherit; text-transform: none; }
 	[aria-invalid="true"] { border-color: var(--status-rose); }
 	@media (max-width: 820px) {
 		.gallery-page { padding: 24px 20px 72px; }
