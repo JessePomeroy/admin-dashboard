@@ -53,6 +53,10 @@ export interface CatalogProductDraftForm {
 	setMembers: CatalogProductSetMemberDraftForm[];
 	/** V2-only. Absent on the legacy V1 single-print form. */
 	webMedia?: CatalogProductWebMediaDraftForm[];
+	/** V2-only verified private print-source relations. */
+	printSources?: CatalogProductGraphV2PrintSourceDraft[];
+	/** V2-only verified paid download relation. */
+	paidFile?: CatalogProductGraphV2PaidFileDraft;
 }
 
 export interface CatalogProductRevisionSummary {
@@ -265,7 +269,11 @@ export interface CatalogProductGraphV2Draft {
 	paidFile?: unknown;
 }
 
-export type CatalogProductStatus = "draft" | "discarded";
+export type CatalogProductStatus =
+	| "unpublished"
+	| "published"
+	| "changes"
+	| "discarded";
 const CATALOG_PRICE_CENTS_MAXIMUM = 100_000_000;
 const CATALOG_FRAME_MULTIPLIER_BASIS_POINTS_MAXIMUM = 1_000_000;
 export const CATALOG_PRODUCT_VARIANT_LIMIT = 100;
@@ -334,6 +342,70 @@ export function emptyCatalogProductDraft(): CatalogProductDraftForm {
 		framePriceMultiplierBasisPoints: 10_000,
 		variants: [],
 		setMembers: [],
+	};
+}
+
+export function newCatalogProductGraphDraft(
+	productKind: CatalogProductKind,
+	input: {
+		title: string;
+		slug: string;
+		retailPriceCents?: number;
+	},
+): CatalogProductGraphV2Draft {
+	const fixedPrice = productKind === "postcard"
+		|| productKind === "merchandise"
+		|| productKind === "tapestry"
+		|| productKind === "digital_download";
+	if (
+		fixedPrice
+		&& (
+			!Number.isSafeInteger(input.retailPriceCents)
+			|| (input.retailPriceCents ?? 0) <= 0
+			|| (input.retailPriceCents ?? 0) > CATALOG_PRICE_CENTS_MAXIMUM
+		)
+	) {
+		throw new Error("Enter a starting retail price in whole cents.");
+	}
+	const variants: CatalogProductGraphV2VariantDraft[] = fixedPrice
+		? [{
+				key: "default",
+				order: 0,
+				retailPriceCents: input.retailPriceCents,
+				status: "disabled",
+			}]
+		: [{ key: newCatalogVariantKey(), order: 0, status: "disabled" }];
+	const common = {
+		schemaVersion: 2 as const,
+		productKind,
+		title: input.title.trim(),
+		slug: input.slug,
+		currency: "usd" as const,
+		saleAvailability: "unavailable" as const,
+		shopPlacement: { featured: false },
+		variants,
+		webMedia: [],
+	};
+	if (productKind === "print" || productKind === "print_set") {
+		return {
+			...common,
+			productKind,
+			fulfillmentMode: "production_partner",
+			printOptions: {
+				borderOptionsEnabled: false,
+				frameOptionsEnabled: false,
+				framePriceMultiplierBasisPoints: 10_000,
+			},
+			printSources: [],
+			...(productKind === "print_set" ? { setMembers: [] } : {}),
+		};
+	}
+	return {
+		...common,
+		productKind,
+		fulfillmentMode: productKind === "digital_download"
+			? "digital_delivery"
+			: "merchant_fulfilled",
 	};
 }
 
@@ -447,6 +519,23 @@ export function catalogProductGraphDraftFromRevision(
 			assetId: placement.assetId,
 			altText: placement.altText,
 		})),
+		...(draft.productKind === "print" || draft.productKind === "print_set"
+			? { printSources: catalogProductGraphPrintSources(draft.printSources) }
+			: {}),
+		...(draft.productKind === "digital_download"
+			&& isUnknownRecord(draft.paidFile)
+			&& typeof draft.paidFile.key === "string"
+			&& typeof draft.paidFile.assetId === "string"
+			? {
+					paidFile: {
+						key: draft.paidFile.key,
+						assetId: draft.paidFile.assetId,
+						...(typeof draft.paidFile.version === "string"
+							? { version: draft.paidFile.version }
+							: {}),
+					},
+				}
+			: {}),
 	};
 }
 
@@ -482,6 +571,10 @@ export function copyCatalogProductDraft(
 		...(source.webMedia
 			? { webMedia: source.webMedia.map((placement) => ({ ...placement })) }
 			: {}),
+		...(source.printSources
+			? { printSources: source.printSources.map((relation) => ({ ...relation })) }
+			: {}),
+		...(source.paidFile ? { paidFile: { ...source.paidFile } } : {}),
 	};
 }
 
@@ -518,6 +611,10 @@ export function serializeCatalogProductDraft(draft: CatalogProductDraftForm) {
 					})),
 				}
 			: {}),
+		...(draft.printSources
+			? { printSources: draft.printSources.map((relation) => ({ ...relation })) }
+			: {}),
+		...(draft.paidFile ? { paidFile: { ...draft.paidFile } } : {}),
 	});
 }
 
@@ -669,7 +766,8 @@ export function catalogProductGraphDraftFromForm(
 		throw new Error("The catalog graph editor cannot change product kind.");
 	}
 	const currentWebMedia = catalogProductGraphWebMedia(draft.webMedia);
-	const currentPrintSources = catalogProductGraphPrintSources(draft.printSources);
+	const currentPrintSources = form.printSources
+		?? catalogProductGraphPrintSources(draft.printSources);
 	const webMedia = form.webMedia ?? currentWebMedia.map((placement) => ({
 		key: placement.key,
 		role: placement.role,
@@ -725,7 +823,7 @@ export function catalogProductGraphDraftFromForm(
 				: {}),
 			status: variant.status,
 			})),
-		...(draft.printSources !== undefined
+		...(draft.printSources !== undefined || form.printSources !== undefined
 			? { printSources: currentPrintSources }
 			: {}),
 		...(draft.productKind === "print_set"
@@ -739,7 +837,15 @@ export function catalogProductGraphDraftFromForm(
 					})),
 				}
 			: {}),
+		...(draft.productKind === "digital_download"
+			&& form.paidFile
+			? { paidFile: { ...form.paidFile } }
+			: {}),
 	};
+}
+
+export function newCatalogPrivateRelationKey(prefix: "print" | "download" | "member") {
+	return `${prefix}-${globalThis.crypto.randomUUID()}`;
 }
 
 function defaultCatalogProductWebMediaRole(
@@ -847,7 +953,12 @@ export function catalogProductLabel(product: CatalogProductEditorSummary) {
 export function catalogProductStatus(
 	product: CatalogProductEditorSummary,
 ): CatalogProductStatus {
-	return product.draft ? "draft" : "discarded";
+	if (product.published) {
+		return product.draft && product.draft.revisionId !== product.published.revisionId
+			? "changes"
+			: "published";
+	}
+	return product.draft ? "unpublished" : "discarded";
 }
 
 export function slugifyCatalogProductTitle(value: string) {

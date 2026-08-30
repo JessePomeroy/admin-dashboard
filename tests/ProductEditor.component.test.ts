@@ -38,6 +38,7 @@ const mocks = vi.hoisted(() => ({
 	privateAssetEnabled: false,
 	publicationEnabled: false,
 	publicationRefsEnabled: false,
+	publicShopEnabled: false,
 	mediaEnabled: false,
 	mediaRegisterEnabled: true,
 	refs: {
@@ -156,6 +157,7 @@ vi.mock("../src/lib/config", () => ({
 				baseHref: "/admin/editor/products",
 				enabledKinds: mocks.enabledKinds,
 				...(mocks.publicationEnabled ? { publicationEnabled: true } : {}),
+				...(mocks.publicShopEnabled ? { publicShopEnabled: true } : {}),
 				...(mocks.privateAssetEnabled
 					? {
 							privateAssetReplacementEnabled: true,
@@ -587,6 +589,7 @@ describe("draft-only product editor", () => {
 		mocks.privateAssetEnabled = false;
 		mocks.publicationEnabled = false;
 		mocks.publicationRefsEnabled = false;
+		mocks.publicShopEnabled = false;
 		mocks.mediaEnabled = false;
 		mocks.mediaRegisterEnabled = true;
 	});
@@ -637,7 +640,7 @@ describe("draft-only product editor", () => {
 				document.querySelectorAll(".status"),
 				(item) => item.textContent,
 			),
-		).toEqual(["draft", "discarded"]);
+		).toEqual(["unpublished", "discarded"]);
 		(document.querySelector(".new-product") as HTMLButtonElement).click();
 		await tick();
 		const name = input("product name");
@@ -659,6 +662,49 @@ describe("draft-only product editor", () => {
 		);
 		expect(mocks.goto).toHaveBeenCalledWith(
 			"/admin/editor/products/new-product",
+		);
+	});
+
+	it("creates a real Graph V2 product kind and states its Shop authority", async () => {
+		mocks.graphApiEnabled = true;
+		mocks.enabledKinds = ["digital_download"];
+		mocks.publicationEnabled = true;
+		mocks.publicationRefsEnabled = true;
+		mocks.publicShopEnabled = true;
+		await mountList();
+		expect(document.body.textContent).toContain(
+			"Create, prepare, and publish the products sold in your Shop.",
+		);
+		button("new")?.click();
+		await tick();
+		const name = input("product name")!;
+		name.value = "Night Preset";
+		name.dispatchEvent(new Event("input", { bubbles: true }));
+		const price = input("starting retail price")!;
+		price.value = "2400";
+		price.dispatchEvent(new Event("input", { bubbles: true }));
+		button("create product draft")?.click();
+		await tick();
+		await Promise.resolve();
+		expect(mocks.mutation).toHaveBeenCalledWith(
+			mocks.refs.createDraft,
+			expect.objectContaining({
+				siteUrl: "https://site.example",
+				draft: expect.objectContaining({
+					schemaVersion: 2,
+					productKind: "digital_download",
+					title: "Night Preset",
+					slug: "night-preset",
+					fulfillmentMode: "digital_delivery",
+					saleAvailability: "unavailable",
+					variants: [{
+						key: "default",
+						order: 0,
+						retailPriceCents: 2400,
+						status: "disabled",
+					}],
+				}),
+			}),
 		);
 	});
 
@@ -700,12 +746,12 @@ describe("draft-only product editor", () => {
 		await tick();
 		expect(Array.from(document.querySelectorAll(".product-list strong"), (item) => item.textContent))
 			.toEqual(["Soft Portal"]);
-		expect(document.querySelector(".new-product")).toBeNull();
+		expect(document.querySelector(".new-product")).not.toBeNull();
 		const allKinds = Array.from(document.querySelectorAll<HTMLButtonElement>(".kind-filters button"))
 			.find((item) => item.textContent?.includes("all products"));
 		allKinds?.click();
 		const draftStatus = Array.from(document.querySelectorAll<HTMLButtonElement>(".status-filters button"))
-			.find((item) => item.textContent === "draft");
+			.find((item) => item.textContent === "unpublished");
 		draftStatus?.click();
 		await tick();
 		expect(Array.from(document.querySelectorAll(".product-list strong"), (item) => item.textContent))
@@ -847,10 +893,10 @@ describe("draft-only product editor", () => {
 
 	it("reserves the three-pane product workspace for viewports that fit the record", () => {
 		expect(productWorkbenchSource).toContain(
-			"grid-template-columns: 156px 268px minmax(0, 1fr)",
+			"grid-template-columns: 128px 232px minmax(0, 1fr)",
 		);
 		expect(productWorkbenchSource).toContain(
-			"@media (min-width: 641px) and (max-width: 1399px)",
+			"@media (min-width: 641px) and (max-width: 1279px)",
 		);
 	});
 
@@ -1263,7 +1309,7 @@ describe("draft-only product editor", () => {
 		expect(document.body.textContent).toContain(
 			"Edit this private imported tapestry draft",
 		);
-		expect(document.body.textContent).not.toContain("fulfillment");
+		expect(input("fulfillment")).toBeUndefined();
 		expect(document.body.textContent).not.toContain("offer frame options");
 		expect(button("add variant")).toBeUndefined();
 		expect(input("material key")).toBeUndefined();
@@ -1723,7 +1769,7 @@ describe("draft-only product editor", () => {
 		expect(document.body.textContent).toContain("application/zip");
 		expect(document.body.textContent).toContain("1.5 MB");
 		expect(document.body.textContent).toContain("1.0.0");
-		expect(document.body.textContent).not.toContain("fulfillment");
+		expect(input("fulfillment")).toBeUndefined();
 		expect(document.body.textContent).not.toContain("offer border options");
 		expect(document.body.textContent).not.toContain("offer frame options");
 		expect(document.body.textContent).not.toContain("set members");
@@ -1929,13 +1975,98 @@ describe("draft-only product editor", () => {
 			draft: {
 				...digitalDownloadGraphRevision,
 				revisionId: "graph-revision-download-2",
+				draft: {
+					...digitalDownloadGraphRevision.draft,
+					paidFile: { key: "download", assetId: replacement.assetId, version: "2.0.0" },
+				},
 				paidFileAsset: { relationKey: "download", asset: replacement },
 			},
 			updatedAt: 2,
 		});
 		expect(document.querySelector(".save-state")?.textContent).toBe("saved");
 		expect(input("product name")?.disabled).toBe(false);
+		expect(document.body.textContent).toContain("time-aware-theme-v2.zip");
 		expect(button("publish")?.disabled).toBe(false);
+	});
+
+	it("attaches the first verified paid ZIP to a newly created download draft", async () => {
+		mocks.graphApiEnabled = true;
+		mocks.privateAssetEnabled = true;
+		mocks.enabledKinds = ["digital_download"];
+		const draftWithoutFile = {
+			...digitalDownloadGraphRevision,
+			draft: {
+				...digitalDownloadGraphRevision.draft,
+				paidFile: undefined,
+			},
+			paidFileAsset: null,
+		};
+		mocks.detailData = {
+			productId: "product-1",
+			productKey: "catalog.digital.new",
+			productKind: "digital_download",
+			graphVersion: 2,
+			slug: "night-preset",
+			draft: draftWithoutFile,
+			published: null,
+			updatedAt: 1,
+			publishedAt: null,
+		};
+		const verified = {
+			kind: "paid_digital_file",
+			assetId: "paid-file-new",
+			status: "verified",
+			originalFilename: "night-preset.zip",
+			mimeType: "application/zip",
+			sizeBytes: 3,
+			version: "1.0.0",
+			createdAt: 1,
+		};
+		const relationUuid = "123e4567-e89b-42d3-a456-426614174010";
+		const uploadUuid = "123e4567-e89b-42d3-a456-426614174011";
+		vi.spyOn(globalThis.crypto, "randomUUID")
+			.mockReturnValueOnce(relationUuid)
+			.mockReturnValueOnce(uploadUuid);
+		const fetchMock = vi.fn()
+			.mockResolvedValueOnce(Response.json({
+				status: "upload_required",
+				uploadHandle: uploadUuid,
+				uploadUrl: "https://cms-media-worker.thinkingofview.workers.dev/v1/catalog-assets/editor-uploads/source",
+				uploadToken: "opaque-token",
+				uploadExpiresAt: "2026-01-01T00:00:00.000Z",
+			}))
+			.mockResolvedValueOnce(new Response(null, { status: 204 }))
+			.mockResolvedValueOnce(Response.json({ status: "verified", asset: verified }));
+		vi.stubGlobal("fetch", fetchMock);
+
+		await mountDetail();
+		button("upload paid ZIP")?.click();
+		await tick();
+		const file = new File(["zip"], "night-preset.zip", { type: "application/zip" });
+		Object.defineProperty(file, "arrayBuffer", {
+			value: vi.fn(async () => new TextEncoder().encode("zip").buffer),
+		});
+		chooseFile(document.querySelector<HTMLInputElement>('.private-asset-create input[type="file"]')!, file);
+		const version = input("version (optional)")!;
+		version.value = "1.0.0";
+		version.dispatchEvent(new Event("input", { bubbles: true }));
+		await tick();
+		expect(button("verify private file")?.disabled).toBe(false);
+		button("verify private file")?.click();
+		await vi.waitFor(() => expect(button("attach to draft"), `${document.body.textContent}\nfetches:${fetchMock.mock.calls.length}`).toBeDefined());
+		button("attach to draft")?.click();
+		await tick();
+		expect(document.body.textContent).toContain("attached to this draft");
+		expect(button("save draft")?.disabled).toBe(false);
+		button("save draft")?.click();
+		await tick();
+		await Promise.resolve();
+		const saveCall = mocks.mutation.mock.calls.find(([ref]) => ref === mocks.refs.saveDraft);
+		expect(saveCall?.[1].draft.paidFile).toEqual({
+			key: `download-${relationUuid}`,
+			assetId: "paid-file-new",
+			version: "1.0.0",
+		});
 	});
 
 	it("starts a distinct upload after the first replacement echo and cleans up pending checks", async () => {

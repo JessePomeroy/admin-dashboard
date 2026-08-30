@@ -79,7 +79,7 @@ function movePlacement(index: number, direction: -1 | 1) {
 </section>
 
 <style>
-	section { margin-top: 20px; padding: 26px; border: 1px solid var(--admin-border); border-radius: 10px; background: var(--admin-surface); }
+	section { margin-top: 0; padding: 20px 0 24px; border-top: 1px solid var(--admin-border-strong); }
 	.section-heading { display: flex; justify-content: space-between; gap: 20px; align-items: center; margin-bottom: 22px; }
 	h2 { margin: 0; color: var(--admin-heading); font-size: 1rem; font-weight: 500; }
 	.section-heading p { margin: 5px 0 0; color: var(--admin-text-muted); font-size: .8rem; }
@@ -107,7 +107,7 @@ function movePlacement(index: number, direction: -1 | 1) {
 	.empty strong { color: var(--admin-heading); }
 	.empty p { margin: 7px 0 0; color: var(--admin-text-muted); }
 	@media (max-width: 820px) {
-		section { padding: 20px; }
+		section { padding: 18px 0 22px; }
 		.section-heading { align-items: flex-start; flex-direction: column; }
 		ol { grid-template-columns: 1fr; }
 		button, .remove { min-height: 44px; }

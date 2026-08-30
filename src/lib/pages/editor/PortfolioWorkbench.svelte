@@ -1,6 +1,7 @@
 <script lang="ts">
 import { useQuery } from "convex-svelte";
 import { tick, type Snippet } from "svelte";
+import { dragHandle, dragHandleZone } from "svelte-dnd-action";
 import { useAdminClient } from "../../adminClient";
 import { getAdminConfig } from "../../config";
 import {
@@ -40,6 +41,8 @@ let galleries = $state<PortfolioGalleryEditorSummary[] | undefined>(undefined);
 let pendingOrderJson = $state<string | null>(null);
 let reorderState = $state<"idle" | "saving" | "error">("idle");
 let reorderMessage = $state("");
+let dragOrigin = $state<PortfolioGalleryEditorSummary[] | null>(null);
+let dragItems = $state<DraggableGallery[] | null>(null);
 let search = $state("");
 let filter = $state<"all" | "draft" | "published" | "changed">("all");
 let creating = $state(false);
@@ -67,6 +70,11 @@ let visibleGalleries = $derived((galleries ?? []).filter((gallery) => {
 		.toLocaleLowerCase()
 		.includes(normalizedSearch);
 }));
+let baseDraggableGalleries = $derived(visibleGalleries.map((gallery) => ({
+	...gallery,
+	id: gallery.galleryId,
+})));
+let draggableGalleries = $derived(dragItems ?? baseDraggableGalleries);
 
 $effect(() => {
 	if (!serverGalleries) return;
@@ -159,14 +167,32 @@ async function createGallery() {
 	}
 }
 
-async function moveGallery(index: number, direction: -1 | 1) {
+type DraggableGallery = PortfolioGalleryEditorSummary & {
+	id: string;
+	isDndShadowItem?: boolean;
+};
+
+function summariesFromDrag(items: DraggableGallery[]) {
+	return items.map(({ id: _id, isDndShadowItem: _shadow, ...gallery }) => gallery);
+}
+
+function handleGalleryConsider(event: CustomEvent<{ items: DraggableGallery[] }>) {
 	if (!galleries || reorderState === "saving" || orderingDisabled) return;
-	const destination = index + direction;
-	if (destination < 0 || destination >= galleries.length) return;
-	const previous = galleries;
-	const reordered = [...galleries];
-	[reordered[index], reordered[destination]] = [reordered[destination], reordered[index]];
+	dragOrigin ??= [...galleries];
+	dragItems = event.detail.items;
+}
+
+async function handleGalleryFinalize(event: CustomEvent<{ items: DraggableGallery[] }>) {
+	if (!galleries || reorderState === "saving" || orderingDisabled) return;
+	const previous = dragOrigin ?? [...galleries];
+	const reordered = summariesFromDrag(event.detail.items);
+	dragOrigin = null;
+	dragItems = null;
 	const galleryIds = reordered.map(({ galleryId }) => galleryId);
+	if (galleryIds.join("\u0000") === previous.map(({ galleryId }) => galleryId).join("\u0000")) {
+		galleries = reordered;
+		return;
+	}
 	galleries = reordered;
 	pendingOrderJson = JSON.stringify(galleryIds);
 	reorderState = "saving";
@@ -187,7 +213,6 @@ async function moveGallery(index: number, direction: -1 | 1) {
 <div class="portfolio-workbench" class:has-selection={Boolean(selectedGalleryId)} inert={creating}>
 	<header class="workbench-heading">
 		<div>
-			<p class="eyebrow">content / portfolio</p>
 			<h1>gallery workspace</h1>
 		</div>
 		<div class="heading-meta">
@@ -199,12 +224,12 @@ async function moveGallery(index: number, direction: -1 | 1) {
 	<div class="workbench-grid">
 		<aside class="collection-pane" aria-label="Portfolio galleries">
 			<div class="collection-heading">
-				<div><span class="eyebrow">collection</span><h2>galleries</h2></div>
+				<h2>galleries</h2>
 				<button bind:this={newGalleryButton} type="button" class="new-gallery" onclick={() => void openCreate()}>new</button>
 			</div>
 			<p class="collection-note">{publishingEnabled
-				? "The public site follows this deliberate order."
-				: "This deliberate order is saved with the private drafts."}</p>
+				? "The public site follows this deliberate order. Drag galleries to rearrange it."
+				: "This deliberate order is saved with the private drafts. Drag galleries to rearrange it."}</p>
 
 			<label class="search-field"><span>search galleries</span><input type="search" placeholder="Search title or URL" bind:value={search} /></label>
 			<div class="filters" role="group" aria-label="Filter galleries">
@@ -221,19 +246,33 @@ async function moveGallery(index: number, direction: -1 | 1) {
 			{:else if visibleGalleries.length === 0}
 				<p class="collection-message">{(galleries?.length ?? 0) === 0 ? "No galleries yet." : "No galleries match this view."}</p>
 			{:else}
-				<ol class="gallery-list">
-					{#each visibleGalleries as gallery}
-						{@const sourceIndex = galleries?.findIndex(({ galleryId }) => galleryId === gallery.galleryId) ?? -1}
+				<ol
+					class="gallery-list"
+					use:dragHandleZone={{
+						items: draggableGalleries,
+						dragDisabled: orderingDisabled || reorderState === "saving",
+						flipDurationMs: 140,
+						type: "portfolio-galleries",
+					}}
+					onconsider={handleGalleryConsider}
+					onfinalize={handleGalleryFinalize}
+				>
+					{#each draggableGalleries as gallery (gallery.id)}
 						<li class:selected={selectedGalleryId === gallery.galleryId}>
 							<a href={`${baseHref}/${gallery.galleryId}`} aria-current={selectedGalleryId === gallery.galleryId ? "page" : undefined}>
 								<strong>{portfolioGalleryLabel(gallery)}</strong>
 								<span>/{gallery.slug} · {gallery.draft?.placementCount ?? gallery.published?.placementCount ?? 0} images</span>
 								<small class="status">{statusLabel(gallery)} · {formatUpdatedAt(gallery.updatedAt)}</small>
 							</a>
-							<div class="order-actions" aria-label={`Reorder ${portfolioGalleryLabel(gallery)}`}>
-								<button type="button" onclick={() => void moveGallery(sourceIndex, -1)} disabled={orderingDisabled || sourceIndex <= 0 || reorderState === "saving"} aria-label="Move gallery earlier">↑</button>
-								<button type="button" onclick={() => void moveGallery(sourceIndex, 1)} disabled={orderingDisabled || !galleries || sourceIndex === galleries.length - 1 || reorderState === "saving"} aria-label="Move gallery later">↓</button>
-							</div>
+							<button
+								type="button"
+								class="drag-handle"
+								use:dragHandle
+								disabled={orderingDisabled || reorderState === "saving"}
+								aria-label={`Drag ${portfolioGalleryLabel(gallery)} to reorder`}
+							>
+								<span aria-hidden="true"></span>
+							</button>
 						</li>
 					{/each}
 				</ol>
@@ -250,7 +289,7 @@ async function moveGallery(index: number, direction: -1 | 1) {
 {#if creating}
 	<div class="create-backdrop" role="presentation" onclick={(event) => { if (event.currentTarget === event.target) void closeCreate(); }}>
 		<div bind:this={createDialog} class="create-panel" role="dialog" aria-modal="true" aria-labelledby="create-gallery-heading" tabindex="-1" onkeydown={handleDialogKeydown}>
-			<div class="create-heading"><div><span class="eyebrow">new record</span><h2 id="create-gallery-heading">new gallery</h2></div><button type="button" class="close" onclick={() => void closeCreate()} aria-label="Close new gallery form">×</button></div>
+			<div class="create-heading"><h2 id="create-gallery-heading">new gallery</h2><button type="button" class="close" onclick={() => void closeCreate()} aria-label="Close new gallery form">×</button></div>
 			<p>{publishingEnabled ? "Create an unpublished gallery, then add details and images before publishing." : "Create and arrange a private gallery draft."}</p>
 			<form onsubmit={(event) => { event.preventDefault(); void createGallery(); }}>
 				<label>gallery name<input bind:this={titleInput} value={title} oninput={updateTitle} maxlength="120" autocomplete="off" aria-invalid={Boolean(errors.title)} />{#if errors.title}<small class="field-error">{errors.title}</small>{/if}</label>
@@ -264,38 +303,49 @@ async function moveGallery(index: number, direction: -1 | 1) {
 
 <style>
 	.portfolio-workbench { min-height: 100%; background: var(--admin-bg); color: var(--admin-text); }
-	.workbench-heading { display: flex; align-items: end; justify-content: space-between; gap: 28px; padding: 24px 32px 20px; border-bottom: 1px solid var(--admin-border); background: color-mix(in srgb, var(--admin-surface) 72%, var(--admin-bg)); }
-	.eyebrow { display: block; margin: 0 0 6px; color: var(--admin-text-subtle); font-size: .64rem; letter-spacing: .16em; text-transform: uppercase; }
+	.workbench-heading { display: flex; align-items: end; justify-content: space-between; gap: 20px; padding: 13px 20px 12px; border-bottom: 1px solid var(--admin-border); background: var(--editor-canvas); }
 	h1, h2 { margin: 0; color: var(--admin-heading); font-family: var(--admin-font-display); font-weight: 500; }
-	h1 { font-size: clamp(1.35rem, 2.2vw, 2rem); } h2 { font-size: 1.08rem; }
+	h1 { font-size: clamp(1.18rem, 1.7vw, 1.48rem); } h2 { font-size: 1rem; }
 	.heading-meta { display: grid; justify-items: end; gap: 5px; color: var(--admin-text-subtle); font-size: .7rem; }
 	.heading-meta .error, .collection-message.error, .create-message.error, .field-error { color: var(--status-rose); }
-	.workbench-grid { display: grid; grid-template-columns: minmax(270px, 300px) minmax(600px, 1fr); min-height: calc(100vh - 101px); }
-	.collection-pane { min-width: 0; padding: 26px 18px 40px; border-right: 1px solid var(--admin-border); background: var(--admin-surface); }
-	.collection-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 20px; }
-	.collection-note { margin: -10px 0 18px; color: var(--admin-text-muted); font-size: .7rem; line-height: 1.45; }
+	.workbench-grid { display: grid; grid-template-columns: minmax(228px, 252px) minmax(520px, 1fr); min-height: calc(100vh - 69px); }
+	.collection-pane { min-width: 0; padding: 18px 14px 32px; border-right: 1px solid var(--admin-border); background: var(--editor-collection); }
+	.collection-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
+	.collection-note { margin: -6px 0 13px; color: var(--admin-text-muted); font-size: .66rem; line-height: 1.4; }
 	button, input { font: inherit; }
 	.new-gallery, .primary { border: 1px solid transparent; border-radius: 6px; padding: 8px 11px; background: var(--admin-accent-strong); color: var(--admin-bg); font-size: .72rem; cursor: pointer; }
 	.search-field, .create-panel label { display: grid; gap: 7px; color: var(--admin-text-muted); font-size: .7rem; }
-	.search-field input, .create-panel input { width: 100%; box-sizing: border-box; border: 1px solid var(--admin-border-strong); border-radius: 6px; padding: 10px 11px; background: var(--admin-bg); color: var(--admin-heading); text-transform: none; }
-	.filters { display: flex; gap: 4px; margin: 12px 0 18px; overflow-x: auto; }
-	.filters button { border: 0; border-radius: 999px; padding: 6px 8px; background: transparent; color: var(--admin-text-subtle); font-size: .66rem; cursor: pointer; }
+	.search-field input, .create-panel input { width: 100%; box-sizing: border-box; border: 1px solid var(--admin-border-strong); border-radius: 3px; padding: 8px 9px; background: var(--editor-control); color: var(--admin-heading); text-transform: none; }
+	.filters { display: flex; gap: 4px; margin: 9px 0 13px; overflow-x: auto; }
+	.filters button { border: 0; border-radius: 3px; padding: 5px 7px; background: transparent; color: var(--admin-text-subtle); font-size: .66rem; cursor: pointer; }
 	.filters button:hover, .filters button.active { background: var(--admin-active); color: var(--admin-heading); }
 	.ordering-note { margin: -10px 0 14px; color: var(--admin-text-subtle); font-size: .66rem; line-height: 1.4; }
 	.collection-message { margin: 0; padding: 16px 4px; color: var(--admin-text-muted); font-size: .76rem; }
-	.gallery-list { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
-	.gallery-list li { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 5px; border: 1px solid transparent; border-radius: 8px; }
-	.gallery-list li:hover, .gallery-list li.selected { border-color: var(--admin-border); background: var(--admin-active); }
-	.gallery-list a { display: grid; gap: 4px; min-width: 0; padding: 12px 4px 12px 12px; color: var(--admin-heading); text-decoration: none; }
+	.gallery-list { display: grid; margin: 0; padding: 0; border-top: 1px solid var(--admin-border); list-style: none; }
+	.gallery-list li { position: relative; display: grid; grid-template-columns: minmax(0, 1fr) 34px; align-items: center; min-height: 70px; border-bottom: 1px solid var(--admin-border); }
+	.gallery-list li::before { position: absolute; inset: 8px auto 8px 0; width: 2px; background: transparent; content: ""; }
+	.gallery-list li:hover { background: color-mix(in srgb, var(--admin-heading) 3%, transparent); }
+	.gallery-list li.selected { background: transparent; }
+	.gallery-list li.selected::before { background: var(--admin-accent-strong); }
+	.gallery-list a { display: grid; gap: 3px; min-width: 0; padding: 10px 7px 10px 10px; color: var(--admin-heading); text-decoration: none; }
 	.gallery-list strong { overflow: hidden; font-size: .82rem; font-weight: 500; text-overflow: ellipsis; white-space: nowrap; }
 	.gallery-list span, .gallery-list small { overflow: hidden; color: var(--admin-text-subtle); font-size: .66rem; text-overflow: ellipsis; text-transform: none; white-space: nowrap; }
 	.gallery-list small { color: var(--admin-accent-strong); letter-spacing: .04em; text-transform: uppercase; }
-	.order-actions { display: grid; gap: 2px; padding-right: 6px; }
-	.order-actions button, .close { border: 0; background: transparent; color: var(--admin-text-muted); cursor: pointer; }
-	.order-actions button { width: 26px; height: 24px; border-radius: 4px; padding: 0; }
-	.order-actions button:hover:not(:disabled) { background: var(--admin-surface-raised); color: var(--admin-heading); }
-	.order-actions button:disabled { opacity: .25; cursor: default; }
-	.document-pane { min-width: 0; }
+	.drag-handle, .close { border: 0; background: transparent; color: var(--admin-text-muted); cursor: pointer; }
+	.drag-handle { display: grid; place-items: center; width: 34px; height: 44px; padding: 0; touch-action: none; }
+	.drag-handle span { width: 12px; height: 18px; background: radial-gradient(circle, currentColor 1.3px, transparent 1.5px) 0 0 / 6px 6px; opacity: .62; }
+	.drag-handle:hover:not(:disabled) { color: var(--admin-heading); }
+	.drag-handle:active:not(:disabled) { cursor: grabbing; }
+	.drag-handle:disabled { opacity: .2; cursor: default; }
+	:global(#dnd-action-dragged-el) { grid-template-columns: minmax(0, 1fr) 34px !important; align-items: center; overflow: hidden; border-radius: 2px !important; outline: 1px solid color-mix(in srgb, currentColor 18%, transparent); box-shadow: 0 10px 24px color-mix(in srgb, currentColor 12%, transparent); opacity: .96; pointer-events: none; }
+	:global(#dnd-action-dragged-el > a) { display: grid; gap: 3px; min-width: 0; padding: 10px 7px 10px 10px; color: inherit; text-decoration: none; }
+	:global(#dnd-action-dragged-el > a > strong), :global(#dnd-action-dragged-el > a > span), :global(#dnd-action-dragged-el > a > small) { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+	:global(#dnd-action-dragged-el > a > strong) { font-size: .82rem; font-weight: 500; }
+	:global(#dnd-action-dragged-el > a > span) { font-size: .66rem; opacity: .68; }
+	:global(#dnd-action-dragged-el > a > small) { font-size: .66rem; letter-spacing: .04em; text-transform: uppercase; opacity: .82; }
+	:global(#dnd-action-dragged-el > .drag-handle) { display: grid; place-items: center; width: 100%; height: 44px; padding: 0; border: 0; background: transparent; color: inherit; }
+	:global(#dnd-action-dragged-el > .drag-handle > span) { width: 12px; height: 18px; background: radial-gradient(circle, currentColor 1.3px, transparent 1.5px) 0 0 / 6px 6px; opacity: .62; }
+	.document-pane { min-width: 0; background: var(--editor-canvas); }
 	.create-backdrop { position: fixed; inset: 0; z-index: 80; display: grid; place-items: center; padding: 20px; background: color-mix(in srgb, var(--admin-bg) 76%, transparent); backdrop-filter: blur(9px); }
 	.create-panel { width: min(440px, 100%); box-sizing: border-box; border: 1px solid var(--admin-border-strong); border-radius: 12px; padding: 24px; background: var(--admin-surface-raised); box-shadow: 0 24px 70px color-mix(in srgb, #000 35%, transparent); }
 	.create-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; }
@@ -309,10 +359,11 @@ async function moveGallery(index: number, direction: -1 | 1) {
 	@media (min-width: 641px) and (max-width: 1179px) {
 		.workbench-grid { display: block; }
 		.portfolio-workbench.has-selection .collection-pane, .portfolio-workbench:not(.has-selection) .document-pane { display: none; }
-		.collection-pane, .document-pane { min-height: calc(100vh - 101px); }
+		.collection-pane, .document-pane { min-height: calc(100vh - 69px); }
 	}
 	@media (max-width: 768px) {
-		.order-actions button { width: 44px; height: 44px; }
+		.drag-handle { width: 44px; height: 44px; }
+		:global(#dnd-action-dragged-el) { grid-template-columns: minmax(0, 1fr) 44px !important; }
 		.new-gallery, .filters button, .primary { min-height: 44px; }
 	}
 	@media (max-width: 640px) {
@@ -325,6 +376,6 @@ async function moveGallery(index: number, direction: -1 | 1) {
 		.create-panel { border-radius: 14px 14px 0 0; }
 	}
 	@media (prefers-reduced-motion: no-preference) {
-		.gallery-list li, .filters button { transition: color .16s ease, background-color .16s ease, border-color .16s ease; }
+		.gallery-list li, .filters button { transition: color .16s ease, background-color .16s ease; }
 	}
 </style>

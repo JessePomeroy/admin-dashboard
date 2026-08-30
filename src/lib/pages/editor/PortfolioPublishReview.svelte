@@ -28,8 +28,8 @@ function focusIssue(fieldId: string) {
 </section>
 
 <style>
-	section { margin-top: 20px; padding: 26px; border: 1px solid var(--admin-border); border-radius: 10px; background: var(--admin-surface); }
-	section.ready { border-color: color-mix(in srgb, var(--status-sage) 45%, var(--admin-border)); }
+	section { margin-top: 0; padding: 20px 0 24px; border-top: 1px solid var(--admin-border-strong); }
+	section.ready { border-top-color: color-mix(in srgb, var(--status-sage) 55%, var(--admin-border)); }
 	.heading { display: flex; justify-content: space-between; gap: 20px; align-items: flex-start; margin-bottom: 22px; }
 	h2 { margin: 0; color: var(--admin-heading); font-size: 1rem; font-weight: 500; }
 	.heading p { margin: 5px 0 0; color: var(--admin-text-muted); font-size: .8rem; }

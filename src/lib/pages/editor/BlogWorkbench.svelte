@@ -99,7 +99,6 @@ async function createPost() {
 <div class="blog-workbench" class:has-selection={Boolean(selectedDocumentId)} class:supporting-view={supportingTarget !== null}>
 	<header class="workbench-heading">
 		<div>
-			<p class="eyebrow">content / blog</p>
 			<h1>editorial workspace</h1>
 		</div>
 		<nav aria-label="Blog collections">
@@ -112,10 +111,7 @@ async function createPost() {
 	<div class="workbench-grid">
 		<aside class="collection-pane" aria-label="Blog posts">
 			<div class="collection-heading">
-				<div>
-					<span class="eyebrow">collection</span>
-					<h2>posts</h2>
-				</div>
+				<h2>posts</h2>
 				<button type="button" class="new-post" onclick={() => void createPost()} disabled={createState === "saving"}>
 					{createState === "saving" ? "creating…" : "new post"}
 				</button>
@@ -180,18 +176,10 @@ async function createPost() {
 		display: flex;
 		align-items: end;
 		justify-content: space-between;
-		gap: 28px;
-		padding: 24px 32px 20px;
+		gap: 20px;
+		padding: 13px 20px 12px;
 		border-bottom: 1px solid var(--admin-border);
-		background: color-mix(in srgb, var(--admin-surface) 72%, var(--admin-bg));
-	}
-
-	.eyebrow {
-		margin: 0 0 6px;
-		color: var(--admin-text-subtle);
-		font-size: 0.64rem;
-		letter-spacing: 0.16em;
-		text-transform: uppercase;
+		background: var(--editor-canvas);
 	}
 
 	h1,
@@ -203,7 +191,7 @@ async function createPost() {
 	}
 
 	h1 {
-		font-size: clamp(1.35rem, 2.2vw, 2rem);
+		font-size: clamp(1.18rem, 1.7vw, 1.48rem);
 	}
 
 	h2 {
@@ -216,8 +204,8 @@ async function createPost() {
 	}
 
 	.workbench-heading nav a {
-		padding: 8px 11px;
-		border-radius: 999px;
+		padding: 6px 9px;
+		border-radius: 3px;
 		color: var(--admin-text-muted);
 		font-size: 0.76rem;
 		text-decoration: none;
@@ -225,21 +213,22 @@ async function createPost() {
 
 	.workbench-heading nav a:hover,
 	.workbench-heading nav a[aria-current="page"] {
-		background: var(--admin-active);
+		background: var(--editor-selection);
 		color: var(--admin-heading);
+		box-shadow: inset 0 -2px var(--admin-accent-strong);
 	}
 
 	.workbench-grid {
 		display: grid;
-		grid-template-columns: minmax(260px, 280px) minmax(560px, 1fr);
-		min-height: calc(100vh - 101px);
+		grid-template-columns: minmax(220px, 238px) minmax(520px, 1fr);
+		min-height: calc(100vh - 69px);
 	}
 
 	.collection-pane {
 		min-width: 0;
-		padding: 26px 20px 40px;
+		padding: 18px 14px 32px;
 		border-right: 1px solid var(--admin-border);
-		background: var(--admin-surface);
+		background: var(--editor-collection);
 	}
 
 	.collection-heading {
@@ -247,7 +236,7 @@ async function createPost() {
 		align-items: center;
 		justify-content: space-between;
 		gap: 12px;
-		margin-bottom: 20px;
+		margin-bottom: 14px;
 	}
 
 	button,
@@ -281,23 +270,23 @@ async function createPost() {
 		width: 100%;
 		box-sizing: border-box;
 		border: 1px solid var(--admin-border-strong);
-		border-radius: 6px;
-		padding: 10px 11px;
-		background: var(--admin-bg);
+		border-radius: 3px;
+		padding: 8px 9px;
+		background: var(--editor-control);
 		color: var(--admin-heading);
 	}
 
 	.filters {
 		display: flex;
 		gap: 4px;
-		margin: 12px 0 18px;
+		margin: 9px 0 13px;
 		overflow-x: auto;
 	}
 
 	.filters button {
 		border: 0;
-		border-radius: 999px;
-		padding: 6px 8px;
+		border-radius: 3px;
+		padding: 5px 7px;
 		background: transparent;
 		color: var(--admin-text-subtle);
 		font-size: 0.66rem;
@@ -313,23 +302,38 @@ async function createPost() {
 
 	.post-list {
 		display: grid;
-		gap: 6px;
+		border-top: 1px solid var(--admin-border);
 	}
 
 	.post-list a {
+		position: relative;
 		display: grid;
 		gap: 4px;
-		padding: 12px;
-		border: 1px solid transparent;
-		border-radius: 8px;
+		padding: 11px 10px;
+		border-bottom: 1px solid var(--admin-border);
 		color: var(--admin-heading);
 		text-decoration: none;
+		transition: background-color 0.16s ease;
 	}
 
-	.post-list a:hover,
+	.post-list a::before {
+		position: absolute;
+		inset: 8px auto 8px 0;
+		width: 2px;
+		background: transparent;
+		content: "";
+	}
+
+	.post-list a:hover {
+		background: color-mix(in srgb, var(--admin-heading) 3%, transparent);
+	}
+
 	.post-list a.selected {
-		border-color: var(--admin-border);
-		background: var(--admin-active);
+		background: transparent;
+	}
+
+	.post-list a.selected::before {
+		background: var(--admin-accent-strong);
 	}
 
 	.post-list strong {
@@ -364,6 +368,7 @@ async function createPost() {
 
 	.document-pane {
 		min-width: 0;
+		background: var(--editor-canvas);
 	}
 
 	:global(.blog-workbench .document-pane .settings-page) {
@@ -375,7 +380,7 @@ async function createPost() {
 		position: sticky;
 		top: 0;
 		z-index: 12;
-		padding: 18px 0;
+		padding: 12px 0;
 		background: color-mix(in srgb, var(--admin-bg) 94%, transparent);
 		backdrop-filter: blur(12px);
 	}
@@ -394,7 +399,7 @@ async function createPost() {
 
 		.collection-pane,
 		.document-pane {
-			min-height: calc(100vh - 101px);
+			min-height: calc(100vh - 69px);
 		}
 
 		.collection-pane {

@@ -57,7 +57,7 @@ function removeVariant(key: string) {
 	{/if}
 </section>
 <style>
-	section { padding: 28px; border: 1px solid var(--admin-border); border-radius: 10px; background: var(--admin-surface); }
+	section { padding: 20px 0 24px; border-top: 1px solid var(--admin-border-strong); }
 	.section-heading { display: flex; gap: 14px; align-items: flex-start; margin-bottom: 24px; }
 	.section-heading > span, .position { color: var(--admin-text-subtle); font-size: .72rem; padding-top: 4px; }
 	.section-heading > div { flex: 1; } h2 { margin: 0; color: var(--admin-heading); font-size: 1rem; font-weight: 500; }
@@ -78,5 +78,5 @@ function removeVariant(key: string) {
 	.empty strong { color: var(--admin-heading); font-weight: 500; }
 	.limit { margin: -12px 0 18px; color: var(--admin-text-muted); font-size: .76rem; }
 	@media (max-width: 900px) { li { grid-template-columns: 1fr; } .variant-actions { display: flex; flex-wrap: wrap; } }
-	@media (max-width: 768px) { section { padding: 20px; } .section-heading { flex-wrap: wrap; } .variant-fields { grid-template-columns: 1fr; } button { min-height: 44px; } }
+	@media (max-width: 768px) { section { padding: 18px 0 22px; } .section-heading { flex-wrap: wrap; } .variant-fields { grid-template-columns: 1fr; } button { min-height: 44px; } }
 </style>

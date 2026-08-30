@@ -9,7 +9,9 @@ import {
 	catalogProductLabel,
 	catalogProductStatus,
 	emptyCatalogProductDraft,
+	newCatalogProductGraphDraft,
 	newCatalogProductKey,
+	parseCatalogPriceCents,
 	slugifyCatalogProductTitle,
 	type CatalogProductEditorSummary,
 	type CatalogProductKind,
@@ -29,7 +31,13 @@ const capability = getCatalogProductEditorCapability(config);
 if (!capability) {
 	throw new Error("Single-print product editor is not configured for this host");
 }
-const { api: catalogApi, enabledKinds, graphVersion, settings: productsConfig } = capability;
+const {
+	api: catalogApi,
+	enabledKinds,
+	graphVersion,
+	publishesToShop,
+	settings: productsConfig,
+} = capability;
 const baseHref = productsConfig.baseHref ?? "/admin/editor/products";
 const client = useAdminClient();
 const catalogKinds = ["print", "print_set", "postcard", "merchandise", "tapestry", "digital_download"] as const satisfies readonly CatalogProductKind[];
@@ -71,7 +79,7 @@ let loading = $derived(productGroups.some((group) => group.products === undefine
 let productsError = $derived(productGroups.some((group) => group.error));
 let search = $state("");
 let kindFilter = $state<"all" | CatalogProductKind>("all");
-let statusFilter = $state<"all" | "draft" | "discarded">("all");
+let statusFilter = $state<"all" | "unpublished" | "published" | "changes" | "discarded">("all");
 let normalizedSearch = $derived(search.trim().toLocaleLowerCase());
 let visibleGroups = $derived(productGroups
 	.filter(({ kind }) => kindFilter === "all" || kind === kindFilter)
@@ -91,6 +99,8 @@ let creating = $state(false);
 let title = $state("");
 let slug = $state("");
 let slugEdited = $state(false);
+let newProductKind = $state<CatalogProductKind>(supportedKinds[0] ?? "print");
+let startingPrice = $state("");
 let createState = $state<"idle" | "saving" | "navigating" | "error">("idle");
 let createError = $state("");
 let pendingProductKey = $state("");
@@ -98,6 +108,12 @@ let createdProductHref = $state("");
 let newProductButton = $state<HTMLButtonElement>();
 let createDialog = $state<HTMLDivElement>();
 let titleInput = $state<HTMLInputElement>();
+let fixedPriceCreation = $derived(
+	newProductKind === "postcard"
+		|| newProductKind === "merchandise"
+		|| newProductKind === "tapestry"
+		|| newProductKind === "digital_download",
+);
 
 function pluralKindLabel(kind: CatalogProductKind) {
 	if (kind === "merchandise") return "merchandise";
@@ -120,6 +136,16 @@ function updateSlug(event: Event) {
 }
 
 async function openCreate() {
+	newProductKind = kindFilter !== "all" && supportedKinds.includes(kindFilter)
+		? kindFilter
+		: supportedKinds[0] ?? "print";
+	title = "";
+	slug = "";
+	slugEdited = false;
+	startingPrice = "";
+	createState = "idle";
+	createError = "";
+	createdProductHref = "";
 	creating = true;
 	await tick();
 	titleInput?.focus();
@@ -171,14 +197,30 @@ async function createProduct() {
 	createState = "saving";
 	createError = "";
 	createdProductHref = "";
-	const productKey = pendingProductKey || newCatalogProductKey("print");
+	let draft;
+	try {
+		draft = graphVersion === 2
+			? newCatalogProductGraphDraft(newProductKind, {
+					title: normalizedTitle,
+					slug,
+					...(fixedPriceCreation
+						? { retailPriceCents: parseCatalogPriceCents(startingPrice) }
+						: {}),
+				})
+			: { ...emptyCatalogProductDraft(), title: normalizedTitle, ...(slug ? { slug } : {}) };
+	} catch (error) {
+		createState = "error";
+		createError = error instanceof Error ? error.message : "Check the product details.";
+		return;
+	}
+	const productKey = pendingProductKey || newCatalogProductKey(newProductKind);
 	pendingProductKey = productKey;
 	let result: { productId: string };
 	try {
 		result = await client.mutation(catalogApi.createDraft, {
 			siteUrl: config.siteUrl,
 			productKey,
-			draft: { ...emptyCatalogProductDraft(), title: normalizedTitle, ...(slug ? { slug } : {}) },
+			draft,
 		}) as { productId: string };
 	} catch (error) {
 		createState = "error";
@@ -199,27 +241,30 @@ async function createProduct() {
 
 <div class="product-workbench" class:has-selection={Boolean(selectedProductId)} inert={creating}>
 	<header class="workbench-heading">
-		<div><p class="eyebrow">commerce / catalog</p><h1>products</h1><p>{graphVersion === 2 ? "Private imported catalog drafts and their operational readiness. Nothing in this workspace is published to the shop yet." : "Private single-print drafts and pricing. Nothing in this workspace is published to the shop yet."}</p></div>
+		<div><h1>products</h1><p>{graphVersion === 2
+			? publishesToShop
+				? "Create, prepare, and publish the products sold in your Shop."
+				: "Private imported catalog drafts and their operational readiness. Nothing in this workspace is published to the shop yet."
+			: "Private single-print drafts and pricing. Nothing in this workspace is published to the shop yet."}</p></div>
 		<div class="heading-meta"><span>{loading ? "loading…" : `${products.length} ${products.length === 1 ? "product" : "products"}`}</span><small>{supportedKinds.length} {supportedKinds.length === 1 ? "kind" : "kinds"}</small></div>
 	</header>
 
 	<div class="workbench-grid">
 		<aside class="taxonomy-pane" aria-label="Product taxonomy">
-			<span class="eyebrow">taxonomy</span>
 			<div class="kind-filters" role="group" aria-label="Filter by product kind">
 				<button type="button" class:active={kindFilter === "all"} aria-pressed={kindFilter === "all"} onclick={() => kindFilter = "all"}><span>all products</span><small>{products.length}</small></button>
 				{#each supportedKinds as kind}
 					<button type="button" class:active={kindFilter === kind} aria-pressed={kindFilter === kind} onclick={() => kindFilter = kind}><span>{pluralKindLabel(kind)}</span><small>{kindCount(kind)}</small></button>
 				{/each}
 			</div>
-			<div class="authority-note"><strong>authority</strong><p>Convex owns these private drafts. Public Shop publication is configured and reviewed separately.</p></div>
+			<div class="authority-note"><strong>catalog</strong><p>{publishesToShop ? "Convex stores the working draft and the exact revision currently published to your Shop." : "Convex stores the working draft. Public publication depends on this host's configured catalog authority."}</p></div>
 		</aside>
 
 		<aside class="collection-pane" aria-label="Product collection">
-			<div class="collection-heading"><div><span class="eyebrow">collection</span><h2>catalog</h2></div>{#if graphVersion === 1}<button bind:this={newProductButton} type="button" class="new-product" onclick={() => void openCreate()}>new</button>{/if}</div>
+			<div class="collection-heading"><h2>catalog</h2><button bind:this={newProductButton} type="button" class="new-product" onclick={() => void openCreate()}>new</button></div>
 			<label class="search-field"><span>search products</span><input type="search" placeholder="Search name or URL" bind:value={search} /></label>
 			<div class="status-filters" role="group" aria-label="Filter by draft status">
-				{#each ["all", "draft", "discarded"] as status}
+				{#each ["all", "unpublished", "published", "changes", "discarded"] as status}
 					<button type="button" class:active={statusFilter === status} aria-pressed={statusFilter === status} onclick={() => statusFilter = status as typeof statusFilter}>{status}</button>
 				{/each}
 			</div>
@@ -238,10 +283,11 @@ async function createProduct() {
 							<h3>{pluralKindLabel(group.kind)}</h3>
 							<ul class="product-list">
 								{#each group.products as product (product.productId)}
+									{@const status = catalogProductStatus(product)}
 									<li class:selected={product.productId === selectedProductId}>
 										<a href={`${baseHref}/${product.productId}`} aria-current={product.productId === selectedProductId ? "page" : undefined}>
 											<span><strong>{catalogProductLabel(product)}</strong><small>{product.slug ? `/${product.slug}` : "No URL name"} · {product.draft?.variantCount ?? 0} {product.draft?.variantCount === 1 ? "variant" : "variants"}</small></span>
-											<em class="status" class:discarded={catalogProductStatus(product) === "discarded"}>{catalogProductStatus(product)}</em>
+										<em class="status" class:published={status === "published"} class:discarded={status === "discarded"}>{status}</em>
 										</a>
 									</li>
 								{/each}
@@ -259,11 +305,13 @@ async function createProduct() {
 {#if creating}
 	<div class="create-backdrop" role="presentation" onclick={(event) => { if (event.currentTarget === event.target) void closeCreate(); }}>
 		<div bind:this={createDialog} class="create-panel" role="dialog" aria-modal="true" aria-labelledby="create-product-heading" tabindex="-1" onkeydown={handleDialogKeydown}>
-			<div class="create-heading"><div><span class="eyebrow">new record</span><h2 id="create-product-heading">new single print</h2></div><button type="button" class="close" onclick={() => void closeCreate()} aria-label="Close new product form">×</button></div>
-			<p>Start a private print draft. Pricing and fulfillment stay inside the product record.</p>
+			<div class="create-heading"><h2 id="create-product-heading">new product</h2><button type="button" class="close" onclick={() => void closeCreate()} aria-label="Close new product form">×</button></div>
+			<p>Start privately, then finish its media and selling details.{publishesToShop ? " Publish the exact saved revision when it is ready for your Shop." : " Publication remains unavailable until this host exposes it."}</p>
 			<form onsubmit={(event) => { event.preventDefault(); void createProduct(); }}>
+				<label>product type<select bind:value={newProductKind} disabled={createState === "saving"}>{#each supportedKinds as kind}<option value={kind}>{catalogProductKindLabel(kind)}</option>{/each}</select></label>
 				<label>product name<input bind:this={titleInput} maxlength="160" value={title} oninput={updateTitle} autocomplete="off" /></label>
 				<label>URL name<input maxlength="96" value={slug} oninput={updateSlug} autocomplete="off" spellcheck="false" /><small>Lowercase words separated by hyphens.</small></label>
+				{#if fixedPriceCreation}<label>starting retail price (cents)<input inputmode="numeric" value={startingPrice} oninput={(event) => (startingPrice = event.currentTarget.value)} autocomplete="off" /><small>Enter whole cents; 1250 is $12.50. The product starts unavailable.</small></label>{/if}
 				<button type="submit" class="primary" disabled={createState === "saving" || Boolean(createdProductHref)}>{createdProductHref ? "draft created" : createState === "saving" ? "creating…" : "create product draft"}</button>
 			</form>
 			{#if createError}<p class="error" role="alert">{createError}</p>{/if}
@@ -274,46 +322,52 @@ async function createProduct() {
 
 <style>
 	.product-workbench { min-height: 100%; background: var(--admin-bg); color: var(--admin-text); }
-	.workbench-heading { display: flex; align-items: end; justify-content: space-between; gap: 28px; padding: 24px 32px 20px; border-bottom: 1px solid var(--admin-border); background: color-mix(in srgb, var(--admin-surface) 72%, var(--admin-bg)); }
-	.workbench-heading h1, .collection-heading h2, .create-heading h2 { margin: 3px 0 0; color: var(--admin-heading); font-family: var(--admin-font-heading); font-weight: 500; letter-spacing: -.025em; text-transform: lowercase; }
-	.workbench-heading h1 { font-size: clamp(1.5rem, 2vw, 2.05rem); }
-	.workbench-heading p { max-width: 680px; margin: 8px 0 0; color: var(--admin-text-muted); font-size: .78rem; line-height: 1.5; }
-	.eyebrow { color: var(--admin-text-subtle); font-size: .58rem; letter-spacing: .16em; text-transform: uppercase; }
+	.workbench-heading { display: flex; align-items: end; justify-content: space-between; gap: 20px; padding: 13px 20px 12px; border-bottom: 1px solid var(--admin-border); background: var(--editor-canvas); }
+	.workbench-heading h1, .collection-heading h2, .create-heading h2 { margin: 0; color: var(--admin-heading); font-family: var(--admin-font-heading); font-weight: 500; letter-spacing: -.025em; text-transform: lowercase; }
+	.workbench-heading h1 { font-size: clamp(1.18rem, 1.7vw, 1.48rem); }
+	.workbench-heading p { max-width: 680px; margin: 4px 0 0; color: var(--admin-text-muted); font-size: .7rem; line-height: 1.4; }
 	.heading-meta { display: grid; justify-items: end; gap: 4px; color: var(--admin-heading); font-size: .75rem; white-space: nowrap; }
 	.heading-meta small { color: var(--admin-text-subtle); font-size: .63rem; }
-	.workbench-grid { display: grid; grid-template-columns: 156px 268px minmax(0, 1fr); min-height: calc(100vh - 101px); }
-	.taxonomy-pane, .collection-pane { border-right: 1px solid var(--admin-border); background: color-mix(in srgb, var(--admin-surface) 45%, var(--admin-bg)); }
-	.taxonomy-pane { padding: 24px 14px; }
-	.kind-filters { display: grid; gap: 4px; margin-top: 14px; }
-	.kind-filters button { display: flex; justify-content: space-between; gap: 8px; width: 100%; border: 0; border-radius: 7px; padding: 9px 10px; background: transparent; color: var(--admin-text-muted); font: inherit; font-size: .7rem; text-align: left; cursor: pointer; }
-	.kind-filters button.active, .kind-filters button:hover { background: var(--admin-active); color: var(--admin-heading); }
+	.workbench-grid { display: grid; grid-template-columns: 128px 232px minmax(0, 1fr); min-height: calc(100vh - 69px); }
+	.taxonomy-pane, .collection-pane { border-right: 1px solid var(--admin-border); background: var(--editor-collection); }
+	.taxonomy-pane { padding: 18px 10px; }
+	.kind-filters { display: grid; margin-top: 0; border-left: 1px solid var(--admin-border); }
+	.kind-filters button { position: relative; display: flex; justify-content: space-between; gap: 8px; width: 100%; border: 0; padding: 8px 7px 8px 11px; background: transparent; color: var(--admin-text-muted); font: inherit; font-size: .66rem; text-align: left; cursor: pointer; }
+	.kind-filters button::before { position: absolute; inset: 6px auto 6px -2px; width: 3px; background: transparent; content: ""; }
+	.kind-filters button:hover { background: color-mix(in srgb, var(--admin-heading) 3%, transparent); color: var(--admin-heading); }
+	.kind-filters button.active { background: transparent; color: var(--admin-heading); font-weight: 500; }
+	.kind-filters button.active::before { background: var(--admin-accent-strong); }
 	.kind-filters small { color: var(--admin-text-subtle); }
-	.authority-note { margin-top: 26px; border-top: 1px solid var(--admin-border); padding: 18px 8px 0; }
+	.authority-note { margin-top: 18px; border-top: 1px solid var(--admin-border); padding: 14px 6px 0; }
 	.authority-note strong { color: var(--admin-heading); font-size: .64rem; letter-spacing: .09em; text-transform: uppercase; }
 	.authority-note p { margin: 7px 0 0; color: var(--admin-text-subtle); font-size: .66rem; line-height: 1.55; }
-	.collection-pane { padding: 24px 18px 48px; }
+	.collection-pane { padding: 18px 14px 32px; }
 	.collection-heading, .create-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; }
 	.collection-heading h2, .create-heading h2 { font-size: 1.08rem; }
 	.new-product, .primary { border: 1px solid transparent; border-radius: 6px; padding: 8px 11px; background: var(--admin-accent-strong); color: var(--admin-bg); font-size: .72rem; cursor: pointer; }
-	.search-field { display: grid; gap: 6px; margin-top: 20px; color: var(--admin-text-muted); font-size: .64rem; }
-	.search-field input, .create-panel input { width: 100%; box-sizing: border-box; border: 1px solid var(--admin-border-strong); border-radius: 7px; padding: 10px 11px; background: var(--admin-bg); color: var(--admin-heading); font: inherit; }
-	.status-filters { display: flex; gap: 4px; margin: 11px 0 18px; }
-	.status-filters button { min-height: 32px; border: 0; border-radius: 999px; padding: 6px 9px; background: transparent; color: var(--admin-text-subtle); font-size: .66rem; cursor: pointer; }
+	.search-field { display: grid; gap: 5px; margin-top: 14px; color: var(--admin-text-muted); font-size: .62rem; }
+	.search-field input, .create-panel input, .create-panel select { width: 100%; box-sizing: border-box; border: 1px solid var(--admin-border-strong); border-radius: 3px; padding: 8px 9px; background: var(--editor-control); color: var(--admin-heading); font: inherit; }
+	.status-filters { display: flex; flex-wrap: wrap; gap: 3px; margin: 8px 0 13px; }
+	.status-filters button { min-height: 28px; border: 0; border-radius: 3px; padding: 5px 7px; background: transparent; color: var(--admin-text-subtle); font-size: .63rem; cursor: pointer; }
 	.status-filters button.active, .status-filters button:hover { background: var(--admin-active); color: var(--admin-heading); }
 	.collection-message { margin: 0; padding: 16px 4px; color: var(--admin-text-muted); font-size: .76rem; line-height: 1.5; }
 	.collection-message.error, .create-panel .error { color: var(--admin-danger, var(--status-rose)); }
-	.product-groups { display: grid; gap: 18px; }
+	.product-groups { display: grid; gap: 13px; }
 	.product-group h3 { margin: 0 0 7px; color: var(--admin-text-subtle); font-size: .63rem; font-weight: 500; letter-spacing: .12em; text-transform: uppercase; }
-	.product-list { display: grid; gap: 5px; margin: 0; padding: 0; list-style: none; }
-	.product-list li { border: 1px solid transparent; border-radius: 8px; }
-	.product-list li.selected { border-color: color-mix(in srgb, var(--admin-accent) 55%, var(--admin-border)); background: var(--admin-active); }
-	.product-list a { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 7px; align-items: center; padding: 10px; color: inherit; text-decoration: none; }
+	.product-list { display: grid; margin: 0; padding: 0; border-top: 1px solid var(--admin-border); list-style: none; }
+	.product-list li { position: relative; border-bottom: 1px solid var(--admin-border); }
+	.product-list li::before { position: absolute; inset: 7px auto 7px 0; width: 2px; background: transparent; content: ""; }
+	.product-list li:hover { background: color-mix(in srgb, var(--admin-heading) 3%, transparent); }
+	.product-list li.selected { background: transparent; }
+	.product-list li.selected::before { background: var(--admin-accent-strong); }
+	.product-list a { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 7px; align-items: center; padding: 9px 8px 9px 10px; color: inherit; text-decoration: none; }
 	.product-list a > span { display: grid; min-width: 0; gap: 4px; }
 	.product-list strong { overflow: hidden; color: var(--admin-heading); font-size: .75rem; font-weight: 500; text-overflow: ellipsis; white-space: nowrap; }
 	.product-list small { overflow: hidden; color: var(--admin-text-subtle); font-size: .62rem; text-overflow: ellipsis; white-space: nowrap; }
 	.product-list em { color: var(--status-amber); font-size: .61rem; font-style: normal; }
+	.product-list em.published { color: var(--status-sage); }
 	.product-list em.discarded { color: var(--admin-text-subtle); }
-	.document-pane { min-width: 0; background: var(--admin-bg); }
+	.document-pane { min-width: 0; background: var(--editor-canvas); }
 	.create-backdrop { position: fixed; z-index: 80; inset: 0; display: grid; place-items: center; padding: 24px; background: color-mix(in srgb, var(--admin-bg) 72%, transparent); backdrop-filter: blur(4px); }
 	.create-panel { width: min(520px, 100%); box-sizing: border-box; border: 1px solid var(--admin-border-strong); border-radius: 14px; padding: 24px; background: var(--admin-surface); box-shadow: 0 24px 80px rgb(0 0 0 / .28); }
 	.create-panel > p { margin: 10px 0 0; color: var(--admin-text-muted); font-size: .78rem; line-height: 1.55; }
@@ -324,7 +378,7 @@ async function createProduct() {
 	.create-panel .error, .create-panel .success { margin: 16px 0 0; font-size: .75rem; }
 	.create-panel .success { color: var(--status-sage); } .create-panel .success a { color: inherit; }
 	button:focus-visible, input:focus-visible, a:focus-visible { outline: 2px solid var(--admin-accent-strong); outline-offset: 2px; }
-	@media (min-width: 641px) and (max-width: 1399px) {
+	@media (min-width: 641px) and (max-width: 1279px) {
 		.workbench-grid { grid-template-columns: 180px minmax(0, 1fr); }
 		.document-pane { display: none; }
 		.product-workbench.has-selection .taxonomy-pane, .product-workbench.has-selection .collection-pane { display: none; }

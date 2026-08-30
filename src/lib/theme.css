@@ -32,6 +32,13 @@
 	--admin-accent-hover: var(--admin-accent-color-hover, rgba(var(--_light), 1));
 	--admin-accent-strong: color-mix(in srgb, var(--admin-accent) 75%, rgb(var(--_light)));
 	--admin-active: rgba(var(--_light), 0.06);
+	--editor-chrome: color-mix(in srgb, var(--admin-bg) 90%, black);
+	--editor-navigation: color-mix(in srgb, var(--admin-bg) 95%, var(--admin-heading));
+	--editor-collection: color-mix(in srgb, var(--admin-bg) 91%, var(--admin-heading));
+	--editor-canvas: var(--admin-bg);
+	--editor-selection: color-mix(in srgb, var(--admin-accent) 11%, var(--admin-surface-raised));
+	--editor-selection-border: color-mix(in srgb, var(--admin-accent) 62%, var(--admin-border-strong));
+	--editor-control: color-mix(in srgb, var(--admin-bg) 94%, var(--admin-heading));
 	--status-slate: #94a3b8;
 	--status-amber: #d4a053;
 	--status-lavender: #a78bfa;
@@ -55,6 +62,13 @@ html:not(.dark) [data-admin] {
 	--admin-accent-hover: var(--admin-accent-color-hover, rgba(var(--_dark), 0.9));
 	--admin-accent-strong: color-mix(in srgb, var(--admin-accent) 55%, rgb(var(--_dark)));
 	--admin-active: rgba(var(--_dark), 0.06);
+	--editor-chrome: color-mix(in srgb, var(--admin-bg) 94%, var(--admin-heading));
+	--editor-navigation: color-mix(in srgb, var(--admin-bg) 97%, var(--admin-heading));
+	--editor-collection: color-mix(in srgb, var(--admin-bg) 95%, var(--admin-heading));
+	--editor-canvas: var(--admin-bg);
+	--editor-selection: color-mix(in srgb, var(--admin-accent) 9%, var(--admin-surface-raised));
+	--editor-selection-border: color-mix(in srgb, var(--admin-accent) 55%, var(--admin-border-strong));
+	--editor-control: color-mix(in srgb, var(--admin-bg) 97%, var(--admin-heading));
 	--status-slate: #64748b;
 	--status-amber: #b8860b;
 	--status-lavender: #7c3aed;

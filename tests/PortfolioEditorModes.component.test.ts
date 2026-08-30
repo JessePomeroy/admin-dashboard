@@ -150,6 +150,42 @@ async function settle() {
 	await tick();
 }
 
+function finalizeGalleryOrder(galleryIds: string[]) {
+	const list = document.querySelector<HTMLOListElement>(".gallery-list");
+	if (!list) throw new Error("gallery list missing");
+	const items = galleryIds.map((galleryId) => {
+		const gallery = mocks.state.galleries.find((candidate) => candidate.galleryId === galleryId);
+		if (!gallery) throw new Error(`gallery ${galleryId} missing`);
+		return { ...gallery, id: gallery.galleryId };
+	});
+	list.dispatchEvent(new CustomEvent("finalize", {
+		bubbles: true,
+		detail: {
+			items,
+			info: { source: "pointer", trigger: "droppedIntoZone", id: galleryIds[0] },
+		},
+	}));
+}
+
+function considerGalleryDrag(galleryId: string) {
+	const list = document.querySelector<HTMLOListElement>(".gallery-list");
+	if (!list) throw new Error("gallery list missing");
+	const items = mocks.state.galleries.map((gallery) => gallery.galleryId === galleryId
+		? {
+			...gallery,
+			id: "id:dnd-shadow-placeholder-0000",
+			isDndShadowItem: true,
+		}
+		: { ...gallery, id: gallery.galleryId });
+	list.dispatchEvent(new CustomEvent("consider", {
+		bubbles: true,
+		detail: {
+			items,
+			info: { source: "pointer", trigger: "dragStarted", id: galleryId },
+		},
+	}));
+}
+
 describe("Portfolio editor capability modes", () => {
 	beforeEach(() => {
 		mocks.mutation.mockClear();
@@ -206,6 +242,8 @@ describe("Portfolio editor capability modes", () => {
 
 	it("retains 44px touch targets through the tablet and phone range", () => {
 		expect(portfolioWorkbenchSource).toContain("@media (max-width: 768px)");
+		expect(portfolioWorkbenchSource).toContain(":global(#dnd-action-dragged-el > a)");
+		expect(portfolioWorkbenchSource).toContain("pointer-events: none");
 		expect(portfolioWorkbenchSource).toContain(
 			".new-gallery, .filters button, .primary { min-height: 44px; }",
 		);
@@ -310,7 +348,7 @@ describe("Portfolio editor capability modes", () => {
 			.find((button) => button.textContent === "published");
 		publishedFilter?.click();
 		await tick();
-		expect(Array.from(document.querySelectorAll<HTMLButtonElement>(".order-actions button"))
+		expect(Array.from(document.querySelectorAll<HTMLButtonElement>(".drag-handle"))
 			.every((button) => button.disabled)).toBe(true);
 		expect(document.body.textContent).toContain("Clear search and choose all to change public order.");
 	});
@@ -372,8 +410,19 @@ describe("Portfolio editor capability modes", () => {
 			},
 		];
 		await mountList();
-		const moveLater = document.querySelector<HTMLButtonElement>('[aria-label="Move gallery later"]');
-		moveLater?.click();
+		expect(document.querySelector('[aria-label="Move gallery later"]')).toBeNull();
+		expect(Array.from(document.querySelectorAll<HTMLButtonElement>(".drag-handle"), (handle) => handle.ariaLabel)).toEqual([
+			"Drag Selected work to reorder",
+			"Drag Second work to reorder",
+		]);
+		considerGalleryDrag("gallery-1");
+		await tick();
+		expect(Array.from(document.querySelectorAll(".gallery-list li"))).toHaveLength(2);
+		expect(Array.from(document.querySelectorAll(".gallery-list strong"), (title) => title.textContent)).toEqual([
+			"Selected work",
+			"Second work",
+		]);
+		finalizeGalleryOrder(["gallery-2", "gallery-1"]);
 		await settle();
 		expect(mocks.mutation).toHaveBeenCalledWith(mocks.refs.reorder, {
 			siteUrl: "https://site.example",
@@ -383,7 +432,7 @@ describe("Portfolio editor capability modes", () => {
 		mocks.state.failMutationName = "portfolio:reorder";
 		const firstVisibleTitle = () => document.querySelector(".gallery-list strong")?.textContent;
 		expect(firstVisibleTitle()).toBe("Second work");
-		document.querySelector<HTMLButtonElement>('[aria-label="Move gallery later"]')?.click();
+		finalizeGalleryOrder(["gallery-1", "gallery-2"]);
 		await settle();
 		expect(document.body.textContent).toContain("forced failure");
 		expect(firstVisibleTitle()).toBe("Second work");

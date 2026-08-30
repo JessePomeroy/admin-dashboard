@@ -334,7 +334,7 @@ function closeMobileMenu() {
 	.admin-layout {
 		display: flex;
 		min-height: 100vh;
-		background: var(--admin-bg);
+		background: var(--editor-canvas, var(--admin-bg));
 		color: var(--admin-text);
 		font-family: var(--admin-font-body);
 		text-transform: lowercase;
@@ -443,7 +443,7 @@ function closeMobileMenu() {
 		left: 0;
 		bottom: 0;
 		width: 220px;
-		background: var(--admin-bg);
+		background: var(--editor-chrome, var(--admin-bg));
 		border-right: 1px solid var(--admin-border);
 		display: flex;
 		flex-direction: column;
@@ -532,7 +532,7 @@ function closeMobileMenu() {
 
 	.sidebar-nav {
 		flex: 1;
-		padding: 8px 12px;
+		padding: 6px 7px;
 		display: flex;
 		flex-direction: column;
 		gap: 1px;
