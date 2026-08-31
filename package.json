@@ -37,7 +37,7 @@
     "convex-svelte": "^0.14.0",
     "resend": "^6.0.0",
     "svelte": "^5.0.0",
-    "svelte-dnd-action": "^0.9.0"
+    "svelte-dnd-action": "^0.9.46"
   },
   "devDependencies": {
     "@sveltejs/kit": "^2.53.0",

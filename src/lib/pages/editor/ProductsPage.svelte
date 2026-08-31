@@ -9,13 +9,12 @@ const capability = getCatalogProductEditorCapability(config);
 if (!capability) {
 	throw new Error("Single-print product editor is not configured for this host");
 }
-const { graphVersion, media, privateAssets, publication, publishesToShop } = capability;
+const { graphVersion, media, publication, publishesToShop } = capability;
 const recordAreas = [
 	"draft details",
 	"variants",
 	...(media ? ["media"] : []),
-	...(privateAssets ? ["verified asset replacement"] : []),
-	...(publication ? ["Convex publication evidence"] : []),
+	...(publication ? ["publication controls"] : []),
 ];
 
 function readableList(values: string[]) {
@@ -35,12 +34,12 @@ function readableList(values: string[]) {
 			: `Choose an existing single print or create a private draft. The selected record keeps ${readableList(recordAreas)} together.`}</p>
 		<div class="workflow-grid">
 			<div><span>01</span><strong>start</strong><p>Create the product kind you need, or filter and search the existing catalog.</p></div>
-			<div><span>02</span><strong>shape</strong><p>Add the copy, price, variants, display media, and fulfillment assets needed to sell it.</p></div>
+			<div><span>02</span><strong>shape</strong><p>Add the copy, price, variants, and artwork needed to sell it.</p></div>
 			<div><span>03</span><strong>release</strong><p>{publication
 				? publishesToShop
-					? "Save the private draft first, then publish that exact revision to your Shop."
-					: "Save private draft work first. This host exposes Convex publication, while its public catalog remains separately configured."
-				: "Save private draft work here. This host exposes no Convex publication control; the public Shop remains a separate authority."}</p></div>
+					? "Save your changes, then publish to your Shop when it is ready."
+					: "Save your changes, then use the available publish action when it is ready."
+				: "Save your changes here. Publishing is not available in this workspace."}</p></div>
 		</div>
 	</div>
 </ProductWorkbench>

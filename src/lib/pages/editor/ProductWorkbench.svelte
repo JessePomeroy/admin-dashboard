@@ -11,12 +11,13 @@ import {
 	emptyCatalogProductDraft,
 	newCatalogProductGraphDraft,
 	newCatalogProductKey,
-	parseCatalogPriceCents,
+	parseCatalogPriceDollars,
 	slugifyCatalogProductTitle,
 	type CatalogProductEditorSummary,
 	type CatalogProductKind,
 } from "../../catalogProductEditor";
 import { getAdminConfig } from "../../config";
+import EditorListbox from "./EditorListbox.svelte";
 
 let {
 	selectedProductId,
@@ -79,14 +80,16 @@ let loading = $derived(productGroups.some((group) => group.products === undefine
 let productsError = $derived(productGroups.some((group) => group.error));
 let search = $state("");
 let kindFilter = $state<"all" | CatalogProductKind>("all");
-let statusFilter = $state<"all" | "unpublished" | "published" | "changes" | "discarded">("all");
+let statusFilter = $state<"all" | "unpublished" | "published">("all");
 let normalizedSearch = $derived(search.trim().toLocaleLowerCase());
 let visibleGroups = $derived(productGroups
 	.filter(({ kind }) => kindFilter === "all" || kind === kindFilter)
 	.map((group) => ({
 		...group,
 		products: (group.products ?? []).filter((product) => {
-			if (statusFilter !== "all" && catalogProductStatus(product) !== statusFilter) return false;
+			const status = catalogProductStatus(product);
+			if (statusFilter === "unpublished" && status !== "unpublished") return false;
+			if (statusFilter === "published" && status !== "published" && status !== "changes") return false;
 			if (!normalizedSearch) return true;
 			return `${catalogProductLabel(product)} ${product.slug ?? ""}`
 				.toLocaleLowerCase()
@@ -204,7 +207,7 @@ async function createProduct() {
 					title: normalizedTitle,
 					slug,
 					...(fixedPriceCreation
-						? { retailPriceCents: parseCatalogPriceCents(startingPrice) }
+						? { retailPriceCents: parseCatalogPriceDollars(startingPrice) }
 						: {}),
 				})
 			: { ...emptyCatalogProductDraft(), title: normalizedTitle, ...(slug ? { slug } : {}) };
@@ -241,11 +244,7 @@ async function createProduct() {
 
 <div class="product-workbench" class:has-selection={Boolean(selectedProductId)} inert={creating}>
 	<header class="workbench-heading">
-		<div><h1>products</h1><p>{graphVersion === 2
-			? publishesToShop
-				? "Create, prepare, and publish the products sold in your Shop."
-				: "Private imported catalog drafts and their operational readiness. Nothing in this workspace is published to the shop yet."
-			: "Private single-print drafts and pricing. Nothing in this workspace is published to the shop yet."}</p></div>
+		<h1>products</h1>
 		<div class="heading-meta"><span>{loading ? "loading…" : `${products.length} ${products.length === 1 ? "product" : "products"}`}</span><small>{supportedKinds.length} {supportedKinds.length === 1 ? "kind" : "kinds"}</small></div>
 	</header>
 
@@ -257,14 +256,13 @@ async function createProduct() {
 					<button type="button" class:active={kindFilter === kind} aria-pressed={kindFilter === kind} onclick={() => kindFilter = kind}><span>{pluralKindLabel(kind)}</span><small>{kindCount(kind)}</small></button>
 				{/each}
 			</div>
-			<div class="authority-note"><strong>catalog</strong><p>{publishesToShop ? "Convex stores the working draft and the exact revision currently published to your Shop." : "Convex stores the working draft. Public publication depends on this host's configured catalog authority."}</p></div>
 		</aside>
 
 		<aside class="collection-pane" aria-label="Product collection">
 			<div class="collection-heading"><h2>catalog</h2><button bind:this={newProductButton} type="button" class="new-product" onclick={() => void openCreate()}>new</button></div>
 			<label class="search-field"><span>search products</span><input type="search" placeholder="Search name or URL" bind:value={search} /></label>
 			<div class="status-filters" role="group" aria-label="Filter by draft status">
-				{#each ["all", "unpublished", "published", "changes", "discarded"] as status}
+				{#each ["all", "unpublished", "published"] as status}
 					<button type="button" class:active={statusFilter === status} aria-pressed={statusFilter === status} onclick={() => statusFilter = status as typeof statusFilter}>{status}</button>
 				{/each}
 			</div>
@@ -306,12 +304,19 @@ async function createProduct() {
 	<div class="create-backdrop" role="presentation" onclick={(event) => { if (event.currentTarget === event.target) void closeCreate(); }}>
 		<div bind:this={createDialog} class="create-panel" role="dialog" aria-modal="true" aria-labelledby="create-product-heading" tabindex="-1" onkeydown={handleDialogKeydown}>
 			<div class="create-heading"><h2 id="create-product-heading">new product</h2><button type="button" class="close" onclick={() => void closeCreate()} aria-label="Close new product form">×</button></div>
-			<p>Start privately, then finish its media and selling details.{publishesToShop ? " Publish the exact saved revision when it is ready for your Shop." : " Publication remains unavailable until this host exposes it."}</p>
+			<p>Start privately, then finish its media and selling details.{publishesToShop ? " Publish it to your Shop when it is ready." : " Publication remains unavailable until this host exposes it."}</p>
 			<form onsubmit={(event) => { event.preventDefault(); void createProduct(); }}>
-				<label>product type<select bind:value={newProductKind} disabled={createState === "saving"}>{#each supportedKinds as kind}<option value={kind}>{catalogProductKindLabel(kind)}</option>{/each}</select></label>
+				<EditorListbox
+					id="new-product-type"
+					label="product type"
+					value={newProductKind}
+					options={supportedKinds.map((kind) => ({ value: kind, label: catalogProductKindLabel(kind) }))}
+					disabled={createState === "saving"}
+					onChange={(kind) => (newProductKind = kind as CatalogProductKind)}
+				/>
 				<label>product name<input bind:this={titleInput} maxlength="160" value={title} oninput={updateTitle} autocomplete="off" /></label>
 				<label>URL name<input maxlength="96" value={slug} oninput={updateSlug} autocomplete="off" spellcheck="false" /><small>Lowercase words separated by hyphens.</small></label>
-				{#if fixedPriceCreation}<label>starting retail price (cents)<input inputmode="numeric" value={startingPrice} oninput={(event) => (startingPrice = event.currentTarget.value)} autocomplete="off" /><small>Enter whole cents; 1250 is $12.50. The product starts unavailable.</small></label>{/if}
+				{#if fixedPriceCreation}<label>starting price (USD)<span class="money-input"><span aria-hidden="true">$</span><input inputmode="decimal" value={startingPrice} oninput={(event) => (startingPrice = event.currentTarget.value)} autocomplete="off" aria-label="starting price (USD)" /></span><small>The product starts unavailable.</small></label>{/if}
 				<button type="submit" class="primary" disabled={createState === "saving" || Boolean(createdProductHref)}>{createdProductHref ? "draft created" : createState === "saving" ? "creating…" : "create product draft"}</button>
 			</form>
 			{#if createError}<p class="error" role="alert">{createError}</p>{/if}
@@ -325,7 +330,6 @@ async function createProduct() {
 	.workbench-heading { display: flex; align-items: end; justify-content: space-between; gap: 20px; padding: 13px 20px 12px; border-bottom: 1px solid var(--admin-border); background: var(--editor-canvas); }
 	.workbench-heading h1, .collection-heading h2, .create-heading h2 { margin: 0; color: var(--admin-heading); font-family: var(--admin-font-heading); font-weight: 500; letter-spacing: -.025em; text-transform: lowercase; }
 	.workbench-heading h1 { font-size: clamp(1.18rem, 1.7vw, 1.48rem); }
-	.workbench-heading p { max-width: 680px; margin: 4px 0 0; color: var(--admin-text-muted); font-size: .7rem; line-height: 1.4; }
 	.heading-meta { display: grid; justify-items: end; gap: 4px; color: var(--admin-heading); font-size: .75rem; white-space: nowrap; }
 	.heading-meta small { color: var(--admin-text-subtle); font-size: .63rem; }
 	.workbench-grid { display: grid; grid-template-columns: 128px 232px minmax(0, 1fr); min-height: calc(100vh - 69px); }
@@ -338,15 +342,17 @@ async function createProduct() {
 	.kind-filters button.active { background: transparent; color: var(--admin-heading); font-weight: 500; }
 	.kind-filters button.active::before { background: var(--admin-accent-strong); }
 	.kind-filters small { color: var(--admin-text-subtle); }
-	.authority-note { margin-top: 18px; border-top: 1px solid var(--admin-border); padding: 14px 6px 0; }
-	.authority-note strong { color: var(--admin-heading); font-size: .64rem; letter-spacing: .09em; text-transform: uppercase; }
-	.authority-note p { margin: 7px 0 0; color: var(--admin-text-subtle); font-size: .66rem; line-height: 1.55; }
 	.collection-pane { padding: 18px 14px 32px; }
 	.collection-heading, .create-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; }
 	.collection-heading h2, .create-heading h2 { font-size: 1.08rem; }
 	.new-product, .primary { border: 1px solid transparent; border-radius: 6px; padding: 8px 11px; background: var(--admin-accent-strong); color: var(--admin-bg); font-size: .72rem; cursor: pointer; }
 	.search-field { display: grid; gap: 5px; margin-top: 14px; color: var(--admin-text-muted); font-size: .62rem; }
-	.search-field input, .create-panel input, .create-panel select { width: 100%; box-sizing: border-box; border: 1px solid var(--admin-border-strong); border-radius: 3px; padding: 8px 9px; background: var(--editor-control); color: var(--admin-heading); font: inherit; }
+	.search-field input, .create-panel input { width: 100%; box-sizing: border-box; border: 1px solid var(--admin-border-strong); border-radius: 3px; padding: 8px 9px; background: var(--editor-control); color: var(--admin-heading); font: inherit; }
+	.money-input { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; border: 1px solid var(--admin-border-strong); border-radius: 3px; background: var(--editor-control); }
+	.money-input > span { padding-left: 9px; color: var(--admin-text-muted); }
+	.money-input input { border: 0; background: transparent; }
+	.money-input > input:focus-visible { outline: 0; }
+	.money-input:focus-within { outline: 2px solid var(--admin-accent-strong); outline-offset: 2px; }
 	.status-filters { display: flex; flex-wrap: wrap; gap: 3px; margin: 8px 0 13px; }
 	.status-filters button { min-height: 28px; border: 0; border-radius: 3px; padding: 5px 7px; background: transparent; color: var(--admin-text-subtle); font-size: .63rem; cursor: pointer; }
 	.status-filters button.active, .status-filters button:hover { background: var(--admin-active); color: var(--admin-heading); }
@@ -394,7 +400,6 @@ async function createProduct() {
 		.taxonomy-pane { border-right: 0; border-bottom: 1px solid var(--admin-border); padding: 18px 16px; }
 		.kind-filters { display: flex; overflow-x: auto; }
 		.kind-filters button { flex: 0 0 auto; width: auto; }
-		.authority-note { display: none; }
 		.collection-pane { border-right: 0; padding: 22px 16px 48px; }
 		.document-pane { display: none; }
 		.product-workbench.has-selection .taxonomy-pane, .product-workbench.has-selection .collection-pane { display: none; }

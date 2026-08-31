@@ -41,22 +41,26 @@ export function getCatalogProductEditorCapability(config: AdminConfig) {
 			&& config.api.mediaAssets.getManyForEditor
 			? config.api.mediaAssets
 			: null;
-		const privateAssetUpload = settings.privateAssetUpload;
-		const privateAssets = settings.privateAssetReplacementEnabled === true
-			&& graphApi.listDraftPrivateAssetCandidates
-			&& graphApi.replaceDraftPrivateAsset
+		const configuredPrivateUpload = settings.privateAssetUpload;
+		const privateUpload = configuredPrivateUpload
+			&& isRootedQuerylessEndpoint(configuredPrivateUpload.prepareEndpoint)
+			&& isRootedQuerylessEndpoint(configuredPrivateUpload.completeEndpoint)
 			? {
-					listCandidates: graphApi.listDraftPrivateAssetCandidates,
-					replace: graphApi.replaceDraftPrivateAsset,
-					upload: privateAssetUpload
-						&& isRootedQuerylessEndpoint(privateAssetUpload.prepareEndpoint)
-						&& isRootedQuerylessEndpoint(privateAssetUpload.completeEndpoint)
-						? {
-								prepareEndpoint: privateAssetUpload.prepareEndpoint,
-								completeEndpoint: privateAssetUpload.completeEndpoint,
-							}
-						: null,
+					prepareEndpoint: configuredPrivateUpload.prepareEndpoint,
+					completeEndpoint: configuredPrivateUpload.completeEndpoint,
 				}
+			: null;
+		const listCandidates = settings.privateAssetReplacementEnabled === true
+			? explicitOwnRef(graphApi, "listDraftPrivateAssetCandidates")
+			: null;
+		const replacePrivateAsset = settings.privateAssetReplacementEnabled === true
+			? explicitOwnRef(graphApi, "replaceDraftPrivateAsset")
+			: null;
+		const replacement = listCandidates && replacePrivateAsset
+			? { listCandidates, replace: replacePrivateAsset }
+			: null;
+		const privateAssets = privateUpload || replacement
+			? { upload: privateUpload, replacement }
 			: null;
 		const publishDraft = settings.publicationEnabled === true
 			? explicitOwnRef(graphApi, "publishDraft")

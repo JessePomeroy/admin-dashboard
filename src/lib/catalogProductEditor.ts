@@ -26,6 +26,44 @@ export interface CatalogProductVariantDraftForm {
 	status: CatalogVariantStatus;
 }
 
+export interface CatalogProductMarginEstimateInput {
+	productKind: "print" | "print_set";
+	materialOptionKey?: string;
+	sizeOptionKey?: string;
+	retailPriceCents?: number;
+	setMemberCount: number;
+	frameMarkupMultiplier?: number;
+}
+
+export interface CatalogProductMarginEstimate {
+	summary: string;
+	framedSummary?: string;
+}
+
+export type CatalogProductMarginCalculator = (
+	input: CatalogProductMarginEstimateInput,
+) => CatalogProductMarginEstimate;
+
+export interface CatalogProductOptionChoice {
+	value: string;
+	label: string;
+}
+
+export interface CatalogProductVariantOptionInput {
+	productKind: "print" | "print_set";
+	materialOptionKey?: string;
+}
+
+export interface CatalogProductVariantOptions {
+	materials: readonly CatalogProductOptionChoice[];
+	sizes: readonly CatalogProductOptionChoice[];
+}
+
+/** Pure, client-safe host adapter for the material and compatible-size catalog. */
+export type CatalogProductVariantOptionResolver = (
+	input: CatalogProductVariantOptionInput,
+) => CatalogProductVariantOptions;
+
 export interface CatalogProductSetMemberDraftForm {
 	key: string;
 	mediaPlacementKey: string;
@@ -345,13 +383,14 @@ export function emptyCatalogProductDraft(): CatalogProductDraftForm {
 	};
 }
 
-export function newCatalogProductGraphDraft(
+function buildNewCatalogProductGraphDraft(
 	productKind: CatalogProductKind,
 	input: {
-		title: string;
-		slug: string;
+		title?: string;
+		slug?: string;
 		retailPriceCents?: number;
 	},
+	requireStartingPrice: boolean,
 ): CatalogProductGraphV2Draft {
 	const fixedPrice = productKind === "postcard"
 		|| productKind === "merchandise"
@@ -359,27 +398,30 @@ export function newCatalogProductGraphDraft(
 		|| productKind === "digital_download";
 	if (
 		fixedPrice
+		&& (requireStartingPrice || input.retailPriceCents !== undefined)
 		&& (
 			!Number.isSafeInteger(input.retailPriceCents)
 			|| (input.retailPriceCents ?? 0) <= 0
 			|| (input.retailPriceCents ?? 0) > CATALOG_PRICE_CENTS_MAXIMUM
 		)
 	) {
-		throw new Error("Enter a starting retail price in whole cents.");
+		throw new Error("Enter a starting retail price in USD.");
 	}
 	const variants: CatalogProductGraphV2VariantDraft[] = fixedPrice
 		? [{
 				key: "default",
 				order: 0,
-				retailPriceCents: input.retailPriceCents,
+				...(input.retailPriceCents !== undefined
+					? { retailPriceCents: input.retailPriceCents }
+					: {}),
 				status: "disabled",
 			}]
 		: [{ key: newCatalogVariantKey(), order: 0, status: "disabled" }];
 	const common = {
 		schemaVersion: 2 as const,
 		productKind,
-		title: input.title.trim(),
-		slug: input.slug,
+		...(input.title?.trim() ? { title: input.title.trim() } : {}),
+		...(input.slug ? { slug: input.slug } : {}),
 		currency: "usd" as const,
 		saleAvailability: "unavailable" as const,
 		shopPlacement: { featured: false },
@@ -407,6 +449,29 @@ export function newCatalogProductGraphDraft(
 			? "digital_delivery"
 			: "merchant_fulfilled",
 	};
+}
+
+export function newCatalogProductGraphDraft(
+	productKind: CatalogProductKind,
+	input: {
+		title: string;
+		slug: string;
+		retailPriceCents?: number;
+	},
+): CatalogProductGraphV2Draft {
+	return buildNewCatalogProductGraphDraft(productKind, input, true);
+}
+
+/**
+ * Starts a clean replacement revision for a retained graph identity. Fixed-price
+ * products intentionally begin disabled and incomplete instead of inventing a
+ * customer-facing price.
+ */
+export function newCatalogProductReplacementGraphDraft(
+	productKind: CatalogEditableGraphProductKind,
+	input: { title?: string; slug?: string } = {},
+): CatalogProductGraphV2Draft {
+	return buildNewCatalogProductGraphDraft(productKind, input, false);
 }
 
 export function catalogProductDraftFromRevision(
@@ -904,6 +969,86 @@ export function addCatalogProductWebMedia(
 	return next;
 }
 
+/** Add an optional web-only gallery image without changing primary/cover artwork. */
+export function addCatalogProductGalleryMedia(
+	placements: readonly CatalogProductWebMediaDraftForm[],
+	asset: { _id: string; assetId: string },
+) {
+	if (placements.length >= CATALOG_PRODUCT_WEB_MEDIA_LIMIT) {
+		throw new Error(`A product cannot exceed ${CATALOG_PRODUCT_WEB_MEDIA_LIMIT} web images.`);
+	}
+	if (placements.some((placement) =>
+		placement.role !== "social_share" && placement.assetId === asset._id
+	)) throw new Error("This image is already attached to the product.");
+	const nextPlacement = {
+		key: `media-gallery-${asset.assetId}`,
+		role: "gallery" as const,
+		assetId: asset._id,
+		altText: "",
+	};
+	const insertionIndex = placements.findIndex(
+		(placement) => ["set_member", "social_share"].includes(placement.role),
+	);
+	const next = placements.map((placement) => ({ ...placement }));
+	next.splice(insertionIndex < 0 ? next.length : insertionIndex, 0, nextPlacement);
+	return next;
+}
+
+/** Attach one verified print original and its ready display image as one form update. */
+export function attachCatalogProductArtwork(
+	form: CatalogProductDraftForm,
+	displayAsset: { _id: string; assetId: string },
+	privateAsset: Extract<CatalogEditorPrivateAsset, { kind: "print_source" }>,
+) {
+	if (form.productKind !== "print" && form.productKind !== "print_set") {
+		throw new Error("Only print products accept paired artwork uploads.");
+	}
+	const next = copyCatalogProductDraft(form);
+	if (next.productKind === "print") {
+		const sourceKey = next.printSources?.[0]?.key ?? newCatalogPrivateRelationKey("print");
+		next.printSources = [{ key: sourceKey, order: 0, assetId: privateAsset.assetId }];
+		const primary = next.webMedia?.find((placement) => placement.role === "primary");
+		next.webMedia = primary
+			? (next.webMedia ?? []).map((placement) => placement.key === primary.key
+				? { ...placement, assetId: displayAsset._id, altText: "" }
+				: { ...placement })
+			: addCatalogProductWebMedia(next.webMedia ?? [], displayAsset, next.productKind);
+		return next;
+	}
+
+	if (next.setMembers.length >= 20) throw new Error("A print set cannot exceed 20 images.");
+	const needsCover = !(next.webMedia ?? []).some((placement) => placement.role === "cover");
+	if ((next.webMedia?.length ?? 0) + 1 + (needsCover ? 1 : 0) > CATALOG_PRODUCT_WEB_MEDIA_LIMIT) {
+		throw new Error(`A product cannot exceed ${CATALOG_PRODUCT_WEB_MEDIA_LIMIT} web images.`);
+	}
+	const order = next.setMembers.length;
+	const memberKey = newCatalogPrivateRelationKey("member");
+	const printSourceKey = newCatalogPrivateRelationKey("print");
+	const mediaPlacementKey = `media-${memberKey}`;
+	next.printSources = [
+		...(next.printSources ?? []),
+		{ key: printSourceKey, order, assetId: privateAsset.assetId },
+	];
+	next.webMedia = [
+		...(next.webMedia ?? []),
+		{
+			key: mediaPlacementKey,
+			role: "set_member",
+			assetId: displayAsset._id,
+			altText: "",
+		},
+	];
+	next.setMembers = [
+		...next.setMembers,
+		{ key: memberKey, mediaPlacementKey, printSourceKey },
+	];
+	if (needsCover) {
+		next.webMedia = addCatalogProductWebMedia(next.webMedia, displayAsset, next.productKind);
+	}
+	next.webMedia = alignCatalogProductWebMediaWithSetMembers(next.webMedia, next.setMembers);
+	return next;
+}
+
 export function removeCatalogProductWebMedia(
 	placements: readonly CatalogProductWebMediaDraftForm[],
 	key: string,
@@ -939,6 +1084,32 @@ export function moveCatalogProductWebMedia(
 		reordered[index],
 	];
 	return reordered;
+}
+
+/** Reorder one user-orderable media role without disturbing hidden or fixed-role relations. */
+export function reorderCatalogProductWebMedia(
+	placements: readonly CatalogProductWebMediaDraftForm[],
+	role: Exclude<CatalogProductWebMediaRole, "set_member" | "social_share">,
+	orderedKeys: readonly string[],
+) {
+	const sameRole = placements.filter((placement) => placement.role === role);
+	const expectedKeys = new Set(sameRole.map(({ key }) => key));
+	if (
+		orderedKeys.length !== sameRole.length
+		|| new Set(orderedKeys).size !== orderedKeys.length
+		|| orderedKeys.some((key) => !expectedKeys.has(key))
+	) {
+		throw new Error(`Catalog ${role} image order must contain every current image exactly once.`);
+	}
+	const byKey = new Map(sameRole.map((placement) => [placement.key, placement]));
+	let roleIndex = 0;
+	return placements.map((placement) => {
+		if (placement.role !== role) return { ...placement };
+		const next = byKey.get(orderedKeys[roleIndex]);
+		roleIndex += 1;
+		if (!next) throw new Error(`Catalog ${role} image order is invalid.`);
+		return { ...next };
+	});
 }
 
 export function catalogProductLabel(product: CatalogProductEditorSummary) {
@@ -1069,6 +1240,67 @@ export function parseCatalogPriceCents(
 		maximum: CATALOG_PRICE_CENTS_MAXIMUM,
 		optional: true,
 	});
+}
+
+export function parseCatalogPriceDollars(
+	value: string | number | null | undefined,
+): number | undefined {
+	if (value === null || value === undefined || value === "") return undefined;
+	const text = typeof value === "number" ? String(value) : value;
+	const match = /^(0|[1-9]\d*)(?:\.(\d{0,2}))?$/.exec(text);
+	if (!match) {
+		throw new Error("Retail price must be a USD amount with no more than two decimal places.");
+	}
+	const wholeDollars = Number(match[1]);
+	const fraction = (match[2] ?? "").padEnd(2, "0");
+	const cents = wholeDollars * 100 + Number(fraction || "0");
+	if (!Number.isSafeInteger(cents) || cents < 0 || cents > CATALOG_PRICE_CENTS_MAXIMUM) {
+		throw new Error("Retail price must be between $0.00 and $1,000,000.00.");
+	}
+	return cents;
+}
+
+export function formatCatalogPriceDollars(value: number | null | undefined): string {
+	if (value === null || value === undefined) return "";
+	return ((parseCatalogPriceCents(value) ?? 0) / 100).toFixed(2);
+}
+
+export function parseCatalogFrameMultiplier(
+	value: string | number | null | undefined,
+) {
+	if (value === null || value === undefined || value === "") {
+		throw new Error("Frame price multiplier is required.");
+	}
+	const text = typeof value === "number" ? String(value) : value;
+	const match = /^(0|[1-9]\d*)(?:\.(\d{0,4}))?$/.exec(text);
+	if (!match) {
+		throw new Error("Frame price multiplier must have no more than four decimal places.");
+	}
+	const whole = Number(match[1]);
+	const fraction = (match[2] ?? "").padEnd(4, "0");
+	const basisPoints = whole * 10_000 + Number(fraction || "0");
+	if (
+		!Number.isSafeInteger(basisPoints)
+		|| basisPoints < 10_000
+		|| basisPoints > CATALOG_FRAME_MULTIPLIER_BASIS_POINTS_MAXIMUM
+	) {
+		throw new Error("Frame price multiplier must be between 1× and 100×.");
+	}
+	return basisPoints;
+}
+
+export function formatCatalogFrameMultiplier(
+	value: number | null | undefined,
+) {
+	if (value === null || value === undefined) return "";
+	const fixed = (parseCatalogBasisPoints(value) / 10_000).toFixed(4);
+	const compact = fixed.replace(/0+$/, "").replace(/\.$/, "");
+	const decimalPlaces = compact.includes(".")
+		? compact.length - compact.indexOf(".") - 1
+		: 0;
+	return decimalPlaces >= 2
+		? compact
+		: `${compact}${decimalPlaces === 0 ? ".00" : "0"}`;
 }
 
 /** Parse literal basis points: 10,000 = 1x and 20,000 = 2x. */

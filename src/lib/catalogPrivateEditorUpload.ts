@@ -13,6 +13,12 @@ const SOURCE_URL = "https://cms-media-worker.thinkingofview.workers.dev/v1/catal
 const UUID_V4_PATTERN =
 	/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 const CONTROL_CHARACTER_PATTERN = /[\u0000-\u001f\u007f]/;
+const ZIP_BROWSER_MIME_TYPES = new Set([
+	"",
+	"application/octet-stream",
+	"application/x-zip-compressed",
+	"application/zip",
+]);
 
 export type CatalogPrivateEditorUploadPrintPrepareRequest = {
 	uploadHandle: string;
@@ -120,6 +126,17 @@ function validFilename(file: File, extension: RegExp) {
 		&& extension.test(file.name);
 }
 
+function hasZipSignature(bytes: Uint8Array) {
+	return bytes.byteLength >= 4
+		&& bytes[0] === 0x50
+		&& bytes[1] === 0x4b
+		&& (
+			(bytes[2] === 0x03 && bytes[3] === 0x04)
+			|| (bytes[2] === 0x05 && bytes[3] === 0x06)
+			|| (bytes[2] === 0x07 && bytes[3] === 0x08)
+		);
+}
+
 function readPngDimensions(bytes: Uint8Array) {
 	if (bytes.byteLength < 24) return null;
 	const signature = [137, 80, 78, 71, 13, 10, 26, 10];
@@ -189,7 +206,7 @@ export async function declareCatalogPrivateEditorUpload(
 	if (isPrint) {
 		const extension = file.type === "image/jpeg" ? /\.jpe?g$/i : file.type === "image/png" ? /\.png$/i : null;
 		if (!extension || !validFilename(file, extension)) throw new TypeError("Select an encoded JPEG or PNG file");
-	} else if (file.type !== "application/zip" || !validFilename(file, /\.zip$/i)) {
+	} else if (!ZIP_BROWSER_MIME_TYPES.has(file.type.toLowerCase()) || !validFilename(file, /\.zip$/i)) {
 		throw new TypeError("Select a ZIP file");
 	}
 	const normalizedVersion = version?.trim() || undefined;
@@ -201,6 +218,7 @@ export async function declareCatalogPrivateEditorUpload(
 	const bytes = new Uint8Array(await file.arrayBuffer());
 	abortIfRequested(signal);
 	if (bytes.byteLength !== file.size) throw new TypeError("The selected file changed while it was read");
+	if (isDigital && !hasZipSignature(bytes)) throw new TypeError("Select an encoded ZIP file");
 	const hash = new Uint8Array(await globalThis.crypto.subtle.digest("SHA-256", bytes));
 	abortIfRequested(signal);
 	const sha256 = Array.from(hash, (byte) => byte.toString(16).padStart(2, "0")).join("");
@@ -298,7 +316,9 @@ export async function putCatalogPrivateEditorUpload(
 	prepared: PreparedUpload,
 	file: File,
 	contentType: CatalogPrivateEditorUploadPrepareRequest["contentType"],
+	signal?: AbortSignal,
 ) {
+	abortIfRequested(signal);
 	const response = await fetch(prepared.uploadUrl, {
 		method: "PUT",
 		headers: {
@@ -308,8 +328,10 @@ export async function putCatalogPrivateEditorUpload(
 		body: file,
 		credentials: "omit",
 		redirect: "error",
+		...(signal ? { signal } : {}),
 	});
 	await response.body?.cancel().catch(() => undefined);
+	abortIfRequested(signal);
 }
 
 function positiveSafeInteger(value: unknown, maximum: number): value is number {
@@ -396,24 +418,29 @@ function retryAfterMs(response: Response) {
 export async function completeCatalogPrivateEditorUpload(
 	endpoint: string,
 	uploadHandle: string,
+	signal?: AbortSignal,
 ): Promise<CatalogPrivateEditorUploadCompletion> {
+	abortIfRequested(signal);
 	if (!isRootedQuerylessEndpoint(endpoint) || !UUID_V4_PATTERN.test(uploadHandle)) return { status: "failed" };
 	let response: Response;
 	try {
+		const timeoutSignal = AbortSignal.timeout(COMPLETE_TIMEOUT_MS);
 		response = await fetch(endpoint, {
 			method: "POST",
 			headers: { "Content-Type": "application/json" },
 			body: JSON.stringify({ uploadHandle } satisfies CatalogPrivateEditorUploadCompleteRequest),
 			credentials: "same-origin",
 			redirect: "error",
-			signal: AbortSignal.timeout(COMPLETE_TIMEOUT_MS),
+			signal: signal ? AbortSignal.any([signal, timeoutSignal]) : timeoutSignal,
 		});
 	} catch {
+		abortIfRequested(signal);
 		return { status: "pending", retryAfterMs: FALLBACK_RETRY_MS };
 	}
 	const delay = retryAfterMs(response);
 	if (response.status === 200) {
 		const value = await readBoundedJson(response);
+		abortIfRequested(signal);
 		const asset = value?.status === "verified"
 			? projectAsset(value.asset)
 			: null;
@@ -421,12 +448,14 @@ export async function completeCatalogPrivateEditorUpload(
 	}
 	if (response.status === 202) {
 		const value = await readBoundedJson(response);
+		abortIfRequested(signal);
 		return value
 			&& ["pending_inspection", "storage_pending", "retry_later"].includes(String(value.status))
 			? { status: "pending", retryAfterMs: delay }
 			: { status: "pending", retryAfterMs: FALLBACK_RETRY_MS };
 	}
 	await response.body?.cancel().catch(() => undefined);
+	abortIfRequested(signal);
 	return [400, 401, 403, 409, 410, 422].includes(response.status)
 		? { status: "failed" }
 		: { status: "pending", retryAfterMs: delay };

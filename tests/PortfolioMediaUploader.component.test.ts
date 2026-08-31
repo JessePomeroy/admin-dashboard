@@ -10,6 +10,7 @@ vi.mock("../src/lib/cmsMediaUpload", () => ({
 }));
 
 import PortfolioMediaUploader from "../src/lib/pages/editor/PortfolioMediaUploader.svelte";
+import PortfolioMediaUploaderHarness from "./PortfolioMediaUploaderHarness.svelte";
 
 const components: ReturnType<typeof mount>[] = [];
 
@@ -82,7 +83,8 @@ describe("portfolio media uploader capacity", () => {
 		await Promise.resolve();
 		await tick();
 		expect(onReady).toHaveBeenCalledOnce();
-		expect(document.body.textContent).toContain("added to this product");
+		expect(document.body.textContent).not.toContain("one.jpg");
+		expect(document.body.textContent).toContain("drop an image here or click to upload");
 	});
 
 	it("reports a registered upload honestly when the parent cannot attach it", async () => {
@@ -110,5 +112,61 @@ describe("portfolio media uploader capacity", () => {
 			"saved in the media library; not attached here",
 		);
 		expect(document.body.textContent).not.toContain("added to this product");
+	});
+
+	it("does not attach an upload after its product-scoped uploader is destroyed", async () => {
+		let complete: ((value: ReturnType<typeof asset>) => void) | undefined;
+		mocks.upload.mockImplementation(() => new Promise((resolve) => {
+			complete = resolve;
+		}));
+		const onReady = vi.fn(() => true);
+		const component = mount(PortfolioMediaUploader, {
+			target: document.body,
+			props: {
+				endpoint: "/api/admin/media",
+				onReady,
+				contextLabel: "product",
+			},
+		});
+		components.push(component);
+		await tick();
+		choose(
+			document.querySelector('input[type="file"]') as HTMLInputElement,
+			new File(["one"], "one.jpg", { type: "image/jpeg" }),
+		);
+		await tick();
+		unmount(components.pop()!);
+		complete?.(asset("one"));
+		await Promise.resolve();
+		await tick();
+		expect(onReady).not.toHaveBeenCalled();
+	});
+
+	it("keeps an in-flight failure visible while saving disables new selection", async () => {
+		let fail: ((reason: Error) => void) | undefined;
+		mocks.upload.mockImplementation(() => new Promise((_resolve, reject) => {
+			fail = reject;
+		}));
+		const onReady = vi.fn(() => true);
+		const harness = mount(PortfolioMediaUploaderHarness, {
+			target: document.body,
+			props: { onReady },
+		});
+		components.push(harness);
+		await tick();
+		choose(
+			document.querySelector('input[type="file"]') as HTMLInputElement,
+			new File(["one"], "one.jpg", { type: "image/jpeg" }),
+		);
+		await tick();
+		harness.setDisabled(true);
+		await tick();
+		expect(document.querySelector<HTMLInputElement>('input[type="file"]')?.disabled).toBe(true);
+		fail?.(new Error("Image processing failed."));
+		await Promise.resolve();
+		await tick();
+		expect(document.querySelector('[role="alert"]')?.textContent).toBe("Image processing failed.");
+		expect(document.body.textContent).toContain("one.jpg");
+		expect(Array.from(document.querySelectorAll("button")).find((item) => item.textContent === "retry")?.disabled).toBe(true);
 	});
 });

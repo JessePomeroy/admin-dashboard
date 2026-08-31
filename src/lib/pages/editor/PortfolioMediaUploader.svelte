@@ -1,4 +1,5 @@
 <script lang="ts">
+import { onDestroy } from "svelte";
 import { uploadCmsMediaFile, type CmsMediaUploadStatus } from "../../cmsMediaUpload";
 import type { PortfolioMediaAsset } from "../../portfolioEditor";
 
@@ -17,6 +18,7 @@ let {
 	contextLabel = "gallery",
 	multiple = true,
 	maxFiles,
+	disabled = false,
 }: {
 	endpoint: string;
 	onReady: (
@@ -25,6 +27,7 @@ let {
 	contextLabel?: string;
 	multiple?: boolean;
 	maxFiles?: number;
+	disabled?: boolean;
 } = $props();
 
 let input: HTMLInputElement;
@@ -32,6 +35,11 @@ let items = $state<UploadItem[]>([]);
 let active = 0;
 let sequence = 0;
 let limitNotice = $state("");
+let destroyed = false;
+
+onDestroy(() => {
+	destroyed = true;
+});
 
 function itemId() {
 	sequence += 1;
@@ -52,6 +60,7 @@ function reservedUploadCount() {
 }
 
 function enqueue(files: FileList | File[]) {
+	if (disabled) return;
 	const selectedFiles = [...files];
 	const remaining = maxFiles === undefined
 		? selectedFiles.length
@@ -77,7 +86,7 @@ function enqueue(files: FileList | File[]) {
 
 function handleDrop(event: DragEvent) {
 	event.preventDefault();
-	if (event.dataTransfer?.files.length) enqueue(event.dataTransfer.files);
+	if (!disabled && event.dataTransfer?.files.length) enqueue(event.dataTransfer.files);
 }
 
 async function upload(item: UploadItem) {
@@ -85,21 +94,27 @@ async function upload(item: UploadItem) {
 	try {
 		const asset = await uploadCmsMediaFile(item.file, {
 			endpoint,
-			onStatus: (status) => update(item.id, { status, error: "" }),
+			onStatus: (status) => {
+				if (!destroyed) update(item.id, { status, error: "" });
+			},
 		});
+		if (destroyed) return;
 		const attached = await onReady(asset);
-		update(item.id, {
-			status: attached === false ? "library" : "done",
-			error: "",
-		});
+		if (destroyed) return;
+		if (attached === false) {
+			update(item.id, { status: "library", error: "" });
+		} else {
+			items = items.filter((candidate) => candidate.id !== item.id);
+		}
 	} catch (error) {
+		if (destroyed) return;
 		update(item.id, {
 			status: "error",
 			error: error instanceof Error ? error.message : "The upload failed.",
 		});
 	} finally {
 		active -= 1;
-		processQueue();
+		if (!destroyed) processQueue();
 	}
 }
 
@@ -113,6 +128,7 @@ function processQueue() {
 }
 
 function retry(id: string) {
+	if (disabled) return;
 	if (maxFiles !== undefined && reservedUploadCount() >= maxFiles) {
 		limitNotice = "No additional images fit in this section yet.";
 		return;
@@ -134,16 +150,11 @@ function statusLabel(status: UploadItemStatus) {
 }
 </script>
 
-<div class="uploader" role="group" aria-label={`Upload new ${contextLabel} images`} ondragover={(event) => event.preventDefault()} ondrop={handleDrop}>
-	<div>
-		<strong>upload new images</strong>
-		<p>Drop images here or choose them from this device. JPEG, PNG, or WebP up to 20 MB. Originals are privately normalized and the site receives responsive WebP copies.</p>
-	</div>
-	<label class="upload-button">
-		<span>choose images</span>
-		<input bind:this={input} type="file" accept="image/jpeg,image/png,image/webp" {multiple} onchange={(event) => event.currentTarget.files && enqueue(event.currentTarget.files)} />
-	</label>
-</div>
+<label class="uploader" class:disabled aria-label={`Upload new ${contextLabel} images`} ondragover={(event) => event.preventDefault()} ondrop={handleDrop}>
+	<strong>drop {multiple ? "images" : "an image"} here or click to upload</strong>
+	<span>JPEG, PNG or WebP · 20 MB max</span>
+	<input bind:this={input} type="file" accept="image/jpeg,image/png,image/webp" {multiple} onchange={(event) => event.currentTarget.files && enqueue(event.currentTarget.files)} {disabled} />
+</label>
 
 {#if limitNotice}<p class="limit-notice" role="status">{limitNotice}</p>{/if}
 
@@ -154,7 +165,7 @@ function statusLabel(status: UploadItemStatus) {
 				<div><strong>{item.file.name}</strong><span>{statusLabel(item.status)}</span></div>
 				{#if item.error}<p role="alert">{item.error}</p>{/if}
 				{#if item.status === "error"}
-					<button type="button" onclick={() => retry(item.id)}>retry</button>
+					<button type="button" onclick={() => retry(item.id)} {disabled}>retry</button>
 					<button type="button" class="quiet" onclick={() => remove(item.id)}>remove</button>
 				{:else if item.status === "done" || item.status === "library"}
 					<button type="button" class="quiet" onclick={() => remove(item.id)}>dismiss</button>
@@ -165,13 +176,13 @@ function statusLabel(status: UploadItemStatus) {
 {/if}
 
 <style>
-	.uploader { display: flex; justify-content: space-between; gap: 20px; align-items: center; margin-bottom: 18px; padding: 16px; border: 1px dashed var(--admin-border-strong); border-radius: 8px; background: var(--admin-bg); }
+	.uploader { display: grid; place-items: center; gap: 7px; min-height: 112px; box-sizing: border-box; margin-bottom: 18px; padding: 18px; border: 1px dashed var(--admin-border-strong); border-radius: 8px; background: var(--admin-bg); text-align: center; cursor: pointer; }
+	.uploader.disabled { opacity: .62; cursor: default; }
 	.uploader strong, li strong { display: block; color: var(--admin-heading); font-size: .78rem; font-weight: 500; }
-	.uploader p { max-width: 650px; margin: 5px 0 0; color: var(--admin-text-muted); font-size: .74rem; line-height: 1.45; }
-	.upload-button, button { min-height: 40px; box-sizing: border-box; border: 1px solid var(--admin-border-strong); border-radius: 6px; padding: 9px 13px; background: transparent; color: var(--admin-text); font: inherit; font-size: .76rem; cursor: pointer; white-space: nowrap; }
-	.upload-button { display: inline-flex; align-items: center; }
-	.upload-button input { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap; }
-	.upload-button:focus-within, button:focus-visible { outline: 2px solid var(--admin-accent); outline-offset: 2px; }
+	.uploader > span { color: var(--admin-text-muted); font-size: .7rem; }
+	.uploader input { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap; }
+	button { min-height: 40px; box-sizing: border-box; border: 1px solid var(--admin-border-strong); border-radius: 6px; padding: 9px 13px; background: transparent; color: var(--admin-text); font: inherit; font-size: .76rem; cursor: pointer; white-space: nowrap; }
+	.uploader:focus-within, button:focus-visible { outline: 2px solid var(--admin-accent); outline-offset: 2px; }
 	ul { display: grid; gap: 1px; margin: 0 0 22px; padding: 1px; list-style: none; background: var(--admin-border); }
 	li { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 8px; align-items: center; padding: 12px; background: var(--admin-surface); }
 	li div { min-width: 0; }
@@ -181,8 +192,7 @@ function statusLabel(status: UploadItemStatus) {
 	.quiet { color: var(--admin-text-muted); }
 	.limit-notice { margin: -8px 0 18px; color: var(--admin-text-muted); font-size: .72rem; }
 	@media (max-width: 700px) {
-		.uploader { align-items: stretch; flex-direction: column; }
-		.upload-button, button { min-height: 44px; justify-content: center; }
+		button { min-height: 44px; justify-content: center; }
 		li { grid-template-columns: minmax(0, 1fr) auto; }
 	}
 </style>

@@ -3,6 +3,8 @@ import { getCatalogProductEditorCapability } from "../src/lib/catalogProductCapa
 import type { AdminConfig } from "../src/lib/config";
 import {
 	addCatalogProductWebMedia,
+	addCatalogProductGalleryMedia,
+	attachCatalogProductArtwork,
 	alignCatalogProductWebMediaWithSetMembers,
 	CATALOG_PRODUCT_WEB_MEDIA_LIMIT,
 	addCatalogProductVariant,
@@ -14,16 +16,22 @@ import {
 	catalogProductStatus,
 	copyCatalogProductDraft,
 	emptyCatalogProductDraft,
+	formatCatalogFrameMultiplier,
+	formatCatalogPriceDollars,
 	moveCatalogProductVariant,
 	moveCatalogProductWebMedia,
 	moveCatalogProductSetMember,
 	newCatalogProductGraphDraft,
+	newCatalogProductReplacementGraphDraft,
 	newCatalogProductKey,
 	newCatalogProductVariant,
 	parseCatalogBasisPoints,
+	parseCatalogFrameMultiplier,
 	parseCatalogPriceCents,
+	parseCatalogPriceDollars,
 	removeCatalogProductVariant,
 	removeCatalogProductWebMedia,
+	reorderCatalogProductWebMedia,
 	serializeCatalogProductDraft,
 	slugifyCatalogOptionKey,
 	slugifyCatalogProductTitle,
@@ -148,7 +156,7 @@ describe("catalog product editor helpers", () => {
 		expect(capability({ ...explicitApi, unpublish: undefined }, true)?.publication).toBeNull();
 	});
 
-	it("projects both private upload routes only behind replacement refs and rooted queryless endpoints", () => {
+	it("projects private upload routes independently from legacy replacement refs", () => {
 		const graphApi = new Proxy({}, {
 			get: (_, property) => ({ name: String(property) }),
 		});
@@ -173,7 +181,25 @@ describe("catalog product editor helpers", () => {
 		expect(configured({
 			prepareEndpoint: "/api/private/prepare",
 			completeEndpoint: "/api/private/complete?retry=1",
-		})?.privateAssets?.upload).toBeNull();
+		})?.privateAssets ?? null).toBeNull();
+		expect(getCatalogProductEditorCapability({
+			editor: {
+				products: {
+					enabledKinds: ["print"],
+					privateAssetUpload: {
+						prepareEndpoint: "/api/private/prepare",
+						completeEndpoint: "/api/private/complete",
+					},
+				},
+			},
+			api: { catalogProductGraphs: graphApi },
+		} as unknown as AdminConfig)?.privateAssets).toEqual({
+			upload: {
+				prepareEndpoint: "/api/private/prepare",
+				completeEndpoint: "/api/private/complete",
+			},
+			replacement: null,
+		});
 	});
 
 	it("converts nullable projections, preserves zero, and strips order", () => {
@@ -498,6 +524,21 @@ describe("catalog product editor helpers", () => {
 		})).toThrow(/starting retail price/i);
 	});
 
+	it("starts replacement graph drafts without inventing a fixed price", () => {
+		const draft = newCatalogProductReplacementGraphDraft("digital_download", {
+			slug: "retained-download",
+		});
+		expect(draft).toEqual(expect.objectContaining({
+			schemaVersion: 2,
+			productKind: "digital_download",
+			slug: "retained-download",
+			saleAvailability: "unavailable",
+			variants: [{ key: "default", order: 0, status: "disabled" }],
+		}));
+		expect(draft).not.toHaveProperty("title");
+		expect(draft.variants?.[0]).not.toHaveProperty("retailPriceCents");
+	});
+
 	it("saves newly attached private files and complete print-set members", () => {
 		const printSetDraft = newCatalogProductGraphDraft("print_set", {
 			title: "New set",
@@ -541,6 +582,85 @@ describe("catalog product editor helpers", () => {
 				}],
 			}),
 		);
+	});
+
+	it("attaches one print upload as a paired primary and verified source", () => {
+		const source = emptyCatalogProductDraft();
+		source.webMedia = [
+			{
+				key: "existing-primary",
+				role: "primary",
+				assetId: "old-display-media",
+				altText: "Description of the old artwork",
+			},
+			{
+				key: "existing-gallery",
+				role: "gallery",
+				assetId: "gallery-media",
+			},
+		];
+		const result = attachCatalogProductArtwork(
+			source,
+			{ _id: "display-media", assetId: "11111111-1111-4111-8111-111111111111" },
+			{
+				kind: "print_source",
+				assetId: "private-source",
+				status: "verified",
+				originalFilename: "print.jpg",
+				mimeType: "image/jpeg",
+				sizeBytes: 100,
+				widthPixels: 100,
+				heightPixels: 100,
+				createdAt: 1,
+			},
+		);
+		expect(result.printSources).toEqual([
+			expect.objectContaining({ order: 0, assetId: "private-source" }),
+		]);
+		expect(result.webMedia).toEqual([
+			expect.objectContaining({
+				key: "existing-primary",
+				role: "primary",
+				assetId: "display-media",
+				altText: "",
+			}),
+			expect.objectContaining({ key: "existing-gallery", assetId: "gallery-media" }),
+		]);
+		expect(source.webMedia?.[0]?.altText).toBe("Description of the old artwork");
+		expect(source.printSources).toBeUndefined();
+	});
+
+	it("appends print-set pairs in order and reuses the first member image as cover", () => {
+		const source = emptyCatalogProductDraft();
+		source.productKind = "print_set";
+		const privateAsset = {
+			kind: "print_source" as const,
+			assetId: "private-a",
+			status: "verified" as const,
+			originalFilename: "a.jpg",
+			mimeType: "image/jpeg" as const,
+			sizeBytes: 100,
+			widthPixels: 100,
+			heightPixels: 100,
+			createdAt: 1,
+		};
+		const first = attachCatalogProductArtwork(
+			source,
+			{ _id: "display-a", assetId: "11111111-1111-4111-8111-111111111111" },
+			privateAsset,
+		);
+		const second = attachCatalogProductArtwork(
+			first,
+			{ _id: "display-b", assetId: "22222222-2222-4222-8222-222222222222" },
+			{ ...privateAsset, assetId: "private-b", originalFilename: "b.jpg" },
+		);
+		expect(second.setMembers).toHaveLength(2);
+		expect(second.printSources?.map((item) => [item.order, item.assetId]))
+			.toEqual([[0, "private-a"], [1, "private-b"]]);
+		expect(second.webMedia?.filter((item) => item.role === "cover"))
+			.toEqual([expect.objectContaining({ assetId: "display-a" })]);
+		expect(second.webMedia?.filter((item) => item.role === "set_member").map((item) => item.assetId))
+			.toEqual(["display-a", "display-b"]);
 	});
 
 	it("creates slugs independently from opaque identity", () => {
@@ -724,22 +844,54 @@ describe("catalog product editor helpers", () => {
 
 	it("keeps same-role gallery order, alt text, and detach operations immutable", () => {
 		const placements = [
+			{ key: "primary", role: "primary" as const, assetId: "media-primary" },
 			{ key: "gallery-z", role: "gallery" as const, assetId: "media-z", altText: "Z image" },
 			{ key: "gallery-a", role: "gallery" as const, assetId: "media-a", altText: "A image" },
+			{ key: "share", role: "social_share" as const, assetId: "media-share", altText: "Hidden" },
 		];
 		const moved = moveCatalogProductWebMedia(placements, "gallery-a", -1);
-		expect(moved.map(({ key }) => key)).toEqual(["gallery-a", "gallery-z"]);
-		expect(moved[0]?.altText).toBe("A image");
-		expect(placements.map(({ key }) => key)).toEqual(["gallery-z", "gallery-a"]);
+		expect(moved.map(({ key }) => key)).toEqual(["primary", "gallery-a", "gallery-z", "share"]);
+		expect(moved[1]?.altText).toBe("A image");
+		expect(placements.map(({ key }) => key)).toEqual(["primary", "gallery-z", "gallery-a", "share"]);
+
+		const reordered = reorderCatalogProductWebMedia(
+			placements,
+			"gallery",
+			["gallery-a", "gallery-z"],
+		);
+		expect(reordered.map(({ key }) => key)).toEqual(["primary", "gallery-a", "gallery-z", "share"]);
+		expect(reordered[1]).toEqual(expect.objectContaining({ altText: "A image" }));
+		expect(reordered[3]).toEqual(placements[3]);
+		expect(reordered[3]).not.toBe(placements[3]);
+		expect(() => reorderCatalogProductWebMedia(placements, "gallery", ["gallery-a", "gallery-a"]))
+			.toThrow(/every current image exactly once/i);
+		expect(() => reorderCatalogProductWebMedia(placements, "gallery", ["gallery-a", "primary"]))
+			.toThrow(/every current image exactly once/i);
 
 		const removed = removeCatalogProductWebMedia(moved, "gallery-z");
-		expect(removed.map(({ key }) => key)).toEqual(["gallery-a"]);
-		expect(moved).toHaveLength(2);
+		expect(removed.map(({ key }) => key)).toEqual(["primary", "gallery-a", "share"]);
+		expect(moved).toHaveLength(4);
 		expect(() => removeCatalogProductWebMedia(
 			placements,
 			"gallery-z",
 			[{ key: "member", mediaPlacementKey: "gallery-z", printSourceKey: "source" }],
 		)).toThrow(/belongs to a print-set member/i);
+	});
+
+	it("adds a web-only gallery image without disturbing print artwork roles", () => {
+		const placements = [
+			{ key: "cover", role: "cover" as const, assetId: "cover-media" },
+			{ key: "member", role: "set_member" as const, assetId: "member-media" },
+		];
+		expect(addCatalogProductGalleryMedia(placements, {
+			_id: "gallery-media",
+			assetId: "11111111-1111-4111-8111-111111111111",
+		}).map(({ role, assetId }) => [role, assetId])).toEqual([
+			["cover", "cover-media"],
+			["gallery", "gallery-media"],
+			["set_member", "member-media"],
+		]);
+		expect(placements).toHaveLength(2);
 	});
 
 	it("aligns print-set media to member order and rejects the placement limit", () => {
@@ -775,6 +927,31 @@ describe("catalog product editor helpers", () => {
 		expect(() => parseCatalogPriceCents("01")).toThrow(/whole number/i);
 		expect(() => parseCatalogPriceCents(-1)).toThrow(/between 0/i);
 		expect(() => parseCatalogPriceCents(100_000_001)).toThrow(/between 0/i);
+		expect(parseCatalogPriceDollars(0)).toBe(0);
+		expect(parseCatalogPriceDollars("0.00")).toBe(0);
+		expect(parseCatalogPriceDollars("12")).toBe(1200);
+		expect(parseCatalogPriceDollars("12.5")).toBe(1250);
+		expect(parseCatalogPriceDollars("12.50")).toBe(1250);
+		expect(parseCatalogPriceDollars("12.")).toBe(1200);
+		expect(parseCatalogPriceDollars(12.5)).toBe(1250);
+		expect(parseCatalogPriceDollars("")).toBeUndefined();
+		expect(() => parseCatalogPriceDollars("12.501")).toThrow(/two decimal places/i);
+		expect(() => parseCatalogPriceDollars("01.00")).toThrow(/USD amount/i);
+		expect(() => parseCatalogPriceDollars("$12.50")).toThrow(/USD amount/i);
+		expect(() => parseCatalogPriceDollars("1000000.01")).toThrow(/between \$0.00/i);
+		expect(formatCatalogPriceDollars(undefined)).toBe("");
+		expect(formatCatalogPriceDollars(0)).toBe("0.00");
+		expect(formatCatalogPriceDollars(1250)).toBe("12.50");
+		expect(parseCatalogFrameMultiplier("1")).toBe(10_000);
+		expect(parseCatalogFrameMultiplier("2.00")).toBe(20_000);
+		expect(parseCatalogFrameMultiplier("1.2345")).toBe(12_345);
+		expect(() => parseCatalogFrameMultiplier("1.23456")).toThrow(/four decimal places/i);
+		expect(() => parseCatalogFrameMultiplier("0")).toThrow(/between 1× and 100×/i);
+		expect(() => parseCatalogFrameMultiplier("0.9999")).toThrow(/between 1× and 100×/i);
+		expect(() => parseCatalogFrameMultiplier("100.0001")).toThrow(/between 1× and 100×/i);
+		expect(formatCatalogFrameMultiplier(10_000)).toBe("1.00");
+		expect(formatCatalogFrameMultiplier(20_000)).toBe("2.00");
+		expect(formatCatalogFrameMultiplier(12_345)).toBe("1.2345");
 		expect(parseCatalogBasisPoints(0)).toBe(0);
 		expect(parseCatalogBasisPoints("10000")).toBe(10_000);
 		expect(() => parseCatalogBasisPoints("")).toThrow(/required/i);
