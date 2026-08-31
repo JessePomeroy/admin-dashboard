@@ -3,6 +3,11 @@ import { onDestroy } from "svelte";
 import { useQuery } from "convex-svelte";
 import { useAdminClient } from "../../adminClient";
 import {
+	uploadCatalogProductArtwork,
+	type CatalogProductArtworkCheckpoint,
+	type CatalogProductArtworkStatus,
+} from "../../catalogProductArtworkUpload";
+import {
 	completeCatalogPrivateEditorUpload,
 	declareCatalogPrivateEditorUpload,
 	newCatalogPrivateEditorUploadHandle,
@@ -12,7 +17,9 @@ import {
 import { getCatalogProductEditorCapability } from "../../catalogProductCapability";
 import {
 	addCatalogProductWebMedia,
+	addCatalogProductGalleryMedia,
 	alignCatalogProductWebMediaWithSetMembers,
+	attachCatalogProductArtwork,
 	catalogProductDraftFromRevision,
 	catalogProductEditorDescription,
 	catalogProductEditorSaleAvailability,
@@ -24,17 +31,18 @@ import {
 	canEditCatalogProductGraphKind,
 	copyCatalogProductDraft,
 	emptyCatalogProductDraft,
+	formatCatalogFrameMultiplier,
 	newCatalogPrivateRelationKey,
-	parseCatalogBasisPoints,
+	newCatalogProductReplacementGraphDraft,
+	parseCatalogFrameMultiplier,
 	serializeCatalogProductDraft,
 	slugifyCatalogProductTitle,
-	type CatalogEditorMediaRelation,
-	type CatalogEditorPrintSourceRelation,
 	type CatalogEditorPrivateAsset,
-	type CatalogEditorPrivateAssetCandidatePage,
 	type CatalogEditorPrivateAssetRelation,
 	type CatalogProductDraftForm,
 	type CatalogProductEditorState,
+	type CatalogProductEditorRevision,
+	type CatalogProductGraphV2Draft,
 } from "../../catalogProductEditor";
 import { getAdminConfig } from "../../config";
 import {
@@ -46,6 +54,7 @@ import "../../styles/editorial-page.css";
 import CatalogProductMedia from "./CatalogProductMedia.svelte";
 import CatalogProductSetMembers from "./CatalogProductSetMembers.svelte";
 import CatalogProductVariants from "./CatalogProductVariants.svelte";
+import EditorSegmentedChoice from "./EditorSegmentedChoice.svelte";
 import PortfolioMediaPicker from "./PortfolioMediaPicker.svelte";
 import ProductWorkbench from "./ProductWorkbench.svelte";
 import { publicationCompletenessMessage } from "./publicationCompleteness";
@@ -71,39 +80,31 @@ const editorQuery = useQuery(catalogApi.getEditorState, () => ({ productId }));
 let editorState = $derived(editorQuery.data as CatalogProductEditorState | undefined);
 let editorError = $derived(editorQuery.error);
 let form = $state<CatalogProductDraftForm>(emptyCatalogProductDraft());
+let scopedProductId = $state<string | null>(null);
 let initialized = $state(false);
 let hasActiveDraft = $state(false);
 let loadedServerRevisionId = $state<string | null>(null);
 let loadedPublishedRevisionId = $state<string | null>(null);
 let loadedUpdatedAt = $state<number | null>(null);
 let baseRevisionId = $state<string | undefined>();
+let graphSourceRevision = $state<CatalogProductEditorRevision | null>(null);
 let locallyCommittedRevisionIds = $state<Array<string | null>>([]);
 let savedJson = $state("");
-let saveState = $state<"loading" | "saved" | "dirty" | "saving" | "replacing" | "discarding" | "error" | "conflict">("loading");
+let saveState = $state<"loading" | "saved" | "dirty" | "saving" | "discarding" | "error" | "conflict">("loading");
 let saveError = $state("");
-let multiplierInput = $state("10000");
+let multiplierInput = $state("1.00");
 let multiplierError = $state("");
 let variantsValid = $state(true);
 let pickerOpen = $state(false);
-let pickerPurpose = $state<"display-media" | "set-member">("display-media");
 let uploadedAssets = $state<PortfolioMediaAsset[]>([]);
 let uploadedPrivateAssets = $state<CatalogEditorPrivateAsset[]>([]);
 let mediaActionError = $state("");
+let artworkUploadBusy = $state(false);
+let artworkUploadController: AbortController | null = null;
+let artworkUploadCheckpoints = new WeakMap<File, CatalogProductArtworkCheckpoint>();
 let activePrivateAssetRelation = $state<CatalogEditorPrivateAssetRelation | null>(null);
-type PrivateAssetAttachment =
-	| { kind: "single-print" }
-	| { kind: "paid-download" }
-	| {
-		kind: "set-member";
-		memberKey: string;
-		mediaPlacementKey: string;
-		media: PortfolioMediaAsset;
-	};
+type PrivateAssetAttachment = { kind: "paid-download" };
 let privateAssetAttachment = $state<PrivateAssetAttachment | null>(null);
-let selectedPrivateAssetId = $state("");
-let replacementPending = $state(false);
-let replacementRevisionId = $state<string | null>(null);
-let replacementBaseRevisionId = $state<string | null>(null);
 type PublicationSnapshot = {
 	productId: string;
 	draftRevisionId: string | null;
@@ -133,7 +134,6 @@ type PrivateUploadOperation = {
 	controller: AbortController | null;
 	putIssued: boolean;
 	stagedAsset: CatalogEditorPrivateAsset | null;
-	replacementRevisionId: string | null;
 };
 let selectedPrivateFile = $state<File | null>(null);
 let privateFileInput = $state<HTMLInputElement | null>(null);
@@ -149,17 +149,6 @@ const PRIVATE_UPLOAD_AUTO_CHECKS = 3;
 const PRIVATE_UPLOAD_AUTO_INTERVAL_MS = 65_000;
 const PRIVATE_UPLOAD_AUTO_WINDOW_MS = 305_000;
 const usedPrivateUploadHandles = new Set<string>();
-const privateAssetCandidateQuery = privateAssetCapability
-	? useQuery(privateAssetCapability.listCandidates, () =>
-		activePrivateAssetRelation && !privateAssetAttachment && baseRevisionId
-			? {
-					productId,
-					expectedDraftRevisionId: baseRevisionId,
-					relation: activePrivateAssetRelation,
-					paginationOpts: { numItems: 25, cursor: null },
-				}
-			: "skip")
-	: null;
 const mediaListQuery = mediaCapability
 	? useQuery(mediaCapability.api.listForEditor, {
 			siteUrl: config.siteUrl,
@@ -209,92 +198,26 @@ let selectedAssetIds = $derived.by(() => {
 });
 let currentJson = $derived(serializeCatalogProductDraft(form));
 let isGraphV2 = $derived(editorState?.graphVersion === 2 || editorState?.draft?.schemaVersion === 2 || editorState?.published?.schemaVersion === 2);
-let canEditGraphProduct = $derived(isGraphV2 && canEditCatalogProductGraphKind(editorState?.productKind) && Boolean(editorState?.draft));
+let graphProductKindEditable = $derived(
+	isGraphV2 && canEditCatalogProductGraphKind(editorState?.productKind),
+);
+let canEditGraphProduct = $derived(
+	graphProductKindEditable && Boolean(editorState?.draft || graphSourceRevision),
+);
 let readOnlyRevision = $derived(editorState?.draft ?? editorState?.published ?? null);
 
-function isVerifiedPrintSourceRelation(
-	relation: CatalogEditorMediaRelation,
-): relation is CatalogEditorPrintSourceRelation {
-	if (!relation.asset || typeof relation.asset !== "object") return false;
-	const asset = relation.asset as Partial<CatalogEditorPrintSourceRelation["asset"]>;
-	return typeof relation.relationKey === "string"
-		&& asset.kind === "print_source"
-		&& asset.status === "verified"
-		&& typeof asset.assetId === "string"
-		&& typeof asset.originalFilename === "string"
-		&& (asset.mimeType === "image/jpeg" || asset.mimeType === "image/png")
-		&& Number.isSafeInteger(asset.sizeBytes)
-		&& Number.isSafeInteger(asset.widthPixels)
-		&& Number.isSafeInteger(asset.heightPixels)
-		&& typeof asset.createdAt === "number";
-}
-
 let privateAssetRows = $derived.by(() => {
+	if (form.productKind !== "digital_download" || !form.paidFile) return [];
 	const revision = editorState?.draft;
-	if (!revision) return [];
-	const printSourceAssets = (revision.printSourceAssets ?? [])
-		.filter(isVerifiedPrintSourceRelation);
 	const privateAssetById = new Map<string, CatalogEditorPrivateAsset>([
-		...printSourceAssets.map((relation) => [relation.asset.assetId, relation.asset] as const),
-		...(revision.paidFileAsset
+		...(revision?.paidFileAsset
 			? [[revision.paidFileAsset.asset.assetId, revision.paidFileAsset.asset] as const]
 			: []),
 		...uploadedPrivateAssets.map((asset) => [asset.assetId, asset] as const),
 	]);
-	if (form.productKind === "digital_download") {
-		const relation = form.paidFile;
-		return relation
-			? [{
-					label: "paid download",
-					relation: { kind: "paid_digital_file" as const, relationKey: relation.key },
-					asset: privateAssetById.get(relation.assetId),
-				}]
-			: [];
-	}
-	if (form.productKind === "print_set") {
-		return form.setMembers.map((member, index) => ({
-			label: `member ${index + 1} print master`,
-			relation: { kind: "print_source" as const, relationKey: member.printSourceKey },
-			asset: privateAssetById.get(
-				(form.printSources ?? []).find(
-					(candidate) => candidate.key === member.printSourceKey,
-				)?.assetId ?? "",
-			),
-		}));
-	}
-	if (form.productKind === "print") {
-		return (form.printSources ?? []).slice(0, 1).map((relation) => ({
-			label: "single-print master",
-			relation: { kind: "print_source" as const, relationKey: relation.key },
-			asset: privateAssetById.get(relation.assetId),
-		}));
-	}
-	return [];
+	return [{ asset: privateAssetById.get(form.paidFile.assetId) }];
 });
-let candidatePage = $derived(
-	privateAssetCandidateQuery?.data as CatalogEditorPrivateAssetCandidatePage | undefined,
-);
-let activeCandidatePage = $derived(
-	candidatePage
-		&& baseRevisionId === candidatePage.draftRevisionId
-		&& activePrivateAssetRelation?.kind === candidatePage.relation.kind
-		&& activePrivateAssetRelation.relationKey === candidatePage.relation.relationKey
-		? candidatePage
-		: undefined,
-);
-let stagedPrivateAsset = $derived(privateUploadOperation?.stagedAsset ?? null);
 let privateUploadState = $derived(privateUploadOperation?.phase ?? privateUploadFallbackState);
-let candidateOptions = $derived(activeCandidatePage
-	? [...new Map([
-		activeCandidatePage.relation.currentAsset,
-		...activeCandidatePage.page,
-		...(stagedPrivateAsset
-			&& privateUploadOperation?.snapshot.relation.kind === activeCandidatePage.relation.kind
-			&& privateUploadOperation.snapshot.relation.relationKey === activeCandidatePage.relation.relationKey
-			? [stagedPrivateAsset]
-			: []),
-	].map((asset) => [asset.assetId, asset])).values()]
-	: []);
 let usesSinglePrice = $derived(
 	form.productKind === "postcard"
 		|| form.productKind === "merchandise"
@@ -306,7 +229,7 @@ let privateUploadBusy = $derived(["reading", "preparing", "uploading", "completi
 let privateUploadBlocked = $derived(privateUploadOperation !== null);
 let publicationRequestActive = $derived(publicationOperation !== null);
 let editorLocked = $derived(
-	replacementPending || privateUploadBusy || publicationRequestActive
+	privateUploadBusy || artworkUploadBusy || publicationRequestActive
 		|| ["saving", "discarding", "conflict"].includes(saveState),
 );
 let publicationStatus = $derived.by(() => {
@@ -326,11 +249,14 @@ let publicationQueryStale = $derived(initialized && Boolean(editorState) && (
 		|| editorState?.updatedAt !== loadedUpdatedAt
 ));
 let publicationActionsLocked = $derived(
-	dirty || saveState !== "saved" || replacementPending || privateUploadBlocked
+	dirty || saveState !== "saved" || privateUploadBlocked || artworkUploadBusy
 		|| publicationRequestActive || publicationQueryStale,
 );
+let draftFormValid = $derived(
+	variantsValid && (!form.frameOptionsEnabled || !multiplierError),
+);
 let canPublish = $derived(Boolean(
-	publicationCapability && editorState?.draft && !publicationActionsLocked
+	publicationCapability && editorState?.draft && draftFormValid && !publicationActionsLocked
 		&& editorState.draft.revisionId !== editorState.published?.revisionId,
 ));
 let canUnpublish = $derived(Boolean(
@@ -338,18 +264,25 @@ let canUnpublish = $derived(Boolean(
 ));
 let canSave = $derived(
 	hasActiveDraft
-		&& variantsValid
-		&& (!form.frameOptionsEnabled || !multiplierError)
+		&& draftFormValid
 		&& !editorLocked
 		&& (dirty || saveState === "error"),
 );
-let publicationUpdatedAtIso = $derived(formatPublicationTime(editorState?.updatedAt ?? null));
-let publicationPublishedAtIso = $derived(formatPublicationTime(editorState?.publishedAt ?? null));
 
 function syncLoadedPublication(state: CatalogProductEditorState) {
 	loadedServerRevisionId = state.draft?.revisionId ?? null;
 	loadedPublishedRevisionId = state.published?.revisionId ?? null;
 	loadedUpdatedAt = state.updatedAt;
+}
+
+function syncMultiplierFromForm() {
+	multiplierInput = formatCatalogFrameMultiplier(form.framePriceMultiplierBasisPoints);
+	try {
+		parseCatalogFrameMultiplier(multiplierInput);
+		multiplierError = "";
+	} catch (error) {
+		multiplierError = error instanceof Error ? error.message : "Enter a valid multiplier.";
+	}
 }
 
 function loadServerDraft(state: CatalogProductEditorState) {
@@ -359,31 +292,64 @@ function loadServerDraft(state: CatalogProductEditorState) {
 	baseRevisionId = state.draft?.revisionId;
 	syncLoadedPublication(state);
 	savedJson = serializeCatalogProductDraft(form);
-	multiplierInput = String(form.framePriceMultiplierBasisPoints);
+	syncMultiplierFromForm();
 	saveState = "saved";
 	saveError = "";
-	multiplierError = "";
+	variantsValid = true;
 	initialized = true;
 }
 
 function loadServerGraphProductDraft(state: CatalogProductEditorState) {
+	if (!state.draft) {
+		throw new Error("The catalog graph editor requires an active draft.");
+	}
 	locallyCommittedRevisionIds = [];
 	if (privateUploadOperation && state.draft?.revisionId !== privateUploadOperation.snapshot.draftRevisionId) {
 		clearCompletionCheckTimer();
 		privateUploadOperation = null;
 		privateUploadFallbackState = "error";
-		privateUploadMessage = "The draft relation changed. Reload this product before starting another upload.";
+		privateUploadMessage = "This product changed while the file was uploading. Reload before trying again.";
 	}
 	form = catalogProductGraphDraftFromRevision(state.draft);
+	graphSourceRevision = state.draft;
 	hasActiveDraft = Boolean(state.draft);
 	baseRevisionId = state.draft?.revisionId;
 	syncLoadedPublication(state);
 	savedJson = serializeCatalogProductDraft(form);
-	multiplierInput = String(form.framePriceMultiplierBasisPoints);
+	syncMultiplierFromForm();
 	saveState = "saved";
 	saveError = "";
-	multiplierError = "";
+	variantsValid = true;
 	initialized = true;
+}
+
+function loadServerGraphProductWithoutDraft(state: CatalogProductEditorState) {
+	locallyCommittedRevisionIds = [];
+	graphSourceRevision = null;
+	form = emptyCatalogProductDraft();
+	hasActiveDraft = false;
+	baseRevisionId = undefined;
+	syncLoadedPublication(state);
+	savedJson = serializeCatalogProductDraft(form);
+	syncMultiplierFromForm();
+	saveState = "saved";
+	saveError = "";
+	variantsValid = true;
+	initialized = true;
+}
+
+function graphRevisionFromDraft(
+	draft: CatalogProductGraphV2Draft,
+	revisionId: string,
+	createdAt: number,
+): CatalogProductEditorRevision {
+	return {
+		revisionId,
+		schemaVersion: 2,
+		productKind: draft.productKind,
+		createdAt,
+		draft,
+	};
 }
 
 function publicationSnapshot(state: CatalogProductEditorState): PublicationSnapshot {
@@ -425,9 +391,46 @@ function clearPublicationReconciliationTimer() {
 	publicationReconciliationTimer = undefined;
 }
 
-function formatPublicationTime(value: number | null) {
-	if (value === null || !Number.isSafeInteger(value)) return null;
-	try { return new Date(value).toISOString(); } catch { return null; }
+function resetProductScope() {
+	artworkUploadController?.abort();
+	artworkUploadController = null;
+	artworkUploadBusy = false;
+	artworkUploadCheckpoints = new WeakMap<File, CatalogProductArtworkCheckpoint>();
+	privateUploadOperation?.controller?.abort();
+	clearCompletionCheckTimer();
+	clearPublicationReconciliationTimer();
+	form = emptyCatalogProductDraft();
+	initialized = false;
+	hasActiveDraft = false;
+	loadedServerRevisionId = null;
+	loadedPublishedRevisionId = null;
+	loadedUpdatedAt = null;
+	baseRevisionId = undefined;
+	graphSourceRevision = null;
+	locallyCommittedRevisionIds = [];
+	savedJson = "";
+	saveState = "loading";
+	saveError = "";
+	syncMultiplierFromForm();
+	variantsValid = true;
+	pickerOpen = false;
+	uploadedAssets = [];
+	uploadedPrivateAssets = [];
+	mediaActionError = "";
+	activePrivateAssetRelation = null;
+	privateAssetAttachment = null;
+	publicationOperation = null;
+	publicationMessage = "";
+	publicationError = "";
+	selectedPrivateFile = null;
+	privateFileInput = null;
+	privateZipVersion = "";
+	privateUploadOperation = null;
+	privateUploadFallbackState = "idle";
+	privateUploadMessage = "";
+	manualCheckReady = false;
+	automaticChecksRemaining = 0;
+	automaticCheckDeadline = 0;
 }
 
 function completePublication(operation: PublicationOperation, state: CatalogProductEditorState) {
@@ -464,65 +467,37 @@ function reconcilePublicationState(state: CatalogProductEditorState) {
 }
 
 $effect(() => {
-	if (!editorState) return;
+	if (scopedProductId === null) {
+		scopedProductId = productId;
+		return;
+	}
+	if (productId === scopedProductId) return;
+	scopedProductId = productId;
+	resetProductScope();
+});
+
+$effect(() => {
+	if (!editorState || editorState.productId !== productId) return;
 	if (isGraphV2) {
 		const serverRevisionId = editorState.draft?.revisionId ?? null;
 		const serverPublishedRevisionId = editorState.published?.revisionId ?? null;
 		if (!initialized) {
-			if (canEditGraphProduct) return loadServerGraphProductDraft(editorState);
-			hasActiveDraft = Boolean(editorState.draft);
-			baseRevisionId = editorState.draft?.revisionId;
-			syncLoadedPublication(editorState);
-			saveState = "saved";
-			initialized = true;
+			if (graphProductKindEditable && editorState.draft) {
+				return loadServerGraphProductDraft(editorState);
+			}
+			loadServerGraphProductWithoutDraft(editorState);
 			return;
 		}
 		if (publicationOperation) {
 			reconcilePublicationState(editorState);
 			return;
 		}
-		if (!canEditGraphProduct) {
+		if (!graphProductKindEditable) {
 			syncLoadedPublication(editorState);
 			if (saveState !== "conflict") saveState = "saved";
 			return;
 		}
 		if (saveState === "conflict") return;
-		if (replacementPending) {
-			if (!replacementRevisionId) return;
-			if (
-				serverRevisionId === replacementRevisionId
-				&& serverPublishedRevisionId === loadedPublishedRevisionId
-			) {
-				const confirmedForm = catalogProductGraphDraftFromRevision(editorState.draft);
-				form = confirmedForm;
-				syncLoadedPublication(editorState);
-				baseRevisionId = serverRevisionId;
-				savedJson = serializeCatalogProductDraft(confirmedForm);
-				multiplierInput = String(confirmedForm.framePriceMultiplierBasisPoints);
-				replacementPending = false;
-				replacementRevisionId = null;
-				replacementBaseRevisionId = null;
-				activePrivateAssetRelation = null;
-				selectedPrivateAssetId = "";
-				if (
-					privateUploadOperation?.replacementRevisionId === serverRevisionId
-					&& stagedUploadMatchesQuery(privateUploadOperation)
-				) {
-					clearCompletionCheckTimer();
-					privateUploadOperation = null;
-					privateUploadFallbackState = "idle";
-					privateUploadMessage = "";
-				}
-				saveState = currentJson === savedJson ? "saved" : "dirty";
-				return;
-			}
-			if (serverRevisionId !== replacementBaseRevisionId) {
-				replacementPending = false;
-				saveState = "conflict";
-				saveError = "A newer server draft arrived before the replacement revision could be confirmed. Reload this product before continuing.";
-			}
-			return;
-		}
 		if (["saving", "discarding"].includes(saveState)) return;
 		if (
 			serverRevisionId === loadedServerRevisionId
@@ -534,14 +509,30 @@ $effect(() => {
 			localEchoIndex >= 0
 			&& serverPublishedRevisionId === loadedPublishedRevisionId
 		) {
+			const remainingCommittedRevisionIds = locallyCommittedRevisionIds.slice(
+				localEchoIndex + 1,
+			);
 			syncLoadedPublication(editorState);
-			baseRevisionId = serverRevisionId ?? undefined;
-			locallyCommittedRevisionIds = locallyCommittedRevisionIds.slice(localEchoIndex + 1);
+			if (remainingCommittedRevisionIds.length === 0) {
+				baseRevisionId = serverRevisionId ?? undefined;
+				graphSourceRevision = editorState.draft;
+				hasActiveDraft = Boolean(editorState.draft);
+			}
+			locallyCommittedRevisionIds = remainingCommittedRevisionIds;
 			return;
 		}
+		if (
+			serverRevisionId === null
+			&& graphSourceRevision
+			&& locallyCommittedRevisionIds.includes(graphSourceRevision.revisionId)
+		) return;
 		if (dirty) {
 			saveState = "conflict";
 			saveError = "A newer server state arrived while this page had unsaved changes. Reload before continuing.";
+			return;
+		}
+		if (!editorState.draft) {
+			loadServerGraphProductWithoutDraft(editorState);
 			return;
 		}
 		loadServerGraphProductDraft(editorState);
@@ -553,9 +544,14 @@ $effect(() => {
 	if (serverRevisionId === loadedServerRevisionId) return;
 	const localEchoIndex = locallyCommittedRevisionIds.indexOf(serverRevisionId);
 	if (localEchoIndex >= 0) {
+		const remainingCommittedRevisionIds = locallyCommittedRevisionIds.slice(
+			localEchoIndex + 1,
+		);
 		loadedServerRevisionId = serverRevisionId;
-		baseRevisionId = serverRevisionId ?? undefined;
-		locallyCommittedRevisionIds = locallyCommittedRevisionIds.slice(localEchoIndex + 1);
+		if (remainingCommittedRevisionIds.length === 0) {
+			baseRevisionId = serverRevisionId ?? undefined;
+		}
+		locallyCommittedRevisionIds = remainingCommittedRevisionIds;
 		return;
 	}
 	if (dirty) {
@@ -582,10 +578,10 @@ function fillSlugIfEmpty() {
 function updateMultiplier(value: string) {
 	multiplierInput = value;
 	try {
-		form.framePriceMultiplierBasisPoints = parseCatalogBasisPoints(value);
+		form.framePriceMultiplierBasisPoints = parseCatalogFrameMultiplier(value);
 		multiplierError = "";
 	} catch (error) {
-		multiplierError = error instanceof Error ? error.message : "Enter whole basis points.";
+		multiplierError = error instanceof Error ? error.message : "Enter a valid multiplier.";
 	}
 }
 function mutationError(error: unknown, fallback: string) {
@@ -624,7 +620,9 @@ function schedulePublicationReconciliation(operation: PublicationOperation) {
 		if (publicationOperation?.requestId !== operation.requestId) return;
 		publicationOperation.phase = "reload-required";
 		publicationMessage = "";
-		publicationError = "The Convex CMS publication result could not be confirmed. Reload this product; do not submit the action again.";
+		publicationError = publishesToShop
+			? "We could not confirm whether the Shop finished this action. Reload the product before trying again."
+			: "The Convex CMS publication result could not be confirmed. Reload this product; do not submit the action again.";
 	}, PUBLICATION_RECONCILIATION_MS);
 }
 
@@ -632,7 +630,7 @@ async function runPublication(action: "publish" | "unpublish") {
 	if (!publicationCapability || !editorState) return;
 	if (action === "publish" ? !canPublish : !canUnpublish) return;
 	if (action === "unpublish" && !globalThis.confirm(
-		"Unpublish this product from Convex CMS?",
+		publishesToShop ? "Remove this product from your Shop?" : "Unpublish this product from Convex CMS?",
 	)) return;
 	const before = publicationSnapshot(editorState);
 	const operation: PublicationOperation = {
@@ -674,7 +672,9 @@ async function runPublication(action: "publish" | "unpublish") {
 			publicationConflict();
 			return;
 		}
-		const completenessMessage = action === "publish" ? publicationCompletenessMessage(error) : null;
+		const completenessMessage = action === "publish"
+			? publicationCompletenessMessage(error, publishesToShop ? "Shop" : "Convex CMS")
+			: null;
 		if (completenessMessage) {
 			clearPublicationReconciliationTimer();
 			publicationOperation = null;
@@ -689,34 +689,26 @@ async function runPublication(action: "publish" | "unpublish") {
 	}
 }
 
-function formatPrivateAssetSize(sizeBytes: number) {
-	if (sizeBytes < 1024) return `${sizeBytes} B`;
-	const units = ["KB", "MB", "GB"];
-	const index = Math.min(Math.floor(Math.log(sizeBytes) / Math.log(1024)) - 1, 2);
-	const value = sizeBytes / 1024 ** (index + 1);
-	return `${value >= 10 ? value.toFixed(0) : value.toFixed(1)} ${units[index]}`;
-}
-
-function privateAssetDetails(asset: CatalogEditorPrivateAsset) {
-	return asset.kind === "print_source"
-		? `${asset.mimeType} · ${formatPrivateAssetSize(asset.sizeBytes)} · ${asset.widthPixels}×${asset.heightPixels}px`
-		: `${asset.mimeType} · ${formatPrivateAssetSize(asset.sizeBytes)} · ${asset.version ?? "version not set"}`;
-}
-
-function choosePrivateAssetRelation(
-	relation: CatalogEditorPrivateAssetRelation,
-	currentAssetId: string | undefined,
-) {
-	if (editorLocked || dirty) return;
-	clearCompletionCheckTimer();
-	privateAssetAttachment = null;
-	activePrivateAssetRelation = relation;
-	selectedPrivateAssetId = currentAssetId ?? "";
-	selectedPrivateFile = null;
-	if (privateFileInput) privateFileInput.value = "";
-	privateZipVersion = "";
+function choosePrivateFile(file: File | null) {
+	selectedPrivateFile = file;
 	privateUploadMessage = "";
-	saveError = "";
+}
+
+function chooseDigitalDownloadFile(file: File | null) {
+	if (!file || form.productKind !== "digital_download") return choosePrivateFile(file);
+	if (dirty || editorLocked || !baseRevisionId) {
+		privateUploadFallbackState = "error";
+		privateUploadMessage = "Save this draft before adding the download file.";
+		return;
+	}
+	if (!privateAssetAttachment) beginSinglePrivateAssetAttachment();
+	choosePrivateFile(file);
+}
+
+function dropDigitalDownloadFile(event: DragEvent) {
+	event.preventDefault();
+	if (privateUploadBlocked || dirty || editorLocked) return;
+	chooseDigitalDownloadFile(event.dataTransfer?.files?.[0] ?? null);
 }
 
 function resetPrivateAssetFlow(message = "") {
@@ -726,7 +718,6 @@ function resetPrivateAssetFlow(message = "") {
 	privateUploadFallbackState = "idle";
 	privateAssetAttachment = null;
 	activePrivateAssetRelation = null;
-	selectedPrivateAssetId = "";
 	selectedPrivateFile = null;
 	privateZipVersion = "";
 	if (privateFileInput) privateFileInput.value = "";
@@ -744,33 +735,12 @@ function beginPrivateAssetAttachment(
 }
 
 function beginSinglePrivateAssetAttachment() {
-	if (form.productKind === "print") {
-		beginPrivateAssetAttachment(
-			{ kind: "single-print" },
-			{ kind: "print_source", relationKey: newCatalogPrivateRelationKey("print") },
-		);
-		return;
-	}
 	if (form.productKind === "digital_download") {
 		beginPrivateAssetAttachment(
 			{ kind: "paid-download" },
 			{ kind: "paid_digital_file", relationKey: newCatalogPrivateRelationKey("download") },
 		);
 	}
-}
-
-function beginSetMemberAttachment(asset: PortfolioMediaAsset) {
-	const memberKey = newCatalogPrivateRelationKey("member");
-	beginPrivateAssetAttachment(
-		{
-			kind: "set-member",
-			memberKey,
-			mediaPlacementKey: `media-${memberKey}`,
-			media: asset,
-		},
-		{ kind: "print_source", relationKey: newCatalogPrivateRelationKey("print") },
-	);
-	pickerOpen = false;
 }
 
 function attachVerifiedPrivateAsset() {
@@ -784,49 +754,20 @@ function attachVerifiedPrivateAsset() {
 		|| !attachment
 		|| !relation
 		|| !asset
-		|| asset.kind !== relation.kind
+		|| attachment.kind !== "paid-download"
+		|| relation.kind !== "paid_digital_file"
+		|| asset.kind !== "paid_digital_file"
 	) return;
 
 	uploadedPrivateAssets = [
 		asset,
 		...uploadedPrivateAssets.filter((candidate) => candidate.assetId !== asset.assetId),
 	];
-	if (attachment.kind === "single-print" && asset.kind === "print_source") {
-		form.printSources = [{ key: relation.relationKey, order: 0, assetId: asset.assetId }];
-	} else if (attachment.kind === "paid-download" && asset.kind === "paid_digital_file") {
-		form.paidFile = {
-			key: relation.relationKey,
-			assetId: asset.assetId,
-			...(asset.version ? { version: asset.version } : {}),
-		};
-	} else if (attachment.kind === "set-member" && asset.kind === "print_source") {
-		const order = form.setMembers.length;
-		form.printSources = [
-			...(form.printSources ?? []),
-			{ key: relation.relationKey, order, assetId: asset.assetId },
-		];
-		form.webMedia = [
-			...(form.webMedia ?? []),
-			{
-				key: attachment.mediaPlacementKey,
-				role: "set_member",
-				assetId: attachment.media._id,
-				altText: "",
-			},
-		];
-		form.setMembers = [
-			...form.setMembers,
-			{
-				key: attachment.memberKey,
-				mediaPlacementKey: attachment.mediaPlacementKey,
-				printSourceKey: relation.relationKey,
-			},
-		];
-		form.webMedia = alignCatalogProductWebMediaWithSetMembers(
-			form.webMedia,
-			form.setMembers,
-		);
-	} else return;
+	form.paidFile = {
+		key: relation.relationKey,
+		assetId: asset.assetId,
+		...(asset.version ? { version: asset.version } : {}),
+	};
 	resetPrivateAssetFlow(`${asset.originalFilename} is attached to this draft. Save the draft to keep it.`);
 }
 
@@ -868,19 +809,6 @@ function operationStillActive(uploadHandle: string) {
 	return privateUploadOperation?.uploadHandle === uploadHandle;
 }
 
-function stagedUploadMatchesQuery(operation: PrivateUploadOperation) {
-	const assetId = operation.stagedAsset?.assetId;
-	const relation = operation.snapshot.relation;
-	if (!assetId || !editorState?.draft) return false;
-	if (relation.kind === "paid_digital_file") {
-		return editorState.draft.paidFileAsset?.relationKey === relation.relationKey
-			&& editorState.draft.paidFileAsset.asset.assetId === assetId;
-	}
-	return editorState.draft.printSourceAssets?.some(
-		(item) => item.relationKey === relation.relationKey && item.asset.assetId === assetId,
-	) ?? false;
-}
-
 function uploadSnapshotStillActive(operation: PrivateUploadOperation) {
 	return baseRevisionId === operation.snapshot.draftRevisionId
 		&& activePrivateAssetRelation?.kind === operation.snapshot.relation.kind
@@ -893,25 +821,33 @@ async function reconcilePrivateUpload() {
 	if (!privateAssetUpload || !operation) return;
 	operation.phase = "completing";
 	privateUploadMessage = "Checking verified asset status…";
-	const result = await completeCatalogPrivateEditorUpload(
-		privateAssetUpload.completeEndpoint,
-		operation.uploadHandle,
-	);
+	let result: Awaited<ReturnType<typeof completeCatalogPrivateEditorUpload>>;
+	try {
+		result = await completeCatalogPrivateEditorUpload(
+			privateAssetUpload.completeEndpoint,
+			operation.uploadHandle,
+			operation.controller?.signal,
+		);
+	} catch (error) {
+		if (!operationStillActive(operation.uploadHandle) && operation.controller?.signal.aborted) return;
+		throw error;
+	}
 	if (!operationStillActive(operation.uploadHandle)) return;
 	if (result.status === "verified") {
 		clearCompletionCheckTimer();
 		if (!uploadSnapshotStillActive(operation) || result.asset.kind !== operation.snapshot.relation.kind) {
 			privateUploadOperation = null;
 			privateUploadFallbackState = "error";
-			privateUploadMessage = "The draft relation changed. Reload this product before using the verified asset.";
+			privateUploadMessage = "This product changed while the file was uploading. Reload before using it.";
 			return;
 		}
 		operation.stagedAsset = result.asset;
 		operation.phase = "verified";
-		selectedPrivateAssetId = result.asset.assetId;
-		privateUploadMessage = privateAssetAttachment
-			? `${result.asset.originalFilename} is verified. Attach it to the draft, then save.`
-			: `${result.asset.originalFilename} is verified, staged unattached, and selected below.`;
+		if (privateAssetAttachment) {
+			attachVerifiedPrivateAsset();
+			return;
+		}
+		privateUploadMessage = `${result.asset.originalFilename} is verified and ready to use.`;
 		return;
 	}
 	if (result.status === "pending") {
@@ -922,7 +858,7 @@ async function reconcilePrivateUpload() {
 	clearCompletionCheckTimer();
 	privateUploadOperation = null;
 	privateUploadFallbackState = "error";
-	privateUploadMessage = "This upload reached a terminal outcome. Select the file again to begin a new upload.";
+	privateUploadMessage = "The file could not be verified. Choose it again to retry.";
 }
 
 async function startPrivateUpload() {
@@ -940,7 +876,7 @@ async function startPrivateUpload() {
 	const uploadHandle = newCatalogPrivateEditorUploadHandle();
 	if (usedPrivateUploadHandles.has(uploadHandle)) {
 		privateUploadFallbackState = "error";
-		privateUploadMessage = "A brand-new upload handle could not be created. Try again.";
+		privateUploadMessage = "A new upload could not be started. Try again.";
 		return;
 	}
 	usedPrivateUploadHandles.add(uploadHandle);
@@ -956,7 +892,6 @@ async function startPrivateUpload() {
 		controller,
 		putIssued: false,
 		stagedAsset: null,
-		replacementRevisionId: null,
 	};
 	privateUploadOperation = operation;
 	privateUploadFallbackState = "idle";
@@ -971,7 +906,7 @@ async function startPrivateUpload() {
 		);
 		if (!operationStillActive(uploadHandle)) return;
 		operation.phase = "preparing";
-		privateUploadMessage = "Preparing one private upload…";
+		privateUploadMessage = "Preparing the file…";
 		let prepared: Awaited<ReturnType<typeof prepareCatalogPrivateEditorUpload>> | null = await prepareCatalogPrivateEditorUpload(
 			privateAssetUpload.prepareEndpoint,
 			declaration,
@@ -979,15 +914,22 @@ async function startPrivateUpload() {
 		);
 		if (!operationStillActive(uploadHandle) || operation.putIssued) return;
 		operation.putIssued = true;
-		operation.controller = null;
 		selectedPrivateFile = null;
 		if (privateFileInput) privateFileInput.value = "";
 		privateZipVersion = "";
 		operation.phase = "uploading";
-		privateUploadMessage = "Uploading once. This transfer will not be retried.";
+		privateUploadMessage = "Uploading and verifying the file…";
 		try {
-			await putCatalogPrivateEditorUpload(prepared, file, declaration.contentType);
+			await putCatalogPrivateEditorUpload(
+				prepared,
+				file,
+				declaration.contentType,
+				controller.signal,
+			);
 		} catch {
+			if (controller.signal.aborted) {
+				throw new DOMException("The operation was aborted", "AbortError");
+			}
 			// A lost or rejected PUT response is reconciled only through completion.
 		}
 		prepared = null;
@@ -1017,11 +959,13 @@ function cancelPrivateUpload() {
 
 onDestroy(() => {
 	const controller = privateUploadOperation?.controller;
+	const artworkController = artworkUploadController;
 	clearCompletionCheckTimer();
 	clearPublicationReconciliationTimer();
 	privateUploadOperation = null;
 	publicationOperation = null;
 	controller?.abort();
+	artworkController?.abort();
 });
 
 async function checkPrivateUploadAgain() {
@@ -1030,63 +974,18 @@ async function checkPrivateUploadAgain() {
 	await reconcilePrivateUpload();
 }
 
-async function replacePrivateAsset() {
-	if (
-		!privateAssetCapability
-		|| !activePrivateAssetRelation
-		|| !activeCandidatePage
-		|| !baseRevisionId
-		|| dirty
-		|| editorLocked
-	) return;
-	const candidate = candidateOptions.find(
-		(asset) => asset.assetId === selectedPrivateAssetId,
-	);
-	if (
-		!candidate
-		|| candidate.assetId === activeCandidatePage.relation.currentAsset.assetId
-	) return;
-	if (!globalThis.confirm(
-		`Replace ${activeCandidatePage.relation.currentAsset.originalFilename} with ${candidate.originalFilename}?`,
-	)) return;
-	const displayedRevisionId = baseRevisionId;
-	replacementBaseRevisionId = displayedRevisionId;
-	replacementRevisionId = null;
-	replacementPending = true;
-	saveState = "replacing";
-	saveError = "";
-	pickerOpen = false;
-	try {
-		const result = await client.mutation(privateAssetCapability.replace, {
-			productId,
-			expectedDraftRevisionId: displayedRevisionId,
-			relation: { ...activePrivateAssetRelation, assetId: candidate.assetId },
-		}) as { revisionId: string };
-		replacementRevisionId = result.revisionId;
-		if (
-			privateUploadOperation?.phase === "verified"
-			&& privateUploadOperation.stagedAsset?.assetId === candidate.assetId
-			&& privateUploadOperation.snapshot.relation.kind === activePrivateAssetRelation.kind
-			&& privateUploadOperation.snapshot.relation.relationKey === activePrivateAssetRelation.relationKey
-		) privateUploadOperation.replacementRevisionId = result.revisionId;
-	} catch (error) {
-		replacementPending = false;
-		replacementRevisionId = null;
-		replacementBaseRevisionId = null;
-		saveError = mutationError(error, "Could not replace this private asset.");
-	}
-}
-
 async function saveDraft() {
 	if (!canSave) return;
-	if (!editorState?.draft) return;
+	if (!editorState) return;
+	if (isGraphV2 && !graphSourceRevision) return;
+	if (!isGraphV2 && !editorState.draft) return;
 	saveState = "saving";
 	saveError = "";
 	try {
 		const submittedForm = copyCatalogProductDraft(form);
 		const submittedJson = serializeCatalogProductDraft(submittedForm);
-		const draft = canEditGraphProduct
-			? catalogProductGraphDraftFromForm(editorState.draft, submittedForm)
+		const draft = isGraphV2 && graphSourceRevision
+			? catalogProductGraphDraftFromForm(graphSourceRevision, submittedForm)
 			: submittedForm;
 		const result = await client.mutation(catalogApi.saveDraft, {
 			productId,
@@ -1094,6 +993,13 @@ async function saveDraft() {
 			draft,
 		}) as { revisionId: string };
 		baseRevisionId = result.revisionId;
+		if (isGraphV2 && graphSourceRevision && "schemaVersion" in draft && draft.schemaVersion === 2) {
+			graphSourceRevision = graphRevisionFromDraft(
+				draft,
+				result.revisionId,
+				graphSourceRevision.createdAt,
+			);
+		}
 		rememberCommittedRevision(result.revisionId);
 		savedJson = submittedJson;
 		saveState = serializeCatalogProductDraft(form) === submittedJson ? "saved" : "dirty";
@@ -1113,27 +1019,52 @@ async function discardDraft() {
 		rememberCommittedRevision(null);
 		hasActiveDraft = false;
 		baseRevisionId = undefined;
+		graphSourceRevision = null;
 		form = emptyCatalogProductDraft();
 		savedJson = serializeCatalogProductDraft(form);
-		multiplierInput = String(form.framePriceMultiplierBasisPoints);
+		syncMultiplierFromForm();
 		saveState = "saved";
 	} catch (error) {
 		saveError = mutationError(error, "Could not discard this product draft.");
 	}
 }
 async function startDraft() {
-	if (editorLocked) return;
-	const draft = catalogProductDraftFromRevision(editorState?.published);
+	if (editorLocked || !editorState) return;
+	if (isGraphV2 && !graphProductKindEditable) return;
+	let draft: CatalogProductDraftForm | CatalogProductGraphV2Draft;
+	let nextForm: CatalogProductDraftForm;
+	if (isGraphV2) {
+		if (!canEditCatalogProductGraphKind(editorState.productKind)) return;
+		const publishedDraft = editorState.published?.draft;
+		draft = publishedDraft && publishedDraft.productKind === editorState.productKind
+			? publishedDraft
+			: newCatalogProductReplacementGraphDraft(editorState.productKind, {
+				...(editorState.slug ? { slug: editorState.slug } : {}),
+			});
+		nextForm = catalogProductGraphDraftFromRevision(
+			graphRevisionFromDraft(draft, "pending-replacement", Date.now()),
+		);
+	} else {
+		draft = catalogProductDraftFromRevision(editorState.published);
+		nextForm = draft;
+	}
 	saveState = "saving";
 	saveError = "";
 	try {
 		const result = await client.mutation(catalogApi.saveDraft, { productId, draft }) as { revisionId: string };
-		form = draft;
+		form = nextForm;
 		hasActiveDraft = true;
 		baseRevisionId = result.revisionId;
+		if (isGraphV2 && "schemaVersion" in draft && draft.schemaVersion === 2) {
+			graphSourceRevision = graphRevisionFromDraft(
+				draft,
+				result.revisionId,
+				Date.now(),
+			);
+		}
 		rememberCommittedRevision(result.revisionId);
-		savedJson = serializeCatalogProductDraft(draft);
-		multiplierInput = String(form.framePriceMultiplierBasisPoints);
+		savedJson = serializeCatalogProductDraft(nextForm);
+		syncMultiplierFromForm();
 		saveState = "saved";
 	} catch (error) {
 		saveError = mutationError(error, "Could not start a new product draft.");
@@ -1143,11 +1074,17 @@ async function startDraft() {
 function addMediaAsset(asset: PortfolioMediaAsset) {
 	mediaActionError = "";
 	try {
-		form.webMedia = addCatalogProductWebMedia(
-			form.webMedia ?? [],
-			asset,
-			form.productKind,
-		);
+		const placements = form.webMedia ?? [];
+		const reusesSetMemberAsCover = form.productKind === "print_set"
+			&& !placements.some((placement) => placement.role === "cover")
+			&& placements.some((placement) =>
+				placement.role === "set_member" && placement.assetId === asset._id
+			);
+		form.webMedia = privateAssetUpload
+			&& (form.productKind === "print" || form.productKind === "print_set")
+			&& !reusesSetMemberAsCover
+			? addCatalogProductGalleryMedia(placements, asset)
+			: addCatalogProductWebMedia(placements, asset, form.productKind);
 		pickerOpen = false;
 		return true;
 	} catch (error) {
@@ -1161,6 +1098,66 @@ function addMediaAsset(asset: PortfolioMediaAsset) {
 function addUploadedMediaAsset(asset: PortfolioMediaAsset) {
 	uploadedAssets = [asset, ...uploadedAssets.filter((item) => item._id !== asset._id)];
 	return addMediaAsset(asset);
+}
+
+async function uploadProductArtwork(
+	file: File,
+	onStatus: (status: CatalogProductArtworkStatus) => void,
+) {
+	if (
+		!privateAssetUpload
+		|| !mediaCapability?.uploadEndpoint
+		|| (form.productKind !== "print" && form.productKind !== "print_set")
+		|| !baseRevisionId
+		|| artworkUploadBusy
+	) throw new Error("This artwork upload is not available right now.");
+	const operationProductId = productId;
+	const operationRevisionId = baseRevisionId;
+	const operationFormJson = serializeCatalogProductDraft(form);
+	const operationKind = form.productKind;
+	const controller = new AbortController();
+	artworkUploadController = controller;
+	artworkUploadBusy = true;
+	mediaActionError = "";
+	try {
+		const result = await uploadCatalogProductArtwork(file, {
+			productKind: operationKind,
+			privatePrepareEndpoint: privateAssetUpload.prepareEndpoint,
+			privateCompleteEndpoint: privateAssetUpload.completeEndpoint,
+			mediaEndpoint: mediaCapability.uploadEndpoint,
+			signal: controller.signal,
+			checkpoint: artworkUploadCheckpoints.get(file),
+			onCheckpoint: (checkpoint) => artworkUploadCheckpoints.set(file, checkpoint),
+			onCheckpointInvalidated: (checkpoint) => {
+				if (artworkUploadCheckpoints.get(file) === checkpoint) {
+					artworkUploadCheckpoints.delete(file);
+				}
+			},
+			onStatus,
+		});
+		if (
+			artworkUploadController !== controller
+			|| saveState === "conflict"
+			|| productId !== operationProductId
+			|| baseRevisionId !== operationRevisionId
+			|| serializeCatalogProductDraft(form) !== operationFormJson
+		) throw new Error("This product changed while the image was uploading. Reload it and try again.");
+		form = attachCatalogProductArtwork(form, result.displayAsset, result.privateAsset);
+		uploadedAssets = [
+			result.displayAsset,
+			...uploadedAssets.filter((asset) => asset._id !== result.displayAsset._id),
+		];
+		uploadedPrivateAssets = [
+			result.privateAsset,
+			...uploadedPrivateAssets.filter((asset) => asset.assetId !== result.privateAsset.assetId),
+		];
+		artworkUploadCheckpoints.delete(file);
+	} finally {
+		if (artworkUploadController === controller) {
+			artworkUploadController = null;
+			artworkUploadBusy = false;
+		}
+	}
 }
 
 function removeSetMember(member: CatalogProductDraftForm["setMembers"][number]) {
@@ -1180,46 +1177,25 @@ function removeSetMember(member: CatalogProductDraftForm["setMembers"][number]) 
 </script>
 
 <svelte:head><title>Product — {config.siteName}</title></svelte:head>
+{#key productId}
 <ProductWorkbench selectedProductId={productId}>
 {#if editorError}
 	<p class="alert page-alert" role="alert">Could not load this product draft. Refresh this page to try again.</p>
-{:else if editorState === undefined}
+{:else if editorState === undefined || editorState.productId !== productId}
 	<p class="loading" role="status">Loading product draft…</p>
 {:else}
 		<div class="settings-page product-page">
 		<header class="settings-header">
-			<div><a class="back" href={baseHref}>← products</a><h1>{canEditGraphProduct || !isGraphV2 ? form.title?.trim() || editorState.productKey : catalogProductEditorTitle(readOnlyRevision)?.trim() || editorState.productKey}</h1><p class="description">{canEditGraphProduct
-				? publishesToShop
-					? `Prepare this ${catalogProductKindLabel(editorState.productKind)} and publish the exact saved revision to your Shop.`
-				: `Edit this private imported ${catalogProductKindLabel(editorState.productKind)} draft. Public Shop authority is configured separately.`
-				: isGraphV2 ? "Review this catalog graph." : "Edit the private product definition and ordered price variants. Public Shop authority is configured separately."}</p></div>
-			{#if hasActiveDraft && (!isGraphV2 || canEditGraphProduct)}<div class="actions"><span class="save-state" aria-live="polite">{saveState}</span><button type="button" class="primary" onclick={() => void saveDraft()} disabled={!canSave}>save draft</button></div>{/if}
+			<div><a class="back" href={baseHref}>← products</a><h1>{canEditGraphProduct || !isGraphV2 ? form.title?.trim() || editorState.productKey : catalogProductEditorTitle(readOnlyRevision)?.trim() || editorState.productKey}</h1></div>
+			{#if hasActiveDraft && (!isGraphV2 || canEditGraphProduct)}<div class="actions"><span class="sr-only save-state" aria-live="polite">{saveState}</span>{#if dirty || saveState === "saving" || saveState === "error"}<button type="button" class="primary" onclick={() => void saveDraft()} disabled={!canSave}>{saveState === "saving" ? "saving…" : saveState === "error" ? "try save again" : "save draft"}</button>{/if}</div>{/if}
 		</header>
 		{#if saveError}<p class="alert" role="alert">{saveError}</p>{/if}
 		{#if publicationError}<div class="alert publication-alert" role="alert"><span>{publicationError}</span>{#if publicationOperation?.phase === "reload-required"}<button type="button" onclick={() => globalThis.location.reload()}>reload product</button>{/if}</div>{/if}
 		{#if mediaActionError}<p class="alert" role="alert">{mediaActionError}</p>{/if}
 		{#if mediaQueryError}<p class="alert" role="alert">Could not load product images. Refresh this page to try again.</p>{/if}
-		{#if privateAssetCandidateQuery?.error}<p class="alert" role="alert">Could not load verified replacement assets. The draft may have changed; reload this product before continuing.</p>{/if}
-		{#if publicationCapability && isGraphV2}
-			<section class="publication" aria-labelledby="catalog-publication-heading">
-				<div><h2 id="catalog-publication-heading">{publishesToShop ? "Shop publication" : "Convex CMS publication"}</h2><p>{publishesToShop ? "The published revision below is the exact product revision read by your public Shop." : "Convex publication is separate; public Shop authority is configured separately."}</p></div>
-				<div class="publication-controls">
-					<p class="publication-status" role="status" aria-live="polite">{publicationStatus}</p>
-					<div class="publication-actions">
-						<button type="button" class="primary" onclick={() => void runPublication("publish")} disabled={!canPublish}>{publishesToShop ? "publish to Shop" : "publish to Convex CMS"}</button>
-						<button type="button" class="danger" onclick={() => void runPublication("unpublish")} disabled={!canUnpublish}>{publishesToShop ? "remove from Shop" : "unpublish from Convex CMS"}</button>
-					</div>
-				</div>
-				<dl class="publication-evidence">
-					<div><dt>draft revision ID</dt><dd><code>{editorState.draft?.revisionId ?? "none — no active draft"}</code></dd></div>
-					<div><dt>published revision ID</dt><dd><code>{editorState.published?.revisionId ?? "none — not published"}</code></dd></div>
-					<div><dt>product updatedAt</dt><dd>{#if publicationUpdatedAtIso}<time datetime={publicationUpdatedAtIso}>{publicationUpdatedAtIso}</time>{:else}invalid timestamp{/if} · <code>{editorState.updatedAt}</code></dd></div>
-					<div><dt>publishedAt</dt><dd>{#if editorState.publishedAt === null}not published{:else if publicationPublishedAtIso}<time datetime={publicationPublishedAtIso}>{publicationPublishedAtIso}</time> · <code>{editorState.publishedAt}</code>{:else}invalid timestamp · <code>{editorState.publishedAt}</code>{/if}</dd></div>
-				</dl>
-				{#if publicationMessage}<p class="publication-message" role="status" aria-live="polite">{publicationMessage}</p>{/if}
-			</section>
-		{/if}
-		{#if isGraphV2 && !canEditGraphProduct}
+		{#if publicationCapability && isGraphV2}<span class="sr-only publication-status" role="status" aria-live="polite">{publicationStatus}</span>{/if}
+		{#if publicationMessage}<p class="publication-message" role="status" aria-live="polite">{publicationMessage}</p>{/if}
+		{#if isGraphV2 && !graphProductKindEditable}
 			<section aria-labelledby="product-readback-heading">
 				<div class="section-heading"><span>01</span><div><h2 id="product-readback-heading">imported catalog draft</h2><p>{publicationCapability ? "This product is stored in the Convex CMS catalog graph." : "This product is stored in the new graph model as an unpublished draft."}</p></div></div>
 				<dl class="readback-grid">
@@ -1228,39 +1204,19 @@ function removeSetMember(member: CatalogProductDraftForm["setMembers"][number]) 
 					<div><dt>availability</dt><dd>{catalogProductEditorSaleAvailability(readOnlyRevision) ?? "not set"}</dd></div>
 					<div><dt>variants</dt><dd>{catalogProductEditorVariantCount(readOnlyRevision)}</dd></div>
 					<div><dt>web images</dt><dd>{readOnlyRevision?.webMediaAssets?.length ?? 0}</dd></div>
-					<div><dt>print files</dt><dd>{readOnlyRevision?.printSourceAssets?.length ?? 0}</dd></div>
 				</dl>
 				{#if catalogProductEditorDescription(readOnlyRevision)}
 					<p class="readback-description">{catalogProductEditorDescription(readOnlyRevision)}</p>
 				{/if}
-				<p class="readback-note">{publicationCapability ? "Convex publication is separate; public Shop authority is configured separately." : "Read-only for this slice: this imported product is visible to the protected Editor. Public Shop authority is configured separately."}</p>
+				{#if canUnpublish}<div class="shop-publication" aria-label={publishesToShop ? "Shop actions" : "Convex CMS actions"}><button type="button" class="danger quiet-action" onclick={() => void runPublication("unpublish")}>{publishesToShop ? "remove from Shop" : "unpublish from Convex CMS"}</button></div>{/if}
 			</section>
 		{:else if !hasActiveDraft}
 			<section aria-labelledby="discarded-product-heading">
 				<div class="section-heading"><span>01</span><div><h2 id="discarded-product-heading">no active draft</h2><p>This product identity remains in the catalog, but its editable draft was discarded. No product details are currently staged.</p></div></div>
 				<button type="button" onclick={() => void startDraft()} disabled={editorLocked}>{saveState === "saving" ? "starting…" : "start a new draft"}</button>
+				{#if canUnpublish}<div class="shop-publication" aria-label={publishesToShop ? "Shop actions" : "Convex CMS actions"}><button type="button" class="danger quiet-action" onclick={() => void runPublication("unpublish")}>{publishesToShop ? "remove from Shop" : "unpublish from Convex CMS"}</button></div>{/if}
 			</section>
 		{:else}
-			<section aria-labelledby="product-identity-heading">
-				<div class="section-heading"><span>01</span><div><h2 id="product-identity-heading">product details</h2><p>The working name, URL name, and description stored with this draft.</p></div></div>
-				<div class="fields two-column">
-					<label>product name<input maxlength="160" value={form.title ?? ""} oninput={(event) => updateOptionalField("title", event.currentTarget.value)} onblur={fillSlugIfEmpty} disabled={editorLocked} /></label>
-					<label>URL name<input maxlength="96" value={form.slug ?? ""} oninput={(event) => updateOptionalField("slug", event.currentTarget.value)} spellcheck="false" disabled={editorLocked} /><small>Lowercase words separated by hyphens.</small></label>
-					<label class="wide">description<textarea rows="5" maxlength="5000" value={form.description ?? ""} oninput={(event) => updateOptionalField("description", event.currentTarget.value)} disabled={editorLocked}></textarea></label>
-				</div>
-			</section>
-			<section aria-labelledby="sale-settings-heading">
-				<div class="section-heading"><span>02</span><div><h2 id="sale-settings-heading">sale settings</h2><p>{form.productKind === "print" || form.productKind === "print_set" ? `Choose how the ${catalogProductKindLabel(form.productKind)} is fulfilled and whether customers may currently order it.` : "Choose whether customers may currently order this product."}</p></div></div>
-				<div class="fields two-column">
-					{#if form.productKind === "print" || form.productKind === "print_set"}<label>fulfillment<select bind:value={form.fulfillmentMode} disabled={editorLocked}><option value="production_partner">production partner</option><option value="merchant_fulfilled">handled by the studio</option></select></label>{/if}
-					<label>sale availability<select bind:value={form.saleAvailability} disabled={editorLocked}><option value="available">available</option><option value="unavailable">unavailable</option></select></label>
-				</div>
-				{#if form.productKind === "print" || form.productKind === "print_set"}
-					<div class="option-grid"><label class="check"><input type="checkbox" bind:checked={form.borderOptionsEnabled} disabled={editorLocked} /><span>offer border options</span></label><label class="check"><input type="checkbox" bind:checked={form.frameOptionsEnabled} disabled={editorLocked} /><span>offer frame options</span></label></div>
-					{#if form.frameOptionsEnabled}<label class="multiplier">frame price multiplier (basis points)<input inputmode="numeric" value={multiplierInput} oninput={(event) => updateMultiplier(event.currentTarget.value)} aria-invalid={Boolean(multiplierError)} disabled={editorLocked} /><small>10,000 = 1×; 20,000 = 2×.</small>{#if multiplierError}<small class="field-error">{multiplierError}</small>{/if}</label>{/if}
-				{/if}
-			</section>
-			<CatalogProductVariants variants={form.variants} productLabel={catalogProductKindLabel(form.productKind)} fixedPrice={usesSinglePrice} onChange={(variants) => { form.variants = variants; }} onValidityChange={(valid) => { variantsValid = valid; }} disabled={editorLocked} />
 			{#if isGraphV2 && mediaCapability}
 				<CatalogProductMedia
 					placements={form.webMedia ?? []}
@@ -1271,10 +1227,46 @@ function removeSetMember(member: CatalogProductDraftForm["setMembers"][number]) 
 					uploadEndpoint={mediaCapability.uploadEndpoint}
 					disabled={editorLocked}
 					onChange={(placements) => { form.webMedia = placements; mediaActionError = ""; }}
-					onChooseMedia={() => { pickerPurpose = "display-media"; pickerOpen = true; mediaActionError = ""; }}
+					onChooseMedia={() => { pickerOpen = true; mediaActionError = ""; }}
 					onUploadReady={addUploadedMediaAsset}
+					onUploadArtwork={privateAssetUpload && mediaCapability.uploadEndpoint
+						? uploadProductArtwork
+						: undefined}
 				/>
 			{/if}
+			<section aria-labelledby="product-identity-heading">
+				<div class="section-heading"><span>01</span><div><h2 id="product-identity-heading">product details</h2><p>The working name, URL name, and description stored with this draft.</p></div></div>
+				<div class="fields two-column">
+					<label>product name<input maxlength="160" value={form.title ?? ""} oninput={(event) => updateOptionalField("title", event.currentTarget.value)} onblur={fillSlugIfEmpty} disabled={editorLocked} /></label>
+					<label>URL name<input maxlength="96" value={form.slug ?? ""} oninput={(event) => updateOptionalField("slug", event.currentTarget.value)} spellcheck="false" disabled={editorLocked} /><small>Lowercase words separated by hyphens.</small></label>
+					<label class="wide">description<textarea rows="5" maxlength="5000" value={form.description ?? ""} oninput={(event) => updateOptionalField("description", event.currentTarget.value)} disabled={editorLocked}></textarea></label>
+				</div>
+			</section>
+			<section aria-labelledby="sale-settings-heading">
+				<div class="section-heading"><span>02</span><div><h2 id="sale-settings-heading">sale settings</h2><p>{form.productKind === "print" || form.productKind === "print_set" ? `Choose how the ${catalogProductKindLabel(form.productKind)} is fulfilled and whether customers may currently order it.` : "Choose whether customers may currently order this product."}</p></div></div>
+				<div class="sale-control-grid">
+					{#if form.productKind === "print" || form.productKind === "print_set"}
+						<EditorSegmentedChoice id="catalog-fulfillment" label="fulfillment" value={form.fulfillmentMode} options={[{ value: "production_partner", label: "production partner" }, { value: "merchant_fulfilled", label: "handled by studio" }]} disabled={editorLocked} onChange={(value) => form.fulfillmentMode = value as typeof form.fulfillmentMode} />
+					{/if}
+					<EditorSegmentedChoice id="catalog-sale-availability" label="sale availability" value={form.saleAvailability} options={[{ value: "available", label: "available" }, { value: "unavailable", label: "not for sale" }]} disabled={editorLocked} onChange={(value) => form.saleAvailability = value as typeof form.saleAvailability} />
+					{#if form.productKind === "print" || form.productKind === "print_set"}
+						<EditorSegmentedChoice id="catalog-border-options" label="border options" value={form.borderOptionsEnabled ? "on" : "off"} options={[{ value: "off", label: "no borders" }, { value: "on", label: "offer borders" }]} disabled={editorLocked} onChange={(value) => form.borderOptionsEnabled = value === "on"} />
+						<EditorSegmentedChoice id="catalog-frame-options" label="frame options" value={form.frameOptionsEnabled ? "on" : "off"} options={[{ value: "off", label: "no frames" }, { value: "on", label: "offer frames" }]} disabled={editorLocked} onChange={(value) => form.frameOptionsEnabled = value === "on"} />
+					{/if}
+				</div>
+				{#if form.productKind === "print" || form.productKind === "print_set"}
+					{#if form.frameOptionsEnabled}<label class="multiplier">frame price multiplier<span class="multiplier-input"><input id="catalog-frame-price-multiplier" inputmode="decimal" value={multiplierInput} oninput={(event) => updateMultiplier(event.currentTarget.value)} aria-invalid={Boolean(multiplierError)} aria-describedby={`catalog-frame-multiplier-hint${multiplierError ? " catalog-frame-multiplier-error" : ""}`} disabled={editorLocked} /><span aria-hidden="true">×</span></span><small id="catalog-frame-multiplier-hint">Applied to the frame cost in the profit estimate.</small>{#if multiplierError}<small id="catalog-frame-multiplier-error" class="field-error" role="alert">{multiplierError}</small>{/if}</label>{/if}
+				{/if}
+				{#if publicationCapability && isGraphV2}
+					<div class="shop-publication" aria-label={publishesToShop ? "Shop actions" : "Convex CMS actions"}>
+						{#if canPublish}<button type="button" class="primary" onclick={() => void runPublication("publish")}>{editorState.published ? "publish changes" : publishesToShop ? "publish to Shop" : "publish to Convex CMS"}</button>{/if}
+						{#if canUnpublish}<button type="button" class="danger quiet-action" onclick={() => void runPublication("unpublish")}>{publishesToShop ? "remove from Shop" : "unpublish from Convex CMS"}</button>{/if}
+					</div>
+				{/if}
+			</section>
+			{#key productId}
+				<CatalogProductVariants variants={form.variants} productKind={form.productKind} resetScope={`${productId}:${baseRevisionId ?? "no-draft"}`} productLabel={catalogProductKindLabel(form.productKind)} fixedPrice={usesSinglePrice} setMemberCount={form.setMembers.length} frameMarkupMultiplier={form.frameOptionsEnabled && !multiplierError ? form.framePriceMultiplierBasisPoints / 10_000 : undefined} marginCalculator={productsConfig.marginCalculator} variantOptionResolver={productsConfig.variantOptionResolver} onChange={(variants) => { form.variants = variants; }} onValidityChange={(valid) => { variantsValid = valid; }} disabled={editorLocked} />
+			{/key}
 			{#if form.productKind === "print_set"}
 				<CatalogProductSetMembers members={form.setMembers} onChange={(members) => {
 					form.setMembers = members;
@@ -1284,74 +1276,26 @@ function removeSetMember(member: CatalogProductDraftForm["setMembers"][number]) 
 					);
 				}} onRemove={removeSetMember} disabled={editorLocked} />
 			{/if}
-			{#if ["print", "print_set", "digital_download"].includes(form.productKind)}
-				<section class="private-assets" aria-labelledby="catalog-private-assets-heading">
-					<div class="section-heading"><span>05</span><div><h2 id="catalog-private-assets-heading">fulfillment files</h2><p>Attach the verified production file that will fulfill this product. These private originals never become display images.</p></div></div>
+			{#if form.productKind === "digital_download"}
+				<section class="download-file" aria-labelledby="catalog-download-file-heading">
+					<div class="section-heading"><span>04</span><div><h2 id="catalog-download-file-heading">customer download</h2></div></div>
 					{#if privateAssetCapability && privateAssetUpload}
-						<div class="private-asset-create">
-							{#if !privateAssetAttachment}
-								{#if form.productKind === "print" && privateAssetRows.length === 0}
-									<button type="button" onclick={beginSinglePrivateAssetAttachment} disabled={editorLocked || dirty}>upload print master</button>
-								{:else if form.productKind === "digital_download" && privateAssetRows.length === 0}
-									<button type="button" onclick={beginSinglePrivateAssetAttachment} disabled={editorLocked || dirty}>upload paid ZIP</button>
-								{:else if form.productKind === "print_set"}
-									<button type="button" onclick={() => { pickerPurpose = "set-member"; pickerOpen = true; }} disabled={editorLocked || dirty}>add print to set</button>
-								{/if}
-							{:else}
-								<div class="private-attachment-heading">
-									<div><strong>{privateAssetAttachment.kind === "set-member" ? "new set member" : privateAssetAttachment.kind === "single-print" ? "print master" : "paid download"}</strong>{#if privateAssetAttachment.kind === "set-member"}<small>{privateAssetAttachment.media.originalFilename}</small>{/if}</div>
-									<button type="button" class="secondary" onclick={() => resetPrivateAssetFlow()} disabled={privateUploadBusy}>cancel</button>
-								</div>
-								<div class="private-upload">
-									<label>private {activePrivateAssetRelation?.kind === "print_source" ? "JPEG or PNG" : "ZIP"}<input bind:this={privateFileInput} type="file" accept={activePrivateAssetRelation?.kind === "print_source" ? "image/jpeg,image/png" : "application/zip,.zip"} onchange={(event) => { selectedPrivateFile = event.currentTarget.files?.[0] ?? null; privateUploadMessage = ""; }} disabled={privateUploadBlocked} /></label>
-									{#if activePrivateAssetRelation?.kind === "paid_digital_file"}<label>version (optional)<input maxlength="64" value={privateZipVersion} oninput={(event) => (privateZipVersion = event.currentTarget.value)} disabled={privateUploadBlocked} /></label>{/if}
-									<div class="private-upload-actions">
-										<button type="button" onclick={() => void startPrivateUpload()} disabled={!selectedPrivateFile || privateUploadBlocked}>verify private file</button>
-										{#if privateUploadState === "reading" || privateUploadState === "preparing"}<button type="button" class="secondary" onclick={cancelPrivateUpload}>cancel before upload</button>{/if}
-										{#if privateUploadState === "pending" && automaticChecksRemaining === 0}<button type="button" class="secondary" onclick={() => void checkPrivateUploadAgain()} disabled={!manualCheckReady}>check again</button>{/if}
-										{#if privateUploadState === "verified"}<button type="button" class="primary" onclick={attachVerifiedPrivateAsset}>attach to draft</button>{/if}
-									</div>
-									{#if privateUploadMessage}<p class:upload-error={privateUploadState === "error"} role={privateUploadState === "error" ? "alert" : "status"}>{privateUploadMessage}</p>{/if}
-								</div>
-							{/if}
-						</div>
+						<label class="private-file-dropzone" class:disabled={privateUploadBlocked || dirty || editorLocked} aria-disabled={privateUploadBlocked || dirty || editorLocked} ondragover={(event) => event.preventDefault()} ondrop={dropDigitalDownloadFile}>
+							<strong>{selectedPrivateFile?.name ?? "drop a ZIP here or click to choose"}</strong>
+							<small>ZIP · 16 MB max</small>
+							<input bind:this={privateFileInput} aria-label="choose customer download ZIP" type="file" accept="application/zip,application/x-zip-compressed,.zip" onchange={(event) => chooseDigitalDownloadFile(event.currentTarget.files?.[0] ?? null)} disabled={privateUploadBlocked || dirty || editorLocked} />
+						</label>
+						{#if privateAssetAttachment}
+							<label>version (optional)<input maxlength="64" value={privateZipVersion} oninput={(event) => (privateZipVersion = event.currentTarget.value)} disabled={privateUploadBlocked || dirty || editorLocked} /></label>
+							<div class="private-upload-actions">
+								<button type="button" onclick={() => void startPrivateUpload()} disabled={!selectedPrivateFile || privateUploadBlocked || dirty || editorLocked}>upload file</button>
+								{#if privateUploadState === "reading" || privateUploadState === "preparing"}<button type="button" class="secondary" onclick={cancelPrivateUpload}>cancel</button>{/if}
+								{#if privateUploadState === "pending" && automaticChecksRemaining === 0}<button type="button" class="secondary" onclick={() => void checkPrivateUploadAgain()} disabled={!manualCheckReady}>check again</button>{/if}
+							</div>
+						{/if}
+						{#if privateUploadMessage}<p class:upload-error={privateUploadState === "error"} role={privateUploadState === "error" ? "alert" : "status"}>{privateUploadMessage}</p>{/if}
 					{/if}
-					{#if privateUploadMessage && !privateAssetAttachment && !activePrivateAssetRelation}<p class="private-upload-summary" role="status">{privateUploadMessage}</p>{/if}
-					{#if privateAssetRows.length === 0}
-						<p class="private-asset-empty" role="status">No fulfillment file is attached yet.</p>
-					{:else}
-						<ul class="private-asset-list">
-							{#each privateAssetRows as row (row.relation.relationKey)}
-								<li>
-									<div class="private-asset-metadata"><strong>{row.label}</strong><span>{row.asset?.originalFilename ?? "verified metadata unavailable"}</span>{#if row.asset}<small>verified · {privateAssetDetails(row.asset)}</small>{/if}<small>{row.relation.relationKey}</small></div>
-									{#if privateAssetCapability && row.asset}
-										{#if activePrivateAssetRelation?.kind === row.relation.kind && activePrivateAssetRelation.relationKey === row.relation.relationKey}
-											<div class="replacement-action">
-												{#if privateAssetUpload}
-													<div class="private-upload">
-														<label>new private {row.relation.kind === "print_source" ? "JPEG or PNG" : "ZIP"}<input bind:this={privateFileInput} type="file" accept={row.relation.kind === "print_source" ? "image/jpeg,image/png" : "application/zip,.zip"} onchange={(event) => { selectedPrivateFile = event.currentTarget.files?.[0] ?? null; privateUploadMessage = ""; }} disabled={privateUploadBlocked || dirty} /></label>
-														{#if row.relation.kind === "paid_digital_file"}<label>version (optional)<input maxlength="64" value={privateZipVersion} oninput={(event) => (privateZipVersion = event.currentTarget.value)} disabled={privateUploadBlocked || dirty} /></label>{/if}
-														<div class="private-upload-actions">
-															<button type="button" onclick={() => void startPrivateUpload()} disabled={!selectedPrivateFile || privateUploadBlocked || dirty || !activeCandidatePage}>stage verified asset</button>
-															{#if privateUploadState === "reading" || privateUploadState === "preparing"}<button type="button" class="secondary" onclick={cancelPrivateUpload}>cancel before upload</button>{/if}
-															{#if privateUploadState === "pending" && automaticChecksRemaining === 0}<button type="button" class="secondary" onclick={() => void checkPrivateUploadAgain()} disabled={!manualCheckReady}>check again</button>{/if}
-														</div>
-														{#if privateUploadMessage}<p class:upload-error={privateUploadState === "error"} role={privateUploadState === "error" ? "alert" : "status"}>{privateUploadMessage}</p>{/if}
-													</div>
-												{/if}
-												{#if activeCandidatePage}
-													<div class="replacement-confirm"><label>verified replacement<select aria-label={`Replacement for ${row.label}`} bind:value={selectedPrivateAssetId} disabled={editorLocked || dirty}>{#each candidateOptions as asset (asset.assetId)}<option value={asset.assetId}>{asset.originalFilename} — {formatPrivateAssetSize(asset.sizeBytes)}</option>{/each}</select></label><button type="button" onclick={() => void replacePrivateAsset()} disabled={editorLocked || dirty || !selectedPrivateAssetId || selectedPrivateAssetId === activeCandidatePage.relation.currentAsset.assetId}>replace asset</button></div>
-												{:else if !privateAssetCandidateQuery?.error}<span role="status">Loading verified choices…</span>{/if}
-											</div>
-										{:else}
-											<button type="button" onclick={() => choosePrivateAssetRelation(row.relation, row.asset?.assetId)} disabled={editorLocked || dirty}>choose replacement</button>
-										{/if}
-									{/if}
-								</li>
-							{/each}
-						</ul>
-					{/if}
-					<p class="private-asset-note">Uploads are verified before they can be attached. Save the draft after adding a new file or set member.</p>
+					{#if privateAssetRows[0]?.asset && !privateAssetAttachment}<p class="download-ready">{privateAssetRows[0].asset.originalFilename}</p>{/if}
 				</section>
 			{/if}
 			{#if !isGraphV2}
@@ -1367,55 +1311,46 @@ function removeSetMember(member: CatalogProductDraftForm["setMembers"][number]) 
 
 {#if pickerOpen && mediaCapability}
 	<PortfolioMediaPicker
-		assets={readyAssets}
-		{selectedAssetIds}
-		mediaBaseUrl={mediaCapability.mediaBaseUrl}
-		hasMore={mediaPage ? !mediaPage.isDone : false}
-		onChoose={pickerPurpose === "set-member" ? beginSetMemberAttachment : addMediaAsset}
-		onClose={() => (pickerOpen = false)}
+			assets={readyAssets}
+			{selectedAssetIds}
+			mediaBaseUrl={mediaCapability.mediaBaseUrl}
+			hasMore={mediaPage ? !mediaPage.isDone : false}
+			onChoose={addMediaAsset}
+			onClose={() => (pickerOpen = false)}
 	/>
 {/if}
+{/key}
 <style>
 	.loading, .page-alert { margin: 48px 40px; } .loading { color: var(--admin-text-muted); } .product-page { max-width: 1040px; }
 	.back { display: inline-block; margin-bottom: 14px; color: var(--admin-text-muted); text-decoration: none; }
-	select { width: 100%; box-sizing: border-box; border: 1px solid var(--admin-border-strong); border-radius: 6px; padding: 11px 12px; background: var(--admin-bg); color: var(--admin-heading); font: inherit; text-transform: none; }
-	select:focus { outline: 2px solid var(--admin-accent); outline-offset: 2px; }
-	.option-grid { display: flex; flex-wrap: wrap; gap: 18px 28px; margin-top: 22px; }
-	.check { flex-direction: row !important; align-items: center; color: var(--admin-text) !important; } .check input { width: auto !important; }
+	.sale-control-grid { display: grid; grid-template-columns: repeat(2, minmax(220px, 1fr)); gap: 18px 20px; }
 	.multiplier { max-width: 360px; margin-top: 20px; }
-	.publication { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 18px; align-items: center; border-block: 1px solid var(--admin-border-strong); padding: 18px 0; }
-	.publication h2, .publication p { margin: 0; } .publication h2 { color: var(--admin-heading); font-size: 1rem; } .publication > div > p, .publication-message { margin-top: 6px; color: var(--admin-text-muted); font-size: .78rem; line-height: 1.5; }
-	.publication-controls { display: grid; justify-items: end; gap: 8px; } .publication-status { color: var(--admin-heading); font-size: .78rem; font-weight: 600; } .publication-actions { display: flex; gap: 8px; } .publication-message, .publication-evidence { grid-column: 1 / -1; }
-	.publication-evidence { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 18px; margin: 0; } .publication-evidence div { min-width: 0; } .publication-evidence dt { color: var(--admin-text-muted); font-size: .68rem; } .publication-evidence dd { margin: 3px 0 0; overflow-wrap: anywhere; color: var(--admin-heading); font-size: .72rem; } .publication-evidence code { font-size: inherit; }
+	.multiplier-input { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; border: 1px solid var(--admin-border-strong); border-radius: 4px; background: var(--editor-control); }
+	.multiplier-input input { border: 0; background: transparent; }
+	.multiplier-input input:focus { outline: 0; }
+	.multiplier-input > span { padding-right: 11px; color: var(--admin-text-muted); }
+	.multiplier-input:focus-within { outline: 2px solid var(--admin-accent-strong); outline-offset: 2px; }
+	.publication-message { margin: 0; color: var(--admin-text-muted); font-size: .78rem; line-height: 1.5; text-align: right; }
+	.shop-publication { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 22px; }
+	.quiet-action { border-color: transparent; }
+	.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
 	.publication-alert { display: flex; justify-content: space-between; gap: 12px; align-items: center; }
 	.readback-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 0; margin: 0; border-block: 1px solid var(--admin-border); }
 	.readback-grid div { min-width: 0; padding: 14px; border-left: 1px solid var(--admin-border); }
 	.readback-grid div:first-child { border-left: 0; }
 	.readback-grid dt { margin: 0 0 6px; color: var(--admin-text-muted); font-size: .68rem; text-transform: lowercase; letter-spacing: .08em; }
 	.readback-grid dd { margin: 0; color: var(--admin-heading); font-size: .95rem; }
-	.readback-description, .readback-note { margin: 18px 0 0; color: var(--admin-text-muted); line-height: 1.6; }
-	.readback-note { border-top: 1px solid var(--admin-border); padding-top: 18px; font-size: .84rem; }
-	.private-asset-create { margin: 0 0 16px; }
-	.private-attachment-heading { display: flex; justify-content: space-between; gap: 16px; align-items: start; margin-bottom: 12px; }
-	.private-attachment-heading > div { display: grid; gap: 4px; }
-	.private-attachment-heading strong { color: var(--admin-heading); font-size: .8rem; font-weight: 500; }
-	.private-attachment-heading small { color: var(--admin-text-muted); font-size: .7rem; }
-	.private-asset-list { display: grid; gap: 12px; margin: 0; padding: 0; list-style: none; }
-	.private-asset-list li { display: grid; grid-template-columns: minmax(220px, 1fr) minmax(240px, auto); gap: 18px; align-items: end; border: 1px solid var(--admin-border); border-radius: 3px; padding: 14px; }
-	.private-asset-metadata { display: grid; min-width: 0; gap: 5px; }
-	.private-asset-metadata strong, .private-asset-metadata span { overflow-wrap: anywhere; color: var(--admin-heading); }
-	.private-asset-metadata strong { font-size: .76rem; font-weight: 500; }
-	.private-asset-metadata span { font-size: .88rem; }
-	.private-asset-metadata small, .replacement-action > span, .private-asset-note, .private-asset-empty, .private-upload-summary { color: var(--admin-text-muted); font-size: .72rem; }
-	.replacement-action, .private-upload { display: grid; gap: 10px; }
-	.replacement-action label { min-width: 240px; color: var(--admin-text-muted); font-size: .68rem; }
-	.private-upload { border-bottom: 1px solid var(--admin-border); padding-bottom: 12px; }
-	.private-upload input { box-sizing: border-box; width: 100%; }
-	.private-upload-actions, .replacement-confirm { display: flex; gap: 8px; align-items: end; }
-	.private-upload-actions button, .replacement-confirm button { white-space: nowrap; }
-	.private-upload p { margin: 0; color: var(--admin-text-muted); font-size: .72rem; }
-	.private-upload .upload-error { color: var(--admin-danger, var(--status-rose)); }
-	.private-asset-note { margin: 16px 0 0; }
+	.readback-description { margin: 18px 0 0; color: var(--admin-text-muted); line-height: 1.6; }
+	.private-file-dropzone { display: grid; place-items: center; min-width: 0 !important; min-height: 112px; box-sizing: border-box; gap: 7px; padding: 18px; border: 1px dashed var(--admin-border-strong); border-radius: 8px; background: var(--admin-bg); color: var(--admin-text-muted); text-align: center; cursor: pointer; }
+	.private-file-dropzone strong { max-width: 100%; overflow: hidden; color: var(--admin-heading); font-size: .78rem; font-weight: 500; text-overflow: ellipsis; white-space: nowrap; }
+	.private-file-dropzone small { color: var(--admin-text-muted); font-size: .7rem; }
+	.private-file-dropzone input { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap; }
+	.private-file-dropzone:focus-within { outline: 2px solid var(--admin-accent); outline-offset: 2px; }
+	.private-file-dropzone.disabled { opacity: .62; cursor: default; }
+	.private-upload-actions { display: flex; gap: 8px; align-items: end; margin-top: 12px; }
+	.private-upload-actions button { white-space: nowrap; }
+	.download-ready { margin: 12px 0 0; color: var(--admin-text-muted); font-size: .72rem; overflow-wrap: anywhere; }
+	.upload-error { color: var(--admin-danger, var(--status-rose)); }
 	.danger { border-color: color-mix(in srgb, var(--admin-danger, var(--status-rose)) 55%, transparent) !important; color: var(--admin-danger, var(--status-rose)) !important; }
-	@media (max-width: 720px) { .publication { grid-template-columns: 1fr; } .publication-controls { justify-items: start; } .private-asset-list li { grid-template-columns: 1fr; } .replacement-action label { min-width: 0; } .private-upload-actions, .replacement-confirm { align-items: stretch; flex-direction: column; } }
+	@media (max-width: 720px) { .sale-control-grid { grid-template-columns: 1fr; } .private-upload-actions { align-items: stretch; flex-direction: column; } }
 </style>

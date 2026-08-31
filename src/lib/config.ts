@@ -1,4 +1,8 @@
 import { getContext, setContext } from "svelte";
+import type {
+	CatalogProductMarginCalculator,
+	CatalogProductVariantOptionResolver,
+} from "./catalogProductEditor";
 
 /**
  * Convex FunctionReference placeholder. Convex's `FunctionReference` type is
@@ -496,6 +500,10 @@ export interface AdminEditorConfig {
 			| "tapestry"
 			| "digital_download"
 		)[];
+		/** Pure, client-safe host calculator. It must return a summary for every print input. */
+		marginCalculator?: CatalogProductMarginCalculator;
+		/** Pure, client-safe host catalog for labelled materials and compatible print sizes. */
+		variantOptionResolver?: CatalogProductVariantOptionResolver;
 	};
 }
 

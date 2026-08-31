@@ -27,6 +27,10 @@ function jpeg(width: number, height: number) {
 	]);
 }
 
+function zip() {
+	return new Uint8Array([0x50, 0x4b, 0x03, 0x04]);
+}
+
 function declaration(): CatalogPrivateEditorUploadPrepareRequest {
 	return {
 		uploadHandle: HANDLE,
@@ -84,23 +88,45 @@ describe("catalog private editor browser upload protocol", () => {
 		}));
 	});
 
-	it("bounds ZIP declarations and trims only the optional version", async () => {
-		const file = new File(["zip"], "download.zip", { type: "application/zip" });
+	it.each([
+		"application/zip",
+		"application/x-zip-compressed",
+		"application/octet-stream",
+		"",
+	])("normalizes the browser ZIP MIME type %j after checking its signature", async (type) => {
+		const file = new File([zip()], "download.zip", { type });
 		expect(await declareCatalogPrivateEditorUpload(
 			file,
 			"digital_download",
 			HANDLE,
 			" 2.0.0 ",
-		)).toEqual(expect.objectContaining({ version: "2.0.0", sizeBytes: 3 }));
+		)).toEqual(expect.objectContaining({
+			contentType: "application/zip",
+			version: "2.0.0",
+			sizeBytes: 4,
+		}));
+	});
+
+	it("bounds ZIP declarations and rejects a mislabeled or invalid archive", async () => {
 		await expect(declareCatalogPrivateEditorUpload(
 			new File([new Uint8Array(16_777_217)], "large.zip", { type: "application/zip" }),
 			"digital_download",
 			HANDLE,
 		)).rejects.toThrow();
+		await expect(declareCatalogPrivateEditorUpload(
+			new File(["not a zip"], "download.zip", { type: "application/zip" }),
+			"digital_download",
+			HANDLE,
+		)).rejects.toThrow("Select an encoded ZIP file");
+		await expect(declareCatalogPrivateEditorUpload(
+			new File([zip()], "download.zip", { type: "text/plain" }),
+			"digital_download",
+			HANDLE,
+		)).rejects.toThrow("Select a ZIP file");
 	});
 
 	it("uses exact host requests, one opaque PUT, and handle-only completion reconciliation", async () => {
-		const file = new File(["zip"], "download.zip", { type: "application/zip" });
+		const file = new File([zip()], "download.zip", { type: "application/zip" });
 		const fetchMock = vi.fn()
 			.mockResolvedValueOnce(Response.json({
 				status: "upload_required",
@@ -164,6 +190,51 @@ describe("catalog private editor browser upload protocol", () => {
 		for (const call of fetchMock.mock.calls.slice(2)) {
 			expect(JSON.parse(String((call[1] as RequestInit).body))).toEqual({ uploadHandle: HANDLE });
 		}
+	});
+
+	it("passes the caller signal to the opaque PUT and preserves its abort", async () => {
+		const controller = new AbortController();
+		const fetchMock = vi.fn((_url: string | URL | Request, init?: RequestInit) =>
+			new Promise<Response>((_resolve, reject) => {
+				const requestSignal = init?.signal;
+				requestSignal?.addEventListener("abort", () => reject(requestSignal.reason), { once: true });
+			}));
+		vi.stubGlobal("fetch", fetchMock);
+		const file = new File([zip()], "download.zip", { type: "application/zip" });
+		const request = putCatalogPrivateEditorUpload(
+			{ uploadUrl: SOURCE_URL, uploadToken: "opaque-token" },
+			file,
+			"application/zip",
+			controller.signal,
+		);
+		const rejection = expect(request).rejects.toMatchObject({ name: "AbortError" });
+
+		expect((fetchMock.mock.calls[0]?.[1] as RequestInit).signal).toBe(controller.signal);
+		controller.abort();
+		await rejection;
+	});
+
+	it("combines completion timeout with the caller signal without masking caller abort", async () => {
+		const controller = new AbortController();
+		const fetchMock = vi.fn((_url: string | URL | Request, init?: RequestInit) =>
+			new Promise<Response>((_resolve, reject) => {
+				const requestSignal = init?.signal;
+				requestSignal?.addEventListener("abort", () => reject(requestSignal.reason), { once: true });
+			}));
+		vi.stubGlobal("fetch", fetchMock);
+		const request = completeCatalogPrivateEditorUpload(
+			"/api/private/complete",
+			HANDLE,
+			controller.signal,
+		);
+		const rejection = expect(request).rejects.toMatchObject({ name: "AbortError" });
+		const requestSignal = (fetchMock.mock.calls[0]?.[1] as RequestInit).signal as AbortSignal;
+
+		expect(requestSignal).not.toBe(controller.signal);
+		expect(requestSignal.aborted).toBe(false);
+		controller.abort();
+		expect(requestSignal.aborted).toBe(true);
+		await rejection;
 	});
 
 	it("falls back to a five-second completion check delay after ambiguous completion", async () => {

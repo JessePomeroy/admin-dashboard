@@ -222,6 +222,9 @@ describe("createAdminMutationHandler", () => {
 		expect(publicationCompletenessMessage(error)).toBe(
 			"Convex CMS did not publish this draft. Add the required display media and alternative text, then save the draft and publish to Convex CMS again.",
 		);
+		expect(publicationCompletenessMessage(error, "Shop")).toBe(
+			"The Shop did not publish this draft. Add the required display media and alternative text, then save the draft and publish to the Shop again.",
+		);
 		for (const unreviewed of [
 			canonicalReason,
 			{ message: canonicalReason },

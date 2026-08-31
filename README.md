@@ -81,19 +81,43 @@ host declares `editor.products` and provides a complete private-draft API.
 Legacy hosts may provide `catalogProducts.listForEditor`, `getEditorState`,
 `createDraft`, `saveDraft`, and `discardDraft` for the single-print editor.
 Hosts using the catalog graph model may instead provide the same function names
-under `catalogProductGraphs`; the list page can read back all enabled product
-kinds. V2 single-print drafts can edit identity, sale settings, print options,
-and ordered variants while preserving imported media and print-source
-relations. Other V2 product kinds remain staged read-back views until their
-specific editors land.
+under `catalogProductGraphs`. The Graph V2 workspace creates and edits all six
+supported product kinds: prints, print sets, postcards, merchandise, tapestries,
+and digital downloads. It owns draft copy, sale settings, USD pricing, variants,
+artwork, optional gallery images, customer-download ZIPs, and publication
+controls while preserving graph relations that are not edited by the UI.
+
+Hosts may add two pure, client-safe adapters without coupling this package to a
+commerce catalog: `variantOptionResolver` supplies human labels and compatible
+material/size choices, while `marginCalculator` returns the host's cost and
+profit summary. A configured `privateAssetUpload` plus public media endpoint
+turns one print-artwork selection into the private production original and its
+web display rendition. The UI presents that as one artwork operation; storage
+relations remain implementation detail.
 
 ```ts
 export const adminConfig: AdminConfig = {
   // existing host configuration
   editor: {
     products: {
-      enabledKinds: ["print", "print_set", "postcard"],
+      enabledKinds: [
+        "print",
+        "print_set",
+        "postcard",
+        "merchandise",
+        "tapestry",
+        "digital_download",
+      ],
       publicationEnabled: true,
+      publicShopEnabled: true,
+      mediaBaseUrl: "https://media.example.com",
+      uploadEndpoint: "/api/admin/media",
+      privateAssetUpload: {
+        prepareEndpoint: "/api/admin/catalog-private-assets/editor-uploads/prepare",
+        completeEndpoint: "/api/admin/catalog-private-assets/editor-uploads/complete",
+      },
+      marginCalculator: calculateCatalogProductMargin,
+      variantOptionResolver: resolveCatalogProductVariantOptions,
     },
   },
   api: new Proxy(api, {
@@ -116,9 +140,11 @@ export const adminConfig: AdminConfig = {
 Publication stays off unless `publicationEnabled` is exactly `true` and
 `publishDraft` plus `unpublish` are explicitly registered as own properties;
 dynamic Convex proxy truthiness is not a capability signal. The actions move
-only the per-product Convex CMS publication pointer. They do not expose a public
-query, preview, checkout/provider identifiers, or a provider switch, and they do
-not cut the Sanity-backed public Shop over to Convex.
+only the per-product publication pointer exposed by the host. The package does
+not create a public query, preview, checkout/provider identifiers, or a provider
+switch. `publicShopEnabled` changes the user-facing destination to “Shop”; set it
+only after the host has wired those publication refs to the catalog its Shop
+actually reads.
 
 ## Server configuration
 
