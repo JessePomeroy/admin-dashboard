@@ -48,6 +48,7 @@ export { default as LoginPage } from "./components/LoginPage.svelte";
 export { default as AdminModal } from "./components/AdminModal.svelte";
 export { default as NotificationWidget } from "./components/NotificationWidget.svelte";
 export { default as EmailPreview } from "./components/EmailPreview.svelte";
+export { default as DocumentEmailRecoveryPanel } from "./pages/DocumentEmailRecoveryPanel.svelte";
 export { default as FeatureGate } from "./components/FeatureGate.svelte";
 export { default as FilterBar } from "./components/FilterBar.svelte";
 export { default as LoadingState } from "./components/LoadingState.svelte";
@@ -100,6 +101,7 @@ export * from "./blogEditor";
 export * from "./catalogProductEditor";
 export type * from "./types";
 export * from "./utils";
+export * from "./documentEmailRecovery";
 
 // Theme
 export { isDark } from "./theme";

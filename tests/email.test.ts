@@ -1,5 +1,15 @@
-import { describe, expect, it } from "vitest";
-import { replaceTemplateVariables } from "../src/lib/server/email";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+const resendSend = vi.fn();
+
+vi.mock("resend", () => ({
+	Resend: class {
+		emails = { send: resendSend };
+	},
+}));
+
+import { setServerConfig } from "../src/lib/config";
+import { replaceTemplateVariables, sendEmail } from "../src/lib/server/email";
 
 describe("replaceTemplateVariables", () => {
 	it("replaces single variable", () => {
@@ -16,9 +26,7 @@ describe("replaceTemplateVariables", () => {
 				dueDate: "2026-05-01",
 			},
 		);
-		expect(result).toBe(
-			"Hi Jane, your invoice INV-001 is due on 2026-05-01.",
-		);
+		expect(result).toBe("Hi Jane, your invoice INV-001 is due on 2026-05-01.");
 	});
 
 	it("replaces all occurrences of the same variable", () => {
@@ -62,5 +70,70 @@ describe("replaceTemplateVariables", () => {
 			amount: "$1,500.00",
 		});
 		expect(result).toBe("Amount: $1,500.00");
+	});
+});
+
+describe("sendEmail", () => {
+	beforeEach(() => {
+		resendSend.mockReset();
+		resendSend.mockResolvedValue({ data: { id: "msg_1" }, error: null });
+		setServerConfig({
+			fromEmail: "Default <mail@example.com>",
+			resendApiKey: "re_test",
+			// biome-ignore lint/suspicious/noExplicitAny: sendEmail reads only these two server fields
+		} as any);
+	});
+
+	it("forwards the frozen envelope and stable provider idempotency key", async () => {
+		await sendEmail(
+			{
+				from: "Studio <studio@example.com>",
+				to: "client@example.com",
+				replyTo: "reply@example.com",
+				subject: "Your document",
+				text: "Plain text",
+				html: "<p>HTML</p>",
+				tags: [
+					{
+						name: "document_attempt",
+						value: "11111111-1111-4111-8111-111111111111",
+					},
+				],
+			},
+			{ idempotencyKey: "document-email-v1/invoice/doc-1/attempt-1" },
+		);
+
+		expect(resendSend).toHaveBeenCalledWith(
+			{
+				from: "Studio <studio@example.com>",
+				to: "client@example.com",
+				replyTo: "reply@example.com",
+				subject: "Your document",
+				text: "Plain text",
+				html: "<p>HTML</p>",
+				tags: [
+					{
+						name: "document_attempt",
+						value: "11111111-1111-4111-8111-111111111111",
+					},
+				],
+			},
+			{ idempotencyKey: "document-email-v1/invoice/doc-1/attempt-1" },
+		);
+	});
+
+	it("keeps the legacy one-argument provider call when no idempotency key is supplied", async () => {
+		await sendEmail({
+			to: "client@example.com",
+			subject: "Legacy",
+			html: "<p>Legacy</p>",
+		});
+
+		expect(resendSend).toHaveBeenCalledWith({
+			from: "Default <mail@example.com>",
+			to: "client@example.com",
+			subject: "Legacy",
+			html: "<p>Legacy</p>",
+		});
 	});
 });

@@ -220,6 +220,7 @@ CRM subscription onboarding and access changes are operator-run processes.
 `@jessepomeroy/admin/server` exports factories for:
 
 - invoice, quote, and contract email delivery
+- tenant-authorized document-email recovery reads and resolutions
 - portal-token creation
 - the universal admin mutation proxy
 - Better Auth JWT validation and browser token delivery
@@ -227,6 +228,74 @@ CRM subscription onboarding and access changes are operator-run processes.
   routes
 - CMS media upload/process and permanent asset-deletion routes
 - catalog private-editor upload prepare and storage-completion routes
+
+Invoice, quote, and contract delivery requires the host's additive
+`documentEmailAttempts` Convex API group (`get`, `getRecovery`,
+`getOpenRecoveryByDocument`, `prepare`, `claim`, `complete`, `fail`, and
+`resolve`). The shared pages create one UUID
+for each explicit send action and reuse it across bounded HTTP retries. Convex
+also excludes a second open attempt for the same tenant document, so a new tab
+or browser session adopts the canonical attempt returned by `prepare` instead
+of creating another provider delivery. The server handler freezes the
+recipient, subject, HTML, plain text, portal URL, provider idempotency key, and
+provider tags before calling Resend; every replay sends that exact provider
+payload. Completion advances only a draft document to `sent` and never
+regresses an overdue or later lifecycle state. New sends are blocked for paid,
+partially paid, or canceled invoices, accepted, declined, or expired quotes,
+and signed or expired contracts; an overdue invoice can still receive its
+explicit reminder. Partially paid invoices remain held until the host has a
+reviewed remaining-balance projection and Checkout path.
+
+Ambiguous attempts stay attached to the document and in session storage until
+the exact attempt becomes terminal. The recovery projection intentionally omits
+the frozen bodies, portal capability, provider key and tags, claim authority,
+and audit-record IDs. Operators can retry the same frozen delivery, finish a
+known provider acceptance, or record a provider acceptance ID. “Not accepted”
+is available only when Convex declares it eligible and requires a checkbox, the
+exact `NOT ACCEPTED` phrase, and a UTF-8-bounded reconciliation note; resolving
+it releases the document but never starts a replacement send. Tracker cleanup
+is attempt-ID guarded so a stale tab cannot clear a newer action.
+Opening a document shows its valid session-tracked attempt immediately, then
+checks the tenant-scoped static discovery adapter for the canonical open row.
+This restores recovery after a modal close or in a new browser session. If an
+exact tracked read is already `sent`, `failed`, or `resolved_not_sent`, the UI
+shows that terminal result and clears only that document and attempt pair.
+
+Mount the recovery adapters at their fixed same-origin paths. The route module
+must first import the host's server-only Admin configuration initializer so
+`setServerConfig(...)` has run before the factory handles a request. Angels Rest
+uses the side-effect import shown below; another host should replace it with its
+own equivalent initializer. All three factories run the required tenant-aware admin
+verifier before authenticated Convex work, and every success or error response
+sets `Cache-Control: private, no-store`:
+
+```ts
+// src/routes/api/admin/document-email-attempts/open/+server.ts
+import "$lib/server/adminHandler";
+import { createOpenDocumentEmailRecoveryGetHandler } from "@jessepomeroy/admin/server";
+
+export const GET = createOpenDocumentEmailRecoveryGetHandler();
+```
+
+```ts
+// src/routes/api/admin/document-email-attempts/[attemptId]/+server.ts
+import "$lib/server/adminHandler";
+import { createDocumentEmailRecoveryGetHandler } from "@jessepomeroy/admin/server";
+
+export const GET = createDocumentEmailRecoveryGetHandler();
+```
+
+```ts
+// src/routes/api/admin/document-email-attempts/[attemptId]/resolve/+server.ts
+import "$lib/server/adminHandler";
+import { createDocumentEmailRecoveryResolveHandler } from "@jessepomeroy/admin/server";
+
+export const POST = createDocumentEmailRecoveryResolveHandler();
+```
+
+Hosts must deploy the corresponding additive Convex schema/functions before
+adopting a package version that uses this journal. The new table starts empty,
+so its initial rollout requires no data backfill.
 
 `createCatalogPrivateEditorUploadPrepareHandler` and
 `createCatalogPrivateEditorUploadCompleteHandler` implement the production

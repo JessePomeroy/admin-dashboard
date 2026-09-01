@@ -12,6 +12,11 @@ export { createInvoiceSendHandler } from "./server/handlers/sendInvoice.js";
 export type { EmailSendConfig } from "./server/handlers/createEmailSendHandler.js";
 export { createContractSendHandler } from "./server/handlers/sendContract.js";
 export { createQuoteSendHandler } from "./server/handlers/sendQuote.js";
+export {
+	createDocumentEmailRecoveryGetHandler,
+	createDocumentEmailRecoveryResolveHandler,
+	createOpenDocumentEmailRecoveryGetHandler,
+} from "./server/handlers/documentEmailRecovery.js";
 export { createPortalTokenHandler } from "./server/handlers/createPortalToken.js";
 export {
 	createAdminMutationHandler,

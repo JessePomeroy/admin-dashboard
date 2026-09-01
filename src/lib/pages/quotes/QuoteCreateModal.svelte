@@ -1,6 +1,12 @@
 <script lang="ts">
 import AdminModal from "../../components/AdminModal.svelte";
 import EmailPreview from "../../components/EmailPreview.svelte";
+import {
+	buildDocumentEmailCreateFields,
+	type DocumentEmailSource,
+	isCompleteDocumentEmailSource,
+} from "../../documentEmailComposition";
+import { addToast } from "../../toast";
 import type { Client, EmailTemplate, QuotePreset } from "../../types";
 import { formatDollars } from "../../utils";
 import PackageEditor from "./PackageEditor.svelte";
@@ -64,13 +70,17 @@ let formPresetId = $state("");
 let selectedTemplateId = $state<string>("");
 let editedSubject = $state("");
 let editedBody = $state("");
+let customEmailContent = $state<DocumentEmailSource | undefined>();
+let customEmailContentValid = $derived(
+	isCompleteDocumentEmailSource(customEmailContent),
+);
 let selectedClientName = $derived(
 	clients.find((c) => c._id === formClientId)?.name ?? "",
 );
 
 let emailVariables = $derived<Record<string, string>>({
 	clientName: selectedClientName,
-	quoteNumber: "assigned on save",
+	quoteNumber: numberPreview,
 	validUntil: formValidUntil,
 });
 
@@ -111,15 +121,23 @@ async function handleSave() {
 
 async function handleSaveAndSend() {
 	if (!formClientId || formPackages.length === 0) return;
+	if (!customEmailContentValid) {
+		addToast("Add both a subject and body before sending.");
+		return;
+	}
 	await onsaveandsend({
 		clientId: formClientId,
 		category: formCategory,
 		packages: formPackages,
 		validUntil: formValidUntil,
 		notes: formNotes,
-		templateId: selectedTemplateId || undefined,
-		emailSubject: editedSubject || undefined,
-		emailBody: editedBody || undefined,
+		...buildDocumentEmailCreateFields(
+			{
+				templateId: selectedTemplateId || undefined,
+				customContent: customEmailContent,
+			},
+			"templateId",
+		),
 	});
 }
 
@@ -134,7 +152,7 @@ async function handleSaveAsPreset() {
 }
 </script>
 
-<AdminModal title="new quote" onclose={onclose} size={emailTemplates.length > 0 ? "full" : "wide"}>
+<AdminModal title="new quote" onclose={onclose} size="full">
 	<div class="modal-split">
 	<form class="modal-form" onsubmit={(e) => { e.preventDefault(); handleSave(); }}>
 		<div class="form-row">
@@ -205,15 +223,14 @@ async function handleSaveAsPreset() {
 			<button type="submit" class="btn-save-draft" disabled={saving || !formClientId || formPackages.length === 0}>
 				{saving ? "saving..." : "save as draft"}
 			</button>
-			<button type="button" class="btn-save" onclick={handleSaveAndSend} disabled={saving || !formClientId || formPackages.length === 0}>
+			<button type="button" class="btn-save" onclick={handleSaveAndSend} disabled={saving || !formClientId || formPackages.length === 0 || !customEmailContentValid}>
 				{saving ? "sending..." : "save & send"}
 			</button>
 		</div>
 	</form>
 
-	{#if emailTemplates.length > 0}
-		<div class="preview-side">
-			<EmailPreview
+	<div class="preview-side">
+		<EmailPreview
 				templates={emailTemplates}
 				variables={emailVariables}
 				defaultSubject={defaultEmailSubject}
@@ -222,11 +239,11 @@ async function handleSaveAsPreset() {
 				ontemplateidchange={(id) => { selectedTemplateId = id; }}
 				onsubjectchange={(s) => { editedSubject = s; }}
 				onbodychange={(b) => { editedBody = b; }}
+				oncustomcontentchange={(content) => { customEmailContent = content; }}
 				{editedSubject}
 				{editedBody}
-			/>
-		</div>
-	{/if}
+		/>
+	</div>
 	</div>
 </AdminModal>
 

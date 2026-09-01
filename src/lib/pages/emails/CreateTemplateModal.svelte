@@ -1,5 +1,8 @@
 <script lang="ts">
-	import { getVariableHighlightParts } from "../../emailTemplatePreview";
+	import {
+		emailTemplateVariablesForCategory,
+		getVariableHighlightParts,
+	} from "../../emailTemplatePreview";
 
 	let { isOpen, saving, categories, onclose, onsave } = $props<{
 		isOpen: boolean;
@@ -9,23 +12,14 @@
 		onsave: (data: { name: string; category: string; subject: string; body: string; variables?: string[] }) => void;
 	}>();
 
-	const commonVariables = [
-		"{{clientName}}",
-		"{{clientEmail}}",
-		"{{eventDate}}",
-		"{{eventLocation}}",
-		"{{galleryLink}}",
-		"{{invoiceLink}}",
-		"{{totalPrice}}",
-		"{{depositAmount}}",
-		"{{bookingDate}}",
-	];
-
 	let formName = $state("");
 	let formCategory = $state("inquiry-reply");
 	let formSubject = $state("");
 	let formBody = $state("");
 	let formVariables = $state("");
+	let referenceVariables = $derived(
+		emailTemplateVariablesForCategory(formCategory),
+	);
 
 	function parseVariables(input: string): string[] {
 		return input
@@ -126,14 +120,20 @@
 				</div>
 
 				<div class="form-group">
-					<label class="form-label" for="create-variables">custom variables (comma-separated)</label>
+					<label class="form-label" for="create-variables"
+						>variable notes (comma-separated; does not create runtime values)</label
+					>
 					<input id="create-variables" class="form-input" type="text" placeholder="customField1, customField2" bind:value={formVariables} />
 				</div>
 
 				<div class="variables-ref">
-					<span class="variables-ref-label">available variables:</span>
+					<span class="variables-ref-label">
+						{formCategory === "custom"
+							? "sender-specific variable reference (unsupported values fail before send):"
+							: "variables for this sender:"}
+					</span>
 					<div class="variables-ref-list">
-						{#each commonVariables as v}
+						{#each referenceVariables as v}
 							<span class="variable-tag">{v}</span>
 						{/each}
 					</div>

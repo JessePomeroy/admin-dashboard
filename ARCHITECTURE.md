@@ -66,6 +66,52 @@ shared email, portal, and gallery side-effect factory therefore depends on the
 required verifier (directly or through an authorized scoped upload grant)
 rather than treating route mounting as authorization.
 
+## Document email delivery boundary
+
+Invoice, quote, and contract sends cross two external boundaries: the host's
+Convex deployment and Resend. The browser assigns one UUID to an explicit send
+action and reuses it for bounded transport retries. Before Resend is contacted,
+the host-authenticated Convex journal freezes the exact tenant, document,
+client, recipient, subject, HTML, plain text, portal capability, and provider
+idempotency key. A fixed claim lease prevents a second server request from
+blindly repeating an ambiguous provider call.
+
+Provider rejection is terminal `failed`. Network ambiguity remains attached to
+the original frozen action: a bounded reconciliation claim may replay the same
+Resend idempotency key within its validity window, while a known provider
+message ID resumes only local completion. Convex completion atomically writes
+the sent email/activity records and advances only a draft document to `sent`,
+preserving later lifecycle states and existing timestamps. The package never
+reconstructs a frozen envelope on retry and never treats a resolved Resend error
+or missing message ID as success.
+
+The browser's UUID and session storage are convenience, not cross-tab
+authority. Convex transactionally excludes another open attempt for the same
+tenant document. When `prepare` returns `blocked`, the server adopts that full
+canonical row, verifies its document scope, and reuses its exact frozen
+idempotency key and provider tags. An attempt conflict is never downgraded to a
+definite client error that could clear an ambiguous tracker.
+
+Recovery uses a separate browser-safe projection and three host-mounted adapters.
+The static document-discovery adapter returns only the canonical open attempt
+for an exact tenant document, allowing a new browser session to recover without
+knowing an attempt ID. The exact-attempt and resolution adapters retain their
+fixed dynamic paths.
+Detail views first surface a valid session-tracked attempt, then reconcile it
+with document discovery. A terminal exact read is rendered as confirmed,
+rejected, or closed-without-send and clears the tracker by document and attempt
+ID before any selected-record UI guard.
+The GET adapter returns recipient, subject, coarse state, deadlines, and
+server-computed action flags; it never returns message bodies, portal or claim
+authority, provider keys/tags, or log IDs. The resolve adapter injects the
+configured tenant and accepts only an expected document plus either provider
+acceptance evidence or the exact high-friction not-accepted decision. Backend
+eligibility and stable coded conflicts remain authoritative. A sent resolution
+finishes normal lifecycle effects; a not-accepted resolution closes the old
+attempt as `resolved_not_sent` without sending. Client cleanup compares the
+terminal attempt ID before removing memory or session storage, and no ambiguous
+state is automatically cleared or replaced.
+
 ## Gallery boundary
 
 The gallery UI/controller owns selection and upload orchestration. Server

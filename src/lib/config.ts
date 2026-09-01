@@ -146,6 +146,17 @@ export interface AdminAPI {
 	emailLog: {
 		create: FnRef;
 	};
+	/** Durable, tenant-scoped delivery journal for invoice, quote, and contract emails. */
+	documentEmailAttempts?: {
+		get: FnRef;
+		getRecovery: FnRef;
+		getOpenRecoveryByDocument: FnRef;
+		prepare: FnRef;
+		claim: FnRef;
+		complete: FnRef;
+		fail: FnRef;
+		resolve: FnRef;
+	};
 	emailTemplates: {
 		create: FnRef;
 		update: FnRef;

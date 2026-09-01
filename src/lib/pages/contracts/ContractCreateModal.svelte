@@ -1,6 +1,13 @@
 <script lang="ts">
 import AdminModal from "../../components/AdminModal.svelte";
 import EmailPreview from "../../components/EmailPreview.svelte";
+import {
+	buildDocumentEmailCreateFields,
+	type DocumentEmailSource,
+	isCompleteDocumentEmailSource,
+} from "../../documentEmailComposition";
+import { logger } from "../../logger";
+import { addToast } from "../../toast";
 import type { Client, ContractTemplate, EmailTemplate } from "../../types";
 import { dollarsToCents } from "../../utils";
 
@@ -28,6 +35,10 @@ let saving = $state(false);
 let selectedTemplateId = $state<string>("");
 let editedSubject = $state("");
 let editedBody = $state("");
+let customEmailContent = $state<DocumentEmailSource | undefined>();
+let customEmailContentValid = $derived(
+	isCompleteDocumentEmailSource(customEmailContent),
+);
 
 let selectedClientName = $derived(
 	clients.find((c) => c._id === formClientId)?.name ?? "",
@@ -83,6 +94,10 @@ async function handleSubmit() {
 
 async function handleSaveAndSend() {
 	if (!formTitle || !formClientId || !formBody) return;
+	if (!customEmailContentValid) {
+		addToast("Add both a subject and body before sending.");
+		return;
+	}
 	saving = true;
 	try {
 		const payload: Record<string, unknown> & { emailTemplateId?: string } = {
@@ -97,17 +112,27 @@ async function handleSaveAndSend() {
 		if (formTotalPrice > 0) payload.totalPrice = dollarsToCents(formTotalPrice);
 		if (formDepositAmount > 0)
 			payload.depositAmount = dollarsToCents(formDepositAmount);
-		if (selectedTemplateId) payload.emailTemplateId = selectedTemplateId;
-		if (editedSubject) payload.emailSubject = editedSubject;
-		if (editedBody) payload.emailBody = editedBody;
+		Object.assign(
+			payload,
+			buildDocumentEmailCreateFields(
+				{
+					templateId: selectedTemplateId || undefined,
+					customContent: customEmailContent,
+				},
+				"emailTemplateId",
+			),
+		);
 		await onsaveandsend(payload);
+	} catch (error) {
+		logger.error("Failed to create and send contract:", error);
+		addToast("Failed to send contract.");
 	} finally {
 		saving = false;
 	}
 }
 </script>
 
-<AdminModal title="new contract" onclose={onclose} size={emailTemplates.length > 0 ? "full" : "wide"}>
+<AdminModal title="new contract" onclose={onclose} size="full">
 	<div class="modal-split">
 	<form
 		class="modal-form"
@@ -260,16 +285,15 @@ async function handleSaveAndSend() {
 				type="button"
 				class="btn-save"
 				onclick={handleSaveAndSend}
-				disabled={saving || !formTitle || !formClientId || !formBody}
+				disabled={saving || !formTitle || !formClientId || !formBody || !customEmailContentValid}
 			>
 				{saving ? "sending..." : "save & send"}
 			</button>
 		</div>
 	</form>
 
-	{#if emailTemplates.length > 0}
-		<div class="preview-side">
-			<EmailPreview
+	<div class="preview-side">
+		<EmailPreview
 				templates={emailTemplates}
 				variables={emailVariables}
 				defaultSubject={defaultEmailSubject}
@@ -278,11 +302,11 @@ async function handleSaveAndSend() {
 				ontemplateidchange={(id) => { selectedTemplateId = id; }}
 				onsubjectchange={(s) => { editedSubject = s; }}
 				onbodychange={(b) => { editedBody = b; }}
+				oncustomcontentchange={(content) => { customEmailContent = content; }}
 				{editedSubject}
 				{editedBody}
-			/>
-		</div>
-	{/if}
+		/>
+	</div>
 	</div>
 </AdminModal>
 

@@ -1,47 +1,78 @@
 import { toId } from "../../utils.js";
+import { renderDocumentEmail } from "../defaultDocumentEmail.js";
 import { escapeHtml } from "../html.js";
-import { createEmailSendHandler, formatCurrency } from "./createEmailSendHandler.js";
+import {
+	createEmailSendHandler,
+	formatCurrency,
+} from "./createEmailSendHandler.js";
 
 /** Subset of the Convex Quote document the send handler needs. */
 interface QuoteDoc extends Record<string, unknown> {
+	_id: string;
+	siteUrl: string;
+	clientId: string;
 	clientEmail?: string;
 	clientName?: string;
+	status: "draft" | "sent" | "accepted" | "declined" | "expired";
 	quoteNumber: string;
-	packages: { name: string; description?: string; price: number }[];
+	packages: {
+		name: string;
+		description?: string;
+		price: number;
+		included?: string[];
+	}[];
 	validUntil?: string;
 }
 
+const DATE_ONLY_PATTERN = /^(\d{4})-(\d{2})-(\d{2})$/;
+
+function quoteValidityError(validUntil: string | undefined): string | undefined {
+	if (validUntil === undefined) return undefined;
+	const match = DATE_ONLY_PATTERN.exec(validUntil);
+	if (!match) return "This quote has an invalid expiration date";
+	const year = Number(match[1]);
+	const month = Number(match[2]);
+	const day = Number(match[3]);
+	const start = Date.UTC(year, month - 1, day);
+	const parsed = new Date(start);
+	if (
+		parsed.getUTCFullYear() !== year ||
+		parsed.getUTCMonth() !== month - 1 ||
+		parsed.getUTCDate() !== day
+	) {
+		return "This quote has an invalid expiration date";
+	}
+	return Date.now() >= start + 24 * 60 * 60 * 1000
+		? "This quote has expired and cannot be sent"
+		: undefined;
+}
+
 function formatPackages(
-	packages: { name: string; description?: string; price: number }[],
-): string {
-	return packages
+	packages: {
+		name: string;
+		description?: string;
+		price: number;
+		included?: string[];
+	}[],
+): { html: string; text: string } {
+	return {
+		html: packages
 		.map(
 			(pkg) =>
 				`<div style="padding: 12px 0; border-bottom: 1px solid #eee;">
 <strong>${escapeHtml(pkg.name)}</strong> — ${formatCurrency(pkg.price)}
 ${pkg.description ? `<br><span style="color: #666; font-size: 0.9em;">${escapeHtml(pkg.description)}</span>` : ""}
+${pkg.included?.length ? `<br><span style="color: #666; font-size: 0.9em;">Includes: ${pkg.included.map(escapeHtml).join(" · ")}</span>` : ""}
 </div>`,
 		)
-		.join("");
-}
-
-function buildDefaultQuoteHtml(
-	vars: Record<string, string>,
-	siteName: string,
-): string {
-	// All vars come from extractVars below, which pre-escapes user-controlled
-	// strings. `packages` is intentionally pre-built HTML and must not be escaped.
-	return `<div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 24px;">
-<p>hi ${vars.clientName},</p>
-${vars.changeNote ? `<p>your quote has been updated (${vars.changeNote}).</p>` : "<p>here is your quote for review.</p>"}
-<table style="width: 100%; border-collapse: collapse; margin: 16px 0;">
-<tr><td style="padding: 8px 0; color: #666;">quote</td><td style="padding: 8px 0; text-align: right;">${vars.quoteNumber}</td></tr>
-</table>
-${vars.packages ? `<div style="margin: 16px 0;">${vars.packages}</div>` : ""}
-${vars.validUntil ? `<p style="color: #666; font-size: 0.85em;">valid until ${vars.validUntil}</p>` : ""}
-<p>please reach out if you have any questions or would like to proceed.</p>
-<p style="color: #999; font-size: 0.85em; margin-top: 32px;">${escapeHtml(siteName)}</p>
-</div>`;
+		.join(""),
+		text: packages
+			.map(
+				(pkg) =>
+					`${pkg.name} — ${formatCurrency(pkg.price)}${pkg.description ? `\n${pkg.description}` : ""}${pkg.included?.length ? `\nIncludes: ${pkg.included.join(" · ")}` : ""}`,
+			)
+			.join("\n\n"),
+	};
 }
 
 export function createQuoteSendHandler() {
@@ -51,16 +82,32 @@ export function createQuoteSendHandler() {
 			convex.query(api.quotes.get, { quoteId: toId(id) }),
 		getClientEmail: (doc) => doc.clientEmail,
 		extractVars: (doc, changeNote) => ({
-			clientName: escapeHtml(doc.clientName ?? "there"),
-			quoteNumber: escapeHtml(doc.quoteNumber),
-			packages: formatPackages(doc.packages),
-			validUntil: escapeHtml(doc.validUntil ?? ""),
-			changeNote: escapeHtml(changeNote),
+			values: {
+				clientName: doc.clientName ?? "there",
+				clientEmail: doc.clientEmail ?? "",
+				quoteNumber: doc.quoteNumber,
+				validUntil: doc.validUntil ?? "",
+				changeNote,
+			},
+			fragments: { packages: formatPackages(doc.packages) },
 		}),
-		buildDefaultHtml: buildDefaultQuoteHtml,
+		buildDefaultMessage: (doc, context) =>
+			renderDocumentEmail({
+				kind: "quote",
+				brand: { siteName: context.siteName, homeUrl: context.homeUrl },
+				clientName: doc.clientName,
+				changeNote: context.changeNote || undefined,
+				quoteNumber: doc.quoteNumber,
+				validUntil: doc.validUntil,
+				packages: doc.packages.map((pkg) => ({
+					name: pkg.name,
+					description: pkg.description,
+					priceCents: pkg.price,
+					included: pkg.included,
+				})),
+				portalUrl: context.portalUrl,
+			}),
 		defaultSubject: (doc) => `quote ${doc.quoteNumber}`,
-		markSent: (api, convex, id, siteUrl) =>
-			convex.mutation(api.quotes.markSent, { quoteId: toId(id), siteUrl }),
-		fallbackCategories: ["custom"],
+		validateDocument: (doc) => quoteValidityError(doc.validUntil),
 	});
 }

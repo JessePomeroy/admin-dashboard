@@ -6,6 +6,11 @@ import { getAdminConfig } from "../config";
 import FeatureGate from "../components/FeatureGate.svelte";
 import LoadingState from "../components/LoadingState.svelte";
 import type { Contract, ContractStatus } from "../types";
+import {
+	isTerminalDocumentEmailRecovery,
+	type DocumentEmailRecovery,
+	type DocumentEmailResolutionOutcome,
+} from "../documentEmailRecovery";
 import { addToast } from "../toast";
 import { logger } from "../logger";
 import { copyPortalLink, toId } from "../utils";
@@ -13,6 +18,13 @@ import ContractCreateModal from "./contracts/ContractCreateModal.svelte";
 import ContractDetailModal from "./contracts/ContractDetailModal.svelte";
 import ContractTable from "./contracts/ContractTable.svelte";
 import TemplateManager from "./contracts/TemplateManager.svelte";
+import {
+	type HydratedDocumentEmailAttempt,
+	createDocumentEmailRequestTracker,
+	documentEmailFailureMessage,
+	presentableDocumentEmailRecoveryFromError,
+	statusAfterSuccessfulDocumentEmail,
+} from "./documentEmailRequest";
 
 const config = getAdminConfig();
 const { api } = config;
@@ -42,6 +54,70 @@ let searchQuery = $state("");
 let showCreateModal = $state(false);
 let selectedContract = $state<Contract | null>(null);
 let showTemplateCreate = $state(false);
+const emailRequests = createDocumentEmailRequestTracker();
+let pageEmailRecovery = $state<{
+	documentId: string;
+	attempt: HydratedDocumentEmailAttempt;
+} | null>(null);
+let hydratedContractId = "";
+
+function contractEmailKey(contractId: string) {
+	return `contract:${contractId}`;
+}
+
+function contractEmailEndpoint(contractId: string) {
+	return `/api/admin/contracts/${contractId}/send`;
+}
+
+function rememberContractRecovery(
+	contractId: string,
+	attempt: HydratedDocumentEmailAttempt,
+) {
+	pageEmailRecovery = { documentId: contractId, attempt };
+}
+
+function visibleContractRecovery(
+	contractId: string,
+): HydratedDocumentEmailAttempt | null {
+	return pageEmailRecovery?.documentId === contractId
+		? pageEmailRecovery.attempt
+		: null;
+}
+
+async function hydrateContractRecovery(contractId: string) {
+	const key = contractEmailKey(contractId);
+	const endpoint = contractEmailEndpoint(contractId);
+	const pending = emailRequests.pending(key, endpoint);
+	if (pending) rememberContractRecovery(contractId, { attemptId: pending.attemptId });
+	try {
+		const hydrated = await emailRequests.hydrate(key, endpoint, {
+			type: "contract",
+			id: contractId,
+		});
+		if (selectedContract?._id !== contractId) return;
+		if (hydrated) rememberContractRecovery(contractId, hydrated);
+		else if (
+			pageEmailRecovery?.documentId === contractId &&
+			(!pageEmailRecovery.attempt.recovery ||
+				!isTerminalDocumentEmailRecovery(pageEmailRecovery.attempt.recovery))
+		) {
+			pageEmailRecovery = null;
+		}
+	} catch (error) {
+		logger.error("Failed to discover contract email recovery:", error);
+	}
+}
+
+$effect(() => {
+	const contractId = selectedContract?._id as string | undefined;
+	if (!contractId) {
+		hydratedContractId = "";
+		return;
+	}
+	if (hydratedContractId === contractId) return;
+	hydratedContractId = contractId;
+	void hydrateContractRecovery(contractId);
+});
 
 // Auto-open contract from ?open= query param
 let openHandled = false;
@@ -110,16 +186,29 @@ async function saveAndSendContract(payload: Record<string, unknown> & { emailTem
 		totalPrice: payload.totalPrice as number | undefined,
 		depositAmount: payload.depositAmount as number | undefined,
 	});
-	await fetch(`/api/admin/contracts/${contractId}/send`, {
-		method: "POST",
-		headers: { "Content-Type": "application/json" },
-		body: JSON.stringify({
-			templateId: payload.emailTemplateId,
-			customSubject: payload.emailSubject,
-			customBody: payload.emailBody,
-		}),
-	});
 	showCreateModal = false;
+	try {
+		await emailRequests.post(
+			contractEmailKey(contractId as string),
+			contractEmailEndpoint(contractId as string),
+			{
+				templateId: payload.emailTemplateId,
+				customSubject: payload.emailSubject,
+				customBody: payload.emailBody,
+			},
+			{ retries: 2 },
+		);
+	} catch (err) {
+		const attempt = presentableDocumentEmailRecoveryFromError(err);
+		if (
+			attempt &&
+			(!selectedContract || selectedContract._id === (contractId as string))
+		) {
+			rememberContractRecovery(contractId as string, attempt);
+		}
+		logger.error("Contract saved but its email was not confirmed:", err);
+		addToast(`Contract saved. ${documentEmailFailureMessage(err)}`);
+	}
 }
 
 async function handleSaveContract(
@@ -153,23 +242,105 @@ async function handleContractAction(id: string, action: string) {
 	}
 }
 
-async function handleSendEmail(id: string, templateId?: string, changeNote?: string): Promise<boolean> {
-	try {
-		const res = await fetch(`/api/admin/contracts/${id}/send`, {
-			method: "POST",
-			headers: { "Content-Type": "application/json" },
-			body: JSON.stringify({ templateId, changeNote }),
-		});
-		if (res.ok) {
-			await client.mutation(api.contracts.markSent, {
-				contractId: toId(id),
-				siteUrl: config.siteUrl,
-			});
-			return true;
-		}
-		return false;
-	} catch {
-		return false;
+async function handleSendEmail(id: string, templateId?: string, changeNote?: string) {
+	await emailRequests.post(
+		contractEmailKey(id),
+		contractEmailEndpoint(id),
+		{ templateId, changeNote },
+		{ retries: 2 },
+	);
+	if (pageEmailRecovery?.documentId === id) pageEmailRecovery = null;
+	if (selectedContract?._id === id) {
+		selectedContract = {
+			...selectedContract,
+			status: statusAfterSuccessfulDocumentEmail(selectedContract.status),
+		} as Contract;
+	}
+}
+
+function handleContractEmailResolved(result: {
+	attemptId: string;
+	outcome: DocumentEmailResolutionOutcome;
+	recovery: DocumentEmailRecovery;
+}) {
+	const documentId = result.recovery.document.id;
+	emailRequests.clearResolved(
+		contractEmailKey(documentId),
+		result.attemptId,
+	);
+	const pending = emailRequests.pending(
+		contractEmailKey(documentId),
+		contractEmailEndpoint(documentId),
+	);
+	if (
+		(pending && pending.attemptId !== result.attemptId) ||
+		(pageEmailRecovery?.documentId === documentId &&
+			pageEmailRecovery.attempt.attemptId !== result.attemptId)
+	) {
+		return;
+	}
+	if (selectedContract && documentId !== selectedContract._id) return;
+	rememberContractRecovery(documentId, {
+		attemptId: result.attemptId,
+		recovery: result.recovery,
+	});
+	if (!selectedContract) return;
+	if (result.recovery.status === "sent") {
+		selectedContract = {
+			...selectedContract,
+			status: statusAfterSuccessfulDocumentEmail(selectedContract.status),
+		} as Contract;
+	}
+}
+
+function handleContractEmailRecovery(
+	contractId: string,
+	attempt: HydratedDocumentEmailAttempt,
+) {
+	if (selectedContract && selectedContract._id !== contractId) return;
+	rememberContractRecovery(contractId, attempt);
+}
+
+function handleContractEmailTerminal(result: {
+	attemptId: string;
+	recovery: DocumentEmailRecovery;
+}) {
+	const documentId = result.recovery.document.id;
+	emailRequests.clearResolved(contractEmailKey(documentId), result.attemptId);
+	const pending = emailRequests.pending(
+		contractEmailKey(documentId),
+		contractEmailEndpoint(documentId),
+	);
+	if (
+		(pending && pending.attemptId !== result.attemptId) ||
+		(pageEmailRecovery?.documentId === documentId &&
+			pageEmailRecovery.attempt.attemptId !== result.attemptId)
+	) {
+		return;
+	}
+	if (selectedContract && selectedContract._id !== documentId) return;
+	rememberContractRecovery(documentId, {
+		attemptId: result.attemptId,
+		recovery: result.recovery,
+	});
+	if (!selectedContract) return;
+	if (result.recovery.status === "sent") {
+		selectedContract = {
+			...selectedContract,
+			status: statusAfterSuccessfulDocumentEmail(selectedContract.status),
+		} as Contract;
+	}
+}
+
+function dismissContractEmailRecovery(result: {
+	attemptId: string;
+	recovery: DocumentEmailRecovery;
+}) {
+	if (
+		pageEmailRecovery?.documentId === result.recovery.document.id &&
+		pageEmailRecovery.attempt.attemptId === result.attemptId
+	) {
+		pageEmailRecovery = null;
 	}
 }
 
@@ -350,6 +521,11 @@ async function handleDeleteTemplate(id: string) {
 			onsave={handleSaveContract}
 			onaction={handleContractAction}
 			onsend={handleSendEmail}
+			onemailresolved={handleContractEmailResolved}
+			emailRecoveryAttempt={visibleContractRecovery(selectedContract._id as string)}
+			onemailrecovery={handleContractEmailRecovery}
+			onemailterminal={handleContractEmailTerminal}
+			onemailrecoverydismiss={dismissContractEmailRecovery}
 			ondelete={handleDeleteContract}
 			onsharelink={handleShareLink}
 		/>
