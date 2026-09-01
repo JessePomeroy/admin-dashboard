@@ -6,9 +6,21 @@ import { getAdminConfig } from "../config";
 import FeatureGate from "../components/FeatureGate.svelte";
 import LoadingState from "../components/LoadingState.svelte";
 import type { Quote, QuotePreset } from "../types";
+import {
+	isTerminalDocumentEmailRecovery,
+	type DocumentEmailRecovery,
+	type DocumentEmailResolutionOutcome,
+} from "../documentEmailRecovery";
 import { copyPortalLink, toId } from "../utils";
 import { addToast } from "../toast";
 import { logger } from "../logger";
+import {
+	type HydratedDocumentEmailAttempt,
+	createDocumentEmailRequestTracker,
+	documentEmailFailureMessage,
+	presentableDocumentEmailRecoveryFromError,
+	statusAfterSuccessfulDocumentEmail,
+} from "./documentEmailRequest";
 import PresetManager from "./quotes/PresetManager.svelte";
 import QuoteCreateModal from "./quotes/QuoteCreateModal.svelte";
 import QuoteDetailModal from "./quotes/QuoteDetailModal.svelte";
@@ -59,14 +71,17 @@ $effect(() => {
 	if (openId) {
 		const match = quotes.find((q: Quote) => q._id === openId);
 		if (match) {
-			selectedQuote = match;
+			openDetailModal(match);
 			openHandled = true;
 		}
 	}
 });
 let sending = $state(false);
 let shareLinkCopied = $state(false);
-let sendResult = $state<"success" | "error" | null>(null);
+let sendResult = $state<"success" | "error" | "uncertain" | null>(null);
+let emailRecoveryAttempt = $state<HydratedDocumentEmailAttempt | null>(null);
+let emailRecoveryDocumentId = $state("");
+const emailRequests = createDocumentEmailRequestTracker();
 let converting = $state(false);
 let convertSuccess = $state(false);
 
@@ -148,19 +163,30 @@ async function saveAndSendQuote(formData: {
 			validUntil: formData.validUntil || undefined,
 			notes: formData.notes || undefined,
 		});
-		await fetch(`/api/admin/quotes/${quoteId}/send`, {
-			method: "POST",
-			headers: { "Content-Type": "application/json" },
-			body: JSON.stringify({
-				templateId: formData.templateId,
-				customSubject: formData.emailSubject,
-				customBody: formData.emailBody,
-			}),
-		});
 		showCreateModal = false;
+		try {
+			await emailRequests.post(
+				`quote:${quoteId}`,
+				`/api/admin/quotes/${quoteId}/send`,
+				{
+					templateId: formData.templateId,
+					customSubject: formData.emailSubject,
+					customBody: formData.emailBody,
+				},
+				{ retries: 2 },
+			);
+		} catch (err) {
+			const attempt = presentableDocumentEmailRecoveryFromError(err) ?? null;
+			if (!selectedQuote || selectedQuote._id === (quoteId as string)) {
+				emailRecoveryAttempt = attempt;
+				emailRecoveryDocumentId = attempt ? (quoteId as string) : "";
+			}
+			logger.error("Quote saved but its email was not confirmed:", err);
+			addToast(`Quote saved. ${documentEmailFailureMessage(err)}`);
+		}
 	} catch (err) {
-		logger.error("Failed to create and send quote:", err);
-		addToast("Failed to send quote.");
+		logger.error("Failed to create quote:", err);
+		addToast("Failed to create quote.");
 	} finally {
 		saving = false;
 	}
@@ -222,27 +248,124 @@ async function saveQuoteEdit(editData: {
 
 async function sendQuoteEmail(templateId?: string, changeNote?: string) {
 	if (!selectedQuote) return;
+	const quoteId = selectedQuote._id as string;
 	sending = true;
 	sendResult = null;
 	try {
-		const res = await fetch(`/api/admin/quotes/${selectedQuote._id}/send`, {
-			method: "POST",
-			headers: { "Content-Type": "application/json" },
-			body: JSON.stringify({ templateId, changeNote }),
-		});
-		if (res.ok) {
+		await emailRequests.post(
+			`quote:${quoteId}`,
+			`/api/admin/quotes/${quoteId}/send`,
+			{ templateId, changeNote },
+			{ retries: 2 },
+		);
+		if (emailRecoveryDocumentId === quoteId) {
+			emailRecoveryAttempt = null;
+			emailRecoveryDocumentId = "";
+		}
+		if (selectedQuote?._id === quoteId) {
 			sendResult = "success";
-			selectedQuote = { ...selectedQuote, status: "sent" } as Quote;
-		} else {
-			sendResult = "error";
+			selectedQuote = {
+				...selectedQuote,
+				status: statusAfterSuccessfulDocumentEmail(selectedQuote.status),
+			} as Quote;
 		}
 	} catch (err) {
 		logger.error("Failed to send quote email:", err);
-		addToast("Failed to send email.");
-		sendResult = "error";
+		addToast(documentEmailFailureMessage(err));
+		const attempt = presentableDocumentEmailRecoveryFromError(err) ?? null;
+		if (!selectedQuote || selectedQuote._id === quoteId) {
+			emailRecoveryAttempt = attempt;
+			sendResult = attempt ? "uncertain" : "error";
+			emailRecoveryDocumentId = attempt ? quoteId : "";
+		}
 	} finally {
 		sending = false;
 	}
+}
+
+function handleQuoteEmailResolved(result: {
+	attemptId: string;
+	outcome: DocumentEmailResolutionOutcome;
+	recovery: DocumentEmailRecovery;
+}) {
+	const documentId = result.recovery.document.id;
+	emailRequests.clearResolved(`quote:${documentId}`, result.attemptId);
+	const pending = emailRequests.pending(
+		`quote:${documentId}`,
+		`/api/admin/quotes/${documentId}/send`,
+	);
+	if (
+		(pending && pending.attemptId !== result.attemptId) ||
+		(emailRecoveryDocumentId === documentId &&
+			emailRecoveryAttempt?.attemptId !== result.attemptId)
+	) {
+		return;
+	}
+	if (selectedQuote && documentId !== selectedQuote._id) return;
+	emailRecoveryAttempt = {
+		attemptId: result.attemptId,
+		recovery: result.recovery,
+	};
+	emailRecoveryDocumentId = documentId;
+	if (!selectedQuote) return;
+	if (result.recovery.status === "sent") {
+		sendResult = "uncertain";
+		selectedQuote = {
+			...selectedQuote,
+			status: statusAfterSuccessfulDocumentEmail(selectedQuote.status),
+		} as Quote;
+		addToast("Accepted email delivery recorded.", "success");
+	} else {
+		sendResult = "uncertain";
+		addToast("Email recorded as not accepted. No replacement was sent.", "success");
+	}
+}
+
+function handleQuoteEmailTerminal(result: {
+	attemptId: string;
+	recovery: DocumentEmailRecovery;
+}) {
+	const documentId = result.recovery.document.id;
+	emailRequests.clearResolved(`quote:${documentId}`, result.attemptId);
+	const pending = emailRequests.pending(
+		`quote:${documentId}`,
+		`/api/admin/quotes/${documentId}/send`,
+	);
+	if (
+		(pending && pending.attemptId !== result.attemptId) ||
+		(emailRecoveryDocumentId === documentId &&
+			emailRecoveryAttempt?.attemptId !== result.attemptId)
+	) {
+		return;
+	}
+	if (selectedQuote && selectedQuote._id !== documentId) return;
+	emailRecoveryAttempt = {
+		attemptId: result.attemptId,
+		recovery: result.recovery,
+	};
+	emailRecoveryDocumentId = documentId;
+	if (!selectedQuote) return;
+	if (result.recovery.status === "sent") {
+		selectedQuote = {
+			...selectedQuote,
+			status: statusAfterSuccessfulDocumentEmail(selectedQuote.status),
+		} as Quote;
+	}
+}
+
+function dismissQuoteEmailRecovery(result: {
+	attemptId: string;
+	recovery: DocumentEmailRecovery;
+}) {
+	if (
+		emailRecoveryDocumentId === result.recovery.document.id &&
+		emailRecoveryAttempt?.attemptId === result.attemptId
+	) {
+		emailRecoveryAttempt = null;
+		emailRecoveryDocumentId = "";
+	}
+	if (selectedQuote && selectedQuote._id !== result.recovery.document.id) return;
+	sendResult = result.recovery.status === "sent" ? "success" : null;
 }
 
 async function quoteAction(action: string) {
@@ -412,12 +535,49 @@ async function deletePreset(presetId: string) {
 	}
 }
 
+async function hydrateQuoteRecovery(quoteId: string) {
+	const key = `quote:${quoteId}`;
+	const endpoint = `/api/admin/quotes/${quoteId}/send`;
+	const pending = emailRequests.pending(key, endpoint);
+	if (pending) {
+		emailRecoveryAttempt = { attemptId: pending.attemptId };
+		emailRecoveryDocumentId = quoteId;
+		sendResult = "uncertain";
+	}
+	try {
+		const hydrated = await emailRequests.hydrate(key, endpoint, {
+			type: "quote",
+			id: quoteId,
+		});
+		if (selectedQuote?._id !== quoteId) return;
+		if (hydrated) {
+			emailRecoveryAttempt = hydrated;
+			emailRecoveryDocumentId = quoteId;
+			sendResult = "uncertain";
+		} else if (
+			emailRecoveryDocumentId === quoteId &&
+			(!emailRecoveryAttempt?.recovery ||
+				!isTerminalDocumentEmailRecovery(emailRecoveryAttempt.recovery))
+		) {
+			emailRecoveryAttempt = null;
+			emailRecoveryDocumentId = "";
+		}
+	} catch (error) {
+		logger.error("Failed to discover quote email recovery:", error);
+	}
+}
+
+function visibleQuoteRecovery(quoteId: string) {
+	return emailRecoveryDocumentId === quoteId ? emailRecoveryAttempt : null;
+}
+
 function openDetailModal(quote: Quote) {
 	selectedQuote = { ...quote };
 	sendResult = null;
 	shareLinkCopied = false;
 	converting = false;
 	convertSuccess = false;
+	void hydrateQuoteRecovery(quote._id as string);
 }
 
 function openPresetModal(preset?: QuotePreset) {
@@ -516,12 +676,16 @@ function closePresetModal() {
 		{sending}
 		{shareLinkCopied}
 		{sendResult}
+		emailRecoveryAttempt={visibleQuoteRecovery(selectedQuote._id as string)}
 		{convertSuccess}
 		{converting}
 		templates={emailTemplates}
 		onclose={() => { selectedQuote = null; sendResult = null; convertSuccess = false; }}
 		onsaveedit={saveQuoteEdit}
 		onsendquoteemail={sendQuoteEmail}
+		onemailresolved={handleQuoteEmailResolved}
+		onemailterminal={handleQuoteEmailTerminal}
+		onemailrecoverydismiss={dismissQuoteEmailRecovery}
 		onquoteaction={quoteAction}
 		ondeletequote={deleteQuote}
 		oncopysharelink={copyShareLink}

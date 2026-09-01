@@ -47,10 +47,21 @@ export function formatDollars(amount: number): string {
 
 // Date formatting
 export function formatDate(dateStr: string): string {
-	return new Date(dateStr).toLocaleDateString("en-US", {
+	const calendarDate = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateStr);
+	const date = calendarDate
+		? new Date(
+				Date.UTC(
+					Number(calendarDate[1]),
+					Number(calendarDate[2]) - 1,
+					Number(calendarDate[3]),
+				),
+			)
+		: new Date(dateStr);
+	return date.toLocaleDateString("en-US", {
 		month: "short",
 		day: "numeric",
 		year: "numeric",
+		...(calendarDate ? { timeZone: "UTC" } : {}),
 	});
 }
 

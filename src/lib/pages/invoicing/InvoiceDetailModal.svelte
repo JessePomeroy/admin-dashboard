@@ -1,6 +1,10 @@
 <script lang="ts">
 import AdminModal from "../../components/AdminModal.svelte";
 import StatusDot from "../../components/StatusDot.svelte";
+import type {
+	DocumentEmailRecovery,
+	DocumentEmailResolutionOutcome,
+} from "../../documentEmailRecovery";
 import { addToast } from "../../toast";
 import { logger } from "../../logger";
 import type { EmailTemplate, Invoice, InvoiceItem } from "../../types";
@@ -16,15 +20,43 @@ import {
 	INVOICE_STATUS_COLORS,
 } from "../../utils";
 import LineItemEditor from "./LineItemEditor.svelte";
+import DocumentEmailRecoveryPanel from "../DocumentEmailRecoveryPanel.svelte";
+import {
+	type HydratedDocumentEmailAttempt,
+	documentEmailFailureMessage,
+	presentableDocumentEmailRecoveryFromError,
+} from "../documentEmailRequest";
 
 interface Props {
 	invoice: Invoice;
 	templates: EmailTemplate[];
 	onsave: (body: Record<string, unknown>) => Promise<void>;
-	onaction: (action: string) => Promise<void>;
-	onsend: (templateId?: string, changeNote?: string) => Promise<void>;
+	onaction: (invoiceId: string, action: string) => Promise<void>;
+	onsend: (
+		invoiceId: string,
+		templateId?: string,
+		changeNote?: string,
+	) => Promise<void>;
 	ondelete: () => Promise<void>;
 	onshare: () => Promise<void>;
+	onemailresolved: (result: {
+		attemptId: string;
+		outcome: DocumentEmailResolutionOutcome;
+		recovery: DocumentEmailRecovery;
+	}) => void | Promise<void>;
+	emailRecoveryAttempt?: HydratedDocumentEmailAttempt | null;
+	onemailrecovery: (
+		invoiceId: string,
+		attempt: HydratedDocumentEmailAttempt,
+	) => void;
+	onemailterminal: (result: {
+		attemptId: string;
+		recovery: DocumentEmailRecovery;
+	}) => void | Promise<void>;
+	onemailrecoverydismiss: (result: {
+		attemptId: string;
+		recovery: DocumentEmailRecovery;
+	}) => void | Promise<void>;
 	shareLinkCopied: boolean;
 	onclose: () => void;
 }
@@ -37,6 +69,11 @@ let {
 	onsend,
 	ondelete,
 	onshare,
+	onemailresolved,
+	emailRecoveryAttempt: suppliedEmailRecoveryAttempt = null,
+	onemailrecovery,
+	onemailterminal,
+	onemailrecoverydismiss,
 	shareLinkCopied,
 	onclose,
 }: Props = $props();
@@ -47,8 +84,17 @@ let confirmResend = $state(false);
 let lastChangeNote = $state("");
 let saving = $state(false);
 let sending = $state(false);
-let sendResult = $state<"success" | "error" | null>(null);
+let sendResult = $state<"success" | "error" | "uncertain" | null>(null);
+let emailRecoveryAttempt = $state<{
+	attemptId: string;
+	recovery?: DocumentEmailRecovery;
+} | null>(null);
 let selectedTemplateId = $state<string>("");
+
+$effect(() => {
+	emailRecoveryAttempt = suppliedEmailRecoveryAttempt;
+	if (suppliedEmailRecoveryAttempt) sendResult = "uncertain";
+});
 
 // Edit form state
 let editItems = $state<InvoiceItem[]>([]);
@@ -117,7 +163,7 @@ async function handleSaveEdit() {
 		body.notes = editNotes || undefined;
 		await onsave(body);
 		editMode = false;
-		if (invoice.status !== "draft") {
+		if (invoice.status === "sent" || invoice.status === "overdue") {
 			confirmResend = true;
 		}
 	} catch (err) {
@@ -141,10 +187,15 @@ async function handleSendEmail(templateId?: string, changeNote?: string) {
 	sending = true;
 	sendResult = null;
 	try {
-		await onsend(templateId, changeNote);
+		await onsend(invoice._id, templateId, changeNote);
 		sendResult = "success";
-	} catch {
-		sendResult = "error";
+		emailRecoveryAttempt = null;
+	} catch (err) {
+		emailRecoveryAttempt =
+			presentableDocumentEmailRecoveryFromError(err) ?? null;
+		sendResult = emailRecoveryAttempt ? "uncertain" : "error";
+		if (emailRecoveryAttempt) onemailrecovery(invoice._id, emailRecoveryAttempt);
+		addToast(documentEmailFailureMessage(err));
 	} finally {
 		sending = false;
 	}
@@ -153,13 +204,19 @@ async function handleSendEmail(templateId?: string, changeNote?: string) {
 async function handleAction(action: string) {
 	saving = true;
 	try {
-		await onaction(action);
+		await onaction(invoice._id, action);
 		// Auto-send reminder email when marking overdue
 		if (action === "overdue") {
 			try {
-				await onsend(undefined, "payment overdue");
-			} catch {
-				addToast("Marked overdue but reminder email failed to send.");
+				await onsend(invoice._id, undefined, "payment overdue");
+			} catch (err) {
+				emailRecoveryAttempt =
+					presentableDocumentEmailRecoveryFromError(err) ?? null;
+				if (emailRecoveryAttempt) {
+					sendResult = "uncertain";
+					onemailrecovery(invoice._id, emailRecoveryAttempt);
+				}
+				addToast(`Marked overdue. ${documentEmailFailureMessage(err)}`);
 			}
 		}
 	} catch (err) {
@@ -174,15 +231,53 @@ async function handleSendReminder() {
 	sending = true;
 	sendResult = null;
 	try {
-		await onsend(undefined, "payment reminder");
+		await onsend(invoice._id, undefined, "payment reminder");
 		sendResult = "success";
+		emailRecoveryAttempt = null;
 		addToast("Reminder sent.", "success");
-	} catch {
-		sendResult = "error";
-		addToast("Failed to send reminder.");
+	} catch (err) {
+		emailRecoveryAttempt =
+			presentableDocumentEmailRecoveryFromError(err) ?? null;
+		sendResult = emailRecoveryAttempt ? "uncertain" : "error";
+		if (emailRecoveryAttempt) onemailrecovery(invoice._id, emailRecoveryAttempt);
+		addToast(documentEmailFailureMessage(err));
 	} finally {
 		sending = false;
 	}
+}
+
+async function handleRecoveryResolved(result: {
+	attemptId: string;
+	outcome: DocumentEmailResolutionOutcome;
+	recovery: DocumentEmailRecovery;
+}) {
+	await onemailresolved(result);
+	emailRecoveryAttempt = {
+		attemptId: result.attemptId,
+		recovery: result.recovery,
+	};
+	sendResult = "uncertain";
+	if (result.recovery.status === "sent") {
+		addToast("Accepted email delivery recorded.", "success");
+	} else {
+		addToast("Email recorded as not accepted. No replacement was sent.", "success");
+	}
+}
+
+async function handleRecoveryTerminal(result: {
+	attemptId: string;
+	recovery: DocumentEmailRecovery;
+}) {
+	await onemailterminal(result);
+}
+
+async function dismissRecovery(result: {
+	attemptId: string;
+	recovery: DocumentEmailRecovery;
+}) {
+	await onemailrecoverydismiss(result);
+	emailRecoveryAttempt = null;
+	sendResult = result.recovery.status === "sent" ? "success" : null;
 }
 
 async function handleDelete() {
@@ -511,6 +606,21 @@ async function handleDelete() {
 							sendResult = null;
 						}}>dismiss</button
 					>
+				{:else if sendResult === "uncertain"}
+					{#if emailRecoveryAttempt}
+						<DocumentEmailRecoveryPanel
+							attemptId={emailRecoveryAttempt.attemptId}
+							document={{ type: "invoice", id: invoice._id }}
+							recovery={emailRecoveryAttempt.recovery}
+							{sending}
+							onretry={() => handleSendEmail(selectedTemplateId || undefined)}
+							onresolved={handleRecoveryResolved}
+							onterminal={handleRecoveryTerminal}
+							ondismiss={dismissRecovery}
+						/>
+					{:else}
+						<span class="send-error" role="alert">delivery not confirmed</span>
+					{/if}
 				{:else if invoice.status === "draft"}
 					<button
 						class="btn-danger-outline"
@@ -568,6 +678,10 @@ async function handleDelete() {
 				{:else if invoice.status === "paid"}
 					<span class="paid-note"
 						>paid on {formatTimestamp(invoice.paidAt ?? 0)}</span
+					>
+				{:else if invoice.status === "partial"}
+					<span class="paid-note"
+						>partially paid — remaining-balance email and checkout are not yet enabled</span
 					>
 				{/if}
 			</div>

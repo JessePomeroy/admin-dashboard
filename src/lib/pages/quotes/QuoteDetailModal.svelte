@@ -1,6 +1,10 @@
 <script lang="ts">
 import AdminModal from "../../components/AdminModal.svelte";
 import StatusDot from "../../components/StatusDot.svelte";
+import type {
+	DocumentEmailRecovery,
+	DocumentEmailResolutionOutcome,
+} from "../../documentEmailRecovery";
 import type { EmailTemplate, Quote, QuotePackage } from "../../types";
 import {
 	dollarsToCents,
@@ -12,6 +16,7 @@ import {
 	QUOTE_STATUS_COLORS,
 } from "../../utils";
 import PackageEditor from "./PackageEditor.svelte";
+import DocumentEmailRecoveryPanel from "../DocumentEmailRecoveryPanel.svelte";
 import {
 	type EditableQuotePackage,
 	toEditableQuotePackages,
@@ -40,7 +45,24 @@ interface Props {
 		notes: string;
 	}) => Promise<void>;
 	shareLinkCopied: boolean;
-	sendResult: "success" | "error" | null;
+	sendResult: "success" | "error" | "uncertain" | null;
+	emailRecoveryAttempt: {
+		attemptId: string;
+		recovery?: DocumentEmailRecovery;
+	} | null;
+	onemailresolved: (result: {
+		attemptId: string;
+		outcome: DocumentEmailResolutionOutcome;
+		recovery: DocumentEmailRecovery;
+	}) => void | Promise<void>;
+	onemailterminal: (result: {
+		attemptId: string;
+		recovery: DocumentEmailRecovery;
+	}) => void | Promise<void>;
+	onemailrecoverydismiss: (result: {
+		attemptId: string;
+		recovery: DocumentEmailRecovery;
+	}) => void | Promise<void>;
 	onsendresultclear: () => void;
 	convertSuccess: boolean;
 	converting: boolean;
@@ -60,6 +82,10 @@ let {
 	onconverttoinvoice,
 	shareLinkCopied,
 	sendResult,
+	emailRecoveryAttempt,
+	onemailresolved,
+	onemailterminal,
+	onemailrecoverydismiss,
 	onsendresultclear,
 	convertSuccess,
 	converting,
@@ -141,7 +167,7 @@ async function handleSaveEdit() {
 		notes: editNotes,
 	});
 	editMode = false;
-	if (quote.status !== "draft") {
+	if (quote.status === "sent") {
 		confirmResend = true;
 	}
 }
@@ -309,10 +335,25 @@ async function handleConvert() {
 					</button>
 					<button class="btn-cancel" onclick={() => { confirmDelete = false; }}>no</button>
 				{:else if sendResult === "success"}
-					<span class="send-success">email sent</span>
+					<span class="send-success" role="status">email sent</span>
 				{:else if sendResult === "error"}
-					<span class="send-error">failed to send</span>
+					<span class="send-error" role="alert">failed to send</span>
 					<button class="btn-cancel" onclick={onsendresultclear}>dismiss</button>
+				{:else if sendResult === "uncertain"}
+					{#if emailRecoveryAttempt}
+						<DocumentEmailRecoveryPanel
+							attemptId={emailRecoveryAttempt.attemptId}
+							document={{ type: "quote", id: quote._id }}
+							recovery={emailRecoveryAttempt.recovery}
+							{sending}
+							onretry={() => handleSendEmail(selectedTemplateId || undefined)}
+							onresolved={onemailresolved}
+							onterminal={onemailterminal}
+							ondismiss={onemailrecoverydismiss}
+						/>
+					{:else}
+						<span class="send-error" role="alert">delivery not confirmed</span>
+					{/if}
 				{:else if quote.status === "draft"}
 					<button class="btn-danger-outline" onclick={() => { confirmDelete = true; }}>delete</button>
 					<button class="btn-cancel" onclick={startEdit}>edit</button>

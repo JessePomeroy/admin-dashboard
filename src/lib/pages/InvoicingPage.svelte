@@ -8,9 +8,21 @@ import FilterBar from "../components/FilterBar.svelte";
 import LoadingState from "../components/LoadingState.svelte";
 import PageHeader from "../components/PageHeader.svelte";
 import type { Invoice, InvoiceStatus } from "../types";
+import {
+	isTerminalDocumentEmailRecovery,
+	type DocumentEmailRecovery,
+	type DocumentEmailResolutionOutcome,
+} from "../documentEmailRecovery";
 import { addToast } from "../toast";
 import { logger } from "../logger";
 import { copyPortalLink, toId } from "../utils";
+import {
+	type HydratedDocumentEmailAttempt,
+	createDocumentEmailRequestTracker,
+	documentEmailFailureMessage,
+	presentableDocumentEmailRecoveryFromError,
+	statusAfterSuccessfulDocumentEmail,
+} from "./documentEmailRequest";
 import InvoiceCreateModal from "./invoicing/InvoiceCreateModal.svelte";
 import InvoiceDetailModal from "./invoicing/InvoiceDetailModal.svelte";
 import InvoiceTable from "./invoicing/InvoiceTable.svelte";
@@ -37,6 +49,70 @@ let searchQuery = $state("");
 let showCreateModal = $state(false);
 let selectedInvoice = $state<Invoice | null>(null);
 let shareLinkCopied = $state(false);
+const emailRequests = createDocumentEmailRequestTracker();
+let pageEmailRecovery = $state<{
+	documentId: string;
+	attempt: HydratedDocumentEmailAttempt;
+} | null>(null);
+let hydratedInvoiceId = "";
+
+function invoiceEmailKey(invoiceId: string) {
+	return `invoice:${invoiceId}`;
+}
+
+function invoiceEmailEndpoint(invoiceId: string) {
+	return `/api/admin/invoicing/${invoiceId}/send`;
+}
+
+function rememberInvoiceRecovery(
+	invoiceId: string,
+	attempt: HydratedDocumentEmailAttempt,
+) {
+	pageEmailRecovery = { documentId: invoiceId, attempt };
+}
+
+function visibleInvoiceRecovery(
+	invoiceId: string,
+): HydratedDocumentEmailAttempt | null {
+	return pageEmailRecovery?.documentId === invoiceId
+		? pageEmailRecovery.attempt
+		: null;
+}
+
+async function hydrateInvoiceRecovery(invoiceId: string) {
+	const key = invoiceEmailKey(invoiceId);
+	const endpoint = invoiceEmailEndpoint(invoiceId);
+	const pending = emailRequests.pending(key, endpoint);
+	if (pending) rememberInvoiceRecovery(invoiceId, { attemptId: pending.attemptId });
+	try {
+		const hydrated = await emailRequests.hydrate(key, endpoint, {
+			type: "invoice",
+			id: invoiceId,
+		});
+		if (selectedInvoice?._id !== invoiceId) return;
+		if (hydrated) rememberInvoiceRecovery(invoiceId, hydrated);
+		else if (
+			pageEmailRecovery?.documentId === invoiceId &&
+			(!pageEmailRecovery.attempt.recovery ||
+				!isTerminalDocumentEmailRecovery(pageEmailRecovery.attempt.recovery))
+		) {
+			pageEmailRecovery = null;
+		}
+	} catch (error) {
+		logger.error("Failed to discover invoice email recovery:", error);
+	}
+}
+
+$effect(() => {
+	const invoiceId = selectedInvoice?._id as string | undefined;
+	if (!invoiceId) {
+		hydratedInvoiceId = "";
+		return;
+	}
+	if (hydratedInvoiceId === invoiceId) return;
+	hydratedInvoiceId = invoiceId;
+	void hydrateInvoiceRecovery(invoiceId);
+});
 
 // Auto-open invoice from ?open= query param (e.g. from activity timeline)
 let openHandled = false;
@@ -85,33 +161,18 @@ let stats = $derived({
 		.length,
 });
 
-function sleep(ms: number) {
-	return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
 async function sendInvoiceEmailRequest(
 	invoiceId: string,
 	body: Record<string, unknown>,
-	options: { retries?: number } = {},
 ) {
-	const retries = options.retries ?? 0;
-	let lastError = "";
-	for (let attempt = 0; attempt <= retries; attempt += 1) {
-		const res = await fetch(`/api/admin/invoicing/${invoiceId}/send`, {
-			method: "POST",
-			headers: { "Content-Type": "application/json" },
-			body: JSON.stringify(body),
-		});
-		if (res.ok) return;
-		const responseText = await res.text().catch(() => "");
-		lastError = responseText ? `${res.status}: ${responseText}` : `${res.status}`;
-		if (attempt < retries && (res.status === 404 || res.status >= 500)) {
-			await sleep(300 * (attempt + 1));
-			continue;
-		}
-		break;
-	}
-	throw new Error(`Failed to send invoice email (${lastError || "unknown error"})`);
+	await emailRequests.post(
+		invoiceEmailKey(invoiceId),
+		invoiceEmailEndpoint(invoiceId),
+		body,
+		{
+		retries: 2,
+		},
+	);
 }
 
 async function handleCreate(body: Record<string, unknown>) {
@@ -150,18 +211,32 @@ async function saveAndSendInvoice(body: Record<string, unknown> & { templateId?:
 		milestoneIndex: invoiceBody.milestoneIndex as number | undefined,
 		parentInvoiceId: toId(invoiceBody.parentInvoiceId as string),
 	});
-	await sendInvoiceEmailRequest(
-		invoiceId as string,
-		{ templateId, customSubject: emailSubject, customBody: emailBody },
-		{ retries: 2 },
-	);
 	showCreateModal = false;
+	try {
+		await sendInvoiceEmailRequest(invoiceId as string, {
+			templateId,
+			customSubject: emailSubject,
+			customBody: emailBody,
+		});
+	} catch (err) {
+		const attempt = presentableDocumentEmailRecoveryFromError(err);
+		if (
+			attempt &&
+			(!selectedInvoice || selectedInvoice._id === (invoiceId as string))
+		) {
+			rememberInvoiceRecovery(invoiceId as string, attempt);
+		}
+		logger.error("Invoice saved but its email was not confirmed:", err);
+		addToast(`Invoice saved. ${documentEmailFailureMessage(err)}`);
+	}
 }
 
 async function handleSave(body: Record<string, unknown>) {
 	if (!selectedInvoice) return;
+	const invoiceId = selectedInvoice._id as string;
+	const invoiceSnapshot = selectedInvoice;
 	await client.mutation(api.invoices.update, {
-		invoiceId: toId(selectedInvoice._id),
+		invoiceId: toId(invoiceId),
 		siteUrl: config.siteUrl,
 		items: body.items as { description: string; quantity: number; unitPrice: number }[] | undefined,
 		taxPercent: body.taxPercent as number | undefined,
@@ -169,38 +244,140 @@ async function handleSave(body: Record<string, unknown>) {
 		dueDate: body.dueDate as string | undefined,
 		status: body.status as string | undefined,
 	});
-	selectedInvoice = { ...selectedInvoice, ...body } as Invoice;
-}
-
-async function handleAction(action: string) {
-	if (!selectedInvoice) return;
-	if (action === "send") {
-		await client.mutation(api.invoices.markSent, {
-			invoiceId: toId(selectedInvoice._id),
-			siteUrl: config.siteUrl,
-		});
-		selectedInvoice = { ...selectedInvoice, status: "sent" } as Invoice;
-	} else if (action === "pay") {
-		await client.mutation(api.invoices.markPaid, {
-			invoiceId: toId(selectedInvoice._id),
-			siteUrl: config.siteUrl,
-		});
-		selectedInvoice = { ...selectedInvoice, status: "paid" } as Invoice;
-	} else if (action === "overdue" || action === "cancel") {
-		const newStatus = action === "overdue" ? "overdue" : "canceled";
-		await client.mutation(api.invoices.update, {
-			invoiceId: toId(selectedInvoice._id),
-			siteUrl: config.siteUrl,
-			status: newStatus,
-		});
-		selectedInvoice = { ...selectedInvoice, status: newStatus } as Invoice;
+	if (selectedInvoice?._id === invoiceId) {
+		selectedInvoice = { ...invoiceSnapshot, ...body } as Invoice;
 	}
 }
 
-async function handleSendEmail(templateId?: string, changeNote?: string) {
+async function handleAction(invoiceId: string, action: string) {
+	if (action === "send") {
+		await client.mutation(api.invoices.markSent, {
+			invoiceId: toId(invoiceId),
+			siteUrl: config.siteUrl,
+		});
+		if (selectedInvoice?._id === invoiceId) {
+			selectedInvoice = { ...selectedInvoice, status: "sent" } as Invoice;
+		}
+	} else if (action === "pay") {
+		await client.mutation(api.invoices.markPaid, {
+			invoiceId: toId(invoiceId),
+			siteUrl: config.siteUrl,
+		});
+		if (selectedInvoice?._id === invoiceId) {
+			selectedInvoice = { ...selectedInvoice, status: "paid" } as Invoice;
+		}
+	} else if (action === "overdue" || action === "cancel") {
+		const newStatus = action === "overdue" ? "overdue" : "canceled";
+		await client.mutation(api.invoices.update, {
+			invoiceId: toId(invoiceId),
+			siteUrl: config.siteUrl,
+			status: newStatus,
+		});
+		if (selectedInvoice?._id === invoiceId) {
+			selectedInvoice = { ...selectedInvoice, status: newStatus } as Invoice;
+		}
+	}
+}
+
+async function handleSendEmail(
+	invoiceId: string,
+	templateId?: string,
+	changeNote?: string,
+) {
+	await sendInvoiceEmailRequest(invoiceId, { templateId, changeNote });
+	if (pageEmailRecovery?.documentId === invoiceId) pageEmailRecovery = null;
+	if (selectedInvoice?._id === invoiceId) {
+		selectedInvoice = {
+			...selectedInvoice,
+			status: statusAfterSuccessfulDocumentEmail(selectedInvoice.status),
+		} as Invoice;
+	}
+}
+
+function handleEmailResolved(result: {
+	attemptId: string;
+	outcome: DocumentEmailResolutionOutcome;
+	recovery: DocumentEmailRecovery;
+}) {
+	const documentId = result.recovery.document.id;
+	emailRequests.clearResolved(
+		invoiceEmailKey(documentId),
+		result.attemptId,
+	);
+	const pending = emailRequests.pending(
+		invoiceEmailKey(documentId),
+		invoiceEmailEndpoint(documentId),
+	);
+	if (
+		(pending && pending.attemptId !== result.attemptId) ||
+		(pageEmailRecovery?.documentId === documentId &&
+			pageEmailRecovery.attempt.attemptId !== result.attemptId)
+	) {
+		return;
+	}
+	if (selectedInvoice && documentId !== selectedInvoice._id) return;
+	rememberInvoiceRecovery(documentId, {
+		attemptId: result.attemptId,
+		recovery: result.recovery,
+	});
 	if (!selectedInvoice) return;
-	await sendInvoiceEmailRequest(selectedInvoice._id as string, { templateId, changeNote });
-	selectedInvoice = { ...selectedInvoice, status: "sent" } as Invoice;
+	if (result.recovery.status === "sent") {
+		selectedInvoice = {
+			...selectedInvoice,
+			status: statusAfterSuccessfulDocumentEmail(selectedInvoice.status),
+		} as Invoice;
+	}
+}
+
+function handleEmailRecovery(
+	invoiceId: string,
+	attempt: HydratedDocumentEmailAttempt,
+) {
+	if (selectedInvoice && selectedInvoice._id !== invoiceId) return;
+	rememberInvoiceRecovery(invoiceId, attempt);
+}
+
+function handleEmailTerminal(result: {
+	attemptId: string;
+	recovery: DocumentEmailRecovery;
+}) {
+	const documentId = result.recovery.document.id;
+	emailRequests.clearResolved(invoiceEmailKey(documentId), result.attemptId);
+	const pending = emailRequests.pending(
+		invoiceEmailKey(documentId),
+		invoiceEmailEndpoint(documentId),
+	);
+	if (
+		(pending && pending.attemptId !== result.attemptId) ||
+		(pageEmailRecovery?.documentId === documentId &&
+			pageEmailRecovery.attempt.attemptId !== result.attemptId)
+	) {
+		return;
+	}
+	if (selectedInvoice && selectedInvoice._id !== documentId) return;
+	rememberInvoiceRecovery(documentId, {
+		attemptId: result.attemptId,
+		recovery: result.recovery,
+	});
+	if (!selectedInvoice) return;
+	if (result.recovery.status === "sent") {
+		selectedInvoice = {
+			...selectedInvoice,
+			status: statusAfterSuccessfulDocumentEmail(selectedInvoice.status),
+		} as Invoice;
+	}
+}
+
+function dismissEmailRecovery(result: {
+	attemptId: string;
+	recovery: DocumentEmailRecovery;
+}) {
+	if (
+		pageEmailRecovery?.documentId === result.recovery.document.id &&
+		pageEmailRecovery.attempt.attemptId === result.attemptId
+	) {
+		pageEmailRecovery = null;
+	}
 }
 
 async function handleDelete() {
@@ -333,6 +510,11 @@ async function handleShareLink() {
 			ondelete={handleDelete}
 			onshare={handleShareLink}
 			{shareLinkCopied}
+			onemailresolved={handleEmailResolved}
+			emailRecoveryAttempt={visibleInvoiceRecovery(selectedInvoice._id as string)}
+			onemailrecovery={handleEmailRecovery}
+			onemailterminal={handleEmailTerminal}
+			onemailrecoverydismiss={dismissEmailRecovery}
 			onclose={() => {
 				selectedInvoice = null;
 			}}

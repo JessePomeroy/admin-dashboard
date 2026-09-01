@@ -1,6 +1,11 @@
 <script lang="ts">
 import AdminModal from "../../components/AdminModal.svelte";
 import EmailPreview from "../../components/EmailPreview.svelte";
+import {
+	buildDocumentEmailCreateFields,
+	type DocumentEmailSource,
+	isCompleteDocumentEmailSource,
+} from "../../documentEmailComposition";
 import { addToast } from "../../toast";
 import { logger } from "../../logger";
 import type {
@@ -35,6 +40,10 @@ let saving = $state(false);
 let selectedTemplateId = $state<string>("");
 let editedSubject = $state("");
 let editedBody = $state("");
+let customEmailContent = $state<DocumentEmailSource | undefined>();
+let customEmailContentValid = $derived(
+	isCompleteDocumentEmailSource(customEmailContent),
+);
 
 // Form state
 let formClientId = $state("");
@@ -51,7 +60,7 @@ let selectedClientName = $derived(
 
 let emailVariables = $derived<Record<string, string>>({
 	clientName: selectedClientName,
-	invoiceNumber: "assigned on save",
+	invoiceNumber: numberPreview,
 	dueDate: formDueDate,
 });
 
@@ -152,13 +161,21 @@ async function handleSubmit() {
 
 async function handleSaveAndSend() {
 	if (!formClientId || formItems.length === 0) return;
+	if (!customEmailContentValid) {
+		addToast("Add both a subject and body before sending.");
+		return;
+	}
 	saving = true;
 	try {
 		await onsaveandsend({
 			...buildInvoiceBody(),
-			templateId: selectedTemplateId || undefined,
-			emailSubject: editedSubject || undefined,
-			emailBody: editedBody || undefined,
+			...buildDocumentEmailCreateFields(
+				{
+					templateId: selectedTemplateId || undefined,
+					customContent: customEmailContent,
+				},
+				"templateId",
+			),
 		});
 	} catch (err) {
 		logger.error("Failed to create and send invoice:", err);
@@ -169,7 +186,7 @@ async function handleSaveAndSend() {
 }
 </script>
 
-<AdminModal title="new invoice" {onclose} size={emailTemplates.length > 0 ? "full" : "wide"}>
+<AdminModal title="new invoice" {onclose} size="full">
 	<div class="modal-split">
 	<form
 		class="modal-form"
@@ -435,16 +452,16 @@ async function handleSaveAndSend() {
 				onclick={handleSaveAndSend}
 				disabled={saving ||
 					!formClientId ||
-					formItems.length === 0}
+					formItems.length === 0 ||
+					!customEmailContentValid}
 			>
 				{saving ? "sending..." : "save & send"}
 			</button>
 		</div>
 	</form>
 
-	{#if emailTemplates.length > 0}
-		<div class="preview-side">
-			<EmailPreview
+	<div class="preview-side">
+		<EmailPreview
 				templates={emailTemplates}
 				variables={emailVariables}
 				defaultSubject={defaultEmailSubject}
@@ -453,11 +470,11 @@ async function handleSaveAndSend() {
 				ontemplateidchange={(id) => { selectedTemplateId = id; }}
 				onsubjectchange={(s) => { editedSubject = s; }}
 				onbodychange={(b) => { editedBody = b; }}
+				oncustomcontentchange={(content) => { customEmailContent = content; }}
 				{editedSubject}
 				{editedBody}
-			/>
-		</div>
-	{/if}
+		/>
+	</div>
 	</div>
 </AdminModal>
 
