@@ -217,6 +217,7 @@ function closeMobileMenu() {
 	<aside class="sidebar" class:sidebar-open={mobileMenuOpen && !editorActive} class:editor-compact={editorActive} aria-label="Admin navigation">
 		<div class="sidebar-brand">
 			<span class="brand-text">{config.siteName}</span>
+			<span class="brand-mark" aria-hidden="true">{config.siteName.slice(0, 1)}</span>
 		</div>
 
 		<nav class="sidebar-nav" aria-label="Main navigation">
@@ -451,15 +452,45 @@ function closeMobileMenu() {
 	}
 
 	.sidebar-brand {
-		padding: 28px 24px 24px;
+		display: flex;
+		align-items: flex-end;
+		position: relative;
+		box-sizing: border-box;
+		flex: 0 0 var(--editor-header-height, 64px);
+		height: var(--editor-header-height, 64px);
+		overflow: hidden;
+		padding: 0 24px var(--editor-header-baseline-inset, 12px);
 	}
 
 	.brand-text {
+		display: block;
+		min-width: 0;
+		max-width: 100%;
+		overflow: hidden;
 		font-family: var(--admin-font-display);
 		font-size: 1.15rem;
 		font-weight: 500;
 		color: var(--admin-heading);
 		letter-spacing: 0.01em;
+		white-space: nowrap;
+	}
+
+	.brand-mark {
+		position: absolute;
+		bottom: var(--editor-header-baseline-inset, 12px);
+		left: 10px;
+		display: block;
+		width: 30px;
+		overflow: hidden;
+		color: var(--admin-heading);
+		font-family: var(--admin-font-display);
+		font-size: 1rem;
+		font-weight: 500;
+		letter-spacing: 0.01em;
+		opacity: 0;
+		text-align: center;
+		white-space: nowrap;
+		pointer-events: none;
 	}
 
 	.nav-separator {
@@ -481,6 +512,17 @@ function closeMobileMenu() {
 		font-weight: 400;
 		letter-spacing: 0.01em;
 		transition: color 0.15s;
+	}
+
+	.nav-item > span:not(.nav-dot),
+	.theme-toggle > span,
+	.back-link > span {
+		min-width: 0;
+		max-width: 150px;
+		overflow: hidden;
+		opacity: 1;
+		text-overflow: ellipsis;
+		white-space: nowrap;
 	}
 
 	.nav-item:hover {
@@ -618,7 +660,6 @@ function closeMobileMenu() {
 
 		.sidebar {
 			transform: translateX(-100%);
-			transition: transform 0.25s ease;
 		}
 
 		.sidebar-open {
@@ -630,6 +671,11 @@ function closeMobileMenu() {
 			padding-top: 56px;
 			max-width: 100vw;
 		}
+	}
 
+	@media (max-width: 768px) and (prefers-reduced-motion: no-preference) {
+		.sidebar {
+			transition: transform 0.25s ease;
+		}
 	}
 </style>

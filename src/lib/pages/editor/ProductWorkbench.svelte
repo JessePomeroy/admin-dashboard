@@ -243,7 +243,7 @@ async function createProduct() {
 </script>
 
 <div class="product-workbench" class:has-selection={Boolean(selectedProductId)} inert={creating}>
-	<header class="workbench-heading">
+	<header class="workbench-heading editor-workbench-header">
 		<h1>products</h1>
 		<div class="heading-meta"><span>{loading ? "loading…" : `${products.length} ${products.length === 1 ? "product" : "products"}`}</span><small>{supportedKinds.length} {supportedKinds.length === 1 ? "kind" : "kinds"}</small></div>
 	</header>
@@ -328,11 +328,11 @@ async function createProduct() {
 <style>
 	.product-workbench { min-height: 100%; background: var(--admin-bg); color: var(--admin-text); }
 	.workbench-heading { display: flex; align-items: end; justify-content: space-between; gap: 20px; padding: 13px 20px 12px; border-bottom: 1px solid var(--admin-border); background: var(--editor-canvas); }
-	.workbench-heading h1, .collection-heading h2, .create-heading h2 { margin: 0; color: var(--admin-heading); font-family: var(--admin-font-heading); font-weight: 500; letter-spacing: -.025em; text-transform: lowercase; }
+	.workbench-heading h1, .collection-heading h2, .create-heading h2 { margin: 0; color: var(--admin-heading); font-family: var(--admin-font-display); font-weight: 500; letter-spacing: -.025em; text-transform: lowercase; }
 	.workbench-heading h1 { font-size: clamp(1.18rem, 1.7vw, 1.48rem); }
 	.heading-meta { display: grid; justify-items: end; gap: 4px; color: var(--admin-heading); font-size: .75rem; white-space: nowrap; }
 	.heading-meta small { color: var(--admin-text-subtle); font-size: .63rem; }
-	.workbench-grid { display: grid; grid-template-columns: 128px 232px minmax(0, 1fr); min-height: calc(100vh - 69px); }
+	.workbench-grid { display: grid; grid-template-columns: 128px 232px minmax(0, 1fr); min-height: calc(100vh - var(--editor-header-height, 64px)); }
 	.taxonomy-pane, .collection-pane { border-right: 1px solid var(--admin-border); background: var(--editor-collection); }
 	.taxonomy-pane { padding: 18px 10px; }
 	.kind-filters { display: grid; margin-top: 0; border-left: 1px solid var(--admin-border); }

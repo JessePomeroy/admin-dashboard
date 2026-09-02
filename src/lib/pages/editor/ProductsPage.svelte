@@ -46,7 +46,7 @@ function readableList(values: string[]) {
 
 <style>
 	.product-overview { max-width: 780px; padding: 30px 28px 72px; }
-	h2 { margin: 0; color: var(--admin-heading); font-family: var(--admin-font-heading); font-size: clamp(1.3rem, 2vw, 1.8rem); font-weight: 500; letter-spacing: -.03em; text-transform: lowercase; }
+	h2 { margin: 0; color: var(--admin-heading); font-family: var(--admin-font-display); font-size: clamp(1.3rem, 2vw, 1.8rem); font-weight: 500; letter-spacing: -.03em; text-transform: lowercase; }
 	.product-overview > p { max-width: 620px; margin: 14px 0 0; color: var(--admin-text-muted); font-size: .85rem; line-height: 1.7; }
 	.workflow-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0; margin-top: 28px; border-top: 1px solid var(--admin-border-strong); }
 	.workflow-grid div { border-right: 1px solid var(--admin-border); padding: 16px 18px 16px 0; background: transparent; }

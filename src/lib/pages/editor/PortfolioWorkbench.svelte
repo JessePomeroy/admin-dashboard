@@ -211,7 +211,7 @@ async function handleGalleryFinalize(event: CustomEvent<{ items: DraggableGaller
 </script>
 
 <div class="portfolio-workbench" class:has-selection={Boolean(selectedGalleryId)} inert={creating}>
-	<header class="workbench-heading">
+	<header class="workbench-heading editor-workbench-header">
 		<div>
 			<h1>gallery workspace</h1>
 		</div>
@@ -308,7 +308,7 @@ async function handleGalleryFinalize(event: CustomEvent<{ items: DraggableGaller
 	h1 { font-size: clamp(1.18rem, 1.7vw, 1.48rem); } h2 { font-size: 1rem; }
 	.heading-meta { display: grid; justify-items: end; gap: 5px; color: var(--admin-text-subtle); font-size: .7rem; }
 	.heading-meta .error, .collection-message.error, .create-message.error, .field-error { color: var(--status-rose); }
-	.workbench-grid { display: grid; grid-template-columns: minmax(228px, 252px) minmax(520px, 1fr); min-height: calc(100vh - 69px); }
+	.workbench-grid { display: grid; grid-template-columns: minmax(228px, 252px) minmax(520px, 1fr); min-height: calc(100vh - var(--editor-header-height, 64px)); }
 	.collection-pane { min-width: 0; padding: 18px 14px 32px; border-right: 1px solid var(--admin-border); background: var(--editor-collection); }
 	.collection-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
 	.collection-note { margin: -6px 0 13px; color: var(--admin-text-muted); font-size: .66rem; line-height: 1.4; }
@@ -359,7 +359,7 @@ async function handleGalleryFinalize(event: CustomEvent<{ items: DraggableGaller
 	@media (min-width: 641px) and (max-width: 1179px) {
 		.workbench-grid { display: block; }
 		.portfolio-workbench.has-selection .collection-pane, .portfolio-workbench:not(.has-selection) .document-pane { display: none; }
-		.collection-pane, .document-pane { min-height: calc(100vh - 69px); }
+		.collection-pane, .document-pane { min-height: calc(100vh - var(--editor-header-height, 64px)); }
 	}
 	@media (max-width: 768px) {
 		.drag-handle { width: 44px; height: 44px; }
