@@ -32,6 +32,7 @@ export interface GalleryUploadFile {
 	r2Key?: string;
 	imageId?: string;
 	deleting?: boolean;
+	pauseRequested?: boolean;
 	controller?: AbortController;
 }
 
@@ -39,6 +40,7 @@ export interface GalleryUploadSnapshot extends GalleryUploadBatchSummary {
 	files: GalleryUploadFile[];
 	selectedFileIds: string[];
 	deletingSelected: boolean;
+	paused: boolean;
 	visibleCompletedCount: number;
 	retryableErrorCount: number;
 	selectableCount: number;
@@ -75,6 +77,8 @@ export interface GalleryUploadController {
 	addFiles(fileList: Iterable<File> | ArrayLike<File>): void;
 	retryUpload(id: string): void;
 	retryAllUploads(): void;
+	pauseUploads(): void;
+	resumeUploads(): void;
 	canSelectForDelete(file: GalleryUploadFile): boolean;
 	isSelected(id: string): boolean;
 	toggleSelected(id: string): void;
@@ -93,6 +97,7 @@ export function createGalleryUploadController(
 	let files: GalleryUploadFile[] = [];
 	let selectedFileIds: string[] = [];
 	let deletingSelected = false;
+	let paused = false;
 	let uploadSession: GalleryUploadSession | null = null;
 	let uploadSessionPromise: Promise<GalleryUploadSession> | null = null;
 	let batchTotalCount = 0;
@@ -134,6 +139,7 @@ export function createGalleryUploadController(
 			files: [...files],
 			selectedFileIds: [...selectedFileIds],
 			deletingSelected,
+			paused,
 			visibleCompletedCount,
 			totalCount: batchTotalCount,
 			completedCount,
@@ -313,10 +319,20 @@ export function createGalleryUploadController(
 			emitChange();
 			options.onupload?.();
 		} catch (err) {
-			next.status = "error";
 			const message = err instanceof Error ? err.message : "Upload failed";
-			next.error = message === "Request canceled" ? "Canceled" : message;
-			next.retryable = message === "Request canceled" ? false : next.retryable;
+			if (message === "Request canceled" && next.pauseRequested && !next.deleting) {
+				if (next.r2Key) await deleteR2File(next.r2Key);
+				next.status = "pending";
+				next.progress = 0;
+				next.error = undefined;
+				next.retryable = undefined;
+				next.r2Key = undefined;
+			} else {
+				next.status = "error";
+				next.error = message === "Request canceled" ? "Canceled" : message;
+				next.retryable = message === "Request canceled" ? false : next.retryable;
+			}
+			next.pauseRequested = undefined;
 			emitChange();
 		} finally {
 			next.controller = undefined;
@@ -324,6 +340,7 @@ export function createGalleryUploadController(
 	}
 
 	function processQueue(): void {
+		if (paused) return;
 		while (true) {
 			const uploading = files.filter(
 				(file) => file.status === "uploading" || file.status === "processing",
@@ -339,6 +356,24 @@ export function createGalleryUploadController(
 		}
 	}
 
+	function pauseUploads(): void {
+		if (paused) return;
+		paused = true;
+		for (const file of files) {
+			if (file.status !== "uploading" && file.status !== "processing") continue;
+			file.pauseRequested = true;
+			file.controller?.abort();
+		}
+		emitChange();
+	}
+
+	function resumeUploads(): void {
+		if (!paused) return;
+		paused = false;
+		emitChange();
+		processQueue();
+	}
+
 	function retryUpload(id: string): void {
 		const target = files.find((file) => file.id === id);
 		if (!target || target.status !== "error" || target.retryable === false) return;
@@ -346,6 +381,7 @@ export function createGalleryUploadController(
 		target.error = undefined;
 		target.progress = 0;
 		target.retryable = undefined;
+		target.pauseRequested = undefined;
 		target.controller = undefined;
 		emitChange();
 		processQueue();
@@ -359,6 +395,7 @@ export function createGalleryUploadController(
 			file.error = undefined;
 			file.progress = 0;
 			file.retryable = undefined;
+			file.pauseRequested = undefined;
 			file.controller = undefined;
 			changed = true;
 		}
@@ -468,6 +505,8 @@ export function createGalleryUploadController(
 		addFiles,
 		retryUpload,
 		retryAllUploads,
+		pauseUploads,
+		resumeUploads,
 		canSelectForDelete,
 		isSelected,
 		toggleSelected,
