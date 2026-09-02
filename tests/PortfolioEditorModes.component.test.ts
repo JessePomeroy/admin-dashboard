@@ -522,6 +522,8 @@ describe("Portfolio editor capability modes", () => {
 		const show = Array.from(document.querySelectorAll<HTMLButtonElement>("button"))
 			.find((button) => button.textContent === "show on site");
 		expect(show?.getAttribute("aria-pressed")).toBe("true");
+		expect(show?.classList.contains("hidden")).toBe(false);
+		expect(document.querySelector('label[for="gallery-title"]')?.parentElement?.classList.contains("field-heading")).toBe(true);
 
 		const remove = Array.from(document.querySelectorAll<HTMLButtonElement>("button"))
 			.find((button) => button.textContent === "delete gallery");

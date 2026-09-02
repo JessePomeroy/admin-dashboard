@@ -456,7 +456,7 @@ function reloadServerDraft() {
 					<button type="button" onclick={() => void publish()} disabled={publicationCurrent || publishing || saveState === "saving" || saveState === "syncing" || saveState === "offline" || saveState === "conflict"}>{publishing ? "publishing…" : "publish"}</button>
 				{/if}
 				{#if setPortfolioGalleryVisibility && isPublished}
-					<button type="button" class="visibility-toggle" class:hidden={!isVisible} aria-pressed={!isVisible} aria-busy={visibilityChanging} onclick={() => void toggleVisibility()} disabled={visibilityChanging}>{visibilityChanging ? "updating…" : isVisible ? "hide from site" : "show on site"}</button>
+					<button type="button" class="visibility-toggle" class:is-hidden={!isVisible} aria-pressed={!isVisible} aria-busy={visibilityChanging} onclick={() => void toggleVisibility()} disabled={visibilityChanging}>{visibilityChanging ? "updating…" : isVisible ? "hide from site" : "show on site"}</button>
 				{/if}
 			</div>
 		</header>
@@ -472,7 +472,7 @@ function reloadServerDraft() {
 			<div class="section-heading"><h2 id="gallery-details-heading">gallery details</h2><p>{publicLifecycleEnabled ? "Name, description, and public path." : "Name, description, and saved URL name."}</p></div>
 			<div class="fields">
 				<div class="field">
-					<label class="field-heading" for="gallery-title">gallery name</label>
+					<div class="field-heading"><label for="gallery-title">gallery name</label></div>
 					<input id="gallery-title" maxlength="120" bind:value={form.title} aria-invalid={reviewRequested && !form.title.trim()} />
 				</div>
 				<div class="field">
@@ -533,7 +533,7 @@ function reloadServerDraft() {
 	button:focus-visible, input:focus-visible, textarea:focus-visible, .back:focus-visible { outline: 2px solid var(--admin-accent); outline-offset: 2px; }
 	.secondary { border-color: var(--admin-border-strong); background: transparent; color: var(--admin-text); }
 	.visibility-toggle { min-width: 106px; border-color: var(--admin-accent-strong); background: color-mix(in srgb, var(--admin-accent) 8%, var(--editor-control)); color: var(--admin-heading); }
-	.visibility-toggle:hover:not(:disabled), .visibility-toggle.hidden { background: var(--admin-accent-strong); color: var(--admin-bg); }
+	.visibility-toggle:hover:not(:disabled), .visibility-toggle.is-hidden { background: var(--admin-accent-strong); color: var(--admin-bg); }
 	.visibility-toggle:active:not(:disabled) { transform: translateY(1px); }
 	.danger { border-color: color-mix(in srgb, var(--status-rose) 55%, transparent); background: transparent; color: var(--status-rose); }
 	.danger.solid { background: var(--status-rose); color: var(--admin-bg); }
