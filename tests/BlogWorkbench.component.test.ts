@@ -113,6 +113,7 @@ describe("BlogWorkbench", () => {
 	it("renders the Paper-derived collection and focused document panes", async () => {
 		await mountWorkbench({ selectedDocumentId: "post-changed", selectedKind: "post" });
 
+		expect(document.querySelector(".workbench-heading h1")?.textContent).toBe("blog");
 		expect(document.querySelector(".workbench-grid")).not.toBeNull();
 		expect(document.querySelector('aside[aria-label="Blog posts"]')).not.toBeNull();
 		expect(document.querySelector('section[aria-label="Blog document"] [data-testid="document-content"]')?.textContent).toBe("document content");

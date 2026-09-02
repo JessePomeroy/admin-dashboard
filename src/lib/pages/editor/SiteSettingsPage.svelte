@@ -2,6 +2,7 @@
 import { browser } from "$app/environment";
 import { onMount } from "svelte";
 import { useQuery } from "convex-svelte";
+import { dragHandle, dragHandleZone } from "svelte-dnd-action";
 import { useAdminClient } from "../../adminClient";
 import {
 	getAdminConfig,
@@ -55,6 +56,9 @@ let fieldErrors = $state<SiteSettingsFieldErrors>({});
 let lastSavedJson = $state("");
 let lastAttemptedJson = $state("");
 let saveTimer: ReturnType<typeof setTimeout> | undefined;
+type DraggableSocialLink = NonNullable<SiteSettingsDraftPayload["socialLinks"]>[number] & { id: string; isDndShadowItem?: boolean };
+let socialDragItems = $state<DraggableSocialLink[] | null>(null);
+let visibleSocialLinks: DraggableSocialLink[] = $derived(socialDragItems ?? (form.socialLinks ?? []).map((link, index) => ({ ...link, id: `social-${index}` })));
 let currentJson = $derived(serializeSiteSettingsDraft(form));
 let hasPendingWork = $derived(
 	["dirty", "saving", "offline", "syncing", "error", "conflict"].includes(
@@ -276,12 +280,13 @@ function removeSocialLink(index: number) {
 	form.socialLinks = (form.socialLinks ?? []).filter((_, itemIndex) => itemIndex !== index);
 }
 
-function moveSocialLink(index: number, direction: -1 | 1) {
-	const links = [...(form.socialLinks ?? [])];
-	const destination = index + direction;
-	if (destination < 0 || destination >= links.length) return;
-	[links[index], links[destination]] = [links[destination], links[index]];
-	form.socialLinks = links;
+function updateSocialLink(index: number, change: Partial<NonNullable<SiteSettingsDraftPayload["socialLinks"]>[number]>) {
+	form.socialLinks = (form.socialLinks ?? []).map((link, itemIndex) => itemIndex === index ? { ...link, ...change } : link);
+}
+
+function finishSocialReorder(event: CustomEvent<{ items: DraggableSocialLink[] }>) {
+	socialDragItems = null;
+	form.socialLinks = event.detail.items.filter((item) => !item.isDndShadowItem).map(({ id: _id, isDndShadowItem: _shadow, ...link }) => link);
 }
 </script>
 
@@ -289,12 +294,7 @@ function moveSocialLink(index: number, direction: -1 | 1) {
 
 <div class="settings-page">
 	<header class="settings-header">
-		<div>
-			<h1>site settings</h1>
-			<p class="description">{publishingEnabled
-				? "Identity, social links, and default search information shared across the public site."
-				: "Private site-setting drafts for a future public rollout. Changes remain in this editor until publishing is connected."}</p>
-		</div>
+		<h1>site settings</h1>
 		<div class="actions">
 			<span class="save-state" aria-live="polite">{saveState === "offline" ? "offline — saved on this device" : saveState}</span>
 			{#if publishingEnabled && siteSettingsConfig.previewHref}
@@ -327,15 +327,14 @@ function moveSocialLink(index: number, direction: -1 | 1) {
 
 			<section aria-labelledby="social-heading">
 				<div class="section-heading"><span>02</span><div><h2 id="social-heading">social links</h2><p>Shown in the deliberate order below.</p></div><button type="button" class="text-action" onclick={addSocialLink} disabled={(form.socialLinks?.length ?? 0) >= 20}>add link</button></div>
-				<div class="social-list">
-					{#each form.socialLinks ?? [] as link, index}
-						<div class="social-row">
-							<label>platform<input maxlength="50" bind:value={link.platform} aria-invalid={Boolean(fieldErrors[`socialLinks.${index}.platform`])} />{#if fieldErrors[`socialLinks.${index}.platform`]}<small class="field-error">{fieldErrors[`socialLinks.${index}.platform`]}</small>{/if}</label>
-							<label>public URL<input type="url" maxlength="2048" bind:value={link.url} aria-invalid={Boolean(fieldErrors[`socialLinks.${index}.url`])} />{#if fieldErrors[`socialLinks.${index}.url`]}<small class="field-error">{fieldErrors[`socialLinks.${index}.url`]}</small>{/if}</label>
-							<div class="row-actions" aria-label={`Reorder ${link.platform || `social link ${index + 1}`}`}>
-								<button type="button" onclick={() => moveSocialLink(index, -1)} disabled={index === 0} aria-label="Move link up">↑</button>
-								<button type="button" onclick={() => moveSocialLink(index, 1)} disabled={index === (form.socialLinks?.length ?? 0) - 1} aria-label="Move link down">↓</button>
-								<button type="button" onclick={() => removeSocialLink(index)} aria-label="Remove link">remove</button>
+				<div class="social-list" aria-label="Reorder social links" use:dragHandleZone={{ items: visibleSocialLinks, dragDisabled: (form.socialLinks?.length ?? 0) < 2, flipDurationMs: 140, morphDisabled: true, dropTargetStyle: {}, type: "site-social-links" }} onconsider={(event) => socialDragItems = event.detail.items} onfinalize={finishSocialReorder}>
+					{#each visibleSocialLinks as link, index (link.id)}
+						<div class="social-row" class:dnd-shadow={link.isDndShadowItem}>
+							<label>platform<input maxlength="50" value={link.platform} oninput={(event) => updateSocialLink(index, { platform: event.currentTarget.value })} aria-invalid={Boolean(fieldErrors[`socialLinks.${index}.platform`])} disabled={link.isDndShadowItem} />{#if fieldErrors[`socialLinks.${index}.platform`]}<small class="field-error">{fieldErrors[`socialLinks.${index}.platform`]}</small>{/if}</label>
+							<label>public URL<input type="url" maxlength="2048" value={link.url} oninput={(event) => updateSocialLink(index, { url: event.currentTarget.value })} aria-invalid={Boolean(fieldErrors[`socialLinks.${index}.url`])} disabled={link.isDndShadowItem} />{#if fieldErrors[`socialLinks.${index}.url`]}<small class="field-error">{fieldErrors[`socialLinks.${index}.url`]}</small>{/if}</label>
+							<div class="row-actions">
+								<button type="button" class="drag-handle" use:dragHandle disabled={(form.socialLinks?.length ?? 0) < 2 || link.isDndShadowItem} aria-label={`Drag ${link.platform || `social link ${index + 1}`} to reorder`}><span aria-hidden="true"></span></button>
+								<button type="button" onclick={() => removeSocialLink(index)} aria-label="Remove link" disabled={link.isDndShadowItem}>remove</button>
 							</div>
 						</div>
 					{/each}
@@ -350,3 +349,10 @@ function moveSocialLink(index: number, direction: -1 | 1) {
 		</form>
 	{/if}
 </div>
+
+<style>
+	.drag-handle { display: grid; place-items: center; min-width: 42px; padding: 0; border-color: transparent; color: var(--admin-text-muted); touch-action: none; }
+	.drag-handle span { width: 12px; height: 18px; background: radial-gradient(circle, currentColor 1.3px, transparent 1.5px) 0 0 / 6px 6px; opacity: .62; }
+	.drag-handle:hover:not(:disabled) { color: var(--admin-heading); }
+	.dnd-shadow { opacity: .34; }
+</style>

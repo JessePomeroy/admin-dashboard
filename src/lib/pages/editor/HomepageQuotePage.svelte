@@ -332,10 +332,7 @@ async function discard() {
 
 <div class="settings-page">
 	<header class="settings-header">
-		<div>
-			<h1>homepage quote</h1>
-			<p class="description">Edit only the quote and attribution. Its placement, typography, and responsive design remain part of the designed Homepage.</p>
-		</div>
+		<h1>homepage quote</h1>
 		{#if initialized && !setupRequired}
 			<div class="actions">
 				<span class="save-state" aria-live="polite">{saveState === "offline" ? "offline — saved on this device" : saveState}</span>
@@ -362,7 +359,7 @@ async function discard() {
 	{:else}
 		<form onsubmit={(event) => { event.preventDefault(); void publish(); }}>
 			<section aria-labelledby="quote-heading">
-				<div class="section-heading"><span>01</span><div><h2 id="quote-heading">quote</h2><p>These words appear in the existing designed quote block on the Homepage.</p></div></div>
+				<div class="section-heading"><span>01</span><div><h2 id="quote-heading">quote</h2><p>The quotation shown on the homepage.</p></div></div>
 				<div class="fields">
 					<label>quote text<textarea rows="9" maxlength="2000" bind:value={form.text} aria-invalid={Boolean(fieldErrors.text)} aria-describedby="quote-count"></textarea><small id="quote-count">{form.text?.length ?? 0} / 2000 characters</small>{#if fieldErrors.text}<small class="field-error">{fieldErrors.text}</small>{/if}</label>
 					<label>attribution<input maxlength="160" bind:value={form.attribution} aria-invalid={Boolean(fieldErrors.attribution)} />{#if fieldErrors.attribution}<small class="field-error">{fieldErrors.attribution}</small>{/if}</label>

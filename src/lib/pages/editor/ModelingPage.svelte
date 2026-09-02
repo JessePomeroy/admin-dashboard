@@ -2,6 +2,7 @@
 import { browser } from "$app/environment";
 import { onMount, tick } from "svelte";
 import { useQuery } from "convex-svelte";
+import { dragHandleZone } from "svelte-dnd-action";
 import { useAdminClient } from "../../adminClient";
 import {
 	getAdminConfig,
@@ -14,7 +15,6 @@ import {
 	emptyModelingPageDraft,
 	MODELING_CATEGORY_IMAGE_MAX,
 	MODELING_GALLERY_MAX,
-	moveModelingItem,
 	newModelingGallery,
 	newModelingImage,
 	resolveModelingPagePreviewUrl,
@@ -82,6 +82,9 @@ let lastAttemptedJson = $state("");
 let pickerGalleryKey = $state<string | null>(null);
 let uploadedAssets = $state<PortfolioMediaAsset[]>([]);
 let saveTimer: ReturnType<typeof setTimeout> | undefined;
+type DraggableGallery = ModelingGalleryDraft & { id: string; isDndShadowItem?: boolean };
+let galleryDragItems = $state<DraggableGallery[] | null>(null);
+let visibleGalleries: DraggableGallery[] = $derived(galleryDragItems ?? (form.galleries ?? []).map((gallery) => ({ ...gallery, id: gallery.key })));
 
 let currentJson = $derived(serializeModelingPageDraft(form));
 let mediaPage = $derived(mediaQuery.data as PortfolioMediaPage | undefined);
@@ -313,7 +316,7 @@ async function publish() {
 		lastSavedJson = currentJson;
 		saveState = "saved";
 		saveError = "";
-		publishMessage = "Published. The public site can use this saved revision when its provider rollout is enabled.";
+		publishMessage = "Published.";
 		clearLocalDraft();
 	} catch (error) {
 		saveState = "error";
@@ -408,6 +411,11 @@ function addGallery() {
 	form.galleries = [...(form.galleries ?? []), newModelingGallery()];
 }
 
+function finishGalleryReorder(event: CustomEvent<{ items: DraggableGallery[] }>) {
+	galleryDragItems = null;
+	form.galleries = event.detail.items.filter((item) => !item.isDndShadowItem).map(({ id: _id, isDndShadowItem: _shadow, ...gallery }) => gallery);
+}
+
 function addAsset(galleryKey: string, asset: PortfolioMediaAsset) {
 	const gallery = (form.galleries ?? []).find((item) => item.key === galleryKey);
 	if (
@@ -432,10 +440,7 @@ function addUploadedAsset(galleryKey: string, asset: PortfolioMediaAsset) {
 
 <div class="settings-page">
 	<header class="settings-header">
-		<div>
-			<h1>modeling &amp; acting</h1>
-			<p class="description">Edit the words, category order, visibility, and image order supplied to the public page. The site retains ownership of layout, orbit composition, motion, navigation, and booking.</p>
-		</div>
+		<h1>modeling &amp; acting</h1>
 		{#if initialized && !setupRequired}
 			<div class="actions">
 				<span class="save-state" aria-live="polite">{saveState === "offline" ? "offline — saved on this device" : saveState}</span>
@@ -457,14 +462,14 @@ function addUploadedAsset(galleryKey: string, asset: PortfolioMediaAsset) {
 		<p class="loading" role="status">loading Modeling content…</p>
 	{:else if setupRequired}
 		<section aria-labelledby="setup-modeling-heading">
-			<div class="section-heading"><span>01</span><div><h2 id="setup-modeling-heading">set up Modeling content</h2><p>Copy the current heading and category names or begin empty. Static site images are not copied into the media library; upload or choose each category's images before making it visible and publishing.</p></div></div>
+			<div class="section-heading"><span>01</span><div><h2 id="setup-modeling-heading">set up Modeling content</h2><p>Copy the current words and category names, or begin empty. Add each category's images before publishing.</p></div></div>
 			<div class="setup-summary"><strong>{modelingConfig.initialPayload.heading}</strong><span>{modelingConfig.initialPayload.galleries?.length ?? 0} prepared categories · all remain unpublished until you publish them</span></div>
 			<div class="actions"><button type="button" class="primary" onclick={() => void beginWithCurrentContent()} disabled={setupStatus === "saving"}>{setupStatus === "saving" ? "copying…" : "copy current structure"}</button><button type="button" onclick={beginBlank} disabled={setupStatus === "saving"}>start blank</button></div>
 		</section>
 	{:else}
 		<form onsubmit={(event) => { event.preventDefault(); void publish(); }}>
 			<section aria-labelledby="modeling-copy-heading">
-				<div class="section-heading"><div><h2 id="modeling-copy-heading">page copy</h2><p>These words are supplied to the designed page. They do not control its visual hierarchy or composition.</p></div></div>
+				<div class="section-heading"><div><h2 id="modeling-copy-heading">page copy</h2><p>The heading and introduction shown on this page.</p></div></div>
 				<div class="fields">
 					<label>page heading<input id="modeling-heading" maxlength="120" bind:value={form.heading} aria-invalid={reviewRequested && publishIssues.some((issue) => issue.fieldId === "modeling-heading")} /></label>
 					<label>introduction <small>optional</small><textarea rows="4" maxlength="2000" bind:value={form.intro}></textarea><small>{form.intro?.length ?? 0} / 2000</small></label>
@@ -479,11 +484,13 @@ function addUploadedAsset(galleryKey: string, asset: PortfolioMediaAsset) {
 				{#if (form.galleries?.length ?? 0) === 0}
 					<div class="empty"><strong>No categories yet.</strong><p>Add a category, upload its images here, then make it visible when it is ready.</p></div>
 				{:else}
-					{#each form.galleries ?? [] as gallery, index (gallery.key)}
+					<div class="category-list" aria-label="Reorder Modeling categories" use:dragHandleZone={{ items: visibleGalleries, dragDisabled: (form.galleries?.length ?? 0) < 2, flipDurationMs: 140, morphDisabled: true, dropTargetStyle: {}, type: "modeling-categories" }} onconsider={(event) => galleryDragItems = event.detail.items} onfinalize={finishGalleryReorder}>
+					{#each visibleGalleries as gallery, index (gallery.id)}
 						<ModelingCategoryEditor
 							{gallery}
 							{index}
 							count={form.galleries?.length ?? 0}
+							isDndShadowItem={gallery.isDndShadowItem}
 							{mediaById}
 							mediaBaseUrl={modelingConfig.mediaBaseUrl}
 							{publishIssues}
@@ -491,11 +498,11 @@ function addUploadedAsset(galleryKey: string, asset: PortfolioMediaAsset) {
 							uploadEndpoint={modelingConfig.uploadEndpoint}
 							onChange={(next) => updateGallery(gallery.key, next)}
 							onRemove={() => removeGallery(gallery.key)}
-							onMove={(direction) => (form.galleries = moveModelingItem(form.galleries ?? [], index, direction))}
 							onChooseMedia={() => (pickerGalleryKey = gallery.key)}
 							onUploadReady={(asset) => addUploadedAsset(gallery.key, asset)}
 						/>
 					{/each}
+					</div>
 				{/if}
 			</section>
 
@@ -520,6 +527,7 @@ function addUploadedAsset(galleryKey: string, asset: PortfolioMediaAsset) {
 	.review ul { margin: 8px 0 0; padding-left: 20px; }
 	.review a { color: var(--admin-text); }
 	.categories-heading { align-items: center; }
+	.category-list { display: grid; }
 	.empty { display: grid; place-items: center; min-height: 170px; border: 1px dashed var(--admin-border); border-radius: 8px; text-align: center; }
 	.empty strong { color: var(--admin-heading); }
 	.empty p { max-width: 480px; margin: 7px 18px 0; color: var(--admin-text-muted); }

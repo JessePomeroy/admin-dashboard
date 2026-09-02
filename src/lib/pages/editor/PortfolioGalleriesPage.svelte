@@ -3,41 +3,26 @@ import { getAdminConfig } from "../../config";
 import PortfolioWorkbench from "./PortfolioWorkbench.svelte";
 
 const config = getAdminConfig();
-const portfolioApi = config.api.portfolioEditor;
-if (!portfolioApi || !config.editor?.portfolio) {
+if (!config.api.portfolioEditor || !config.editor?.portfolio) {
 	throw new Error("Portfolio editor is not configured for this host");
 }
-
-const publishingEnabled = Boolean(portfolioApi.publish);
 </script>
 
 <svelte:head><title>Portfolio — {config.siteName}</title></svelte:head>
 
 <PortfolioWorkbench>
 	<div class="portfolio-overview">
+		<span>portfolio</span>
 		<h2>select a gallery</h2>
-		<p>{publishingEnabled
-			? "Public galleries, their order, and whether each one is ready for visitors. Choose a gallery to edit its details, review publication readiness, and arrange its public images."
-			: "Gallery drafts, their saved order, and the images prepared for a future public rollout. Choose a draft to edit its details and arrange its images."}</p>
-		<div class="workflow-grid">
-			<div><span>01</span><strong>details</strong><p>Keep the name, URL, and description together.</p></div>
-			<div><span>02</span><strong>images</strong><p>Upload or choose ready media, then set order and accessibility text.</p></div>
-			<div><span>03</span><strong>{publishingEnabled ? "publish" : "review"}</strong><p>{publishingEnabled ? "Preview and publish only after the saved revision passes review." : "Saved drafts remain private until publication is connected."}</p></div>
-		</div>
+		<p>Choose one from the list, or create a new gallery.</p>
 	</div>
 </PortfolioWorkbench>
 
 <style>
-	.portfolio-overview { max-width: 820px; padding: clamp(26px, 4vw, 44px); }
+	.portfolio-overview { max-width: 620px; padding: clamp(38px, 7vw, 86px) clamp(28px, 6vw, 72px) 96px; }
+	.portfolio-overview > span { color: var(--admin-accent-strong); font-size: .62rem; letter-spacing: .12em; text-transform: uppercase; }
 	h2 { margin: 0; color: var(--admin-heading); font-family: var(--admin-font-display); font-size: clamp(1.3rem, 2.2vw, 1.8rem); font-weight: 500; }
-	.portfolio-overview > p { max-width: 620px; margin: 12px 0 0; color: var(--admin-text-muted); line-height: 1.65; }
-	.workflow-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0; margin-top: 28px; border-top: 1px solid var(--admin-border-strong); }
-	.workflow-grid div { min-height: 0; padding: 16px 18px 16px 0; border-right: 1px solid var(--admin-border); background: transparent; }
-	.workflow-grid div + div { padding-left: 18px; }
-	.workflow-grid div:last-child { border-right: 0; }
-	.workflow-grid span, .workflow-grid strong { display: block; }
-	.workflow-grid span { color: var(--admin-accent-strong); font-size: .64rem; }
-	.workflow-grid strong { margin-top: 12px; color: var(--admin-heading); font-weight: 500; }
-	.workflow-grid p { margin: 7px 0 0; color: var(--admin-text-muted); font-size: .75rem; line-height: 1.5; }
-	@media (max-width: 760px) { .portfolio-overview { padding: 28px 20px 64px; } .workflow-grid { grid-template-columns: 1fr; } }
+	.portfolio-overview > span + h2 { margin-top: 11px; }
+	.portfolio-overview > p { max-width: 48ch; margin: 12px 0 0; color: var(--admin-text-muted); font-size: .82rem; line-height: 1.65; }
+	@media (max-width: 760px) { .portfolio-overview { padding: 28px 20px 64px; } }
 </style>

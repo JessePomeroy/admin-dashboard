@@ -423,7 +423,7 @@ function exportCSV() {
 
 	.filter-select {
 		padding: 7px 12px;
-		background: transparent;
+		background: var(--admin-dropdown-bg);
 		border: 1px solid var(--admin-border-strong);
 		border-radius: 6px;
 		color: var(--admin-text);

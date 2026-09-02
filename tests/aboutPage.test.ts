@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import {
 	copyAboutPageDraft,
@@ -20,6 +21,7 @@ const asset = {
 	},
 	createdAt: 1,
 };
+const portraitsSource = readFileSync("src/lib/pages/editor/AboutPortraits.svelte", "utf8");
 
 const complete = {
 	heading: "About",
@@ -84,6 +86,13 @@ describe("About editor helpers", () => {
 		expect(portrait).not.toHaveProperty("decorative");
 		expect(moveAboutItem(["a", "b", "c"], 1, -1)).toEqual(["b", "a", "c"]);
 		expect(moveAboutItem(["a", "b"], 0, -1)).toEqual(["a", "b"]);
+	});
+
+	it("uses drag handles instead of portrait ordering arrows", () => {
+		expect(portraitsSource).toContain("use:dragHandleZone");
+		expect(portraitsSource).toContain("use:dragHandle");
+		expect(portraitsSource).not.toContain("Move portrait earlier");
+		expect(portraitsSource).not.toContain("Move portrait later");
 	});
 
 	it("accepts only same-origin About preview URLs", () => {

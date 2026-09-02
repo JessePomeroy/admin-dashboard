@@ -1,11 +1,11 @@
 <script lang="ts">
+import { dragHandle, dragHandleZone } from "svelte-dnd-action";
 import type {
 	ModelingGalleryDraft,
 	ModelingImageDraft,
 } from "../../config";
 import {
 	MODELING_CATEGORY_IMAGE_MAX,
-	moveModelingItem,
 	slugifyModelingTitle,
 	type ModelingPublishIssue,
 } from "../../modelingPage";
@@ -23,9 +23,9 @@ let {
 	uploadEndpoint,
 	onChange,
 	onRemove,
-	onMove,
 	onChooseMedia,
 	onUploadReady,
+	isDndShadowItem = false,
 }: {
 	gallery: ModelingGalleryDraft;
 	index: number;
@@ -37,15 +37,19 @@ let {
 	uploadEndpoint?: string;
 	onChange: (gallery: ModelingGalleryDraft) => void;
 	onRemove: () => void;
-	onMove: (direction: -1 | 1) => void;
 	onChooseMedia: () => void;
 	onUploadReady: (asset: PortfolioMediaAsset) => void;
+	isDndShadowItem?: boolean;
 } = $props();
 
 let images = $derived(gallery.images ?? []);
+type DraggableImage = ModelingImageDraft & { id: string; isDndShadowItem?: boolean };
+let imageDragItems = $state<DraggableImage[] | null>(null);
+let visibleImages: DraggableImage[] = $derived(imageDragItems ?? images.map((image) => ({ ...image, id: image.key })));
 
 function update(change: Partial<ModelingGalleryDraft>) {
-	onChange({ ...gallery, ...change });
+	const { id: _id, isDndShadowItem: _shadow, ...cleanGallery } = gallery as ModelingGalleryDraft & { id?: string; isDndShadowItem?: boolean };
+	onChange({ ...cleanGallery, ...change });
 }
 
 function updateImage(imageIndex: number, change: Partial<ModelingImageDraft>) {
@@ -65,21 +69,24 @@ function fillSlug() {
 		update({ slug: slugifyModelingTitle(gallery.title) });
 	}
 }
+
+function finishImageReorder(event: CustomEvent<{ items: DraggableImage[] }>) {
+	imageDragItems = null;
+	update({ images: event.detail.items.filter((item) => !item.isDndShadowItem).map(({ id: _id, isDndShadowItem: _shadow, ...image }) => image) });
+}
 </script>
 
-<section class="category" aria-labelledby={`modeling-category-${gallery.key}-heading`}>
+<section class="category" class:dnd-shadow={isDndShadowItem} aria-labelledby={`modeling-category-${gallery.key}-heading`}>
 	<header class="category-header">
 		<div>
 			<span class="position">category {index + 1} of {count}</span>
 			<h3 id={`modeling-category-${gallery.key}-heading`}>{gallery.title?.trim() || "untitled category"}</h3>
 		</div>
-		<label class="visibility"><input type="checkbox" checked={gallery.isVisible} onchange={(event) => update({ isVisible: event.currentTarget.checked })} /> visible on the site</label>
+		<div class="category-controls"><button type="button" class="drag-handle" use:dragHandle disabled={count < 2 || isDndShadowItem} aria-label={`Drag category ${index + 1} to reorder`}><span aria-hidden="true"></span></button><label class="visibility"><input type="checkbox" checked={gallery.isVisible} onchange={(event) => update({ isVisible: event.currentTarget.checked })} disabled={isDndShadowItem} /> visible on the site</label></div>
 	</header>
 
-	<div class="category-actions" role="group" aria-label={`Reorder category ${index + 1}`}>
-		<button type="button" onclick={() => onMove(-1)} disabled={index === 0}>move earlier</button>
-		<button type="button" onclick={() => onMove(1)} disabled={index === count - 1}>move later</button>
-		<button type="button" class="remove" onclick={onRemove}>remove category</button>
+	<div class="category-actions">
+		<button type="button" class="remove" onclick={onRemove} disabled={isDndShadowItem}>remove category</button>
 	</div>
 
 	<div class="fields two-column">
@@ -103,11 +110,11 @@ function fillSlug() {
 	{#if images.length === 0}
 		<div class="empty"><strong>No images selected.</strong><p>Upload directly into this category or choose a ready image from the site media library.</p></div>
 	{:else}
-		<ol>
-			{#each images as image, imageIndex (image.key)}
+		<ol aria-label={`Reorder images in ${gallery.title?.trim() || `category ${index + 1}`}`} use:dragHandleZone={{ items: visibleImages, dragDisabled: images.length < 2 || isDndShadowItem, flipDurationMs: 140, morphDisabled: true, dropTargetStyle: {}, type: `modeling-images-${gallery.key}` }} onconsider={(event) => imageDragItems = event.detail.items} onfinalize={finishImageReorder}>
+			{#each visibleImages as image, imageIndex (image.id)}
 				{@const asset = mediaById.get(image.assetId)}
 				{@const issue = publishIssues.find((item) => item.fieldId === `modeling-image-${image.key}-alt`)}
-				<li>
+				<li class:dnd-shadow={image.isDndShadowItem}>
 					<div class="image-summary">
 						{#if asset}<img src={portfolioMediaUrl(mediaBaseUrl, asset.derivatives.thumb.key)} alt="" />{:else}<div class="missing">image unavailable</div>{/if}
 						<div><strong>{asset?.originalFilename ?? `image ${imageIndex + 1}`}</strong><span>position {imageIndex + 1}</span></div>
@@ -115,10 +122,9 @@ function fillSlug() {
 					<div class="placement-fields">
 						<label>alt text<input id={`modeling-image-${image.key}-alt`} maxlength="500" value={image.altText ?? ""} oninput={(event) => updateImage(imageIndex, { altText: event.currentTarget.value })} aria-invalid={reviewRequested && Boolean(issue)} />{#if reviewRequested && issue}<small class="field-error">{issue.message}</small>{/if}</label>
 					</div>
-					<div class="image-actions" role="group" aria-label={`Reorder image ${imageIndex + 1}`}>
-						<button type="button" onclick={() => update({ images: moveModelingItem(images, imageIndex, -1) })} disabled={imageIndex === 0} aria-label="Move image earlier">↑</button>
-						<button type="button" onclick={() => update({ images: moveModelingItem(images, imageIndex, 1) })} disabled={imageIndex === images.length - 1} aria-label="Move image later">↓</button>
-						<button type="button" class="remove" onclick={() => removeImage(imageIndex)}>remove</button>
+					<div class="image-actions">
+						<button type="button" class="drag-handle" use:dragHandle disabled={images.length < 2 || image.isDndShadowItem} aria-label={`Drag image ${imageIndex + 1} to reorder`}><span aria-hidden="true"></span></button>
+						<button type="button" class="remove" onclick={() => removeImage(imageIndex)} disabled={image.isDndShadowItem}>remove</button>
 					</div>
 				</li>
 			{/each}
@@ -127,8 +133,9 @@ function fillSlug() {
 </section>
 
 <style>
-	.category { margin-top: 18px; padding: 22px; border: 1px solid var(--admin-border); border-radius: 10px; background: var(--admin-surface); }
+	.category { margin-top: 0; padding: 28px 0 32px; border-top: 1px solid var(--admin-border); }
 	.category-header, .images-heading { display: flex; justify-content: space-between; gap: 18px; align-items: center; }
+	.category-controls { display: flex; align-items: center; gap: 10px; }
 	.position { color: var(--admin-text-subtle); font-size: .66rem; letter-spacing: .08em; text-transform: uppercase; }
 	h3, h4 { margin: 5px 0 0; color: var(--admin-heading); font-size: 1rem; font-weight: 500; }
 	h4 { margin: 0; font-size: .9rem; }
@@ -156,15 +163,18 @@ function fillSlug() {
 	.image-summary strong { color: var(--admin-heading); font-size: .76rem; font-weight: 500; }
 	.image-summary span { margin-top: 5px; color: var(--admin-text-subtle); font-size: .68rem; }
 	.placement-fields { display: grid; gap: 12px; }
-	.image-actions { display: grid; grid-template-columns: repeat(2, auto); gap: 6px; }
+	.image-actions { display: grid; gap: 6px; }
 	.image-actions button { min-width: 40px; padding: 7px 9px; }
-	.image-actions .remove { grid-column: 1 / -1; }
+	.drag-handle { display: grid; place-items: center; min-width: 52px; padding: 0; border-color: transparent; color: var(--admin-text-muted); touch-action: none; }
+	.drag-handle span { width: 12px; height: 18px; background: radial-gradient(circle, currentColor 1.3px, transparent 1.5px) 0 0 / 6px 6px; opacity: .62; }
+	.drag-handle:hover:not(:disabled) { color: var(--admin-heading); }
+	.dnd-shadow { opacity: .34; }
 	.empty { display: grid; place-items: center; min-height: 140px; border: 1px dashed var(--admin-border); border-radius: 8px; text-align: center; }
 	.empty strong { color: var(--admin-heading); }
 	.empty p { max-width: 420px; margin: 7px 16px 0; color: var(--admin-text-muted); }
 	.field-error { color: var(--status-rose); line-height: 1.45; }
 	@media (max-width: 820px) {
-		.category { padding: 18px; }
+		.category { padding: 24px 0 28px; }
 		.category-header, .images-heading { align-items: flex-start; flex-direction: column; }
 		.two-column, li { grid-template-columns: 1fr; }
 		.image-actions { display: flex; flex-wrap: wrap; }

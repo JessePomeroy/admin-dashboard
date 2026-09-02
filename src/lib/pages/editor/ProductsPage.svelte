@@ -5,22 +5,8 @@ import "../../styles/editorial-page.css";
 import ProductWorkbench from "./ProductWorkbench.svelte";
 
 const config = getAdminConfig();
-const capability = getCatalogProductEditorCapability(config);
-if (!capability) {
+if (!getCatalogProductEditorCapability(config)) {
 	throw new Error("Single-print product editor is not configured for this host");
-}
-const { graphVersion, media, publication, publishesToShop } = capability;
-const recordAreas = [
-	"draft details",
-	"variants",
-	...(media ? ["media"] : []),
-	...(publication ? ["publication controls"] : []),
-];
-
-function readableList(values: string[]) {
-	if (values.length === 1) return values[0];
-	if (values.length === 2) return `${values[0]} and ${values[1]}`;
-	return `${values.slice(0, -1).join(", ")}, and ${values.at(-1)}`;
 }
 </script>
 
@@ -28,33 +14,17 @@ function readableList(values: string[]) {
 
 <ProductWorkbench>
 	<div class="product-overview">
-		<h2>{graphVersion === 2 ? "build your catalog" : "shape a product draft"}</h2>
-		<p>{graphVersion === 2
-			? `Create a product or choose an existing one. Each record keeps ${readableList(recordAreas)} together from first draft through release.`
-			: `Choose an existing single print or create a private draft. The selected record keeps ${readableList(recordAreas)} together.`}</p>
-		<div class="workflow-grid">
-			<div><span>01</span><strong>start</strong><p>Create the product kind you need, or filter and search the existing catalog.</p></div>
-			<div><span>02</span><strong>shape</strong><p>Add the copy, price, variants, and artwork needed to sell it.</p></div>
-			<div><span>03</span><strong>release</strong><p>{publication
-				? publishesToShop
-					? "Save your changes, then publish to your Shop when it is ready."
-					: "Save your changes, then use the available publish action when it is ready."
-				: "Save your changes here. Publishing is not available in this workspace."}</p></div>
-		</div>
+		<span>products</span>
+		<h2>choose a product</h2>
+		<p>Select one from the list, or create a new product draft.</p>
 	</div>
 </ProductWorkbench>
 
 <style>
-	.product-overview { max-width: 780px; padding: 30px 28px 72px; }
+	.product-overview { max-width: 620px; padding: clamp(38px, 7vw, 86px) clamp(28px, 6vw, 72px) 96px; }
+	.product-overview > span { color: var(--admin-accent-strong); font-size: .62rem; letter-spacing: .12em; text-transform: uppercase; }
 	h2 { margin: 0; color: var(--admin-heading); font-family: var(--admin-font-display); font-size: clamp(1.3rem, 2vw, 1.8rem); font-weight: 500; letter-spacing: -.03em; text-transform: lowercase; }
-	.product-overview > p { max-width: 620px; margin: 14px 0 0; color: var(--admin-text-muted); font-size: .85rem; line-height: 1.7; }
-	.workflow-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0; margin-top: 28px; border-top: 1px solid var(--admin-border-strong); }
-	.workflow-grid div { border-right: 1px solid var(--admin-border); padding: 16px 18px 16px 0; background: transparent; }
-	.workflow-grid div + div { padding-left: 18px; }
-	.workflow-grid div:last-child { border-right: 0; }
-	.workflow-grid span { color: var(--admin-text-subtle); font-size: .58rem; letter-spacing: .12em; }
-	.workflow-grid strong { display: block; margin-top: 12px; color: var(--admin-heading); font-size: .78rem; font-weight: 500; text-transform: lowercase; }
-	.workflow-grid p { margin: 7px 0 0; color: var(--admin-text-muted); font-size: .7rem; line-height: 1.55; }
-	@media (max-width: 840px) { .workflow-grid { grid-template-columns: 1fr; } }
+	.product-overview > span + h2 { margin-top: 11px; }
+	.product-overview > p { max-width: 48ch; margin: 12px 0 0; color: var(--admin-text-muted); font-size: .82rem; line-height: 1.65; }
 	@media (max-width: 640px) { .product-overview { padding: 28px 20px 72px; } }
 </style>

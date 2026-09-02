@@ -66,7 +66,7 @@ let {
 <style>
 	.media-review {
 		display: grid;
-		gap: 14px;
+		border-top: 1px solid var(--admin-border);
 	}
 
 	.media-row {
@@ -74,9 +74,8 @@ let {
 		grid-template-columns: 112px minmax(150px, 0.45fr) minmax(260px, 1fr);
 		align-items: center;
 		gap: 18px;
-		padding: 16px;
-		border: 1px solid var(--admin-border);
-		border-radius: 10px;
+		padding: 16px 0;
+		border-bottom: 1px solid var(--admin-border);
 	}
 
 	.media-preview {

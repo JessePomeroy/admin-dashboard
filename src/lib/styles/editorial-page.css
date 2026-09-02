@@ -44,14 +44,24 @@
 .settings-page .actions a,
 .settings-page button {
 	border: 1px solid var(--admin-border-strong);
-		border-radius: 3px;
-		padding: 8px 11px;
+	border-radius: 3px;
+	padding: 8px 11px;
 	background: transparent;
 	color: var(--admin-text);
 	font: inherit;
 	font-size: 0.78rem;
 	text-decoration: none;
 	cursor: pointer;
+}
+
+.settings-page .actions a:hover,
+.settings-page button:hover:not(:disabled) {
+	background: var(--admin-active);
+}
+
+.settings-page .actions a:active,
+.settings-page button:active:not(:disabled) {
+	transform: translateY(1px);
 }
 
 .settings-page button:disabled {
@@ -63,6 +73,13 @@
 	background: var(--admin-accent);
 	color: var(--admin-bg);
 	border-color: transparent;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+	.settings-page .actions a,
+	.settings-page button {
+		transition: color 160ms ease, background-color 160ms ease, border-color 160ms ease, transform 100ms ease;
+	}
 }
 
 .settings-page .alert {
@@ -273,7 +290,7 @@
 	}
 }
 
-	@media (max-width: 768px) {
+@media (max-width: 768px) {
 	.settings-page {
 		padding: 28px 20px 72px;
 	}
