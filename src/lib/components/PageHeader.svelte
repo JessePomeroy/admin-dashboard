@@ -25,12 +25,14 @@ let { title, actions }: Props = $props();
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
-		margin-bottom: 32px;
+		min-height: var(--editor-header-height, 64px);
+		margin-bottom: 28px;
+		border-bottom: 1px solid var(--admin-border);
 	}
 
 	h1 {
 		font-family: "Chillax", sans-serif;
-		font-size: 1.4rem;
+		font-size: 1.3rem;
 		font-weight: 500;
 		color: var(--admin-heading);
 		margin: 0;
@@ -44,9 +46,10 @@ let { title, actions }: Props = $props();
 
 	@media (max-width: 768px) {
 		.page-header {
-			flex-direction: column;
-			align-items: flex-start;
-			gap: 16px;
+			min-height: auto;
+			padding: 18px 0;
+			gap: 12px;
+			flex-wrap: wrap;
 		}
 	}
 </style>

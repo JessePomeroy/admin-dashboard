@@ -69,7 +69,7 @@ let {
 		align-items: center;
 		justify-content: space-between;
 		gap: 12px;
-		margin-bottom: 24px;
+		margin-bottom: 28px;
 		flex-wrap: wrap;
 	}
 
@@ -82,7 +82,7 @@ let {
 
 	.filter-select {
 		padding: 7px 10px;
-		background: rgba(255, 255, 255, 0.03);
+		background: var(--admin-control-bg);
 		color: var(--admin-text);
 		border: 1px solid var(--admin-border-strong);
 		border-radius: 6px;
@@ -99,7 +99,7 @@ let {
 
 	.filter-search {
 		padding: 7px 10px;
-		background: rgba(255, 255, 255, 0.03);
+		background: var(--admin-control-bg);
 		color: var(--admin-text);
 		border: 1px solid var(--admin-border-strong);
 		border-radius: 6px;

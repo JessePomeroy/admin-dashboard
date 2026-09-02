@@ -28,7 +28,7 @@
 
 :global([data-admin] .form-input) {
 	padding: 8px 10px;
-	background: rgba(255, 255, 255, 0.03);
+	background: var(--admin-control-bg);
 	color: var(--admin-text);
 	border: 1px solid var(--admin-border-strong);
 	border-radius: 6px;
@@ -169,7 +169,7 @@
 
 :global([data-admin] .template-select) {
 	padding: 8px 10px;
-	background: rgba(255, 255, 255, 0.03);
+	background: var(--admin-control-bg);
 	color: var(--admin-text);
 	border: 1px solid var(--admin-border-strong);
 	border-radius: 6px;
