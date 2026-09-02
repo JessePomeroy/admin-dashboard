@@ -27,7 +27,7 @@ function indexLabel(index: number) {
 
 <svelte:head><title>Pages — {config.siteName}</title></svelte:head>
 
-<div class="settings-page pages-index">
+<div class="settings-page rail-aligned-header pages-index">
 	<header class="settings-header">
 		<h1>pages</h1>
 	</header>

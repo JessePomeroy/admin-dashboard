@@ -26,12 +26,6 @@ let {
 } = $props();
 
 let items = $derived([
-	...(siteSettingsEnabled
-		? [{ href: "/admin/editor", label: "site settings" }]
-		: []),
-	...(pagesEnabled
-		? [{ href: "/admin/editor/pages", label: "pages" }]
-		: []),
 	...(portfolioEnabled
 		? [{ href: "/admin/editor/portfolio", label: "portfolio" }]
 		: []),
@@ -40,6 +34,12 @@ let items = $derived([
 		: []),
 	...(blogEnabled
 		? [{ href: "/admin/editor/blog", label: "blog" }]
+		: []),
+	...(pagesEnabled
+		? [{ href: "/admin/editor/pages", label: "pages" }]
+		: []),
+	...(siteSettingsEnabled
+		? [{ href: "/admin/editor", label: "site settings" }]
 		: []),
 ]);
 

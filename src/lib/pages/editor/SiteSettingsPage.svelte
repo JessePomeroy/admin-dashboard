@@ -292,7 +292,7 @@ function finishSocialReorder(event: CustomEvent<{ items: DraggableSocialLink[] }
 
 <svelte:head><title>Site settings — {config.siteName}</title></svelte:head>
 
-<div class="settings-page">
+<div class="settings-page rail-aligned-header">
 	<header class="settings-header">
 		<h1>site settings</h1>
 		<div class="actions">

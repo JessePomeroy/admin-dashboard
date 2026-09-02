@@ -19,6 +19,18 @@ const productOverviewSource = readFileSync(
 	"src/lib/pages/editor/ProductsPage.svelte",
 	"utf8",
 );
+const pagesOverviewSource = readFileSync(
+	"src/lib/pages/editor/EditorPagesPage.svelte",
+	"utf8",
+);
+const siteSettingsSource = readFileSync(
+	"src/lib/pages/editor/SiteSettingsPage.svelte",
+	"utf8",
+);
+const editorialPageSource = readFileSync(
+	"src/lib/styles/editorial-page.css",
+	"utf8",
+);
 
 describe("Editor desktop header alignment", () => {
 	it("anchors the compact brand and Editor heading to one shared row", () => {
@@ -102,6 +114,17 @@ describe("Editor desktop header alignment", () => {
 		);
 		expect(editorShellSource).toContain(
 			"border-bottom-color: var(--editor-header-divider)",
+		);
+	});
+
+	it("aligns Pages and Site settings with the editor rail divider", () => {
+		expect(pagesOverviewSource).toContain("rail-aligned-header");
+		expect(siteSettingsSource).toContain("rail-aligned-header");
+		expect(editorialPageSource).toContain(
+			"min-height: var(--editor-header-height, 64px)",
+		);
+		expect(editorialPageSource).toContain(
+			"border-bottom: 1px solid var(--editor-header-divider, var(--admin-border))",
 		);
 	});
 
