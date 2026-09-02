@@ -97,6 +97,17 @@ function isCurrent(href: string) {
 		padding: 0 8px 20px;
 	}
 
+	.editor-navigation:not(.mobile) {
+		padding-top: 0;
+	}
+
+	.editor-navigation:not(.mobile) .editor-heading {
+		box-sizing: border-box;
+		justify-content: flex-end;
+		height: var(--editor-header-height, 64px);
+		padding: 0 8px var(--editor-header-baseline-inset, 12px);
+	}
+
 	strong {
 		font-family: var(--admin-font-display);
 		font-size: 1.08rem;

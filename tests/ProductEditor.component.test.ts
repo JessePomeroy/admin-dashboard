@@ -1183,6 +1183,12 @@ describe("draft-only product editor", () => {
 		await mountDetail();
 
 		const saleSection = document.querySelector("#sale-settings-heading")?.closest("section");
+		const variantsSection = document.querySelector("#catalog-variants-heading")?.closest("section");
+		expect(document.querySelector("#catalog-variants-heading")?.textContent).toBe("prices and options");
+		expect(variantsSection?.querySelector(".variant-heading")?.textContent).toContain("variant 1");
+		expect(variantsSection?.querySelector("button")?.textContent).toContain("add variant");
+		expect(saleSection?.contains(input("retail price (USD)")!)).toBe(false);
+		expect(variantsSection?.contains(input("retail price (USD)")!)).toBe(true);
 		expect(saleSection?.querySelector("select")).toBeNull();
 		expect(saleSection?.querySelector('input[type="checkbox"]')).toBeNull();
 		expect(saleSection?.querySelectorAll('input[type="radio"]')).toHaveLength(8);
@@ -1702,6 +1708,17 @@ describe("draft-only product editor", () => {
 		};
 		await mountDetail();
 		expect(document.querySelector(".settings-header .description")).toBeNull();
+		const saleSection = document.querySelector("#sale-settings-heading")?.closest("section");
+		expect(document.querySelector("#sale-settings-heading")?.textContent).toBe("price and availability");
+		expect(saleSection?.querySelector(".section-heading p")).toBeNull();
+		expect(saleSection?.contains(input("retail price (USD)")!)).toBe(true);
+		expect(saleSection?.querySelectorAll("fieldset")).toHaveLength(1);
+		expect(document.querySelector("#catalog-variants-heading")).toBeNull();
+		expect(document.querySelector(".variant-heading")).toBeNull();
+		expect(document.body.textContent).not.toContain("variant 1");
+		expect(document.body.textContent).not.toContain("default");
+		expect(input("retail price (USD)")?.getAttribute("aria-label")).toBe("retail price (USD)");
+		expect(Array.from(document.querySelectorAll(".section-heading > span"), (item) => item.textContent)).toEqual(["01", "02"]);
 		expect(input("fulfillment")).toBeUndefined();
 		expect(document.body.textContent).not.toContain("offer frame options");
 		expect(button("add variant")).toBeUndefined();
@@ -1714,6 +1731,7 @@ describe("draft-only product editor", () => {
 		const price = input("retail price (USD)");
 		price!.value = "90.00";
 		price!.dispatchEvent(new Event("input", { bubbles: true }));
+		segmentedChoice("sale availability", "not for sale")!.click();
 		await tick();
 
 		button("save draft")?.click();
@@ -1734,6 +1752,7 @@ describe("draft-only product editor", () => {
 				schemaVersion: 2,
 				productKind: "tapestry",
 				title: "Soft Portal revised",
+				saleAvailability: "unavailable",
 				seoDescription: "Imported tapestry SEO copy.",
 				shopPlacement: { featured: false, orderRank: "c0" },
 				webMedia: fixedPriceGraphRevision.draft.webMedia,
@@ -1741,11 +1760,12 @@ describe("draft-only product editor", () => {
 		);
 		expect(saveCall?.[1].draft).not.toHaveProperty("printOptions");
 		expect(saveCall?.[1].draft.variants).toEqual([
-			expect.objectContaining({
-				key: "default",
-				order: 0,
-				retailPriceCents: 9000,
-			}),
+				expect.objectContaining({
+					key: "default",
+					order: 0,
+					retailPriceCents: 9000,
+					status: "disabled",
+				}),
 		]);
 	});
 
@@ -2295,6 +2315,10 @@ describe("draft-only product editor", () => {
 		expect(document.querySelector(".settings-header .description")).toBeNull();
 		expect(document.body.textContent).toContain("time-aware-theme-v1.0.0.zip");
 		expect(document.querySelector("#catalog-download-file-heading")?.textContent).toBe("customer download");
+		expect(document.querySelector("#catalog-download-file-heading")?.closest(".section-heading")?.querySelector(":scope > span")?.textContent).toBe("03");
+		expect(document.querySelector("#sale-settings-heading")?.closest("section")?.contains(input("retail price (USD)")!)).toBe(true);
+		expect(document.querySelector("#catalog-variants-heading")).toBeNull();
+		expect(document.querySelector(".variant-heading")).toBeNull();
 		expect(document.querySelector(".download-ready")?.textContent).toBe("time-aware-theme-v1.0.0.zip");
 		expect(document.querySelector<HTMLInputElement>('[aria-label="choose customer download ZIP"]')?.accept)
 			.toBe("application/zip,application/x-zip-compressed,.zip");
