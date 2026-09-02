@@ -4,7 +4,8 @@ const PRESIGN_TIMEOUT_MS = 15_000;
 const UPLOAD_TIMEOUT_MS = 10 * 60_000;
 const PROCESS_TIMEOUT_MS = 60_000;
 const UPLOAD_CAPABILITY_HEADER = "X-Gallery-Upload-Token";
-const MULTIPART_PART_BYTES = 50 * 1024 * 1024;
+const MULTIPART_PART_BYTES = 20 * 1024 * 1024;
+const UPLOAD_RETRY_DELAYS_MS = [250, 500] as const;
 
 export interface GalleryUploadSession {
 	token: string;
@@ -138,6 +139,18 @@ function isV2UploadUrl(value: unknown): value is string {
 	}
 }
 
+async function retryUpload<T>(operation: () => Promise<T>, signal?: AbortSignal): Promise<T> {
+	for (const delay of [0, ...UPLOAD_RETRY_DELAYS_MS]) {
+		if (delay) await new Promise((resolve) => setTimeout(resolve, delay));
+		try {
+			return await operation();
+		} catch (error) {
+			if (signal?.aborted || delay === UPLOAD_RETRY_DELAYS_MS.at(-1)) throw error;
+		}
+	}
+	throw new Error("Upload retry exhausted");
+}
+
 export function createGalleryStoragePort(
 	options: GalleryStoragePortOptions = {},
 ): GalleryStoragePort {
@@ -242,7 +255,7 @@ export function createGalleryStoragePort(
 				try {
 					const parts = [];
 					for (let offset = 0, partNumber = 1; offset < file.size; offset += partSize, partNumber++) {
-						const part = await parseJsonObject(await fetchWithTimeout(
+						const part = await retryUpload(async () => parseJsonObject(await fetchWithTimeout(
 							fetcher,
 							multipartEndpoint(endpoint, { ...session, action: "part", partNumber }),
 							{
@@ -252,7 +265,7 @@ export function createGalleryStoragePort(
 							},
 							UPLOAD_TIMEOUT_MS,
 							signal,
-						), "Multipart upload failed");
+						), "Multipart upload failed"), signal);
 						parts.push(part);
 					}
 					const response = await fetchWithTimeout(
