@@ -1,5 +1,6 @@
 <script lang="ts">
 import { browser } from "$app/environment";
+import { goto } from "$app/navigation";
 import { onMount, tick } from "svelte";
 import { useQuery } from "convex-svelte";
 import { useAdminClient } from "../../adminClient";
@@ -44,7 +45,10 @@ if (!portfolioApi || !portfolioConfig) {
 const getEditorState = portfolioApi.getEditorState;
 const savePortfolioDraft = portfolioApi.saveDraft;
 const publishPortfolioGallery = portfolioApi.publish;
+const setPortfolioGalleryVisibility = portfolioApi.setVisibility;
+const removePortfolioGallery = portfolioApi.remove;
 const publishingEnabled = Boolean(publishPortfolioGallery);
+const publicLifecycleEnabled = Boolean(publishPortfolioGallery || setPortfolioGalleryVisibility);
 const listMediaAssets = portfolioApi.listMediaAssets;
 const getPlacedMediaAssets = portfolioApi.getPlacedMediaAssets;
 const portfolioBaseHref = portfolioConfig.baseHref ?? "/admin/editor/portfolio";
@@ -65,6 +69,7 @@ let baseRevisionId = $state<string | undefined>(undefined);
 let loadedServerRevisionId = $state<string | undefined>(undefined);
 let publishedRevisionId = $state<string | undefined>(undefined);
 let isPublished = $state(false);
+let isVisible = $state(true);
 let savedJson = $state("");
 let lastAttemptedJson = $state("");
 let saveState = $state<SaveState>("loading");
@@ -74,6 +79,9 @@ let publishing = $state(false);
 let previewing = $state(false);
 let reviewRequested = $state(false);
 let pickerOpen = $state(false);
+let visibilityChanging = $state(false);
+let confirmingRemoval = $state(false);
+let removing = $state(false);
 let uploadedAssets = $state<PortfolioMediaAsset[]>([]);
 let saveTimer: ReturnType<typeof setTimeout> | undefined;
 let locallySavedRevisionIds: string[] = [];
@@ -161,6 +169,7 @@ function loadRevision(state: PortfolioGalleryEditorState, restoreDeviceDraft = f
 	loadedServerRevisionId = revision?.revisionId;
 	publishedRevisionId = state.published?.revisionId;
 	isPublished = state.isPublished;
+	isVisible = state.isVisible;
 	savedJson = serializePortfolioGalleryDraft(form);
 	saveState = "saved";
 	saveError = "";
@@ -189,7 +198,7 @@ async function saveNow() {
 		clearTimeout(saveTimer);
 		saveTimer = undefined;
 	}
-	if (!initialized || saveState === "conflict") return false;
+	if (!initialized || removing || saveState === "conflict") return false;
 	if (currentJson === savedJson) {
 		saveState = "saved";
 		clearLocalDraft();
@@ -247,7 +256,7 @@ async function saveNow() {
 
 $effect(() => {
 	const changedJson = currentJson;
-	if (!initialized || changedJson === savedJson || saveState === "conflict") return;
+	if (!initialized || removing || changedJson === savedJson || saveState === "conflict") return;
 	if (saveState === "error" && changedJson === lastAttemptedJson) return;
 	persistLocalDraft();
 	saveState = online ? "dirty" : "offline";
@@ -310,6 +319,41 @@ async function publish() {
 		saveError = error instanceof Error ? error.message : "Could not publish gallery.";
 	} finally {
 		publishing = false;
+	}
+}
+
+async function toggleVisibility() {
+	if (!setPortfolioGalleryVisibility || !isPublished) return;
+	visibilityChanging = true;
+	publishMessage = "";
+	try {
+		const result = await client.mutation(setPortfolioGalleryVisibility, {
+			galleryId,
+			isVisible: !isVisible,
+		}) as { isVisible: boolean };
+		isVisible = result.isVisible;
+		publishMessage = isVisible
+			? "Shown. This gallery is available on the public site."
+			: "Hidden. The saved gallery remains here and can be shown again.";
+	} catch (error) {
+		saveError = error instanceof Error ? error.message : "Could not change gallery visibility.";
+	} finally {
+		visibilityChanging = false;
+	}
+}
+
+async function removeGallery() {
+	if (!removePortfolioGallery) return;
+	if (saveTimer) clearTimeout(saveTimer);
+	removing = true;
+	saveError = "";
+	try {
+		await client.mutation(removePortfolioGallery, { galleryId });
+		clearLocalDraft();
+		await goto(portfolioBaseHref);
+	} catch (error) {
+		removing = false;
+		saveError = error instanceof Error ? error.message : "Could not delete gallery.";
 	}
 }
 
@@ -391,12 +435,11 @@ function reloadServerDraft() {
 			<div>
 				<a class="back" href={portfolioBaseHref}>← portfolio</a>
 				<h1>{form.title || "untitled gallery"}</h1>
-				<p>{publishingEnabled
-					? "Changes autosave as a private draft. Publishing makes the current saved revision available to the public site immediately."
-					: "Changes autosave as a private draft. Saved work remains in this editor until publishing is connected."}</p>
 			</div>
 			<div class="actions">
-				<span aria-live="polite">{saveState === "offline"
+				<span class="status" aria-live="polite">{isPublished && !isVisible
+					? "hidden"
+					: saveState === "offline"
 					? "offline — saved on this device"
 					: publicationCurrent
 						? "published"
@@ -412,24 +455,29 @@ function reloadServerDraft() {
 				{#if publishingEnabled}
 					<button type="button" onclick={() => void publish()} disabled={publicationCurrent || publishing || saveState === "saving" || saveState === "syncing" || saveState === "offline" || saveState === "conflict"}>{publishing ? "publishing…" : "publish"}</button>
 				{/if}
+				{#if setPortfolioGalleryVisibility && isPublished}
+					<button type="button" class="visibility-toggle" class:hidden={!isVisible} aria-pressed={!isVisible} aria-busy={visibilityChanging} onclick={() => void toggleVisibility()} disabled={visibilityChanging}>{visibilityChanging ? "updating…" : isVisible ? "hide from site" : "show on site"}</button>
+				{/if}
 			</div>
 		</header>
 
 		{#if saveError}<p class="alert" role="alert">{saveError}</p>{/if}
 		{#if mediaError}<p class="alert" role="alert">Could not load gallery media. Refresh this page to try again.</p>{/if}
-		{#if publishingEnabled && publishMessage}<p class="success" role="status">{publishMessage}</p>{/if}
-
+		{#if publishMessage}<p class="success" role="status">{publishMessage}</p>{/if}
 		{#if publishingEnabled}
 			<PortfolioPublishReview issues={publishIssues} />
 		{/if}
 
 		<section aria-labelledby="gallery-details-heading">
-			<div class="section-heading"><h2 id="gallery-details-heading">gallery details</h2><p>{publishingEnabled ? "Name, description, and public path." : "Name, description, and saved URL name."}</p></div>
+			<div class="section-heading"><h2 id="gallery-details-heading">gallery details</h2><p>{publicLifecycleEnabled ? "Name, description, and public path." : "Name, description, and saved URL name."}</p></div>
 			<div class="fields">
-				<label>gallery name<input id="gallery-title" maxlength="120" bind:value={form.title} aria-invalid={reviewRequested && !form.title.trim()} /></label>
+				<div class="field">
+					<label class="field-heading" for="gallery-title">gallery name</label>
+					<input id="gallery-title" maxlength="120" bind:value={form.title} aria-invalid={reviewRequested && !form.title.trim()} />
+				</div>
 				<div class="field">
 					<div class="field-heading">
-						<label for="gallery-slug">{publishingEnabled ? "public URL" : "URL name"}</label>
+						<label for="gallery-slug">{publicLifecycleEnabled ? "public URL" : "URL name"}</label>
 						<button type="button" class="generate-url" onclick={generateSlug} disabled={!form.title.trim()}>generate url</button>
 					</div>
 					<input id="gallery-slug" maxlength="80" bind:value={form.slug} spellcheck="false" aria-invalid={reviewRequested && !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(form.slug)} />
@@ -444,12 +492,26 @@ function reloadServerDraft() {
 			mediaBaseUrl={portfolioConfig.mediaBaseUrl}
 			{publishIssues}
 			{reviewRequested}
-			{publishingEnabled}
+			publishingEnabled={publicLifecycleEnabled}
 			uploadEndpoint={portfolioConfig.uploadEndpoint}
 			onChange={(placements) => (form.placements = placements)}
 			onChooseMedia={() => (pickerOpen = true)}
 			onUploadReady={addUploadedAsset}
 		/>
+
+		{#if removePortfolioGallery}
+			<section class="danger-zone" aria-labelledby="delete-gallery-heading">
+				{#if confirmingRemoval}
+					<div class="delete-confirmation" role="alertdialog" aria-labelledby="delete-gallery-heading" aria-describedby="delete-gallery-copy">
+						<div><h2 id="delete-gallery-heading">Delete this gallery permanently?</h2><p id="delete-gallery-copy">Its saved drafts and public page will be removed. The image files stay in the shared media library.</p></div>
+						<div><button type="button" class="secondary" onclick={() => (confirmingRemoval = false)} disabled={removing}>cancel</button><button type="button" class="danger solid" onclick={() => void removeGallery()} disabled={removing}>{removing ? "deleting…" : "delete permanently"}</button></div>
+					</div>
+				{:else}
+					<div><h2 id="delete-gallery-heading">delete gallery</h2><p>Permanently remove this gallery without deleting its shared media files.</p></div>
+					<button type="button" class="danger" onclick={() => (confirmingRemoval = true)}>delete gallery</button>
+				{/if}
+			</section>
+		{/if}
 	</div>
 {/if}
 
@@ -461,18 +523,26 @@ function reloadServerDraft() {
 <style>
 	.loading, .page-alert { margin: 32px; } .loading { padding: 16px 8px; color: var(--admin-text-muted); }
 	.gallery-page { width: 100%; max-width: 1120px; box-sizing: border-box; padding: 22px 24px 72px; }
-	header { display: flex; justify-content: space-between; gap: 20px; align-items: flex-end; margin-bottom: 18px; }
+	header { display: flex; justify-content: space-between; gap: 28px; align-items: flex-end; margin-bottom: 18px; }
 	.back { color: var(--admin-text-muted); font-size: .74rem; text-decoration: none; }
 	h1 { margin: 6px 0 0; color: var(--admin-heading); font-family: var(--admin-font-display); font-size: clamp(1.28rem, 1.8vw, 1.55rem); font-weight: 500; }
-	header p { max-width: 620px; margin: 4px 0 0; color: var(--admin-text-muted); font-size: .76rem; line-height: 1.45; }
 	.actions { display: flex; align-items: center; justify-content: flex-end; gap: 8px; flex-wrap: wrap; }
-	.actions span { color: var(--admin-text-subtle); font-size: .72rem; white-space: nowrap; }
+	.actions .status { color: var(--admin-text-subtle); font-size: .7rem; white-space: nowrap; }
 	button { min-height: 36px; border: 1px solid transparent; border-radius: 3px; padding: 8px 11px; background: var(--admin-accent); color: var(--admin-bg); font: inherit; font-size: .72rem; cursor: pointer; }
 	button:disabled { opacity: .45; cursor: default; }
-	button:focus-visible, input:focus, textarea:focus, .back:focus-visible { outline: 2px solid var(--admin-accent); outline-offset: 2px; }
+	button:focus-visible, input:focus-visible, textarea:focus-visible, .back:focus-visible { outline: 2px solid var(--admin-accent); outline-offset: 2px; }
 	.secondary { border-color: var(--admin-border-strong); background: transparent; color: var(--admin-text); }
+	.visibility-toggle { min-width: 106px; border-color: var(--admin-accent-strong); background: color-mix(in srgb, var(--admin-accent) 8%, var(--editor-control)); color: var(--admin-heading); }
+	.visibility-toggle:hover:not(:disabled), .visibility-toggle.hidden { background: var(--admin-accent-strong); color: var(--admin-bg); }
+	.visibility-toggle:active:not(:disabled) { transform: translateY(1px); }
+	.danger { border-color: color-mix(in srgb, var(--status-rose) 55%, transparent); background: transparent; color: var(--status-rose); }
+	.danger.solid { background: var(--status-rose); color: var(--admin-bg); }
 	.alert { padding: 12px 14px; border: 1px solid color-mix(in srgb, var(--status-rose) 45%, transparent); border-radius: 6px; color: var(--status-rose); }
 	.success { padding: 12px 14px; border: 1px solid color-mix(in srgb, var(--status-sage) 45%, transparent); border-radius: 6px; color: var(--status-sage); }
+	.danger-zone, .delete-confirmation { display: flex; align-items: center; justify-content: space-between; gap: 20px; }
+	.danger-zone h2, .delete-confirmation h2 { margin: 0; color: var(--admin-heading); font-size: .82rem; font-weight: 500; }
+	.danger-zone p, .delete-confirmation p { margin: 5px 0 0; color: var(--admin-text-muted); font-size: .72rem; }
+	.delete-confirmation > div:last-child { display: flex; gap: 8px; flex: none; }
 	section { margin-top: 0; padding: 20px 0 24px; border: 0; border-top: 1px solid var(--admin-border-strong); border-radius: 0; background: transparent; }
 	.section-heading { margin-bottom: 15px; }
 	.section-heading h2 { margin: 0; color: var(--admin-heading); font-size: .88rem; font-weight: 500; }
@@ -490,6 +560,7 @@ function reloadServerDraft() {
 		.gallery-page { padding: 24px 20px 72px; }
 		header { align-items: flex-start; flex-direction: column; }
 		.actions { justify-content: flex-start; }
+		.danger-zone, .delete-confirmation { align-items: stretch; flex-direction: column; }
 		.fields { grid-template-columns: 1fr; }
 		.wide { grid-column: auto; }
 		button { min-height: 44px; }

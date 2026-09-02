@@ -25,6 +25,7 @@ function gallery(
 		slug: "selected-work",
 		portfolioOrder: 0,
 		isPublished: false,
+		isVisible: true,
 		draft: {
 			revisionId: "draft-1",
 			title: "Selected work",
@@ -84,6 +85,12 @@ describe("portfolio editor presentation", () => {
 			draft: publishedRevision,
 			published: publishedRevision,
 		}))).toBe("published");
+		expect(portfolioGalleryStatus(gallery({
+			isPublished: true,
+			isVisible: false,
+			draft: publishedRevision,
+			published: publishedRevision,
+		}))).toBe("hidden");
 	});
 
 	it("builds encoded immutable media URLs and stable placement keys", () => {

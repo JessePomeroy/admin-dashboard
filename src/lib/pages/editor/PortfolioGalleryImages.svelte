@@ -143,10 +143,10 @@ function handleFinalize(event: CustomEvent<{ items: DraggablePlacement[] }>) {
 	.image-summary span { margin-top: 4px; color: var(--admin-text-subtle); font-size: .66rem; }
 	.placement-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; min-width: 0; }
 	label { display: flex; flex-direction: column; gap: 7px; color: var(--admin-text-muted); font-size: .76rem; }
-	input { width: 100%; box-sizing: border-box; border: 1px solid var(--admin-border-strong); border-radius: 6px; padding: 10px 11px; background: var(--admin-bg); color: var(--admin-heading); font: inherit; text-transform: none; }
+	input { width: 100%; box-sizing: border-box; border: 1px solid var(--admin-border-strong); border-radius: 0; padding: 10px 11px; background: var(--editor-control); color: var(--admin-heading); font: inherit; text-transform: none; }
 	[aria-invalid="true"] { border-color: var(--status-rose); }
 	small { color: var(--status-rose); line-height: 1.45; }
-	.actions { align-self: end; }
+	.actions { align-self: center; padding-top: 23px; }
 	.remove { min-height: 36px; padding: 7px 9px; color: var(--status-rose); }
 	.drag-handle { display: grid; place-items: center; width: 28px; min-height: 52px; padding: 0; border: 0; background: transparent; color: var(--admin-text-muted); touch-action: none; }
 	.drag-handle span { width: 12px; height: 18px; background: radial-gradient(circle, currentColor 1.3px, transparent 1.5px) 0 0 / 6px 6px; opacity: .62; }
@@ -164,7 +164,7 @@ function handleFinalize(event: CustomEvent<{ items: DraggablePlacement[] }>) {
 		.image-summary { display: grid; grid-template-columns: 96px minmax(0, 1fr); gap: 12px; align-items: center; }
 		.placement-fields, .actions { grid-column: 2; }
 		.placement-fields { grid-template-columns: 1fr; }
-		.actions { justify-self: end; }
+		.actions { justify-self: end; padding-top: 0; }
 		:global(#dnd-action-dragged-el) { grid-template-columns: 28px minmax(0, 1fr) !important; }
 		:global(#dnd-action-dragged-el .placement-fields) { display: none; }
 		button, .remove { min-height: 44px; }

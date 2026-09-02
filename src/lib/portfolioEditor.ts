@@ -38,6 +38,7 @@ export interface PortfolioGalleryEditorState {
 	slug: string;
 	portfolioOrder: number;
 	isPublished: boolean;
+	isVisible: boolean;
 	draft: PortfolioRevisionEditorState | null;
 	published: PortfolioRevisionEditorState | null;
 	updatedAt: number;
@@ -147,17 +148,19 @@ export interface PortfolioGalleryEditorSummary {
 	slug: string;
 	portfolioOrder: number;
 	isPublished: boolean;
+	isVisible: boolean;
 	draft: PortfolioRevisionSummary | null;
 	published: PortfolioRevisionSummary | null;
 	updatedAt: number;
 }
 
-export type PortfolioGalleryStatus = "unpublished" | "draft changes" | "published";
+export type PortfolioGalleryStatus = "unpublished" | "draft changes" | "published" | "hidden";
 
 export function portfolioGalleryStatus(
 	gallery: PortfolioGalleryEditorSummary,
 ): PortfolioGalleryStatus {
 	if (!gallery.published || !gallery.isPublished) return "unpublished";
+	if (!gallery.isVisible) return "hidden";
 	if (gallery.draft?.revisionId !== gallery.published.revisionId) {
 		return "draft changes";
 	}

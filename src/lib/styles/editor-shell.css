@@ -122,6 +122,19 @@
 	max-width: calc(100vw - var(--editor-rail-width) - var(--editor-panel-width));
 }
 
+[data-admin].editor-workspace .admin-main :where(
+	input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]),
+	textarea,
+	select
+) {
+	border-radius: 0;
+	background: var(--editor-control);
+}
+
+[data-admin].editor-workspace .admin-main :where(button:not(.close):not(.drag-handle)) {
+	border-radius: 0;
+}
+
 @media (min-width: 641px) {
 	[data-admin] .workbench-heading.editor-workbench-header {
 		box-sizing: border-box;

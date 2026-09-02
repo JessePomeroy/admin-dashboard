@@ -15,6 +15,7 @@ const mocks = vi.hoisted(() => {
 		slug: "selected-work",
 		portfolioOrder: 0,
 		isPublished: true,
+		isVisible: true,
 		draft: {
 			revisionId: "published-revision",
 			title: "Selected work",
@@ -58,15 +59,19 @@ const mocks = vi.hoisted(() => {
 			createdAt: number;
 		}>,
 	};
-	const mutation = vi.fn(async (ref: { name?: string }) => {
+	const mutation = vi.fn(async (ref: { name?: string }, args?: { isVisible?: boolean }) => {
 		if (ref.name === state.failMutationName) throw new Error("forced failure");
+		if (ref.name === "portfolio:setVisibility") return { isVisible: args?.isVisible };
 		return { revisionId: "saved-revision" };
 	});
+	const goto = vi.fn();
 	return {
 		mutation,
+		goto,
 		state,
 		defaultGallery,
 		publishingEnabled: true,
+		publicLifecycleEnabled: true,
 		previewEnabled: true,
 		refs: {
 			listForEditor: { name: "portfolio:listForEditor" },
@@ -78,6 +83,8 @@ const mocks = vi.hoisted(() => {
 			registerReadyWebAsset: { name: "portfolio:registerReadyWebAsset" },
 		},
 		publishRef: { name: "portfolio:publish" },
+		setVisibilityRef: { name: "portfolio:setVisibility" },
+		removeRef: { name: "portfolio:remove" },
 	};
 });
 
@@ -102,6 +109,7 @@ vi.mock("convex-svelte", () => ({
 					galleryId: "gallery-1",
 					slug: "selected-work",
 					isPublished: true,
+					isVisible: true,
 					draft: revision,
 					published: revision,
 				},
@@ -115,6 +123,8 @@ vi.mock("convex-svelte", () => ({
 	},
 	useConvexClient: () => ({ mutation: mocks.mutation }),
 }));
+
+vi.mock("$app/navigation", () => ({ goto: mocks.goto }));
 
 vi.mock("../src/lib/adminClient", () => ({
 	useAdminClient: () => ({ mutation: mocks.mutation }),
@@ -130,6 +140,9 @@ vi.mock("../src/lib/config", () => ({
 			portfolioEditor: {
 				...mocks.refs,
 				...(mocks.publishingEnabled ? { publish: mocks.publishRef } : {}),
+				...(mocks.publicLifecycleEnabled
+					? { setVisibility: mocks.setVisibilityRef, remove: mocks.removeRef }
+					: {}),
 			},
 		},
 		editor: {
@@ -207,12 +220,14 @@ function considerGalleryDrag(galleryId: string) {
 describe("Portfolio editor capability modes", () => {
 	beforeEach(() => {
 		mocks.mutation.mockClear();
+		mocks.goto.mockClear();
 		mocks.state.failMutationName = "";
 		mocks.state.queryFailures.clear();
 		mocks.state.galleries = [mocks.defaultGallery];
 		mocks.state.placements = [];
 		mocks.state.mediaAssets = [];
 		mocks.publishingEnabled = true;
+		mocks.publicLifecycleEnabled = true;
 		mocks.previewEnabled = true;
 		localStorage.clear();
 	});
@@ -235,6 +250,7 @@ describe("Portfolio editor capability modes", () => {
 
 	it("presents every collection record as a private draft when publish is absent", async () => {
 		mocks.publishingEnabled = false;
+		mocks.publicLifecycleEnabled = false;
 		await mountList();
 
 		expect(document.body.textContent).toContain("Choose one from the list, or create a new gallery.");
@@ -269,9 +285,7 @@ describe("Portfolio editor capability modes", () => {
 		mocks.previewEnabled = false;
 		await mountDetail();
 
-		expect(document.body.textContent).toContain(
-			"Publishing makes the current saved revision available to the public site immediately.",
-		);
+		expect(document.querySelector(".gallery-page > header p")).toBeNull();
 		expect(buttonLabels()).toContain("publish");
 		expect(buttonLabels()).not.toContain("preview");
 		expect(document.querySelector("#publish-review-heading")?.textContent).toBe("publishing review");
@@ -280,11 +294,10 @@ describe("Portfolio editor capability modes", () => {
 
 	it("keeps preview and draft editing while removing publication semantics in staging mode", async () => {
 		mocks.publishingEnabled = false;
+		mocks.publicLifecycleEnabled = false;
 		await mountDetail();
 
-		expect(document.body.textContent).toContain(
-			"Saved work remains in this editor until publishing is connected.",
-		);
+		expect(document.querySelector(".gallery-page > header p")).toBeNull();
 		expect(buttonLabels()).toContain("preview");
 		expect(buttonLabels()).not.toContain("publish");
 		expect(document.querySelector("#publish-review-heading")).toBeNull();
@@ -492,6 +505,36 @@ describe("Portfolio editor capability modes", () => {
 				],
 			}),
 		}));
+	});
+
+	it("hides a published gallery and confirms permanent deletion without deleting shared media", async () => {
+		await mountDetail();
+		const hide = Array.from(document.querySelectorAll<HTMLButtonElement>("button"))
+			.find((button) => button.textContent === "hide from site");
+		expect(hide?.classList.contains("visibility-toggle")).toBe(true);
+		expect(hide?.getAttribute("aria-pressed")).toBe("false");
+		hide?.click();
+		await settle();
+		expect(mocks.mutation).toHaveBeenCalledWith(mocks.setVisibilityRef, {
+			galleryId: "gallery-1",
+			isVisible: false,
+		});
+		const show = Array.from(document.querySelectorAll<HTMLButtonElement>("button"))
+			.find((button) => button.textContent === "show on site");
+		expect(show?.getAttribute("aria-pressed")).toBe("true");
+
+		const remove = Array.from(document.querySelectorAll<HTMLButtonElement>("button"))
+			.find((button) => button.textContent === "delete gallery");
+		remove?.click();
+		await tick();
+		expect(document.querySelector('[role="alertdialog"]')?.textContent)
+			.toContain("The image files stay in the shared media library.");
+		const confirm = Array.from(document.querySelectorAll<HTMLButtonElement>("button"))
+			.find((button) => button.textContent === "delete permanently");
+		confirm?.click();
+		await settle();
+		expect(mocks.mutation).toHaveBeenCalledWith(mocks.removeRef, { galleryId: "gallery-1" });
+		expect(mocks.goto).toHaveBeenCalledWith("/admin/editor/portfolio");
 	});
 
 	it("persists exact full ordering and rolls the optimistic list back on failure", async () => {
