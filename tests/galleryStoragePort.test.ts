@@ -133,7 +133,7 @@ describe("createGalleryStoragePort", () => {
 		);
 	});
 
-	it("uses R2 multipart upload for files larger than one Worker request", async () => {
+	it("uses R2 multipart upload for files larger than one multipart part", async () => {
 		let part = 0;
 		const fetcher = createFetchMock(async (input) => {
 			const action = new URL(String(input)).searchParams.get("action");
@@ -146,7 +146,7 @@ describe("createGalleryStoragePort", () => {
 			galleryWorkerUrl: "https://gallery-worker.example",
 		});
 		const file = {
-			size: 50 * 1024 * 1024 + 1,
+			size: 20 * 1024 * 1024 + 1,
 			slice: vi.fn(() => new Blob(["part"])),
 		} as unknown as Blob;
 
@@ -168,6 +168,41 @@ describe("createGalleryStoragePort", () => {
 				{ partNumber: 2, etag: "etag-2" },
 			],
 		});
+	});
+
+	it("retries transient multipart part failures", async () => {
+		let partAttempts = 0;
+		const fetcher = createFetchMock(async (input) => {
+			const url = new URL(String(input));
+			const action = url.searchParams.get("action");
+			if (action === "create") return jsonResponse({ uploadId: "upload-1" });
+			if (action === "part" && partAttempts++ === 0) {
+				return textResponse("network connection lost", { status: 500 });
+			}
+			if (action === "part") return jsonResponse({
+				partNumber: Number(url.searchParams.get("partNumber")),
+				etag: `etag-${partAttempts}`,
+			});
+			return jsonResponse({ success: true });
+		});
+		const port = createGalleryStoragePort({
+			fetch: fetcher,
+			galleryWorkerUrl: "https://gallery-worker.example",
+		});
+
+		await port.uploadFile({
+			file: {
+				size: 20 * 1024 * 1024 + 1,
+				slice: () => new Blob(["part"]),
+			} as unknown as Blob,
+			r2Key: "angelsrest.online/gallery-1/original/photo.jpg",
+			uploadUrl: "/upload/put?key=photo",
+			uploadToken: "worker-upload-token",
+			contentType: "image/jpeg",
+			uploadSessionToken: "session-token",
+		});
+
+		expect(partAttempts).toBe(3);
 	});
 
 	it.each([401, 403, 404])(
