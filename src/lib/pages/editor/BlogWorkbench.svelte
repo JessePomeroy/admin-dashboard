@@ -97,7 +97,7 @@ async function createPost() {
 </script>
 
 <div class="blog-workbench" class:has-selection={Boolean(selectedDocumentId)} class:supporting-view={supportingTarget !== null}>
-	<header class="workbench-heading">
+	<header class="workbench-heading editor-workbench-header">
 		<div>
 			<h1>editorial workspace</h1>
 		</div>
@@ -221,7 +221,7 @@ async function createPost() {
 	.workbench-grid {
 		display: grid;
 		grid-template-columns: minmax(220px, 238px) minmax(520px, 1fr);
-		min-height: calc(100vh - 69px);
+		min-height: calc(100vh - var(--editor-header-height, 64px));
 	}
 
 	.collection-pane {
@@ -399,7 +399,7 @@ async function createPost() {
 
 		.collection-pane,
 		.document-pane {
-			min-height: calc(100vh - 69px);
+			min-height: calc(100vh - var(--editor-header-height, 64px));
 		}
 
 		.collection-pane {

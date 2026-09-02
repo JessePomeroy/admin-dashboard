@@ -224,6 +224,13 @@ let usesSinglePrice = $derived(
 		|| form.productKind === "tapestry"
 		|| form.productKind === "digital_download",
 );
+let effectiveSaleAvailability = $derived(
+	usesSinglePrice
+		? form.saleAvailability === "available" && form.variants[0]?.status === "enabled"
+			? "available"
+			: "unavailable"
+		: form.saleAvailability,
+);
 let dirty = $derived(initialized && hasActiveDraft && currentJson !== savedJson);
 let privateUploadBusy = $derived(["reading", "preparing", "uploading", "completing", "pending"].includes(privateUploadState));
 let privateUploadBlocked = $derived(privateUploadOperation !== null);
@@ -574,6 +581,14 @@ function updateOptionalField(field: "title" | "slug" | "description", value: str
 }
 function fillSlugIfEmpty() {
 	if (!form.slug && form.title) form.slug = slugifyCatalogProductTitle(form.title) || undefined;
+}
+function updateSaleAvailability(value: string) {
+	const saleAvailability = value as typeof form.saleAvailability;
+	form.saleAvailability = saleAvailability;
+	if (!usesSinglePrice) return;
+	form.variants = form.variants.map((variant, index) => index === 0
+		? { ...variant, status: saleAvailability === "available" ? "enabled" : "disabled" }
+		: variant);
 }
 function updateMultiplier(value: string) {
 	multiplierInput = value;
@@ -1243,12 +1258,14 @@ function removeSetMember(member: CatalogProductDraftForm["setMembers"][number]) 
 				</div>
 			</section>
 			<section aria-labelledby="sale-settings-heading">
-				<div class="section-heading"><span>02</span><div><h2 id="sale-settings-heading">sale settings</h2><p>{form.productKind === "print" || form.productKind === "print_set" ? `Choose how the ${catalogProductKindLabel(form.productKind)} is fulfilled and whether customers may currently order it.` : "Choose whether customers may currently order this product."}</p></div></div>
+				<div class="section-heading"><span>02</span><div><h2 id="sale-settings-heading">{usesSinglePrice ? "price and availability" : "sale settings"}</h2>{#if !usesSinglePrice}<p>Choose how the {catalogProductKindLabel(form.productKind)} is fulfilled and whether customers may currently order it.</p>{/if}</div></div>
 				<div class="sale-control-grid">
 					{#if form.productKind === "print" || form.productKind === "print_set"}
 						<EditorSegmentedChoice id="catalog-fulfillment" label="fulfillment" value={form.fulfillmentMode} options={[{ value: "production_partner", label: "production partner" }, { value: "merchant_fulfilled", label: "handled by studio" }]} disabled={editorLocked} onChange={(value) => form.fulfillmentMode = value as typeof form.fulfillmentMode} />
+					{:else}
+						<CatalogProductVariants variants={form.variants} productKind={form.productKind} resetScope={`${productId}:${baseRevisionId ?? "no-draft"}`} productLabel={catalogProductKindLabel(form.productKind)} fixedPrice setMemberCount={form.setMembers.length} frameMarkupMultiplier={form.frameOptionsEnabled && !multiplierError ? form.framePriceMultiplierBasisPoints / 10_000 : undefined} marginCalculator={productsConfig.marginCalculator} variantOptionResolver={productsConfig.variantOptionResolver} onChange={(variants) => { form.variants = variants; }} onValidityChange={(valid) => { variantsValid = valid; }} disabled={editorLocked} />
 					{/if}
-					<EditorSegmentedChoice id="catalog-sale-availability" label="sale availability" value={form.saleAvailability} options={[{ value: "available", label: "available" }, { value: "unavailable", label: "not for sale" }]} disabled={editorLocked} onChange={(value) => form.saleAvailability = value as typeof form.saleAvailability} />
+					<EditorSegmentedChoice id="catalog-sale-availability" label="sale availability" value={effectiveSaleAvailability} options={[{ value: "available", label: "available" }, { value: "unavailable", label: "not for sale" }]} disabled={editorLocked} onChange={updateSaleAvailability} />
 					{#if form.productKind === "print" || form.productKind === "print_set"}
 						<EditorSegmentedChoice id="catalog-border-options" label="border options" value={form.borderOptionsEnabled ? "on" : "off"} options={[{ value: "off", label: "no borders" }, { value: "on", label: "offer borders" }]} disabled={editorLocked} onChange={(value) => form.borderOptionsEnabled = value === "on"} />
 						<EditorSegmentedChoice id="catalog-frame-options" label="frame options" value={form.frameOptionsEnabled ? "on" : "off"} options={[{ value: "off", label: "no frames" }, { value: "on", label: "offer frames" }]} disabled={editorLocked} onChange={(value) => form.frameOptionsEnabled = value === "on"} />
@@ -1264,9 +1281,11 @@ function removeSetMember(member: CatalogProductDraftForm["setMembers"][number]) 
 					</div>
 				{/if}
 			</section>
-			{#key productId}
-				<CatalogProductVariants variants={form.variants} productKind={form.productKind} resetScope={`${productId}:${baseRevisionId ?? "no-draft"}`} productLabel={catalogProductKindLabel(form.productKind)} fixedPrice={usesSinglePrice} setMemberCount={form.setMembers.length} frameMarkupMultiplier={form.frameOptionsEnabled && !multiplierError ? form.framePriceMultiplierBasisPoints / 10_000 : undefined} marginCalculator={productsConfig.marginCalculator} variantOptionResolver={productsConfig.variantOptionResolver} onChange={(variants) => { form.variants = variants; }} onValidityChange={(valid) => { variantsValid = valid; }} disabled={editorLocked} />
-			{/key}
+			{#if !usesSinglePrice}
+				{#key productId}
+					<CatalogProductVariants variants={form.variants} productKind={form.productKind} resetScope={`${productId}:${baseRevisionId ?? "no-draft"}`} productLabel={catalogProductKindLabel(form.productKind)} setMemberCount={form.setMembers.length} frameMarkupMultiplier={form.frameOptionsEnabled && !multiplierError ? form.framePriceMultiplierBasisPoints / 10_000 : undefined} marginCalculator={productsConfig.marginCalculator} variantOptionResolver={productsConfig.variantOptionResolver} onChange={(variants) => { form.variants = variants; }} onValidityChange={(valid) => { variantsValid = valid; }} disabled={editorLocked} />
+				{/key}
+			{/if}
 			{#if form.productKind === "print_set"}
 				<CatalogProductSetMembers members={form.setMembers} onChange={(members) => {
 					form.setMembers = members;
@@ -1278,7 +1297,7 @@ function removeSetMember(member: CatalogProductDraftForm["setMembers"][number]) 
 			{/if}
 			{#if form.productKind === "digital_download"}
 				<section class="download-file" aria-labelledby="catalog-download-file-heading">
-					<div class="section-heading"><span>04</span><div><h2 id="catalog-download-file-heading">customer download</h2></div></div>
+					<div class="section-heading"><span>03</span><div><h2 id="catalog-download-file-heading">customer download</h2></div></div>
 					{#if privateAssetCapability && privateAssetUpload}
 						<label class="private-file-dropzone" class:disabled={privateUploadBlocked || dirty || editorLocked} aria-disabled={privateUploadBlocked || dirty || editorLocked} ondragover={(event) => event.preventDefault()} ondrop={dropDigitalDownloadFile}>
 							<strong>{selectedPrivateFile?.name ?? "drop a ZIP here or click to choose"}</strong>

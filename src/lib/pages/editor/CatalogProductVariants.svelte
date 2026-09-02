@@ -117,41 +117,55 @@ function removeVariant(key: string) {
 	onChange([...removeCatalogProductVariant(variants, key)]);
 }
 </script>
-<section aria-labelledby="catalog-variants-heading">
-	<div class="section-heading"><span>03</span><div><h2 id="catalog-variants-heading">{fixedPrice ? "price" : "prices and options"}</h2><p>{fixedPrice ? `Set the price and availability for this ${productLabel}.` : `${variants.length} ${variants.length === 1 ? "variant" : "variants"}. Their order is saved exactly as shown.`}</p></div>{#if !fixedPrice}<button type="button" onclick={() => onChange(addCatalogProductVariant(variants))} disabled={disabled || variants.length >= CATALOG_PRODUCT_VARIANT_LIMIT}>add variant</button>{/if}</div>
-	{#if variants.length >= CATALOG_PRODUCT_VARIANT_LIMIT}<p class="limit" role="status">This {productLabel} has reached the 100-variant limit.</p>{/if}
-	{#if variants.length === 0}
-		<p class="empty"><strong>No variants yet.</strong><span>Add a purchasable option when its price is known.</span></p>
-	{:else}
-		<ol>
-			{#each variants as variant, index (variant.key)}
-				{@const margin = marginFor(variant)}
-				{@const options = resolvedOptions(variant)}
-				{@const priceInputId = `catalog-price-${variant.key}`}
-				{@const priceMessageId = `catalog-price-message-${variant.key}`}
-				<li>
-					<div class="variant-heading"><span class="position">{String(index + 1).padStart(2, "0")}</span><div><strong>variant {index + 1}</strong><small>{variant.key}</small></div></div>
-					<div class:fixed={fixedPrice} class="variant-fields">
-						{#if !fixedPrice && options}
-							<EditorListbox id={`catalog-material-${variant.key}`} label="material" value={variant.materialOptionKey} options={pickerOptions(options.materials, variant.materialOptionKey)} placeholder="choose a material" {disabled} onChange={(value) => updateMaterial(index, value)} />
-							<EditorListbox id={`catalog-size-${variant.key}`} label="size" value={variant.sizeOptionKey} options={pickerOptions(options.sizes, variant.sizeOptionKey)} placeholder={variant.materialOptionKey ? "choose a size" : "choose a material first"} disabled={disabled || !variant.materialOptionKey} onChange={(value) => updateVariant(index, { sizeOptionKey: value })} />
-						{:else if !fixedPrice}
-							<label>material key<input value={variant.materialOptionKey ?? ""} oninput={(event) => updateVariant(index, { materialOptionKey: slugifyCatalogOptionKey(event.currentTarget.value) || undefined })} maxlength="120" autocomplete="off" disabled={disabled} /></label>
-							<label>size key<input value={variant.sizeOptionKey ?? ""} oninput={(event) => updateVariant(index, { sizeOptionKey: slugifyCatalogOptionKey(event.currentTarget.value) || undefined })} maxlength="120" autocomplete="off" disabled={disabled} /></label>
-						{/if}
-						<label>retail price (USD)<span class="money-input"><span aria-hidden="true">$</span><input id={priceInputId} inputmode="decimal" value={priceInputs[variant.key] ?? formatCatalogPriceDollars(variant.retailPriceCents)} oninput={(event) => updatePrice(index, event.currentTarget.value)} aria-label={`variant ${index + 1} retail price (USD)`} aria-invalid={Boolean(priceErrors[variant.key])} aria-describedby={priceErrors[variant.key] || margin ? priceMessageId : undefined} disabled={disabled} /></span>{#if priceErrors[variant.key]}<small id={priceMessageId} class="field-error">{priceErrors[variant.key]}</small>{/if}{#if margin}<output id={priceMessageId} for={priceInputId} class="margin-output" aria-live="polite"><small class="margin-summary">{margin.summary}</small>{#if margin.framedSummary}<small class="margin-summary">{margin.framedSummary}</small>{/if}</output>{/if}</label>
-						<EditorSegmentedChoice id={`catalog-availability-${variant.key}`} label="availability" value={variant.status} options={[{ value: "enabled", label: "available" }, { value: "disabled", label: "not for sale" }]} {disabled} onChange={(value) => updateVariant(index, { status: value as "enabled" | "disabled" })} />
-					</div>
-					{#if !fixedPrice}<div class="variant-actions" role="group" aria-label={`Reorder variant ${index + 1}`}>
-						<button type="button" onclick={() => onChange([...moveCatalogProductVariant(variants, index, -1)])} disabled={disabled || index === 0} aria-label={`Move variant ${index + 1} earlier`}>↑</button>
-						<button type="button" onclick={() => onChange([...moveCatalogProductVariant(variants, index, 1)])} disabled={disabled || index === variants.length - 1} aria-label={`Move variant ${index + 1} later`}>↓</button>
-						<button type="button" class="remove" onclick={() => removeVariant(variant.key)} disabled={disabled} aria-label={`Remove variant ${index + 1}`}>remove</button>
-					</div>{/if}
-				</li>
-			{/each}
-		</ol>
-	{/if}
-</section>
+{#snippet priceField(variant: CatalogProductVariantDraftForm, index: number)}
+	{@const margin = marginFor(variant)}
+	{@const priceInputId = `catalog-price-${variant.key}`}
+	{@const priceMessageId = `catalog-price-message-${variant.key}`}
+	<label class="price-field">retail price (USD)<span class="money-input"><span aria-hidden="true">$</span><input id={priceInputId} inputmode="decimal" value={priceInputs[variant.key] ?? formatCatalogPriceDollars(variant.retailPriceCents)} oninput={(event) => updatePrice(index, event.currentTarget.value)} aria-label={fixedPrice ? "retail price (USD)" : `variant ${index + 1} retail price (USD)`} aria-invalid={Boolean(priceErrors[variant.key])} aria-describedby={priceErrors[variant.key] || margin ? priceMessageId : undefined} disabled={disabled} /></span>{#if priceErrors[variant.key]}<small id={priceMessageId} class="field-error">{priceErrors[variant.key]}</small>{/if}{#if margin}<output id={priceMessageId} for={priceInputId} class="margin-output" aria-live="polite"><small class="margin-summary">{margin.summary}</small>{#if margin.framedSummary}<small class="margin-summary">{margin.framedSummary}</small>{/if}</output>{/if}</label>
+{/snippet}
+
+{#if fixedPrice}
+	<div class="fixed-price-field">
+		{#each variants.slice(0, 1) as variant, index (variant.key)}
+			{@render priceField(variant, index)}
+		{:else}
+			<p class="empty" role="alert"><strong>Price unavailable.</strong><span>Reload this product to try again.</span></p>
+		{/each}
+	</div>
+{:else}
+	<section aria-labelledby="catalog-variants-heading">
+		<div class="section-heading"><span>03</span><div><h2 id="catalog-variants-heading">prices and options</h2><p>{variants.length} {variants.length === 1 ? "variant" : "variants"}. Their order is saved exactly as shown.</p></div><button type="button" onclick={() => onChange(addCatalogProductVariant(variants))} disabled={disabled || variants.length >= CATALOG_PRODUCT_VARIANT_LIMIT}>add variant</button></div>
+		{#if variants.length >= CATALOG_PRODUCT_VARIANT_LIMIT}<p class="limit" role="status">This {productLabel} has reached the 100-variant limit.</p>{/if}
+		{#if variants.length === 0}
+			<p class="empty"><strong>No variants yet.</strong><span>Add a purchasable option when its price is known.</span></p>
+		{:else}
+			<ol>
+				{#each variants as variant, index (variant.key)}
+					{@const options = resolvedOptions(variant)}
+					<li>
+						<div class="variant-heading"><span class="position">{String(index + 1).padStart(2, "0")}</span><div><strong>variant {index + 1}</strong><small>{variant.key}</small></div></div>
+						<div class="variant-fields">
+							{#if options}
+								<EditorListbox id={`catalog-material-${variant.key}`} label="material" value={variant.materialOptionKey} options={pickerOptions(options.materials, variant.materialOptionKey)} placeholder="choose a material" {disabled} onChange={(value) => updateMaterial(index, value)} />
+								<EditorListbox id={`catalog-size-${variant.key}`} label="size" value={variant.sizeOptionKey} options={pickerOptions(options.sizes, variant.sizeOptionKey)} placeholder={variant.materialOptionKey ? "choose a size" : "choose a material first"} disabled={disabled || !variant.materialOptionKey} onChange={(value) => updateVariant(index, { sizeOptionKey: value })} />
+							{:else}
+								<label>material key<input value={variant.materialOptionKey ?? ""} oninput={(event) => updateVariant(index, { materialOptionKey: slugifyCatalogOptionKey(event.currentTarget.value) || undefined })} maxlength="120" autocomplete="off" disabled={disabled} /></label>
+								<label>size key<input value={variant.sizeOptionKey ?? ""} oninput={(event) => updateVariant(index, { sizeOptionKey: slugifyCatalogOptionKey(event.currentTarget.value) || undefined })} maxlength="120" autocomplete="off" disabled={disabled} /></label>
+							{/if}
+							{@render priceField(variant, index)}
+							<EditorSegmentedChoice id={`catalog-availability-${variant.key}`} label="availability" value={variant.status} options={[{ value: "enabled", label: "available" }, { value: "disabled", label: "not for sale" }]} {disabled} onChange={(value) => updateVariant(index, { status: value as "enabled" | "disabled" })} />
+						</div>
+						<div class="variant-actions" role="group" aria-label={`Reorder variant ${index + 1}`}>
+							<button type="button" onclick={() => onChange([...moveCatalogProductVariant(variants, index, -1)])} disabled={disabled || index === 0} aria-label={`Move variant ${index + 1} earlier`}>↑</button>
+							<button type="button" onclick={() => onChange([...moveCatalogProductVariant(variants, index, 1)])} disabled={disabled || index === variants.length - 1} aria-label={`Move variant ${index + 1} later`}>↓</button>
+							<button type="button" class="remove" onclick={() => removeVariant(variant.key)} disabled={disabled} aria-label={`Remove variant ${index + 1}`}>remove</button>
+						</div>
+					</li>
+				{/each}
+			</ol>
+		{/if}
+	</section>
+{/if}
 <style>
 	section { padding: 20px 0 24px; border-top: 1px solid var(--admin-border-strong); }
 	.section-heading { display: flex; gap: 14px; align-items: flex-start; margin-bottom: 24px; }
@@ -165,7 +179,7 @@ function removeVariant(key: string) {
 	.variant-heading strong, .variant-heading small { display: block; } .variant-heading strong { color: var(--admin-heading); font-size: .82rem; font-weight: 500; }
 	.variant-heading small { overflow: hidden; margin-top: 5px; color: var(--admin-text-subtle); font-size: .65rem; text-overflow: ellipsis; }
 	.variant-fields { display: grid; grid-template-columns: repeat(2, minmax(140px, 1fr)); gap: 14px; }
-	.variant-fields.fixed { grid-template-columns: repeat(2, minmax(180px, 1fr)); }
+	.fixed-price-field { min-width: 0; }
 	label { display: flex; flex-direction: column; gap: 7px; color: var(--admin-text-muted); font-size: .76rem; }
 	input { width: 100%; box-sizing: border-box; border: 1px solid var(--admin-border-strong); border-radius: 6px; padding: 10px 11px; background: var(--admin-bg); color: var(--admin-heading); font: inherit; text-transform: none; }
 	.money-input { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; border: 1px solid var(--admin-border-strong); border-radius: 6px; background: var(--admin-bg); }
