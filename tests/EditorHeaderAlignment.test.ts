@@ -59,7 +59,9 @@ describe("Editor desktop header alignment", () => {
 		);
 		expect(editorShellSource).toContain("height: 37px");
 		expect(editorShellSource).toContain("padding: 2px 7px");
+		expect(editorShellSource).toContain("padding-inline: 10px");
 		expect(editorShellSource).toContain("margin: 3px 6px");
+		expect(editorShellSource).toContain("padding: 7px 9px");
 		expect(editorShellSource).toContain("max-width: 0");
 		expect(editorShellSource).toContain("opacity: 0");
 		expect(adminLayoutSource).toContain(
