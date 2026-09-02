@@ -3,7 +3,6 @@ import { isValidGalleryUploadSize } from "../../galleryUploadSize";
 const PRESIGN_TIMEOUT_MS = 15_000;
 const UPLOAD_TIMEOUT_MS = 10 * 60_000;
 const PROCESS_TIMEOUT_MS = 60_000;
-const DIRECT_UPLOAD_FALLBACK_STATUSES = new Set([401, 403, 404]);
 const UPLOAD_CAPABILITY_HEADER = "X-Gallery-Upload-Token";
 
 export interface GalleryUploadSession {
@@ -189,15 +188,16 @@ export function createGalleryStoragePort(
 			const data = await parseJsonObject(res, "Failed to get upload URL");
 			if (
 				typeof data.r2Key !== "string"
+				|| typeof data.uploadUrl !== "string"
 				|| typeof data.uploadToken !== "string"
 				|| !data.uploadToken
-				|| (data.uploadUrl !== undefined && !isV2UploadUrl(data.uploadUrl))
+				|| !isV2UploadUrl(data.uploadUrl)
 			) {
 				throw new Error("Presign response was invalid");
 			}
 			return {
 				r2Key: data.r2Key,
-				uploadUrl: typeof data.uploadUrl === "string" ? data.uploadUrl : undefined,
+				uploadUrl: data.uploadUrl,
 				uploadToken: data.uploadToken,
 			};
 		},
@@ -208,11 +208,11 @@ export function createGalleryStoragePort(
 			uploadUrl,
 			uploadToken,
 			contentType,
-			uploadSessionToken,
 			signal,
 		}) {
 			if (!uploadToken) throw new Error("Upload capability is required");
-			const proxyEndpoint = `/api/admin/galleries/upload?key=${encodeURIComponent(r2Key)}`;
+			const endpoint = uploadUrl ? directEndpoint(uploadUrl, options.galleryWorkerUrl) : null;
+			if (!endpoint) throw new Error("Direct upload URL is required");
 			const requestInit = {
 				method: "PUT",
 				headers: {
@@ -221,44 +221,14 @@ export function createGalleryStoragePort(
 				},
 				body: file,
 			};
-			const endpoint = uploadUrl ? directEndpoint(uploadUrl, options.galleryWorkerUrl) : null;
-
-			if (endpoint) {
-				let directRes: Response | null = null;
-				try {
-					directRes = await fetchWithTimeout(
-						fetcher,
-						endpoint,
-						requestInit,
-						UPLOAD_TIMEOUT_MS,
-						signal,
-					);
-				} catch (err) {
-					const message = err instanceof Error ? err.message : "";
-					if (message.startsWith("Request timed out") || message === "Request canceled") {
-						throw err;
-					}
-				}
-				if (directRes?.ok) return;
-				if (directRes && !DIRECT_UPLOAD_FALLBACK_STATUSES.has(directRes.status)) {
-					throw await parseErrorResponse(directRes, "Upload failed");
-				}
-			}
-
-			const proxyRes = await fetchWithTimeout(
+			const response = await fetchWithTimeout(
 				fetcher,
-				proxyEndpoint,
-				{
-					...requestInit,
-					headers: {
-						...requestInit.headers,
-						"X-Gallery-Upload-Session": uploadSessionToken,
-					},
-				},
+				endpoint,
+				requestInit,
 				UPLOAD_TIMEOUT_MS,
 				signal,
 			);
-			if (!proxyRes.ok) throw await parseErrorResponse(proxyRes, "Upload failed");
+			if (!response.ok) throw await parseErrorResponse(response, "Upload failed");
 		},
 
 		async process({ r2Key, uploadSessionToken, signal }) {

@@ -2,6 +2,17 @@ const BROWSER_PREVIEW_EXTENSIONS = [".jpg", ".jpeg", ".png", ".webp"] as const;
 
 const TIFF_EXTENSIONS = [".tif", ".tiff"] as const;
 
+const VIDEO_CONTENT_TYPES = {
+	".avi": "video/x-msvideo",
+	".m2ts": "video/mp2t",
+	".m4v": "video/mp4",
+	".mkv": "video/x-matroska",
+	".mov": "video/quicktime",
+	".mp4": "video/mp4",
+	".mts": "video/mp2t",
+	".webm": "video/webm",
+} as const;
+
 const RAW_EXTENSIONS = [
 	".3fr",
 	".ari",
@@ -38,6 +49,7 @@ export const GALLERY_UPLOAD_EXTENSIONS = new Set<string>([
 	...BROWSER_PREVIEW_EXTENSIONS,
 	...TIFF_EXTENSIONS,
 	...RAW_EXTENSIONS,
+	...Object.keys(VIDEO_CONTENT_TYPES),
 ]);
 
 const GALLERY_UPLOAD_MIME_TYPES = new Set([
@@ -54,6 +66,7 @@ const GALLERY_UPLOAD_MIME_TYPES = new Set([
 	"image/x-panasonic-raw",
 	"image/x-pentax-pef",
 	"image/x-sony-arw",
+	...Object.values(VIDEO_CONTENT_TYPES),
 	"application/octet-stream",
 ]);
 
@@ -80,13 +93,18 @@ export function isBrowserPreviewableGalleryFile(filename: string): boolean {
 }
 
 export function isAllowedGalleryFile(file: File): boolean {
+	if (file.name.toLowerCase().startsWith("._")) return false;
 	if (isAllowedGalleryFileName(file.name)) return true;
 	return file.type ? GALLERY_UPLOAD_MIME_TYPES.has(file.type) : false;
 }
 
 export function galleryFileContentType(file: File): string {
 	if (file.type && GALLERY_UPLOAD_MIME_TYPES.has(file.type)) return file.type;
-	if (galleryFileExtension(file.name) === ".dng") return "image/x-adobe-dng";
-	if (galleryFileExtension(file.name) === ".raf") return "image/x-fuji-raf";
+	const extension = galleryFileExtension(file.name);
+	if (extension === ".dng") return "image/x-adobe-dng";
+	if (extension === ".raf") return "image/x-fuji-raf";
+	if (extension in VIDEO_CONTENT_TYPES) {
+		return VIDEO_CONTENT_TYPES[extension as keyof typeof VIDEO_CONTENT_TYPES];
+	}
 	return "application/octet-stream";
 }

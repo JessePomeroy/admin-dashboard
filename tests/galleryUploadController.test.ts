@@ -66,30 +66,37 @@ function createController(options: {
 
 describe("createGalleryUploadController", () => {
 	it("admits valid files and marks invalid files as non-retryable without blocking valid uploads", async () => {
-		const ids = ["valid-id", "invalid-id"];
+		const ids = ["valid-id", "video-id", "metadata-id", "invalid-id"];
 		const { controller, addImage } = createController({
 			randomId: () => ids.shift() ?? "extra-id",
 		});
 
-		controller.addFiles([file("photo.jpg"), file("notes.txt", 4, "text/plain")]);
+		controller.addFiles([
+			file("photo.jpg"),
+			file("clip.mov", 4, "video/quicktime"),
+			file("._clip.mov", 4, "video/quicktime"),
+			file("notes.txt", 4, "text/plain"),
+		]);
 
 		await vi.waitFor(() => {
-			expect(addImage).toHaveBeenCalledTimes(1);
+			expect(addImage).toHaveBeenCalledTimes(2);
 		});
 
 		const snapshot = controller.getSnapshot();
-		expect(snapshot.totalCount).toBe(2);
-		expect(snapshot.completedCount).toBe(1);
-		expect(snapshot.sourceFileCount).toBe(2);
-		expect(snapshot.sourceSizeBytes).toBe(8);
-		expect(snapshot.acceptedFileCount).toBe(1);
-		expect(snapshot.acceptedSizeBytes).toBe(4);
-		expect(snapshot.rejectedFileCount).toBe(1);
-		expect(snapshot.rejectedSizeBytes).toBe(4);
+		expect(snapshot.totalCount).toBe(4);
+		expect(snapshot.completedCount).toBe(2);
+		expect(snapshot.sourceFileCount).toBe(4);
+		expect(snapshot.sourceSizeBytes).toBe(16);
+		expect(snapshot.acceptedFileCount).toBe(2);
+		expect(snapshot.acceptedSizeBytes).toBe(8);
+		expect(snapshot.rejectedFileCount).toBe(2);
+		expect(snapshot.rejectedSizeBytes).toBe(8);
 		expect(snapshot.hasErrors).toBe(true);
 		expect(snapshot.retryableErrorCount).toBe(0);
 		expect(snapshot.files.map((upload) => [upload.id, upload.status, upload.retryable])).toEqual([
 			["valid-id", "done", undefined],
+			["video-id", "done", undefined],
+			["metadata-id", "error", false],
 			["invalid-id", "error", false],
 		]);
 	});
