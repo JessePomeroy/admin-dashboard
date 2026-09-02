@@ -56,6 +56,7 @@
 			.split(",")
 			.map((e) => e.trim())
 			.filter(Boolean);
+		if (adminEmails.length === 0) adminEmails.push(formEmail);
 		onsave({
 			name: formName,
 			email: formEmail,
@@ -116,8 +117,9 @@
 					</div>
 				</div>
 				<div class="form-group">
-					<label class="form-label" for="add-admin-emails">admin emails <span class="form-hint">(comma-separated)</span></label>
+					<label class="form-label" for="add-admin-emails">invited admin emails <span class="form-hint">(comma-separated)</span></label>
 					<input id="add-admin-emails" class="form-input" type="text" placeholder="email1@example.com, email2@example.com" bind:value={formAdminEmails} />
+					<p class="form-hint">leave blank to use the client email. invited admins claim access with their verified Google account.</p>
 				</div>
 				<div class="form-group">
 					<label class="form-label" for="add-notes">notes</label>

@@ -40,6 +40,8 @@ Put a `read:packages` token in user or hosted npm configuration before install.
    host's request verifier and Convex token reader.
 3. Validate the Better Auth session and tenant/creator membership in the host's
    server layout before returning `getTenantAdminLayoutData(...)`.
+   Disable public password signup; invited administrators should claim access
+   with a provider-verified account that the host binds to a stable identity.
 4. Initialize `setupConvex`/`setupAuth` in the browser layout for reactive
    authenticated queries.
 5. Choose a mutation transport. Current platform hosts use the HTTP proxy with
