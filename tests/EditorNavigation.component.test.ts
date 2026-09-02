@@ -36,11 +36,11 @@ describe("EditorNavigation", () => {
 		});
 
 		expect(Array.from(document.querySelectorAll("a"), (item) => item.textContent?.trim())).toEqual([
-			"site settings",
-			"pages",
 			"portfolio",
 			"products",
 			"blog",
+			"pages",
+			"site settings",
 		]);
 		expect(document.querySelectorAll('a[aria-current="page"]')).toHaveLength(1);
 		expect(document.querySelector('a[aria-current="page"]')?.textContent).toContain(

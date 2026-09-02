@@ -1,6 +1,7 @@
 .settings-page {
+	--settings-page-gutter: 24px;
 	max-width: 1080px;
-	padding: 22px 24px 72px;
+	padding: 22px var(--settings-page-gutter) 72px;
 }
 
 .settings-page .settings-header {
@@ -292,7 +293,8 @@
 
 @media (max-width: 768px) {
 	.settings-page {
-		padding: 28px 20px 72px;
+		--settings-page-gutter: 20px;
+		padding: 28px var(--settings-page-gutter) 72px;
 	}
 
 	.settings-page .two-column {
@@ -314,5 +316,26 @@
 		width: 100%;
 		padding: 10px 0;
 		background: var(--admin-bg);
+	}
+}
+
+@media (min-width: 901px) {
+	.settings-page.rail-aligned-header {
+		padding-top: 0;
+	}
+
+	.settings-page.rail-aligned-header > .settings-header {
+		box-sizing: border-box;
+		align-items: flex-end;
+		min-height: var(--editor-header-height, 64px);
+		margin-left: calc(-1 * var(--settings-page-gutter));
+		margin-bottom: 0;
+		padding: 0 0 var(--editor-workbench-baseline-inset, 14px) var(--settings-page-gutter);
+		border-bottom: 1px solid var(--editor-header-divider, var(--admin-border));
+	}
+
+	.settings-page.rail-aligned-header > form > section:first-child,
+	.settings-page.rail-aligned-header > nav:first-of-type .page-list > li:first-child .page-entry {
+		border-top: 0;
 	}
 }
