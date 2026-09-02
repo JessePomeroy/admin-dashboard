@@ -118,7 +118,7 @@ async function handleDelete(image: GalleryImage) {
 				<div class="overlay">
 					<span class="filename">{image.filename}</span>
 					<div class="item-actions">
-						{#if !isCover(image)}
+						{#if !isCover(image) && canPreview(image)}
 							<button onclick={() => handleSetCover(image)}>set cover</button>
 						{/if}
 						<button class="delete-btn" onclick={() => handleDelete(image)}>delete</button>

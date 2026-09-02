@@ -63,6 +63,10 @@ describe("createGalleryStoragePort", () => {
 	});
 
 	it.each([
+		["a missing upload URL", {
+			r2Key: "angelsrest.online/gallery-1/original/photo.jpg",
+			uploadToken: "worker-upload-token",
+		}],
 		["a missing token", {
 			r2Key: "angelsrest.online/gallery-1/original/photo.jpg",
 			uploadUrl: "/upload/put?key=abc",
@@ -130,37 +134,24 @@ describe("createGalleryStoragePort", () => {
 	});
 
 	it.each([401, 403, 404])(
-		"falls back to the host proxy when direct upload returns %i",
+		"does not proxy the file when direct upload returns %i",
 		async (status) => {
-			const fetcher = createFetchMock()
-				.mockResolvedValueOnce(textResponse("nope", { status }))
-				.mockResolvedValueOnce(jsonResponse({ success: true }));
+			const fetcher = createFetchMock(async () => textResponse("nope", { status }));
 			const port = createGalleryStoragePort({
 				fetch: fetcher,
 				galleryWorkerUrl: "https://gallery-worker.example",
 			});
 
-			await port.uploadFile({
+			await expect(port.uploadFile({
 				file: new Blob(["image"]),
 				r2Key: "angelsrest.online/gallery-1/original/photo.jpg",
 				uploadUrl: "/upload/put?key=abc",
 				uploadToken: "worker-upload-token",
 				contentType: "image/jpeg",
 				uploadSessionToken: "session-token",
-			});
+			})).rejects.toThrow(`Upload failed: ${status} nope`);
 
-			expect(fetcher).toHaveBeenCalledTimes(2);
-			expect(fetcher).toHaveBeenLastCalledWith(
-				"/api/admin/galleries/upload?key=angelsrest.online%2Fgallery-1%2Foriginal%2Fphoto.jpg",
-				expect.objectContaining({
-					method: "PUT",
-					headers: {
-						"Content-Type": "image/jpeg",
-						"X-Gallery-Upload-Token": "worker-upload-token",
-						"X-Gallery-Upload-Session": "session-token",
-					},
-				}),
-			);
+			expect(fetcher).toHaveBeenCalledTimes(1);
 		},
 	);
 
@@ -185,25 +176,25 @@ describe("createGalleryStoragePort", () => {
 		expect(fetcher).toHaveBeenCalledTimes(1);
 	});
 
-	it("falls back to the host proxy when the direct upload has a network-style failure", async () => {
-		const fetcher = createFetchMock()
-			.mockRejectedValueOnce(new TypeError("Failed to fetch"))
-			.mockResolvedValueOnce(jsonResponse({ success: true }));
+	it("does not proxy the file after a direct network failure", async () => {
+		const fetcher = createFetchMock(async () => {
+			throw new TypeError("Failed to fetch");
+		});
 		const port = createGalleryStoragePort({
 			fetch: fetcher,
 			galleryWorkerUrl: "https://gallery-worker.example",
 		});
 
-		await port.uploadFile({
+		await expect(port.uploadFile({
 			file: new Blob(["image"]),
 			r2Key: "angelsrest.online/gallery-1/original/photo.jpg",
 			uploadUrl: "/upload/put?key=abc",
 			uploadToken: "worker-upload-token",
 			contentType: "image/jpeg",
 			uploadSessionToken: "session-token",
-		});
+		})).rejects.toThrow("Failed to fetch");
 
-		expect(fetcher).toHaveBeenCalledTimes(2);
+		expect(fetcher).toHaveBeenCalledTimes(1);
 	});
 
 	it("does not fall back after an atomic Worker collision", async () => {

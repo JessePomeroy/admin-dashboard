@@ -236,13 +236,13 @@ function formatFileSize(bytes: number): string {
 >
 	{#if files.length === 0}
 		<div class="drop-zone">
-			<p class="drop-text">drag photos here</p>
+			<p class="drop-text">drag photos and videos here</p>
 			<p class="drop-hint">or</p>
 			<label class="browse-btn">
 				browse files
 				<input type="file" multiple accept={GALLERY_UPLOAD_ACCEPT} onchange={handleFileInput} hidden />
 			</label>
-			<p class="drop-limits">jpg, png, webp, tiff, raw — max {GALLERY_MAX_FILE_SIZE_LABEL} per file</p>
+			<p class="drop-limits">photos, raw files, mov, mp4, webm — max {GALLERY_MAX_FILE_SIZE_LABEL} per file</p>
 		</div>
 	{:else}
 		<div class="upload-list" aria-live="polite">

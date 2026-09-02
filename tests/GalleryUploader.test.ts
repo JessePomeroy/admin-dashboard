@@ -199,7 +199,7 @@ describe("GalleryUploader", () => {
 		getButton("clear done").click();
 		await tick();
 
-		expect(document.body.textContent).toContain("drag photos here");
+		expect(document.body.textContent).toContain("drag photos and videos here");
 		expect(document.body.textContent).not.toContain("one.jpg");
 		expect(document.body.textContent).not.toContain("two.jpg");
 		expect(summaries.at(-1)).toMatchObject({
