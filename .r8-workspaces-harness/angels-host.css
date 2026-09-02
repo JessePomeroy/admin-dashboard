@@ -1,0 +1,20 @@
+.host-angels {
+	--admin-dark-rgb: 30, 41, 59;
+	--admin-light-rgb: 241, 245, 249;
+	--admin-accent-color: #818cf8;
+	--admin-accent-color-hover: #a5b4fc;
+}
+
+[data-admin] {
+	font-family: "Synonym", sans-serif;
+	text-transform: lowercase;
+}
+
+.host-rp {
+	--admin-dark-rgb: 26, 31, 46;
+	--admin-light-rgb: 240, 244, 248;
+	--admin-font-body: system-ui, sans-serif;
+	--admin-font-display: system-ui, sans-serif;
+	font-family: system-ui, sans-serif;
+	text-transform: none;
+}

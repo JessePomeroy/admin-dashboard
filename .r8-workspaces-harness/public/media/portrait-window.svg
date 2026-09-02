@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 480 600" role="img" aria-label="Sanitized window portrait placeholder">
+	<defs><linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#cbd5e1"/><stop offset="1" stop-color="#64748b"/></linearGradient></defs>
+	<rect width="480" height="600" fill="url(#bg)"/>
+	<rect x="48" y="0" width="122" height="600" fill="#f8fafc" opacity=".78"/>
+	<ellipse cx="292" cy="215" rx="78" ry="94" fill="#334155"/>
+	<path d="M164 600c10-174 65-260 140-260s132 86 146 260" fill="#475569"/>
+	<path d="M212 235c18 25 45 38 81 38 34 0 60-12 78-36" fill="none" stroke="#94a3b8" stroke-width="8" opacity=".6"/>
+</svg>

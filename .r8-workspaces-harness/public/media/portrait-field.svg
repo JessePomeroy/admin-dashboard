@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 480 600" role="img" aria-label="Sanitized field portrait placeholder">
+	<defs><linearGradient id="sky" x1="0" y1="0" x2="0" y2="1"><stop stop-color="#ddd6fe"/><stop offset=".58" stop-color="#c4b5fd"/><stop offset=".59" stop-color="#64748b"/><stop offset="1" stop-color="#334155"/></linearGradient></defs>
+	<rect width="480" height="600" fill="url(#sky)"/>
+	<circle cx="386" cy="102" r="58" fill="#f8fafc" opacity=".68"/>
+	<ellipse cx="236" cy="228" rx="68" ry="88" fill="#475569"/>
+	<path d="M95 600c18-168 70-252 141-252 73 0 126 84 147 252" fill="#1e293b"/>
+	<g stroke="#94a3b8" stroke-width="5" opacity=".65"><path d="M38 600l62-184M425 600l-52-205M14 600l20-110M462 600l-15-126"/></g>
+</svg>
