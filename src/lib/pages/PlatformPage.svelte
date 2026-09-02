@@ -9,7 +9,6 @@ import { addToast } from "../toast";
 import { logger } from "../logger";
 import AddClientModal from "./platform/AddClientModal.svelte";
 import ClientDetailModal from "./platform/ClientDetailModal.svelte";
-import CredentialsModal from "./platform/CredentialsModal.svelte";
 
 const config = getAdminConfig();
 const { api } = config;
@@ -26,11 +25,6 @@ let saving = $state(false);
 
 // Search
 let searchQuery = $state("");
-
-// Credentials modal (shown after creating a client with auth account)
-let showCredentials = $state(false);
-let credentialsEmail = $state("");
-let credentialsPassword = $state("");
 
 let clients = $derived((clientsQuery.data ?? []) as PlatformClient[]);
 
@@ -85,17 +79,6 @@ function getSubscriptionColor(status: string): string {
 	return colors[status] || "var(--admin-text-subtle)";
 }
 
-function generatePassword(): string {
-	const chars = "abcdefghijkmnpqrstuvwxyz23456789";
-	let password = "";
-	const array = new Uint8Array(12);
-	crypto.getRandomValues(array);
-	for (const byte of array) {
-		password += chars[byte % chars.length];
-	}
-	return password;
-}
-
 async function handleSaveNewClient(formData: {
 	name: string;
 	email: string;
@@ -119,23 +102,7 @@ async function handleSaveNewClient(formData: {
 			notes: formData.notes,
 		});
 
-		// Create a Better Auth account for the first admin email
-		const authClient = config.authClient;
-		const primaryEmail = formData.adminEmails[0] || formData.email;
-		if (authClient) {
-			const password = generatePassword();
-			const result = await authClient.signUp.email({
-				email: primaryEmail,
-				password,
-				name: formData.name,
-			});
-			if (!result?.error) {
-				credentialsEmail = primaryEmail;
-				credentialsPassword = password;
-				showCredentials = true;
-			}
-		}
-
+		addToast("Client created. Their invited admin can sign in with Google to claim access.");
 		closeAddModal();
 	} catch (err) {
 		logger.error("Failed to create platform client:", err);
@@ -320,8 +287,6 @@ async function quickStatusUpdate(
 
 <ClientDetailModal client={selectedClient} {saving} onclose={closeDetailModal} onsave={handleSaveEdit} ontiertoggle={quickTierToggle} onstatusupdate={quickStatusUpdate} />
 {/if}
-
-<CredentialsModal isOpen={showCredentials} email={credentialsEmail} password={credentialsPassword} onclose={() => showCredentials = false} />
 
 <style>
 	/* Page layout */

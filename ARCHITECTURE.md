@@ -61,6 +61,11 @@ Authentication and authorization are separate:
 4. The browser WebSocket receives a short-lived token for queries.
 5. HTTP mutations receive a fresh authenticated Convex client.
 
+The platform-client UI records invited administrator email addresses; it does
+not create Better Auth accounts or generate passwords. Hosts disable public
+password signup and bind an invitation to a stable identity only after the
+provider has verified that account's email.
+
 The package cannot infer tenant membership from a valid identity alone. Every
 shared email, portal, and gallery side-effect factory therefore depends on the
 required verifier (directly or through an authorized scoped upload grant)
