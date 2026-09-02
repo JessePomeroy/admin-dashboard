@@ -23,6 +23,7 @@
 	--admin-surface: rgba(var(--_light), 0.03);
 	--admin-surface-raised: rgba(var(--_light), 0.05);
 	--admin-dropdown-bg: color-mix(in srgb, rgb(var(--_dark)) 94%, rgb(var(--_light)));
+	--admin-control-bg: color-mix(in srgb, rgb(var(--_dark)) 96%, rgb(var(--_light)));
 	--admin-border: rgba(var(--_light), 0.06);
 	--admin-border-strong: rgba(var(--_light), 0.1);
 	--admin-heading: rgba(var(--_light), 0.92);
@@ -54,6 +55,7 @@ html:not(.dark) [data-admin] {
 	--admin-surface: rgba(var(--_dark), 0.02);
 	--admin-surface-raised: rgba(var(--_dark), 0.04);
 	--admin-dropdown-bg: color-mix(in srgb, rgb(var(--_light)) 97%, rgb(var(--_dark)));
+	--admin-control-bg: color-mix(in srgb, rgb(var(--_light)) 98%, rgb(var(--_dark)));
 	--admin-border: rgba(var(--_dark), 0.08);
 	--admin-border-strong: rgba(var(--_dark), 0.13);
 	--admin-heading: rgba(var(--_dark), 0.88);

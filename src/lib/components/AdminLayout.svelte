@@ -648,6 +648,27 @@ function closeMobileMenu() {
 		overflow-x: hidden;
 	}
 
+	/* Keep every operational workspace on the same quiet 64px header seam as
+	 * the editor. Page-local layouts still own their content below the line. */
+	:global(.admin-main:not(.editor-active) > [class$="-page"]),
+	:global(.admin-main:not(.editor-active) > .dashboard) {
+		box-sizing: border-box;
+		width: 100%;
+		max-width: 1120px;
+		padding: 0 40px 72px;
+	}
+
+	:global(.admin-main:not(.editor-active) .page-header) {
+		min-height: var(--editor-header-height, 64px);
+		margin: 0 0 28px;
+		border-bottom: 1px solid var(--admin-border);
+	}
+
+	:global(.admin-main:not(.editor-active) .page-header h1) {
+		font-size: 1.3rem;
+		font-weight: 500;
+	}
+
 	/* Mobile responsive */
 	@media (max-width: 768px) {
 		.mobile-header {
@@ -670,6 +691,16 @@ function closeMobileMenu() {
 			margin-left: 0;
 			padding-top: 56px;
 			max-width: 100vw;
+		}
+
+		:global(.admin-main:not(.editor-active) > [class$="-page"]),
+		:global(.admin-main:not(.editor-active) > .dashboard) {
+			padding: 0 20px 48px;
+		}
+
+		:global(.admin-main:not(.editor-active) .page-header) {
+			min-height: auto;
+			padding: 18px 0;
 		}
 	}
 

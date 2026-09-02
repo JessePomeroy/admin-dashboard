@@ -13,16 +13,17 @@
 }
 
 :global([data-admin] .data-table th) {
-	padding: 0 16px 12px 0;
+	padding: 0 16px 10px 0;
 	color: var(--admin-text-subtle);
 	font-weight: 400;
 	font-size: 0.75rem;
-	letter-spacing: 0.04em;
+	letter-spacing: 0.06em;
+	text-transform: uppercase;
 	border-bottom: 1px solid var(--admin-border);
 }
 
 :global([data-admin] .data-table td) {
-	padding: 14px 16px 14px 0;
+	padding: 16px 16px 16px 0;
 	border-bottom: 1px solid var(--admin-border);
 }
 
@@ -36,6 +37,10 @@
 :global([data-admin] .data-table--clickable tbody tr) {
 	cursor: pointer;
 	transition: background 0.12s;
+}
+
+:global([data-admin] .data-table tbody tr:last-child td) {
+	border-bottom-color: transparent;
 }
 
 :global([data-admin] .data-table--clickable tbody tr:hover) {
