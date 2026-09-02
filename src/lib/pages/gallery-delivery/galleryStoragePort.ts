@@ -4,6 +4,7 @@ const PRESIGN_TIMEOUT_MS = 15_000;
 const UPLOAD_TIMEOUT_MS = 10 * 60_000;
 const PROCESS_TIMEOUT_MS = 60_000;
 const UPLOAD_CAPABILITY_HEADER = "X-Gallery-Upload-Token";
+const MULTIPART_PART_BYTES = 50 * 1024 * 1024;
 
 export interface GalleryUploadSession {
 	token: string;
@@ -121,6 +122,13 @@ function directEndpoint(uploadUrl: string, galleryWorkerUrl?: string): string | 
 	}
 }
 
+function multipartEndpoint(endpoint: string, params: Record<string, string | number>): string {
+	const url = new URL(endpoint);
+	url.pathname = "/upload/multipart";
+	for (const [key, value] of Object.entries(params)) url.searchParams.set(key, String(value));
+	return url.toString();
+}
+
 function isV2UploadUrl(value: unknown): value is string {
 	if (typeof value !== "string" || !value) return false;
 	try {
@@ -213,6 +221,63 @@ export function createGalleryStoragePort(
 			if (!uploadToken) throw new Error("Upload capability is required");
 			const endpoint = uploadUrl ? directEndpoint(uploadUrl, options.galleryWorkerUrl) : null;
 			if (!endpoint) throw new Error("Direct upload URL is required");
+			if (file.size > MULTIPART_PART_BYTES) {
+				const partSize = Math.max(
+					MULTIPART_PART_BYTES,
+					Math.ceil(file.size / 10_000),
+				);
+				const common = { partSize };
+				const headers = { [UPLOAD_CAPABILITY_HEADER]: uploadToken };
+				const created = await parseJsonObject(await fetchWithTimeout(
+					fetcher,
+					multipartEndpoint(endpoint, { ...common, action: "create" }),
+					{ method: "POST", headers },
+					PRESIGN_TIMEOUT_MS,
+					signal,
+				), "Failed to start multipart upload");
+				if (typeof created.uploadId !== "string") {
+					throw new Error("Multipart upload response was invalid");
+				}
+				const session = { ...common, uploadId: created.uploadId };
+				try {
+					const parts = [];
+					for (let offset = 0, partNumber = 1; offset < file.size; offset += partSize, partNumber++) {
+						const part = await parseJsonObject(await fetchWithTimeout(
+							fetcher,
+							multipartEndpoint(endpoint, { ...session, action: "part", partNumber }),
+							{
+								method: "PUT",
+								headers: { ...headers, "Content-Type": contentType },
+								body: file.slice(offset, offset + partSize),
+							},
+							UPLOAD_TIMEOUT_MS,
+							signal,
+						), "Multipart upload failed");
+						parts.push(part);
+					}
+					const response = await fetchWithTimeout(
+						fetcher,
+						multipartEndpoint(endpoint, { ...session, action: "complete" }),
+						{
+							method: "POST",
+							headers: { ...headers, "Content-Type": "application/json" },
+							body: JSON.stringify({ parts }),
+						},
+						UPLOAD_TIMEOUT_MS,
+						signal,
+					);
+					if (!response.ok) throw await parseErrorResponse(response, "Upload failed");
+					return;
+				} catch (error) {
+					await fetchWithTimeout(
+						fetcher,
+						multipartEndpoint(endpoint, { ...session, action: "abort" }),
+						{ method: "DELETE", headers },
+						PROCESS_TIMEOUT_MS,
+					).catch(() => undefined);
+					throw error;
+				}
+			}
 			const requestInit = {
 				method: "PUT",
 				headers: {
