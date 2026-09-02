@@ -285,7 +285,7 @@ describe("createGalleryStoragePort", () => {
 			uploadToken: "worker-upload-token",
 			contentType: "image/jpeg",
 			uploadSessionToken: "session-token",
-		})).rejects.toThrow("Upload failed: 409 Upload key already exists");
+		})).rejects.toThrow("File already exists");
 
 		expect(fetcher).toHaveBeenCalledTimes(1);
 	});

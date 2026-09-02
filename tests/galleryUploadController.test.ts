@@ -350,4 +350,38 @@ describe("createGalleryUploadController", () => {
 		});
 		expect(controller.getSnapshot().files).toHaveLength(0);
 	});
+
+	it("pauses active uploads and resumes the retained queue", async () => {
+		let firstAttempt = true;
+		const storage = createStorage({
+			uploadFile: vi.fn(async ({ signal }) => {
+				if (!firstAttempt) return;
+				firstAttempt = false;
+				await new Promise<void>((_, reject) => {
+					signal.addEventListener("abort", () => reject(new Error("Request canceled")), { once: true });
+				});
+			}),
+		});
+		const { controller, addImage } = createController({ storage, maxConcurrent: 1 });
+
+		controller.addFiles([file("one.jpg"), file("two.jpg")]);
+		await vi.waitFor(() => expect(storage.uploadFile).toHaveBeenCalledTimes(1));
+		controller.pauseUploads();
+
+		await vi.waitFor(() => {
+			const snapshot = controller.getSnapshot();
+			expect(snapshot.paused).toBe(true);
+			expect(snapshot.files.every((upload) => upload.status === "pending")).toBe(true);
+		});
+		expect(storage.delete).toHaveBeenCalledWith({
+			r2Key: "site/gallery/original/one.jpg",
+			uploadSessionToken: "session-token",
+		});
+
+		controller.resumeUploads();
+		await vi.waitFor(() => expect(addImage).toHaveBeenCalledTimes(2));
+		expect(controller.getSnapshot().paused).toBe(false);
+		expect(controller.getSnapshot().completedCount).toBe(2);
+		expect(storage.uploadFile).toHaveBeenCalledTimes(3);
+	});
 });

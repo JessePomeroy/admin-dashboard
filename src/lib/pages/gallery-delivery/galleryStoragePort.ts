@@ -100,6 +100,7 @@ async function fetchWithTimeout(
 
 async function parseErrorResponse(res: Response, fallback: string): Promise<Error> {
 	const body = (await res.text()).trim();
+	if (res.status === 409 && body.toLowerCase().includes("already exists")) return new Error("File already exists");
 	return new Error(body ? `${fallback}: ${res.status} ${body}` : `${fallback}: ${res.status}`);
 }
 
@@ -245,7 +246,7 @@ export function createGalleryStoragePort(
 					fetcher,
 					multipartEndpoint(endpoint, { ...common, action: "create" }),
 					{ method: "POST", headers },
-					PRESIGN_TIMEOUT_MS,
+					PROCESS_TIMEOUT_MS,
 					signal,
 				), "Failed to start multipart upload");
 				if (typeof created.uploadId !== "string") {

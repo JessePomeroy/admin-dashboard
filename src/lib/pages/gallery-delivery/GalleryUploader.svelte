@@ -34,6 +34,7 @@ let uploadState = $state<GalleryUploadSnapshot>({
 	files: [],
 	selectedFileIds: [],
 	deletingSelected: false,
+	paused: false,
 	visibleCompletedCount: 0,
 	totalCount: 0,
 	completedCount: 0,
@@ -197,6 +198,10 @@ let retryableErrorCount = $derived(uploadState.retryableErrorCount);
 let selectableCount = $derived(uploadState.selectableCount);
 let selectedCount = $derived(uploadState.selectedCount);
 let allSelectableSelected = $derived(uploadState.allSelectableSelected);
+let paused = $derived(uploadState.paused);
+let hasQueuedWork = $derived(files.some((file) =>
+	file.status === "pending" || file.status === "uploading" || file.status === "processing"
+));
 
 $effect(() => {
 	onbatchchange({
@@ -246,6 +251,9 @@ function formatFileSize(bytes: number): string {
 			<div class="upload-header">
 				<span class="upload-progress-text">
 					{completedCount}/{totalCount} uploaded
+					{#if paused}
+						<span>— paused</span>
+					{/if}
 					{#if hasErrors}
 						<span class="error-text">— some failed</span>
 					{/if}
@@ -266,6 +274,11 @@ function formatFileSize(bytes: number): string {
 						+ add more
 						<input type="file" multiple accept={GALLERY_UPLOAD_ACCEPT} onchange={handleFileInput} hidden />
 					</label>
+					{#if paused && hasQueuedWork}
+						<button class="pause-btn" onclick={() => uploadController.resumeUploads()}>resume</button>
+					{:else if hasQueuedWork}
+						<button class="pause-btn" onclick={() => uploadController.pauseUploads()}>pause</button>
+					{/if}
 					{#if retryableErrorCount > 0}
 						<button class="retry-all-btn" onclick={() => uploadController.retryAllUploads()}>
 							retry all ({retryableErrorCount})
@@ -432,7 +445,7 @@ function formatFileSize(bytes: number): string {
 		visibility: visible;
 	}
 
-	.add-more-btn, .clear-btn, .delete-selected-btn, .retry-all-btn {
+	.add-more-btn, .clear-btn, .delete-selected-btn, .retry-all-btn, .pause-btn {
 		padding: 4px 12px;
 		border: 1px solid var(--admin-border);
 		border-radius: 5px;
