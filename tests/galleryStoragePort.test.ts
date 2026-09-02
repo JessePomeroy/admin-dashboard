@@ -133,6 +133,43 @@ describe("createGalleryStoragePort", () => {
 		);
 	});
 
+	it("uses R2 multipart upload for files larger than one Worker request", async () => {
+		let part = 0;
+		const fetcher = createFetchMock(async (input) => {
+			const action = new URL(String(input)).searchParams.get("action");
+			if (action === "create") return jsonResponse({ uploadId: "upload-1" });
+			if (action === "part") return jsonResponse({ partNumber: ++part, etag: `etag-${part}` });
+			return jsonResponse({ success: true });
+		});
+		const port = createGalleryStoragePort({
+			fetch: fetcher,
+			galleryWorkerUrl: "https://gallery-worker.example",
+		});
+		const file = {
+			size: 50 * 1024 * 1024 + 1,
+			slice: vi.fn(() => new Blob(["part"])),
+		} as unknown as Blob;
+
+		await port.uploadFile({
+			file,
+			r2Key: "angelsrest.online/gallery-1/original/video.mov",
+			uploadUrl: "/upload/put?key=video",
+			uploadToken: "worker-upload-token",
+			contentType: "video/quicktime",
+			uploadSessionToken: "session-token",
+		});
+
+		expect(fetcher).toHaveBeenCalledTimes(4);
+		expect(vi.mocked(fetcher).mock.calls.map(([url]) => new URL(String(url)).searchParams.get("action")))
+			.toEqual(["create", "part", "part", "complete"]);
+		expect(JSON.parse(String(vi.mocked(fetcher).mock.calls[3]?.[1]?.body))).toEqual({
+			parts: [
+				{ partNumber: 1, etag: "etag-1" },
+				{ partNumber: 2, etag: "etag-2" },
+			],
+		});
+	});
+
 	it.each([401, 403, 404])(
 		"does not proxy the file when direct upload returns %i",
 		async (status) => {

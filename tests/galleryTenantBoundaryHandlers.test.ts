@@ -1,6 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { setServerConfig, type AdminServerConfig } from "../src/lib/config";
-import { GALLERY_MAX_FILE_SIZE_BYTES } from "../src/lib/galleryUploadPolicy";
 import {
 	createGalleryBulkDeleteHandler,
 	createGalleryDeleteHandler,
@@ -110,7 +109,7 @@ describe("gallery tenant boundary", () => {
 		expect(fetchMock).not.toHaveBeenCalled();
 	});
 
-	it.each([null, 0, 1.5, GALLERY_MAX_FILE_SIZE_BYTES + 1])(
+	it.each([null, 0, 1.5, Number.MAX_SAFE_INTEGER + 1])(
 		"rejects invalid present presign size %s before contacting the Worker",
 		async (sizeBytes) => {
 			configureServer();

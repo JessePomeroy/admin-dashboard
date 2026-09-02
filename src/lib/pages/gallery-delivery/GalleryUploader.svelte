@@ -5,10 +5,7 @@ import { toId } from "../../utils";
 import FeatureGate from "../../components/FeatureGate.svelte";
 import { logger } from "../../logger";
 import type { TenantAdminServerSession } from "../../adminSession";
-import {
-	GALLERY_MAX_FILE_SIZE_LABEL,
-	GALLERY_UPLOAD_ACCEPT,
-} from "../../galleryUploadPolicy";
+import { GALLERY_UPLOAD_ACCEPT } from "../../galleryUploadPolicy";
 import { createGalleryStoragePort } from "./galleryStoragePort";
 import {
 	createGalleryUploadController,
@@ -242,7 +239,7 @@ function formatFileSize(bytes: number): string {
 				browse files
 				<input type="file" multiple accept={GALLERY_UPLOAD_ACCEPT} onchange={handleFileInput} hidden />
 			</label>
-			<p class="drop-limits">photos, raw files, mov, mp4, webm — max {GALLERY_MAX_FILE_SIZE_LABEL} per file</p>
+			<p class="drop-limits">photos, raw files, mov, mp4, webm</p>
 		</div>
 	{:else}
 		<div class="upload-list" aria-live="polite">

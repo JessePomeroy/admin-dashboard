@@ -39,9 +39,6 @@ const RAW_EXTENSIONS = [
 	".x3f",
 ] as const;
 
-export const GALLERY_MAX_FILE_SIZE_BYTES = 500 * 1024 * 1024;
-export const GALLERY_MAX_FILE_SIZE_LABEL = "500MB";
-
 export const GALLERY_BROWSER_PREVIEW_EXTENSIONS = new Set<string>(
 	BROWSER_PREVIEW_EXTENSIONS,
 );

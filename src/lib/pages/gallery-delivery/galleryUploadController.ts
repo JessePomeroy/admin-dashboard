@@ -1,5 +1,4 @@
 import {
-	GALLERY_MAX_FILE_SIZE_LABEL,
 	galleryFileContentType,
 	isAllowedGalleryFile,
 } from "../../galleryUploadPolicy";
@@ -217,7 +216,7 @@ export function createGalleryUploadController(
 					progress: 0,
 					error: file.size <= 0
 						? "File is empty"
-						: `File is over ${GALLERY_MAX_FILE_SIZE_LABEL}`,
+						: "File size is not supported by this browser",
 					retryable: false,
 				});
 				batchRejectedFileCount += 1;
