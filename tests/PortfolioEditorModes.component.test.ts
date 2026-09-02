@@ -39,6 +39,24 @@ const mocks = vi.hoisted(() => {
 		failMutationName: "",
 		queryFailures: new Set<string>(),
 		galleries: [defaultGallery],
+		placements: [] as Array<{
+			key: string;
+			assetId: string;
+			altText?: string;
+			caption?: string;
+		}>,
+		mediaAssets: [] as Array<{
+			_id: string;
+			assetId: string;
+			originalFilename: string;
+			status: "ready";
+			source: { contentType: string; sizeBytes: number; width: number; height: number };
+			derivatives: {
+				thumb: { key: string; width: number; height: number };
+				card: { key: string; width: number; height: number };
+			};
+			createdAt: number;
+		}>,
 	};
 	const mutation = vi.fn(async (ref: { name?: string }) => {
 		if (ref.name === state.failMutationName) throw new Error("forced failure");
@@ -77,7 +95,7 @@ vi.mock("convex-svelte", () => ({
 				title: "Selected work",
 				description: "Portraits",
 				slug: "selected-work",
-				placements: [],
+				placements: mocks.state.placements,
 			};
 			return {
 				data: {
@@ -90,9 +108,9 @@ vi.mock("convex-svelte", () => ({
 			};
 		}
 		if (ref.name === "portfolio:listMediaAssets") {
-			return { data: { page: [], isDone: true, continueCursor: null } };
+			return { data: { page: mocks.state.mediaAssets, isDone: true, continueCursor: null } };
 		}
-		if (ref.name === "portfolio:getPlacedMediaAssets") return { data: [] };
+		if (ref.name === "portfolio:getPlacedMediaAssets") return { data: mocks.state.mediaAssets };
 		return { data: undefined };
 	},
 	useConvexClient: () => ({ mutation: mocks.mutation }),
@@ -192,6 +210,8 @@ describe("Portfolio editor capability modes", () => {
 		mocks.state.failMutationName = "";
 		mocks.state.queryFailures.clear();
 		mocks.state.galleries = [mocks.defaultGallery];
+		mocks.state.placements = [];
+		mocks.state.mediaAssets = [];
 		mocks.publishingEnabled = true;
 		mocks.previewEnabled = true;
 		localStorage.clear();
@@ -205,9 +225,7 @@ describe("Portfolio editor capability modes", () => {
 	it("retains the public collection language and statuses for publish-capable hosts", async () => {
 		await mountList();
 
-		expect(document.body.textContent).toContain(
-			"Public galleries, their order, and whether each one is ready for visitors.",
-		);
+		expect(document.body.textContent).toContain("Choose one from the list, or create a new gallery.");
 		expect(document.querySelector(".status")?.textContent).toContain("published");
 		(document.querySelector(".new-gallery") as HTMLButtonElement).click();
 		await tick();
@@ -219,9 +237,7 @@ describe("Portfolio editor capability modes", () => {
 		mocks.publishingEnabled = false;
 		await mountList();
 
-		expect(document.body.textContent).toContain(
-			"Gallery drafts, their saved order, and the images prepared for a future public rollout.",
-		);
+		expect(document.body.textContent).toContain("Choose one from the list, or create a new gallery.");
 		expect(document.querySelector(".status")?.textContent).toContain("draft");
 		(document.querySelector(".new-gallery") as HTMLButtonElement).click();
 		await tick();
@@ -273,7 +289,7 @@ describe("Portfolio editor capability modes", () => {
 		expect(buttonLabels()).not.toContain("publish");
 		expect(document.querySelector("#publish-review-heading")).toBeNull();
 		expect(document.querySelector('[aria-live="polite"]')?.textContent).toBe("draft saved");
-		expect(document.body.textContent).toContain("Use the arrow controls to set their saved order.");
+		expect(document.body.textContent).toContain("Drag images to set their saved order.");
 		expect(document.body.textContent).not.toContain("available to the public site immediately");
 	});
 
@@ -395,6 +411,87 @@ describe("Portfolio editor capability modes", () => {
 			.dispatchEvent(new SubmitEvent("submit", { bubbles: true, cancelable: true }));
 		await settle();
 		expect(document.body.textContent).toContain("forced failure");
+	});
+
+	it("regenerates manually edited gallery URLs from the current gallery name", async () => {
+		await mountList();
+		(document.querySelector(".new-gallery") as HTMLButtonElement).click();
+		await settle();
+		const title = document.querySelector<HTMLInputElement>('.create-panel input[maxlength="120"]')!;
+		const slug = document.querySelector<HTMLInputElement>("#new-gallery-slug")!;
+		title.value = "Winter Light";
+		title.dispatchEvent(new Event("input", { bubbles: true }));
+		slug.value = "custom-url";
+		slug.dispatchEvent(new Event("input", { bubbles: true }));
+		title.value = "Winter Blue";
+		title.dispatchEvent(new Event("input", { bubbles: true }));
+		expect(slug.value).toBe("custom-url");
+		await tick();
+		(document.querySelector(".create-panel .generate-url") as HTMLButtonElement).click();
+		await tick();
+		expect(slug.value).toBe("winter-blue");
+
+		for (const component of components.splice(0)) unmount(component);
+		document.body.innerHTML = "";
+		await mountDetail();
+		const detailTitle = document.querySelector<HTMLInputElement>("#gallery-title")!;
+		const detailSlug = document.querySelector<HTMLInputElement>("#gallery-slug")!;
+		detailTitle.value = "Quiet Portraits";
+		detailTitle.dispatchEvent(new Event("input", { bubbles: true }));
+		detailSlug.value = "keep-this-until-asked";
+		detailSlug.dispatchEvent(new Event("input", { bubbles: true }));
+		(document.querySelector(".gallery-page .generate-url") as HTMLButtonElement).click();
+		await tick();
+		expect(detailSlug.value).toBe("quiet-portraits");
+	});
+
+	it("reorders gallery images by drag handle without arrow controls", async () => {
+		mocks.state.placements = [
+			{ key: "image-a", assetId: "asset-a", altText: "First" },
+			{ key: "image-b", assetId: "asset-b", altText: "Second" },
+		];
+		mocks.state.mediaAssets = ["a", "b"].map((suffix, index) => ({
+			_id: `asset-${suffix}`,
+			assetId: `source-${suffix}`,
+			originalFilename: `${index + 1}.jpg`,
+			status: "ready" as const,
+			source: { contentType: "image/jpeg", sizeBytes: 10, width: 100, height: 80 },
+			derivatives: {
+				thumb: { key: `thumb-${suffix}`, width: 100, height: 80 },
+				card: { key: `card-${suffix}`, width: 100, height: 80 },
+			},
+			createdAt: index,
+		}));
+		await mountDetail();
+		expect(document.querySelector('[aria-label="Move image earlier"]')).toBeNull();
+		expect(Array.from(document.querySelectorAll<HTMLButtonElement>(".image-list .drag-handle"), (handle) => handle.ariaLabel))
+			.toEqual(["Drag 1.jpg to reorder", "Drag 2.jpg to reorder"]);
+		const list = document.querySelector<HTMLOListElement>(".image-list")!;
+		list.dispatchEvent(new CustomEvent("finalize", {
+			bubbles: true,
+			detail: {
+				items: [mocks.state.placements[1], mocks.state.placements[0]].map((placement) => ({
+					...placement,
+					id: placement.key,
+				})),
+				info: { source: "pointer", trigger: "droppedIntoZone", id: "image-b" },
+			},
+		}));
+		await tick();
+		expect(Array.from(document.querySelectorAll(".image-summary strong"), (item) => item.textContent))
+			.toEqual(["2.jpg", "1.jpg"]);
+		const saveNow = Array.from(document.querySelectorAll<HTMLButtonElement>("button"))
+			.find((button) => button.textContent === "save now");
+		saveNow?.click();
+		await settle();
+		expect(mocks.mutation).toHaveBeenCalledWith(mocks.refs.saveDraft, expect.objectContaining({
+			draft: expect.objectContaining({
+				placements: [
+					expect.objectContaining({ key: "image-b" }),
+					expect.objectContaining({ key: "image-a" }),
+				],
+			}),
+		}));
 	});
 
 	it("persists exact full ordering and rolls the optimistic list back on failure", async () => {

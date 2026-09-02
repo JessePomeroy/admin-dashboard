@@ -2,6 +2,7 @@
 import { browser } from "$app/environment";
 import { onMount } from "svelte";
 import { useQuery } from "convex-svelte";
+import { dragHandle, dragHandleZone } from "svelte-dnd-action";
 import { useAdminClient } from "../../adminClient";
 import {
 	getAdminConfig,
@@ -50,6 +51,9 @@ let fieldErrors = $state<ContactPageFieldErrors>({});
 let lastSavedJson = $state("");
 let lastAttemptedJson = $state("");
 let saveTimer: ReturnType<typeof setTimeout> | undefined;
+type DraggableChoice = { id: string; value: string; isDndShadowItem?: boolean };
+let choiceDragItems = $state<DraggableChoice[] | null>(null);
+let visibleChoices: DraggableChoice[] = $derived(choiceDragItems ?? (form.inquiryChoices ?? []).map((value, index) => ({ id: `choice-${index}`, value })));
 let currentJson = $derived(serializeContactPageDraft(form));
 let hasPendingWork = $derived(["dirty", "saving", "offline", "syncing", "error", "conflict"].includes(saveState));
 
@@ -337,12 +341,9 @@ function removeChoice(index: number) {
 	form.inquiryChoices = (form.inquiryChoices ?? []).filter((_, itemIndex) => itemIndex !== index);
 }
 
-function moveChoice(index: number, offset: -1 | 1) {
-	const choices = [...(form.inquiryChoices ?? [])];
-	const target = index + offset;
-	if (target < 0 || target >= choices.length) return;
-	[choices[index], choices[target]] = [choices[target], choices[index]];
-	form.inquiryChoices = choices;
+function finishChoiceReorder(event: CustomEvent<{ items: DraggableChoice[] }>) {
+	choiceDragItems = null;
+	form.inquiryChoices = event.detail.items.filter((item) => !item.isDndShadowItem).map((item) => item.value);
 }
 </script>
 
@@ -350,12 +351,7 @@ function moveChoice(index: number, offset: -1 | 1) {
 
 <div class="settings-page">
 	<header class="settings-header">
-		<div>
-			<h1>contact &amp; booking</h1>
-			<p class="description">{publishingEnabled
-				? "Edit the words and public destinations visitors see. Form fields, required validation, abuse protection, recipients, and delivery integrations remain platform-managed."
-				: "Private Contact & Booking drafts for a future public rollout. Changes remain in this editor until publishing is connected. Form fields, required validation, abuse protection, recipients, and delivery integrations remain platform-managed."}</p>
-		</div>
+		<h1>contact &amp; booking</h1>
 		{#if initialized && !setupRequired}
 			<div class="actions">
 				<span class="save-state" aria-live="polite">{saveState === "offline" ? "offline — saved on this device" : saveState}</span>
@@ -384,7 +380,7 @@ function moveChoice(index: number, offset: -1 | 1) {
 	{:else}
 		<form onsubmit={(event) => { event.preventDefault(); publishingEnabled ? void publish() : void saveNow(); }}>
 			<section aria-labelledby="contact-copy-heading">
-				<div class="section-heading"><span>01</span><div><h2 id="contact-copy-heading">contact copy</h2><p>Visible words around the existing designed contact form.</p></div></div>
+				<div class="section-heading"><span>01</span><div><h2 id="contact-copy-heading">contact copy</h2><p>The introduction and contact details shown above the form.</p></div></div>
 				<div class="fields two-column">
 					<label class="wide">heading<input maxlength="120" bind:value={form.heading} aria-invalid={Boolean(fieldErrors.heading)} />{#if fieldErrors.heading}<small class="field-error">{fieldErrors.heading}</small>{/if}</label>
 					<label class="wide">introduction<textarea rows="5" maxlength="2000" bind:value={form.intro} aria-invalid={Boolean(fieldErrors.intro)}></textarea><small>{form.intro?.length ?? 0} / 2000</small>{#if fieldErrors.intro}<small class="field-error">{fieldErrors.intro}</small>{/if}</label>
@@ -397,7 +393,7 @@ function moveChoice(index: number, offset: -1 | 1) {
 			</section>
 
 			<section aria-labelledby="booking-copy-heading">
-				<div class="section-heading"><span>02</span><div><h2 id="booking-copy-heading">booking</h2><p>The frontend keeps its designed booking treatment; these fields supply its visible words and destination.</p></div></div>
+				<div class="section-heading"><span>02</span><div><h2 id="booking-copy-heading">booking</h2><p>The words and destination for the optional booking link.</p></div></div>
 				<div class="fields two-column">
 					<label class="toggle wide"><span><input type="checkbox" bind:checked={form.bookingEnabled} /> offer an external booking link</span><small>Turning this off keeps the existing inquiry fallback; it does not disable the contact form.</small></label>
 					<label>button label<input maxlength="120" bind:value={form.bookingLabel} aria-invalid={Boolean(fieldErrors.bookingLabel)} />{#if fieldErrors.bookingLabel}<small class="field-error">{fieldErrors.bookingLabel}</small>{/if}</label>
@@ -407,15 +403,15 @@ function moveChoice(index: number, offset: -1 | 1) {
 			</section>
 
 			<section aria-labelledby="inquiry-choices-heading">
-				<div class="section-heading"><span>03</span><div><h2 id="inquiry-choices-heading">inquiry choices</h2><p>Optional business labels the designed form may offer. They cannot add fields, change validation, or alter delivery.</p></div><button type="button" class="text-action" onclick={addChoice} disabled={(form.inquiryChoices?.length ?? 0) >= 12}>add choice</button></div>
-				<div class="choice-list">
-					{#each form.inquiryChoices ?? [] as choice, index}
-						<div class="choice-row">
-							<label><span>choice {index + 1}</span><input maxlength="120" value={choice} oninput={(event) => updateChoice(index, event.currentTarget.value)} /></label>
-							<div class="row-actions"><button type="button" onclick={() => moveChoice(index, -1)} disabled={index === 0} aria-label={`move choice ${index + 1} up`}>↑</button><button type="button" onclick={() => moveChoice(index, 1)} disabled={index === (form.inquiryChoices?.length ?? 0) - 1} aria-label={`move choice ${index + 1} down`}>↓</button><button type="button" onclick={() => removeChoice(index)}>remove</button></div>
+				<div class="section-heading"><span>03</span><div><h2 id="inquiry-choices-heading">inquiry choices</h2><p>Optional subjects visitors can choose when they write.</p></div><button type="button" class="text-action" onclick={addChoice} disabled={(form.inquiryChoices?.length ?? 0) >= 12}>add choice</button></div>
+				<div class="choice-list" aria-label="Reorder inquiry choices" use:dragHandleZone={{ items: visibleChoices, dragDisabled: (form.inquiryChoices?.length ?? 0) < 2, flipDurationMs: 140, morphDisabled: true, dropTargetStyle: {}, type: "contact-inquiry-choices" }} onconsider={(event) => choiceDragItems = event.detail.items} onfinalize={finishChoiceReorder}>
+					{#each visibleChoices as choice, index (choice.id)}
+						<div class="choice-row" class:dnd-shadow={choice.isDndShadowItem}>
+							<label><span>choice {index + 1}</span><input maxlength="120" value={choice.value} oninput={(event) => updateChoice(index, event.currentTarget.value)} disabled={choice.isDndShadowItem} /></label>
+							<div class="row-actions"><button type="button" class="drag-handle" use:dragHandle disabled={(form.inquiryChoices?.length ?? 0) < 2 || choice.isDndShadowItem} aria-label={`Drag choice ${index + 1} to reorder`}><span aria-hidden="true"></span></button><button type="button" onclick={() => removeChoice(index)} disabled={choice.isDndShadowItem}>remove</button></div>
 						</div>
 					{/each}
-					{#if !(form.inquiryChoices?.length)}<p class="empty">No choices configured. The designed form may continue using its ordinary free-text subject field.</p>{/if}
+					{#if !(form.inquiryChoices?.length)}<p class="empty">No choices yet. Visitors can still write their own subject.</p>{/if}
 				</div>
 				{#if fieldErrors.inquiryChoices}<small class="field-error">{fieldErrors.inquiryChoices}</small>{/if}
 			</section>
@@ -431,5 +427,9 @@ function moveChoice(index: number, offset: -1 | 1) {
 	.choice-list { display: grid; gap: 12px; }
 	.choice-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; align-items: start; }
 	.choice-row .row-actions { padding-top: 23px; }
+	.drag-handle { display: grid; place-items: center; min-width: 42px; padding: 0; border-color: transparent; color: var(--admin-text-muted); touch-action: none; }
+	.drag-handle span { width: 12px; height: 18px; background: radial-gradient(circle, currentColor 1.3px, transparent 1.5px) 0 0 / 6px 6px; opacity: .62; }
+	.drag-handle:hover:not(:disabled) { color: var(--admin-heading); }
+	.dnd-shadow { opacity: .34; }
 	@media (max-width: 768px) { .choice-row { grid-template-columns: 1fr; } .choice-row .row-actions { padding-top: 0; } }
 </style>

@@ -102,6 +102,11 @@ function updateSlug(event: Event) {
 	slug = slugifyPortfolioTitle((event.currentTarget as HTMLInputElement).value);
 }
 
+function generateSlug() {
+	slug = slugifyPortfolioTitle(title);
+	slugWasEdited = false;
+}
+
 async function openCreate() {
 	creating = true;
 	await tick();
@@ -213,7 +218,7 @@ async function handleGalleryFinalize(event: CustomEvent<{ items: DraggableGaller
 <div class="portfolio-workbench" class:has-selection={Boolean(selectedGalleryId)} inert={creating}>
 	<header class="workbench-heading editor-workbench-header">
 		<div>
-			<h1>gallery workspace</h1>
+			<h1>portfolio</h1>
 		</div>
 		<div class="heading-meta">
 			<span>{galleries?.length ?? 0} {(galleries?.length ?? 0) === 1 ? "gallery" : "galleries"}</span>
@@ -293,7 +298,14 @@ async function handleGalleryFinalize(event: CustomEvent<{ items: DraggableGaller
 			<p>{publishingEnabled ? "Create an unpublished gallery, then add details and images before publishing." : "Create and arrange a private gallery draft."}</p>
 			<form onsubmit={(event) => { event.preventDefault(); void createGallery(); }}>
 				<label>gallery name<input bind:this={titleInput} value={title} oninput={updateTitle} maxlength="120" autocomplete="off" aria-invalid={Boolean(errors.title)} />{#if errors.title}<small class="field-error">{errors.title}</small>{/if}</label>
-				<label>{publishingEnabled ? "public URL" : "URL name"}<div class="slug-field"><span>/</span><input value={slug} oninput={updateSlug} maxlength="80" autocomplete="off" spellcheck="false" aria-invalid={Boolean(errors.slug)} /></div>{#if errors.slug}<small class="field-error">{errors.slug}</small>{/if}</label>
+				<div class="create-field">
+					<div class="field-heading">
+						<label for="new-gallery-slug">{publishingEnabled ? "public URL" : "URL name"}</label>
+						<button type="button" class="generate-url" onclick={generateSlug} disabled={!title.trim() || createState === "saving"}>generate url</button>
+					</div>
+					<div class="slug-field"><span>/</span><input id="new-gallery-slug" value={slug} oninput={updateSlug} maxlength="80" autocomplete="off" spellcheck="false" aria-invalid={Boolean(errors.slug)} /></div>
+					{#if errors.slug}<small class="field-error">{errors.slug}</small>{/if}
+				</div>
 				<button type="submit" class="primary" disabled={createState === "saving"}>{createState === "saving" ? "creating…" : publishingEnabled ? "create unpublished gallery" : "create gallery draft"}</button>
 			</form>
 			{#if createMessage}<p class:error={createState === "error"} class="create-message" role={createState === "error" ? "alert" : "status"}>{createMessage}</p>{/if}
@@ -314,8 +326,13 @@ async function handleGalleryFinalize(event: CustomEvent<{ items: DraggableGaller
 	.collection-note { margin: -6px 0 13px; color: var(--admin-text-muted); font-size: .66rem; line-height: 1.4; }
 	button, input { font: inherit; }
 	.new-gallery, .primary { border: 1px solid transparent; border-radius: 6px; padding: 8px 11px; background: var(--admin-accent-strong); color: var(--admin-bg); font-size: .72rem; cursor: pointer; }
-	.search-field, .create-panel label { display: grid; gap: 7px; color: var(--admin-text-muted); font-size: .7rem; }
+	.search-field, .create-panel label, .create-field { display: grid; gap: 7px; color: var(--admin-text-muted); font-size: .7rem; }
 	.search-field input, .create-panel input { width: 100%; box-sizing: border-box; border: 1px solid var(--admin-border-strong); border-radius: 3px; padding: 8px 9px; background: var(--editor-control); color: var(--admin-heading); text-transform: none; }
+	.field-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 28px; }
+	.generate-url { border: 0; padding: 4px 0; background: transparent; color: var(--admin-accent-strong); font: inherit; font-size: .68rem; cursor: pointer; text-underline-offset: 3px; }
+	.generate-url:hover:not(:disabled) { text-decoration: underline; }
+	.generate-url:active:not(:disabled) { transform: translateY(1px); }
+	.generate-url:disabled { color: var(--admin-text-subtle); cursor: default; }
 	.filters { display: flex; gap: 4px; margin: 9px 0 13px; overflow-x: auto; }
 	.filters button { border: 0; border-radius: 3px; padding: 5px 7px; background: transparent; color: var(--admin-text-subtle); font-size: .66rem; cursor: pointer; }
 	.filters button:hover, .filters button.active { background: var(--admin-active); color: var(--admin-heading); }

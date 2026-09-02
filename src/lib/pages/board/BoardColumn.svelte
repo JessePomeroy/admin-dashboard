@@ -188,7 +188,7 @@ let {
 		position: absolute;
 		top: 100%;
 		right: 0;
-		background: var(--admin-bg);
+		background: var(--admin-dropdown-bg);
 		border: 1px solid var(--admin-border-strong);
 		border-radius: 6px;
 		padding: 4px;

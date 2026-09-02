@@ -161,7 +161,7 @@ const statuses: OrderStatus[] = [
 
 	.status-select {
 		padding: 4px 8px;
-		background: transparent;
+		background: var(--admin-dropdown-bg);
 		border: 1px solid var(--admin-border-strong);
 		border-radius: 5px;
 		color: var(--admin-text);

@@ -1,6 +1,7 @@
 <script lang="ts">
 import { untrack } from "svelte";
-import { addCatalogProductVariant, CATALOG_PRODUCT_VARIANT_LIMIT, formatCatalogPriceDollars, moveCatalogProductVariant, parseCatalogPriceDollars, removeCatalogProductVariant, slugifyCatalogOptionKey, type CatalogProductKind, type CatalogProductMarginCalculator, type CatalogProductOptionChoice, type CatalogProductVariantDraftForm, type CatalogProductVariantOptionResolver } from "../../catalogProductEditor";
+import { dragHandle, dragHandleZone } from "svelte-dnd-action";
+import { addCatalogProductVariant, CATALOG_PRODUCT_VARIANT_LIMIT, formatCatalogPriceDollars, parseCatalogPriceDollars, removeCatalogProductVariant, slugifyCatalogOptionKey, type CatalogProductKind, type CatalogProductMarginCalculator, type CatalogProductOptionChoice, type CatalogProductVariantDraftForm, type CatalogProductVariantOptionResolver } from "../../catalogProductEditor";
 import EditorListbox from "./EditorListbox.svelte";
 import EditorSegmentedChoice from "./EditorSegmentedChoice.svelte";
 let { variants, productKind, resetScope, disabled = false, fixedPrice = false, productLabel = "print", setMemberCount = 0, frameMarkupMultiplier, marginCalculator, variantOptionResolver, onChange, onValidityChange = () => {} }: { variants: CatalogProductVariantDraftForm[]; productKind: CatalogProductKind; resetScope?: string; disabled?: boolean; fixedPrice?: boolean; productLabel?: string; setMemberCount?: number; frameMarkupMultiplier?: number; marginCalculator?: CatalogProductMarginCalculator; variantOptionResolver?: CatalogProductVariantOptionResolver; onChange: (variants: CatalogProductVariantDraftForm[]) => void; onValidityChange?: (valid: boolean) => void } = $props();
@@ -8,6 +9,9 @@ let priceErrors = $state<Record<string, string>>({});
 let priceInputs = $state<Record<string, string>>({});
 let observedPrices = $state<Record<string, number | undefined>>({});
 let observedResetScope = $state<string | undefined>();
+type DraggableVariant = CatalogProductVariantDraftForm & { id: string; isDndShadowItem?: boolean };
+let dragItems = $state<DraggableVariant[] | null>(null);
+let visibleVariants: DraggableVariant[] = $derived(dragItems ?? variants.map((variant) => ({ ...variant, id: variant.key })));
 $effect(() => {
 	const scopeChanged = observedResetScope !== resetScope;
 	const activeKeys = new Set(variants.map((variant) => variant.key));
@@ -116,6 +120,10 @@ function removeVariant(key: string) {
 	onValidityChange(!Object.values(nextErrors).some(Boolean));
 	onChange([...removeCatalogProductVariant(variants, key)]);
 }
+function finishReorder(event: CustomEvent<{ items: DraggableVariant[] }>) {
+	dragItems = null;
+	onChange(event.detail.items.filter((item) => !item.isDndShadowItem).map(({ id: _id, isDndShadowItem: _shadow, ...variant }) => variant));
+}
 </script>
 {#snippet priceField(variant: CatalogProductVariantDraftForm, index: number)}
 	{@const margin = marginFor(variant)}
@@ -139,10 +147,10 @@ function removeVariant(key: string) {
 		{#if variants.length === 0}
 			<p class="empty"><strong>No variants yet.</strong><span>Add a purchasable option when its price is known.</span></p>
 		{:else}
-			<ol>
-				{#each variants as variant, index (variant.key)}
+			<ol aria-label="Reorder product variants" use:dragHandleZone={{ items: visibleVariants, dragDisabled: disabled || variants.length < 2, flipDurationMs: 140, morphDisabled: true, dropTargetStyle: {}, type: "catalog-variants" }} onconsider={(event) => dragItems = event.detail.items} onfinalize={finishReorder}>
+				{#each visibleVariants as variant, index (variant.id)}
 					{@const options = resolvedOptions(variant)}
-					<li>
+					<li class:dnd-shadow={variant.isDndShadowItem}>
 						<div class="variant-heading"><span class="position">{String(index + 1).padStart(2, "0")}</span><div><strong>variant {index + 1}</strong><small>{variant.key}</small></div></div>
 						<div class="variant-fields">
 							{#if options}
@@ -155,9 +163,8 @@ function removeVariant(key: string) {
 							{@render priceField(variant, index)}
 							<EditorSegmentedChoice id={`catalog-availability-${variant.key}`} label="availability" value={variant.status} options={[{ value: "enabled", label: "available" }, { value: "disabled", label: "not for sale" }]} {disabled} onChange={(value) => updateVariant(index, { status: value as "enabled" | "disabled" })} />
 						</div>
-						<div class="variant-actions" role="group" aria-label={`Reorder variant ${index + 1}`}>
-							<button type="button" onclick={() => onChange([...moveCatalogProductVariant(variants, index, -1)])} disabled={disabled || index === 0} aria-label={`Move variant ${index + 1} earlier`}>↑</button>
-							<button type="button" onclick={() => onChange([...moveCatalogProductVariant(variants, index, 1)])} disabled={disabled || index === variants.length - 1} aria-label={`Move variant ${index + 1} later`}>↓</button>
+						<div class="variant-actions">
+							<button type="button" class="drag-handle" use:dragHandle disabled={disabled || variants.length < 2 || variant.isDndShadowItem} aria-label={`Drag variant ${index + 1} to reorder`}><span aria-hidden="true"></span></button>
 							<button type="button" class="remove" onclick={() => removeVariant(variant.key)} disabled={disabled} aria-label={`Remove variant ${index + 1}`}>remove</button>
 						</div>
 					</li>
@@ -191,7 +198,11 @@ function removeVariant(key: string) {
 	.margin-output { display: grid; gap: 3px; }
 	.margin-summary { color: var(--admin-text-muted); line-height: 1.45; }
 	input:focus, button:focus-visible { outline: 2px solid var(--admin-accent); outline-offset: 2px; } [aria-invalid="true"] { border-color: var(--status-rose); } .field-error { color: var(--status-rose); }
-	.variant-actions { display: grid; grid-template-columns: repeat(2, auto); gap: 6px; } .variant-actions .remove { grid-column: 1 / -1; }
+	.variant-actions { display: grid; gap: 6px; }
+	.drag-handle { display: grid; place-items: center; min-width: 64px; padding: 0; border-color: transparent; color: var(--admin-text-muted); touch-action: none; }
+	.drag-handle span { width: 12px; height: 18px; background: radial-gradient(circle, currentColor 1.3px, transparent 1.5px) 0 0 / 6px 6px; opacity: .62; }
+	.drag-handle:hover:not(:disabled) { color: var(--admin-heading); }
+	.dnd-shadow { opacity: .34; }
 	.empty { display: grid; gap: 7px; margin: 0; padding: 20px; border: 1px dashed var(--admin-border); border-radius: 10px; color: var(--admin-text-muted); }
 	.empty strong { color: var(--admin-heading); font-weight: 500; }
 	.limit { margin: -12px 0 18px; color: var(--admin-text-muted); font-size: .76rem; }

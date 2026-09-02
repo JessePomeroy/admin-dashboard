@@ -1319,7 +1319,7 @@ function removeSetMember(member: CatalogProductDraftForm["setMembers"][number]) 
 			{/if}
 			{#if !isGraphV2}
 				<section aria-labelledby="product-draft-actions-heading">
-					<div class="section-heading"><span>04</span><div><h2 id="product-draft-actions-heading">draft actions</h2><p>Discard clears the active draft pointer. The product identity and immutable revision history remain retained.</p></div></div>
+					<div class="section-heading"><span>04</span><div><h2 id="product-draft-actions-heading">draft actions</h2><p>Discard the current draft and return to the published product.</p></div></div>
 					<button type="button" class="danger" onclick={() => void discardDraft()} disabled={saveState === "saving" || saveState === "discarding"}>{saveState === "discarding" ? "discarding…" : "discard draft"}</button>
 				</section>
 			{/if}

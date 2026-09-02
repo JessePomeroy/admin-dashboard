@@ -144,9 +144,6 @@ describe("Contact page editor capability modes", () => {
 		await renderPage();
 		const confirmDiscard = vi.spyOn(window, "confirm").mockReturnValue(false);
 
-		expect(document.body.textContent).toContain(
-			"Edit the words and public destinations visitors see.",
-		);
 		expect(buttonLabels()).toContain("preview");
 		expect(buttonLabels()).toContain("publish");
 		buttonWithLabel("discard draft")?.click();
@@ -186,9 +183,6 @@ describe("Contact page editor capability modes", () => {
 		await renderPage();
 		const confirmDiscard = vi.spyOn(window, "confirm").mockReturnValue(false);
 
-		expect(document.body.textContent).toContain(
-			"Private Contact & Booking drafts for a future public rollout. Changes remain in this editor until publishing is connected. Form fields, required validation, abuse protection, recipients, and delivery integrations remain platform-managed.",
-		);
 		expect(buttonLabels()).not.toContain("preview");
 		expect(buttonLabels()).not.toContain("publish");
 		buttonWithLabel("discard draft")?.click();

@@ -164,7 +164,7 @@ async function handleFocusOut() {
 	.listbox-trigger[aria-expanded="true"] .chevron { transform: translateY(2px) rotate(225deg); }
 	.listbox-trigger:focus-visible, .listbox-options button:focus-visible { outline: 2px solid var(--admin-accent); outline-offset: 2px; }
 	.listbox-trigger:disabled { opacity: .45; cursor: default; }
-	.listbox-options { position: absolute; z-index: 30; top: calc(100% + 5px); right: 0; left: 0; display: grid; max-height: min(280px, 45vh); overflow-y: auto; border: 1px solid var(--admin-border-strong); border-radius: 7px; padding: 4px; background: var(--admin-surface-raised, var(--admin-surface)); box-shadow: 0 14px 34px color-mix(in srgb, #000 28%, transparent); }
+	.listbox-options { position: absolute; z-index: 30; top: calc(100% + 5px); right: 0; left: 0; display: grid; max-height: min(280px, 45vh); overflow-y: auto; border: 1px solid var(--admin-border-strong); border-radius: 7px; padding: 4px; background: var(--admin-dropdown-bg); box-shadow: 0 14px 34px color-mix(in srgb, #000 28%, transparent); }
 	.listbox-options.opens-above { top: auto; bottom: calc(100% + 5px); }
 	.listbox-options button { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; width: 100%; min-height: 38px; border: 0; border-radius: 4px; padding: 8px 9px; background: transparent; color: var(--admin-text); font: inherit; font-size: .74rem; text-align: left; cursor: pointer; }
 	.listbox-options button:hover:not(:disabled), .listbox-options button[aria-selected="true"] { background: var(--admin-active); color: var(--admin-heading); }

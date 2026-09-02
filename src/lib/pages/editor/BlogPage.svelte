@@ -79,19 +79,12 @@ async function createSupporting(kind: BlogSupportingKind) {
 
 <BlogWorkbench>
 <div class="settings-page">
-	<header class="settings-header">
-		<div>
-			<h1>blog</h1>
-			<p class="description">Authors, categories, and posts for the public journal. Open a record to edit its draft, review existing images, or manage publication.</p>
-		</div>
-	</header>
-
 	<section aria-labelledby="supporting-heading" id="supporting-content">
 		<div class="section-heading">
 			<span>02</span>
 			<div>
 				<h2 id="supporting-heading">supporting content</h2>
-				<p>Author profiles and categories used by Posts. Active references are guarded by the shared content lifecycle.</p>
+				<p>Authors and categories available to posts.</p>
 			</div>
 		</div>
 		{#if createError}
@@ -194,8 +187,8 @@ async function createSupporting(kind: BlogSupportingKind) {
 	}
 
 	button {
-		border: 1px solid var(--admin-border);
-		border-radius: 8px;
+		border: 1px solid var(--admin-border-strong);
+		border-radius: 3px;
 		padding: 8px 10px;
 		background: transparent;
 		color: var(--admin-heading);
@@ -214,9 +207,8 @@ async function createSupporting(kind: BlogSupportingKind) {
 
 	.empty {
 		margin: 0;
-		padding: 18px;
-		border: 1px dashed var(--admin-border);
-		border-radius: 12px;
+		padding: 16px 0;
+		border-top: 1px solid var(--admin-border);
 		color: var(--admin-text-muted);
 	}
 

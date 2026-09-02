@@ -99,7 +99,7 @@ async function createPost() {
 <div class="blog-workbench" class:has-selection={Boolean(selectedDocumentId)} class:supporting-view={supportingTarget !== null}>
 	<header class="workbench-heading editor-workbench-header">
 		<div>
-			<h1>editorial workspace</h1>
+			<h1>blog</h1>
 		</div>
 		<nav aria-label="Blog collections">
 			<a href={baseHref} aria-current={selectedKind === "post" || (!selectedKind && supportingTarget === null) ? "page" : undefined} onclick={() => supportingTarget = null}>posts</a>

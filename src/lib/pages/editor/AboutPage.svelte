@@ -291,7 +291,7 @@ async function publish() {
 		lastSavedJson = currentJson;
 		saveState = "saved";
 		saveError = "";
-		publishMessage = "Published. This saved revision is available to the public provider when its rollout is enabled.";
+		publishMessage = "Published.";
 		clearLocalDraft();
 	} catch (error) {
 		saveState = "error";
@@ -385,7 +385,7 @@ function addUploadedAsset(asset: PortfolioMediaAsset) {
 
 <div class="settings-page">
 	<header class="settings-header">
-		<div><h1>about</h1><p class="description">Edit the words, portraits, and structured details supplied to the public About page. The site keeps ownership of composition, motion, typography, and responsive design.</p></div>
+		<h1>about</h1>
 		{#if initialized && !setupRequired}
 			<div class="actions">
 				<span class="save-state" aria-live="polite">{saveState === "offline" ? "offline — saved on this device" : saveState}</span>
@@ -413,7 +413,7 @@ function addUploadedAsset(asset: PortfolioMediaAsset) {
 	{:else}
 		<form onsubmit={(event) => { event.preventDefault(); void publish(); }}>
 			<section aria-labelledby="about-copy-heading">
-				<div class="section-heading"><div><h2 id="about-copy-heading">identity &amp; biography</h2><p>Public copy only. The frontend decides how much appears in each composition and breakpoint.</p></div></div>
+				<div class="section-heading"><div><h2 id="about-copy-heading">identity &amp; biography</h2><p>The name and story shown on the About page.</p></div></div>
 				<div class="fields two-column">
 					<label>page heading<input id="about-heading" maxlength="120" bind:value={form.heading} aria-invalid={reviewRequested && publishIssues.some((issue) => issue.fieldId === "about-heading")} /></label>
 					<label>display name<input id="about-display-name" maxlength="200" bind:value={form.displayName} aria-invalid={reviewRequested && publishIssues.some((issue) => issue.fieldId === "about-display-name")} /></label>

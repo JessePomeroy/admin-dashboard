@@ -281,7 +281,6 @@ async function restoreDocument() {
 			<div>
 				<a class="back" href={backHref}>← blog</a>
 				<h1>{kind === "author" ? "author" : "category"}</h1>
-				<p class="description">Edit the supporting identity, biography, and image description used by Blog Posts.</p>
 			</div>
 			<div class="header-actions">
 				<span class="save-status">{saveState}</span>
@@ -417,7 +416,7 @@ async function restoreDocument() {
 					<span>{String(3 + supportingSectionOffset + (slugChanged ? 1 : 0))}</span>
 					<div>
 						<h2 id="draft-actions-heading">draft actions</h2>
-						<p>Discard only clears the current draft pointer; immutable history stays available server-side.</p>
+						<p>Discard the current draft and return to the published version.</p>
 					</div>
 				</div>
 				<button type="button" onclick={() => void discardDraft()} disabled={archived}>discard draft</button>
@@ -461,30 +460,36 @@ async function restoreDocument() {
 	.header-actions {
 		display: flex;
 		align-items: center;
-		gap: 10px;
+		gap: 8px;
 		flex-wrap: wrap;
 		justify-content: flex-end;
 	}
 
 	.save-status {
 		color: var(--admin-text-subtle);
-		font-size: 0.85rem;
+		font-size: 0.74rem;
 	}
 
 	button {
-		border: 1px solid var(--admin-border);
-		border-radius: 8px;
-		padding: 10px 14px;
+		border: 1px solid var(--admin-border-strong);
+		border-radius: 3px;
+		padding: 8px 11px;
 		background: transparent;
-		color: var(--admin-heading);
+		color: var(--admin-text);
 		font: inherit;
+		font-size: 0.78rem;
 		cursor: pointer;
 	}
 
 	button.primary {
-		background: var(--admin-heading);
+		border-color: transparent;
+		background: var(--admin-accent);
 		color: var(--admin-bg);
 	}
+
+	button:hover:not(:disabled) { background: var(--admin-active); }
+	button.primary:hover:not(:disabled) { background: var(--admin-accent); filter: brightness(1.06); }
+	button:active:not(:disabled) { transform: translateY(1px); }
 
 	button.danger {
 		border-color: color-mix(in srgb, var(--admin-danger, #ff8f8f) 55%, transparent);

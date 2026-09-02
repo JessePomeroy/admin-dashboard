@@ -108,9 +108,6 @@ describe("Site settings editor capability modes", () => {
 	it("retains preview, validation, save, and publish behavior for publish-capable hosts", async () => {
 		await renderPage();
 
-		expect(document.body.textContent).toContain(
-			"Identity, social links, and default search information shared across the public site.",
-		);
 		expect(document.querySelector<HTMLAnchorElement>('a[href="/preview/site-settings"]'))
 			.not.toBeNull();
 		expect(buttonLabels()).toContain("publish");
@@ -135,9 +132,6 @@ describe("Site settings editor capability modes", () => {
 		await renderPage();
 		const confirmDiscard = vi.spyOn(window, "confirm").mockReturnValue(false);
 
-		expect(document.body.textContent).toContain(
-			"Private site-setting drafts for a future public rollout. Changes remain in this editor until publishing is connected.",
-		);
 		expect(document.body.textContent).toContain(
 			"The name and short description prepared for a future public rollout.",
 		);

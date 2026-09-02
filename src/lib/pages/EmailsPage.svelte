@@ -274,7 +274,6 @@ async function deleteTemplate() {
 	.filter-select,
 	.filter-search {
 		padding: 7px 12px;
-		background: transparent;
 		color: var(--admin-text);
 		border: 1px solid var(--admin-border-strong);
 		border-radius: 6px;
@@ -282,6 +281,14 @@ async function deleteTemplate() {
 		font-family: "Synonym", system-ui, sans-serif;
 		outline: none;
 		transition: border-color 0.15s;
+	}
+
+	.filter-select {
+		background: var(--admin-dropdown-bg);
+	}
+
+	.filter-search {
+		background: transparent;
 	}
 
 	.filter-select:focus,

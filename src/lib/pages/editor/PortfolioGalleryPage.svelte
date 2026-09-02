@@ -11,6 +11,7 @@ import {
 	resolvePortfolioPreviewUrl,
 	serializePortfolioGalleryDraft,
 	shouldLoadPortfolioServerRevision,
+	slugifyPortfolioTitle,
 	type PortfolioGalleryDraftForm,
 	type PortfolioGalleryEditorState,
 	type PortfolioMediaAsset,
@@ -364,6 +365,10 @@ function addUploadedAsset(asset: PortfolioMediaAsset) {
 	addAsset(asset);
 }
 
+function generateSlug() {
+	form.slug = slugifyPortfolioTitle(form.title);
+}
+
 function reloadServerDraft() {
 	if (!editorState || saveState !== "conflict") return;
 	if (!confirm("Discard this device's changes and load the newer server draft?")) return;
@@ -422,7 +427,13 @@ function reloadServerDraft() {
 			<div class="section-heading"><h2 id="gallery-details-heading">gallery details</h2><p>{publishingEnabled ? "Name, description, and public path." : "Name, description, and saved URL name."}</p></div>
 			<div class="fields">
 				<label>gallery name<input id="gallery-title" maxlength="120" bind:value={form.title} aria-invalid={reviewRequested && !form.title.trim()} /></label>
-				<label>{publishingEnabled ? "public URL" : "URL name"}<input id="gallery-slug" maxlength="80" bind:value={form.slug} spellcheck="false" aria-invalid={reviewRequested && !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(form.slug)} /></label>
+				<div class="field">
+					<div class="field-heading">
+						<label for="gallery-slug">{publishingEnabled ? "public URL" : "URL name"}</label>
+						<button type="button" class="generate-url" onclick={generateSlug} disabled={!form.title.trim()}>generate url</button>
+					</div>
+					<input id="gallery-slug" maxlength="80" bind:value={form.slug} spellcheck="false" aria-invalid={reviewRequested && !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(form.slug)} />
+				</div>
 				<label class="wide">description<textarea rows="3" maxlength="2000" bind:value={form.description}></textarea></label>
 			</div>
 		</section>
@@ -449,7 +460,7 @@ function reloadServerDraft() {
 
 <style>
 	.loading, .page-alert { margin: 32px; } .loading { padding: 16px 8px; color: var(--admin-text-muted); }
-	.gallery-page { max-width: 1120px; padding: 22px 24px 72px; }
+	.gallery-page { width: 100%; max-width: 1120px; box-sizing: border-box; padding: 22px 24px 72px; }
 	header { display: flex; justify-content: space-between; gap: 20px; align-items: flex-end; margin-bottom: 18px; }
 	.back { color: var(--admin-text-muted); font-size: .74rem; text-decoration: none; }
 	h1 { margin: 6px 0 0; color: var(--admin-heading); font-family: var(--admin-font-display); font-size: clamp(1.28rem, 1.8vw, 1.55rem); font-weight: 500; }
@@ -468,7 +479,11 @@ function reloadServerDraft() {
 	.section-heading p { margin: 4px 0 0; color: var(--admin-text-muted); font-size: .74rem; }
 	.fields { display: grid; grid-template-columns: 1fr 1fr; gap: 13px; }
 	.wide { grid-column: 1 / -1; }
-	label { display: flex; flex-direction: column; gap: 6px; color: var(--admin-text-muted); font-size: .72rem; }
+	label, .field { display: flex; flex-direction: column; gap: 6px; color: var(--admin-text-muted); font-size: .72rem; }
+	.field-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 28px; }
+	.generate-url { min-height: 0; border: 0; padding: 4px 0; background: transparent; color: var(--admin-accent-strong); font-size: .68rem; text-underline-offset: 3px; }
+	.generate-url:hover:not(:disabled) { text-decoration: underline; }
+	.generate-url:active:not(:disabled) { transform: translateY(1px); }
 	input, textarea { width: 100%; box-sizing: border-box; border: 1px solid var(--admin-border-strong); border-radius: 3px; padding: 9px 10px; background: var(--editor-control); color: var(--admin-heading); font: inherit; text-transform: none; }
 	[aria-invalid="true"] { border-color: var(--status-rose); }
 	@media (max-width: 820px) {

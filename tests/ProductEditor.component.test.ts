@@ -853,6 +853,25 @@ describe("draft-only product editor", () => {
 		expect(document.querySelector('[role="alert"]')?.textContent).toContain("Could not load product drafts");
 	});
 
+	it("regenerates a manually edited URL name from the product name", async () => {
+		await mountList();
+		button("new")?.click();
+		await tick();
+		const name = input("product name")!;
+		const slug = document.querySelector<HTMLInputElement>("#new-product-slug")!;
+		name.value = "Winter Light";
+		name.dispatchEvent(new Event("input", { bubbles: true }));
+		slug.value = "custom-url";
+		slug.dispatchEvent(new Event("input", { bubbles: true }));
+		name.value = "Winter Blue";
+		name.dispatchEvent(new Event("input", { bubbles: true }));
+		expect(slug.value).toBe("custom-url");
+		await tick();
+		button("generate url")?.click();
+		await tick();
+		expect(slug.value).toBe("winter-blue");
+	});
+
 	it("contains modal focus and moves it before native submit disabling", async () => {
 		let resolveCreate: ((value: { productId: string }) => void) | undefined;
 		mocks.mutation.mockImplementationOnce(() => new Promise((resolve) => {
@@ -950,8 +969,7 @@ describe("draft-only product editor", () => {
 
 	it("describes publication in user-facing terms only when the host exposes it", async () => {
 		await mountList();
-		expect(document.body.textContent).toContain("draft details and variants");
-		expect(document.body.textContent).toContain("Publishing is not available in this workspace");
+		expect(document.body.textContent).toContain("Select one from the list, or create a new product draft.");
 		expect(document.body.textContent).not.toContain("publication controls");
 		expect(document.body.textContent).not.toContain("verified asset replacement");
 		for (const component of components.splice(0)) unmount(component);
@@ -959,7 +977,7 @@ describe("draft-only product editor", () => {
 
 		mocks.graphApiEnabled = true;
 		await mountList();
-		expect(document.body.textContent).toContain("Publishing is not available in this workspace");
+		expect(document.body.textContent).toContain("Select one from the list, or create a new product draft.");
 		expect(document.body.textContent).not.toContain("publication controls");
 		expect(document.body.textContent).not.toContain("verified asset replacement");
 		for (const component of components.splice(0)) unmount(component);
@@ -967,8 +985,7 @@ describe("draft-only product editor", () => {
 
 		enablePublication();
 		await mountList();
-		expect(document.body.textContent).toContain("publication controls");
-		expect(document.body.textContent).not.toContain("Publishing is not available in this workspace");
+		expect(document.body.textContent).toContain("Select one from the list, or create a new product draft.");
 		expect(document.body.textContent).not.toContain("Convex publication");
 	});
 
@@ -1079,11 +1096,8 @@ describe("draft-only product editor", () => {
 		expect(document.querySelector("#catalog-publication-heading")).toBeNull();
 		button("add variant")?.click();
 		await tick();
-		(
-			document.querySelector(
-				'[aria-label="Move variant 2 earlier"]',
-			) as HTMLButtonElement | null
-		)?.click();
+		const newVariantKey = document.querySelectorAll(".variant-heading small")[1]?.textContent ?? "";
+		document.querySelector("#catalog-variants-heading")?.closest("section")?.querySelector("ol")?.dispatchEvent(new CustomEvent("finalize", { bubbles: true, detail: { items: [{ key: newVariantKey, status: "enabled", id: newVariantKey }, { ...revision.variants[0], id: revision.variants[0].key }], info: { source: "pointer", trigger: "droppedIntoZone", id: newVariantKey } } }));
 		const name = input("product name");
 		name!.value = "Lake print revised";
 		name!.dispatchEvent(new Event("input", { bubbles: true }));
@@ -1136,11 +1150,8 @@ describe("draft-only product editor", () => {
 		segmentedChoice("sale availability", "not for sale")!.click();
 		button("add variant")?.click();
 		await tick();
-		(
-			document.querySelector(
-				'[aria-label="Move variant 2 earlier"]',
-			) as HTMLButtonElement | null
-		)?.click();
+		const newVariantKey = document.querySelectorAll(".variant-heading small")[1]?.textContent ?? "";
+		document.querySelector("#catalog-variants-heading")?.closest("section")?.querySelector("ol")?.dispatchEvent(new CustomEvent("finalize", { bubbles: true, detail: { items: [{ key: newVariantKey, status: "enabled", id: newVariantKey }, { ...graphRevision.draft.variants[0], id: graphRevision.draft.variants[0].key }], info: { source: "pointer", trigger: "droppedIntoZone", id: newVariantKey } } }));
 		await tick();
 
 		button("save draft")?.click();
@@ -2251,11 +2262,7 @@ describe("draft-only product editor", () => {
 		const name = input("product name");
 		name!.value = "Twin Moons revised";
 		name!.dispatchEvent(new Event("input", { bubbles: true }));
-		(
-			document.querySelector(
-				'[aria-label="Move set member 2 earlier"]',
-			) as HTMLButtonElement | null
-		)?.click();
+		document.querySelector("#catalog-set-members-heading")?.closest("section")?.querySelector("ol")?.dispatchEvent(new CustomEvent("finalize", { bubbles: true, detail: { items: [...printSetGraphRevision.draft.setMembers].reverse().map((member) => ({ ...member, id: member.key })), info: { source: "pointer", trigger: "droppedIntoZone", id: "member-b" } } }));
 		await tick();
 
 		button("save draft")?.click();

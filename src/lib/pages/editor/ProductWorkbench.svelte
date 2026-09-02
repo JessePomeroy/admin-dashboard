@@ -138,6 +138,11 @@ function updateSlug(event: Event) {
 	slug = slugifyCatalogProductTitle((event.currentTarget as HTMLInputElement).value);
 }
 
+function generateSlug() {
+	slug = slugifyCatalogProductTitle(title);
+	slugEdited = false;
+}
+
 async function openCreate() {
 	newProductKind = kindFilter !== "all" && supportedKinds.includes(kindFilter)
 		? kindFilter
@@ -315,7 +320,14 @@ async function createProduct() {
 					onChange={(kind) => (newProductKind = kind as CatalogProductKind)}
 				/>
 				<label>product name<input bind:this={titleInput} maxlength="160" value={title} oninput={updateTitle} autocomplete="off" /></label>
-				<label>URL name<input maxlength="96" value={slug} oninput={updateSlug} autocomplete="off" spellcheck="false" /><small>Lowercase words separated by hyphens.</small></label>
+				<div class="create-field">
+					<div class="field-heading">
+						<label for="new-product-slug">URL name</label>
+						<button type="button" class="generate-url" onclick={generateSlug} disabled={!title.trim() || createState === "saving"}>generate url</button>
+					</div>
+					<input id="new-product-slug" maxlength="96" value={slug} oninput={updateSlug} autocomplete="off" spellcheck="false" />
+					<small>Lowercase words separated by hyphens.</small>
+				</div>
 				{#if fixedPriceCreation}<label>starting price (USD)<span class="money-input"><span aria-hidden="true">$</span><input inputmode="decimal" value={startingPrice} oninput={(event) => (startingPrice = event.currentTarget.value)} autocomplete="off" aria-label="starting price (USD)" /></span><small>The product starts unavailable.</small></label>{/if}
 				<button type="submit" class="primary" disabled={createState === "saving" || Boolean(createdProductHref)}>{createdProductHref ? "draft created" : createState === "saving" ? "creating…" : "create product draft"}</button>
 			</form>
@@ -378,8 +390,13 @@ async function createProduct() {
 	.create-panel { width: min(520px, 100%); box-sizing: border-box; border: 1px solid var(--admin-border-strong); border-radius: 14px; padding: 24px; background: var(--admin-surface); box-shadow: 0 24px 80px rgb(0 0 0 / .28); }
 	.create-panel > p { margin: 10px 0 0; color: var(--admin-text-muted); font-size: .78rem; line-height: 1.55; }
 	.create-panel form { display: grid; gap: 17px; margin-top: 22px; }
-	.create-panel label { display: grid; gap: 6px; color: var(--admin-text-muted); font-size: .68rem; }
-	.create-panel label small { color: var(--admin-text-subtle); }
+	.create-panel label, .create-field { display: grid; gap: 6px; color: var(--admin-text-muted); font-size: .68rem; }
+	.create-panel label small, .create-field small { color: var(--admin-text-subtle); }
+	.field-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 28px; }
+	.generate-url { border: 0; padding: 4px 0; background: transparent; color: var(--admin-accent-strong); font: inherit; font-size: .68rem; cursor: pointer; text-underline-offset: 3px; }
+	.generate-url:hover:not(:disabled) { text-decoration: underline; }
+	.generate-url:active:not(:disabled) { transform: translateY(1px); }
+	.generate-url:disabled { color: var(--admin-text-subtle); cursor: default; }
 	.close { width: 44px; height: 44px; border: 1px solid var(--admin-border); border-radius: 50%; background: transparent; color: var(--admin-heading); font-size: 1.25rem; cursor: pointer; }
 	.create-panel .error, .create-panel .success { margin: 16px 0 0; font-size: .75rem; }
 	.create-panel .success { color: var(--status-sage); } .create-panel .success a { color: inherit; }
