@@ -79,6 +79,10 @@ export interface AdminAPI {
 		saveDraft: FnRef;
 		/** Optional while a host stages private drafts before connecting a public provider. */
 		publish?: FnRef;
+		/** Reversibly include or exclude a published gallery from public reads. */
+		setVisibility?: FnRef;
+		/** Permanently remove a gallery and its revisions while preserving shared media. */
+		remove?: FnRef;
 		reorder: FnRef;
 		listMediaAssets: FnRef;
 		getPlacedMediaAssets: FnRef;

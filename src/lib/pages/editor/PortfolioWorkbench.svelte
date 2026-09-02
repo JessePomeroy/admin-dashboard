@@ -30,6 +30,7 @@ if (!portfolioApi || !portfolioConfig) {
 const client = useAdminClient();
 const baseHref = portfolioConfig.baseHref ?? "/admin/editor/portfolio";
 const publishingEnabled = Boolean(portfolioApi.publish);
+const publicLifecycleEnabled = Boolean(portfolioApi.publish || portfolioApi.setVisibility);
 const savePortfolioDraft = portfolioApi.saveDraft;
 const reorderPortfolioGalleries = portfolioApi.reorder;
 const galleriesQuery = useQuery(portfolioApi.listForEditor, { siteUrl: config.siteUrl });
@@ -44,7 +45,7 @@ let reorderMessage = $state("");
 let dragOrigin = $state<PortfolioGalleryEditorSummary[] | null>(null);
 let dragItems = $state<DraggableGallery[] | null>(null);
 let search = $state("");
-let filter = $state<"all" | "draft" | "published" | "changed">("all");
+let filter = $state<"all" | "draft" | "published" | "changed" | "hidden">("all");
 let creating = $state(false);
 let title = $state("");
 let slug = $state("");
@@ -57,13 +58,14 @@ let createDialog = $state<HTMLDivElement>();
 let titleInput = $state<HTMLInputElement>();
 let normalizedSearch = $derived(search.trim().toLocaleLowerCase());
 let orderingDisabled = $derived(Boolean(normalizedSearch) || filter !== "all");
-let filterOptions = $derived(publishingEnabled
-	? (["all", "draft", "published", "changed"] as const)
+let filterOptions = $derived(publicLifecycleEnabled
+	? (["all", "draft", "published", "changed", "hidden"] as const)
 	: (["all", "draft"] as const));
 let visibleGalleries = $derived((galleries ?? []).filter((gallery) => {
-	const status = publishingEnabled ? portfolioGalleryStatus(gallery) : "draft";
+	const status = publicLifecycleEnabled ? portfolioGalleryStatus(gallery) : "draft";
 	if (filter === "published" && status !== "published") return false;
 	if (filter === "changed" && status !== "draft changes") return false;
+	if (filter === "hidden" && status !== "hidden") return false;
 	if (filter === "draft" && !["draft", "unpublished"].includes(status)) return false;
 	if (!normalizedSearch) return true;
 	return `${portfolioGalleryLabel(gallery)} ${gallery.slug}`
@@ -85,7 +87,7 @@ $effect(() => {
 });
 
 function statusLabel(gallery: PortfolioGalleryEditorSummary) {
-	return publishingEnabled ? portfolioGalleryStatus(gallery) : "draft";
+	return publicLifecycleEnabled ? portfolioGalleryStatus(gallery) : "draft";
 }
 
 function formatUpdatedAt(value: number) {
@@ -161,7 +163,7 @@ async function createGallery() {
 			draft: { title: title.trim(), slug: slug.trim(), placements: [] },
 		});
 		createState = "idle";
-		createMessage = publishingEnabled ? "Unpublished gallery created." : "Gallery draft created.";
+		createMessage = publicLifecycleEnabled ? "Unpublished gallery created." : "Gallery draft created.";
 		title = "";
 		slug = "";
 		slugWasEdited = false;
@@ -232,7 +234,7 @@ async function handleGalleryFinalize(event: CustomEvent<{ items: DraggableGaller
 				<h2>galleries</h2>
 				<button bind:this={newGalleryButton} type="button" class="new-gallery" onclick={() => void openCreate()}>new</button>
 			</div>
-			<p class="collection-note">{publishingEnabled
+			<p class="collection-note">{publicLifecycleEnabled
 				? "The public site follows this deliberate order. Drag galleries to rearrange it."
 				: "This deliberate order is saved with the private drafts. Drag galleries to rearrange it."}</p>
 
@@ -242,7 +244,7 @@ async function handleGalleryFinalize(event: CustomEvent<{ items: DraggableGaller
 					<button type="button" class:active={filter === option} aria-pressed={filter === option} onclick={() => filter = option as typeof filter}>{option}</button>
 				{/each}
 			</div>
-			{#if orderingDisabled}<p class="ordering-note">Clear search and choose all to change {publishingEnabled ? "public" : "saved"} order.</p>{/if}
+			{#if orderingDisabled}<p class="ordering-note">Clear search and choose all to change {publicLifecycleEnabled ? "public" : "saved"} order.</p>{/if}
 
 			{#if galleriesQuery.isLoading}
 				<p class="collection-message" role="status">loading galleries…</p>
@@ -295,18 +297,18 @@ async function handleGalleryFinalize(event: CustomEvent<{ items: DraggableGaller
 	<div class="create-backdrop" role="presentation" onclick={(event) => { if (event.currentTarget === event.target) void closeCreate(); }}>
 		<div bind:this={createDialog} class="create-panel" role="dialog" aria-modal="true" aria-labelledby="create-gallery-heading" tabindex="-1" onkeydown={handleDialogKeydown}>
 			<div class="create-heading"><h2 id="create-gallery-heading">new gallery</h2><button type="button" class="close" onclick={() => void closeCreate()} aria-label="Close new gallery form">×</button></div>
-			<p>{publishingEnabled ? "Create an unpublished gallery, then add details and images before publishing." : "Create and arrange a private gallery draft."}</p>
+			<p>{publicLifecycleEnabled ? "Create an unpublished gallery, then add details and images before publishing." : "Create and arrange a private gallery draft."}</p>
 			<form onsubmit={(event) => { event.preventDefault(); void createGallery(); }}>
 				<label>gallery name<input bind:this={titleInput} value={title} oninput={updateTitle} maxlength="120" autocomplete="off" aria-invalid={Boolean(errors.title)} />{#if errors.title}<small class="field-error">{errors.title}</small>{/if}</label>
 				<div class="create-field">
 					<div class="field-heading">
-						<label for="new-gallery-slug">{publishingEnabled ? "public URL" : "URL name"}</label>
+						<label for="new-gallery-slug">{publicLifecycleEnabled ? "public URL" : "URL name"}</label>
 						<button type="button" class="generate-url" onclick={generateSlug} disabled={!title.trim() || createState === "saving"}>generate url</button>
 					</div>
 					<div class="slug-field"><span>/</span><input id="new-gallery-slug" value={slug} oninput={updateSlug} maxlength="80" autocomplete="off" spellcheck="false" aria-invalid={Boolean(errors.slug)} /></div>
 					{#if errors.slug}<small class="field-error">{errors.slug}</small>{/if}
 				</div>
-				<button type="submit" class="primary" disabled={createState === "saving"}>{createState === "saving" ? "creating…" : publishingEnabled ? "create unpublished gallery" : "create gallery draft"}</button>
+				<button type="submit" class="primary" disabled={createState === "saving"}>{createState === "saving" ? "creating…" : publicLifecycleEnabled ? "create unpublished gallery" : "create gallery draft"}</button>
 			</form>
 			{#if createMessage}<p class:error={createState === "error"} class="create-message" role={createState === "error" ? "alert" : "status"}>{createMessage}</p>{/if}
 		</div>
