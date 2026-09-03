@@ -45,6 +45,7 @@ jobs:
       - uses: changesets/action@a45c4d594aa4e2c509dc14a9f2b3b67ba3780d0d # v1.9.0
         id: changesets
         with:
+          github-token: ${{ secrets.PUBLISH_TOKEN }}
           version: corepack pnpm changeset version
           publish: corepack pnpm changeset publish
           commit: "chore(admin): version package"
