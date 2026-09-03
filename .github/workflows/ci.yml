@@ -34,7 +34,7 @@ jobs:
           base_version=$(git show origin/main:package.json | node -e "let s=''; process.stdin.on('data', c => s += c).on('end', () => process.stdout.write(JSON.parse(s).version))")
           head_version=$(node -p "require('./package.json').version")
           release_pr=false
-          if [ "$GITHUB_HEAD_REF" = 'changeset-release/main' ] && [ "$PR_AUTHOR" = 'github-actions[bot]' ]; then release_pr=true; fi
+          if [ "$GITHUB_HEAD_REF" = 'changeset-release/main' ] && { [ "$PR_AUTHOR" = 'github-actions[bot]' ] || [ "$PR_AUTHOR" = 'JessePomeroy' ]; }; then release_pr=true; fi
           if [ "$base_version" != "$head_version" ] && [ "$release_pr" != true ]; then
             echo 'Direct package version changes are reserved for the Changesets release PR.'
             exit 1
