@@ -417,15 +417,14 @@ pnpm build
 
 ## Release
 
-Releases use a dedicated version-only PR after the implementation has merged:
+Every public package change includes a Changeset: patch for fixes, minor for an
+additive API, and major for a breaking API. After the source PR merges, the
+release workflow opens or updates a dedicated version PR. Only approving and
+merging that second PR publishes to GitHub Packages.
 
-1. Choose a semver bump: patch for fixes, minor for additive public API, major
-   for breaking behavior or types.
-2. Change only the version in `package.json` and run the full checks.
-3. Merge only after PR CI passes. The main-branch publish workflow builds and
-   publishes to GitHub Packages; do not also publish locally.
-4. Verify the registry version and publish workflow.
-5. Update consumers only after the package is available.
+After the registry version is verified, each host adopts that exact version in
+its own reviewed PR. Source merge, package publication, host adoption, and host
+deployment remain separately approved effects.
 
 Package publication and consumer deployment are separate effects. Publishing
 must not invoke a consumer deployment hook; deploy each host only under its own

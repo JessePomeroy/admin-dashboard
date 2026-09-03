@@ -1,8 +1,9 @@
 import { execFileSync } from "node:child_process";
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
-describe("package server subpath", () => {
-	it("loads runtime exports and type-checks a consumer against generated declarations", () => {
+describe("package exports", () => {
+	it("keeps browser and server surfaces separate and type-checks a consumer", () => {
 		execFileSync("corepack", ["pnpm", "build"], {
 			cwd: process.cwd(),
 			stdio: "pipe",
@@ -17,6 +18,9 @@ describe("package server subpath", () => {
 			cwd: process.cwd(),
 			stdio: "pipe",
 		});
+
+		const browserEntry = readFileSync("dist/index.js", "utf8");
+		expect(browserEntry).not.toContain("./server/");
 
 		const output = execFileSync(
 			process.execPath,

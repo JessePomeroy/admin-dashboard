@@ -2,12 +2,9 @@
 export {
 	setAdminConfig,
 	getAdminConfig,
-	setServerConfig,
-	getServerConfig,
 	type AdminAPI,
 	type AdminConfig,
 	type AdminEditorConfig,
-	type AdminServerConfig,
 	type AdminTheme,
 	type AdminAuthClient,
 	type AdminAuthSession,
@@ -105,36 +102,3 @@ export * from "./documentEmailRecovery";
 
 // Theme
 export { isDark } from "./theme";
-
-// Server utilities
-export { sendEmail, getResend, replaceTemplateVariables } from "./server/email";
-export { getConvex, getAuthenticatedConvex } from "./server/convexClient";
-export { trimString, validateFilename } from "./server/validation";
-export { createInvoiceSendHandler } from "./server/handlers/sendInvoice";
-export type { EmailSendConfig } from "./server/handlers/createEmailSendHandler";
-export { createContractSendHandler } from "./server/handlers/sendContract";
-export { createQuoteSendHandler } from "./server/handlers/sendQuote";
-export { createPortalTokenHandler } from "./server/handlers/createPortalToken";
-export {
-	createAdminMutationHandler,
-	resolveConvexFunction,
-	type AdminMutationProxyOptions,
-} from "./server/adminMutationProxy";
-export {
-	cookiesFromRequest,
-	parseRequestCookieHeader,
-	type RequestCookieEntry,
-} from "./server/adminHost";
-export {
-	createGalleryUploadSessionHandler,
-	createGalleryPresignHandler,
-	createGalleryUploadHandler,
-	createGalleryProcessHandler,
-	createGalleryDeleteHandler,
-	createGalleryBulkDeleteHandler,
-	createGalleryImageHandler,
-} from "./server/handlers/galleryPresign";
-export {
-	createCmsMediaCapabilityHandler,
-	createCmsMediaProcessHandler,
-} from "./server/handlers/cmsMedia";
