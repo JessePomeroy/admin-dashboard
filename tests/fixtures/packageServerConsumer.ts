@@ -16,6 +16,12 @@ import {
 	type CatalogPrivateEditorUploadPrintPrepareRequest,
 	type CatalogPrivateEditorUploadVerifiedResponse,
 } from "@jessepomeroy/admin/server";
+import { getAdminConfig, type AdminConfig } from "@jessepomeroy/admin";
+// @ts-expect-error Server configuration is available only from @jessepomeroy/admin/server.
+import { getServerConfig as invalidRootServerImport } from "@jessepomeroy/admin";
+
+const browserConfig: AdminConfig = getAdminConfig();
+void [browserConfig, invalidRootServerImport];
 
 const uploadConfig: CatalogPrivateEditorUploadConfig = {
 	convexJournalOrigin: "https://example.convex.site",
