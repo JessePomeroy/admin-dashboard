@@ -22,7 +22,7 @@ jobs:
           package-manager-cache: false
           token: ""
       - run: corepack enable
-      - run: corepack pnpm install --frozen-lockfile
+      - run: corepack pnpm install --frozen-lockfile --ignore-scripts
       - run: corepack pnpm check
       - run: corepack pnpm test
       - run: corepack pnpm build
