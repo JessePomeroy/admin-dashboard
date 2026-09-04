@@ -198,7 +198,7 @@ function finishReorder(event: CustomEvent<{ items: DraggableVariant[] }>) {
 	.margin-output { display: grid; gap: 3px; }
 	.margin-summary { color: var(--admin-text-muted); line-height: 1.45; }
 	input:focus, button:focus-visible { outline: 2px solid var(--admin-accent); outline-offset: 2px; } [aria-invalid="true"] { border-color: var(--status-rose); } .field-error { color: var(--status-rose); }
-	.variant-actions { display: grid; gap: 6px; }
+	.variant-actions { display: grid; grid-template-rows: 40px 40px; gap: 14px; padding-top: 23px; }
 	.drag-handle { display: grid; place-items: center; min-width: 64px; padding: 0; border-color: transparent; color: var(--admin-text-muted); touch-action: none; }
 	.drag-handle span { width: 12px; height: 18px; background: radial-gradient(circle, currentColor 1.3px, transparent 1.5px) 0 0 / 6px 6px; opacity: .62; }
 	.drag-handle:hover:not(:disabled) { color: var(--admin-heading); }
