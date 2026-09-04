@@ -1202,7 +1202,7 @@ function removeSetMember(member: CatalogProductDraftForm["setMembers"][number]) 
 		<div class="settings-page product-page">
 		<header class="settings-header">
 			<div><a class="back" href={baseHref}>← products</a><h1>{canEditGraphProduct || !isGraphV2 ? form.title?.trim() || editorState.productKey : catalogProductEditorTitle(readOnlyRevision)?.trim() || editorState.productKey}</h1></div>
-			{#if hasActiveDraft && (!isGraphV2 || canEditGraphProduct)}<div class="actions"><span class="sr-only save-state" aria-live="polite">{saveState}</span>{#if dirty || saveState === "saving" || saveState === "error"}<button type="button" class="primary" onclick={() => void saveDraft()} disabled={!canSave}>{saveState === "saving" ? "saving…" : saveState === "error" ? "try save again" : "save draft"}</button>{/if}</div>{/if}
+			{#if hasActiveDraft && (!isGraphV2 || canEditGraphProduct)}<div class="actions"><span class="sr-only save-state" aria-live="polite">{saveState}</span>{#if dirty || saveState === "saving" || saveState === "error"}<button type="button" class="primary" onclick={() => void saveDraft()} disabled={!canSave}>{saveState === "saving" ? "saving…" : saveState === "error" ? "try save again" : "save draft"}</button>{:else if canPublish}<button type="button" class="primary" onclick={() => void runPublication("publish")}>{editorState.published ? "publish changes" : publishesToShop ? "publish to Shop" : "publish to Convex CMS"}</button>{/if}</div>{/if}
 		</header>
 		{#if saveError}<p class="alert" role="alert">{saveError}</p>{/if}
 		{#if publicationError}<div class="alert publication-alert" role="alert"><span>{publicationError}</span>{#if publicationOperation?.phase === "reload-required"}<button type="button" onclick={() => globalThis.location.reload()}>reload product</button>{/if}</div>{/if}
@@ -1276,7 +1276,6 @@ function removeSetMember(member: CatalogProductDraftForm["setMembers"][number]) 
 				{/if}
 				{#if publicationCapability && isGraphV2}
 					<div class="shop-publication" aria-label={publishesToShop ? "Shop actions" : "Convex CMS actions"}>
-						{#if canPublish}<button type="button" class="primary" onclick={() => void runPublication("publish")}>{editorState.published ? "publish changes" : publishesToShop ? "publish to Shop" : "publish to Convex CMS"}</button>{/if}
 						{#if canUnpublish}<button type="button" class="danger quiet-action" onclick={() => void runPublication("unpublish")}>{publishesToShop ? "remove from Shop" : "unpublish from Convex CMS"}</button>{/if}
 					</div>
 				{/if}

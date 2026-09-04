@@ -161,11 +161,10 @@ function finishReorder(event: CustomEvent<{ items: DraggableVariant[] }>) {
 								<label>size key<input value={variant.sizeOptionKey ?? ""} oninput={(event) => updateVariant(index, { sizeOptionKey: slugifyCatalogOptionKey(event.currentTarget.value) || undefined })} maxlength="120" autocomplete="off" disabled={disabled} /></label>
 							{/if}
 							{@render priceField(variant, index)}
-							<EditorSegmentedChoice id={`catalog-availability-${variant.key}`} label="availability" value={variant.status} options={[{ value: "enabled", label: "available" }, { value: "disabled", label: "not for sale" }]} {disabled} onChange={(value) => updateVariant(index, { status: value as "enabled" | "disabled" })} />
+							<div class="availability-row"><EditorSegmentedChoice id={`catalog-availability-${variant.key}`} label="availability" value={variant.status} options={[{ value: "enabled", label: "available" }, { value: "disabled", label: "not for sale" }]} {disabled} onChange={(value) => updateVariant(index, { status: value as "enabled" | "disabled" })} /><button type="button" class="remove" onclick={() => removeVariant(variant.key)} disabled={disabled} aria-label={`Remove variant ${index + 1}`}>remove</button></div>
 						</div>
 						<div class="variant-actions">
 							<button type="button" class="drag-handle" use:dragHandle disabled={disabled || variants.length < 2 || variant.isDndShadowItem} aria-label={`Drag variant ${index + 1} to reorder`}><span aria-hidden="true"></span></button>
-							<button type="button" class="remove" onclick={() => removeVariant(variant.key)} disabled={disabled} aria-label={`Remove variant ${index + 1}`}>remove</button>
 						</div>
 					</li>
 				{/each}
@@ -198,6 +197,7 @@ function finishReorder(event: CustomEvent<{ items: DraggableVariant[] }>) {
 	.margin-output { display: grid; gap: 3px; }
 	.margin-summary { color: var(--admin-text-muted); line-height: 1.45; }
 	input:focus, button:focus-visible { outline: 2px solid var(--admin-accent); outline-offset: 2px; } [aria-invalid="true"] { border-color: var(--status-rose); } .field-error { color: var(--status-rose); }
+	.availability-row { display: grid; grid-template-columns: minmax(140px, 1fr) auto; gap: 14px; align-items: end; }
 	.variant-actions { display: grid; gap: 6px; }
 	.drag-handle { display: grid; place-items: center; min-width: 64px; padding: 0; border-color: transparent; color: var(--admin-text-muted); touch-action: none; }
 	.drag-handle span { width: 12px; height: 18px; background: radial-gradient(circle, currentColor 1.3px, transparent 1.5px) 0 0 / 6px 6px; opacity: .62; }
@@ -207,5 +207,5 @@ function finishReorder(event: CustomEvent<{ items: DraggableVariant[] }>) {
 	.empty strong { color: var(--admin-heading); font-weight: 500; }
 	.limit { margin: -12px 0 18px; color: var(--admin-text-muted); font-size: .76rem; }
 	@media (max-width: 900px) { li { grid-template-columns: 1fr; } .variant-actions { display: flex; flex-wrap: wrap; } }
-	@media (max-width: 768px) { section { padding: 18px 0 22px; } .section-heading { flex-wrap: wrap; } .variant-fields { grid-template-columns: 1fr; } button { min-height: 44px; } }
+	@media (max-width: 768px) { section { padding: 18px 0 22px; } .section-heading { flex-wrap: wrap; } .variant-fields, .availability-row { grid-template-columns: 1fr; } button { min-height: 44px; } }
 </style>
