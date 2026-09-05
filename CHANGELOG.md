@@ -1,5 +1,13 @@
 # @jessepomeroy/admin
 
+## 5.0.1
+
+### Patch Changes
+
+- 051aeb7: Reuse the identical resolved and terminal email-recovery handling in invoice and
+  contract pages. Preserve exact-attempt cleanup, newer-attempt and selected-document
+  guards, and status updates; quote-specific recovery feedback is unchanged.
+
 ## 5.0.0
 
 ### Major Changes
