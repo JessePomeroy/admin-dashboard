@@ -147,7 +147,7 @@ const quoteStats = $derived({
 	declined: quotes.filter((q: Quote) => q.status === "declined").length,
 });
 
-// Sanity data (still from server)
+// Published content supplied by the host loader
 const newInquiryCount = $derived(data.newInquiryCount);
 
 // Activity feed: combine recent orders, invoices, quotes

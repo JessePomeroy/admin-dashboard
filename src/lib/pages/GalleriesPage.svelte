@@ -17,7 +17,6 @@ const hasWorker = !!config.galleryWorkerUrl;
 const galleries = $derived(data.galleries);
 
 let tab = $state<"portfolio" | "delivery">("portfolio");
-const studioBaseUrl = config.sanityStudioUrl ?? "";
 
 $effect(() => {
 	tab = activeTab;
@@ -76,16 +75,6 @@ $effect(() => {
 							<a href="/gallery/{gallery.slug}" class="action-link" target="_blank" rel="noopener">
 								view
 							</a>
-							{#if studioBaseUrl}
-								<a
-									href="{studioBaseUrl}/structure/gallery;{gallery._id}"
-									class="action-link"
-									target="_blank"
-									rel="noopener"
-								>
-									edit in studio
-								</a>
-							{/if}
 						</div>
 					</div>
 				{/each}

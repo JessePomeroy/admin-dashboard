@@ -205,6 +205,16 @@ Node 24's lone generated `Sec-Fetch-Mode: cors` is accepted by the Worker
 classifier merged in gallery-worker commit `6de645b2`, while the adapter forwards
 no browser headers and the Worker continues to reject browser context.
 
+## Retired content-provider controls
+
+Platform-client forms and types no longer include a Sanity project identifier.
+The galleries page no longer accepts a Studio URL or links to a hosted Studio;
+current portfolio editing remains in the configured Site editor workspace.
+Hosts upgrading from version 4 must remove `sanityStudioUrl` from `AdminConfig`
+and `sanityProjectId` from platform-client objects and form payloads.
+Historical `sanityImport` revision-source values remain supported because they
+identify existing Convex records, not a connection to a content provider.
+
 ## Change discipline
 
 - Prefer deep page/controller interfaces over exposing implementation helpers.

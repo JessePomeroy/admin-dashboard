@@ -7,7 +7,6 @@
 			name: string;
 			email: string;
 			siteUrl: string;
-			sanityProjectId?: string;
 			tier: "basic" | "full";
 			subscriptionStatus: string;
 			adminEmails: string[];
@@ -18,7 +17,6 @@
 	let formName = $state("");
 	let formEmail = $state("");
 	let formSiteUrl = $state("");
-	let formSanityProjectId = $state("");
 	let formTier = $state<"basic" | "full">("basic");
 	let formSubscriptionStatus = $state<
 		"none" | "active" | "canceled" | "past_due"
@@ -38,7 +36,6 @@
 		formName = "";
 		formEmail = "";
 		formSiteUrl = "";
-		formSanityProjectId = "";
 		formTier = "basic";
 		formSubscriptionStatus = "none";
 		formAdminEmails = "";
@@ -61,7 +58,6 @@
 			name: formName,
 			email: formEmail,
 			siteUrl: formSiteUrl,
-			sanityProjectId: formSanityProjectId || undefined,
 			tier: formTier,
 			subscriptionStatus: formSubscriptionStatus,
 			adminEmails,
@@ -93,10 +89,6 @@
 				<div class="form-group">
 					<label class="form-label" for="add-site">site url <span class="required">*</span></label>
 					<input id="add-site" class="form-input" type="text" placeholder="example.com" bind:value={formSiteUrl} required />
-				</div>
-				<div class="form-group">
-					<label class="form-label" for="add-sanity">sanity project id</label>
-					<input id="add-sanity" class="form-input" type="text" bind:value={formSanityProjectId} />
 				</div>
 				<div class="form-row">
 					<div class="form-group">

@@ -9,7 +9,6 @@
 			name: string;
 			email: string;
 			siteUrl: string;
-			sanityProjectId?: string;
 			tier: "basic" | "full";
 			subscriptionStatus: string;
 			notes?: string;
@@ -23,7 +22,6 @@
 	let formName = $state("");
 	let formEmail = $state("");
 	let formSiteUrl = $state("");
-	let formSanityProjectId = $state("");
 	let formTier = $state<"basic" | "full">("basic");
 	let formSubscriptionStatus = $state<
 		"none" | "active" | "canceled" | "past_due"
@@ -54,7 +52,6 @@
 		formName = client.name || "";
 		formEmail = client.email || "";
 		formSiteUrl = client.siteUrl || "";
-		formSanityProjectId = client.sanityProjectId || "";
 		formTier = client.tier || "basic";
 		formSubscriptionStatus = client.subscriptionStatus || "none";
 		formAdminEmails = (client.adminEmails || []).join(", ");
@@ -77,7 +74,6 @@
 			name: formName,
 			email: formEmail,
 			siteUrl: formSiteUrl,
-			sanityProjectId: formSanityProjectId || undefined,
 			tier: formTier,
 			subscriptionStatus: formSubscriptionStatus,
 			notes: formNotes || undefined,
@@ -109,10 +105,6 @@
 					<div class="form-group">
 						<label class="form-label" for="edit-site">site url <span class="required">*</span></label>
 						<input id="edit-site" class="form-input" type="text" placeholder="example.com" bind:value={formSiteUrl} required />
-					</div>
-					<div class="form-group">
-						<label class="form-label" for="edit-sanity">sanity project id</label>
-						<input id="edit-sanity" class="form-input" type="text" bind:value={formSanityProjectId} />
 					</div>
 					<div class="form-row">
 						<div class="form-group">
@@ -167,12 +159,6 @@
 							<span class="detail-label">site url</span>
 							<a class="detail-link" href={client.siteUrl} target="_blank" rel="noopener noreferrer">{client.siteUrl}</a>
 						</div>
-						{#if client.sanityProjectId}
-							<div class="detail-field">
-								<span class="detail-label">sanity project</span>
-								<a class="detail-link" href="https://sanity.io/manage/project/{client.sanityProjectId}" target="_blank" rel="noopener noreferrer">{client.sanityProjectId}</a>
-							</div>
-						{/if}
 						{#if client.adminEmails?.length > 0}
 							<div class="detail-field">
 								<span class="detail-label">admin emails</span>

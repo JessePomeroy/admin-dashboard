@@ -241,7 +241,6 @@ export interface PlatformClient extends ConvexDocument<"platformClients"> {
 	name: string;
 	email: string;
 	siteUrl: string;
-	sanityProjectId?: string;
 	tier: "basic" | "full";
 	subscriptionStatus: "active" | "canceled" | "past_due" | "none";
 	stripeCustomerId?: string;
@@ -300,9 +299,8 @@ export type InquiryStatus = "new" | "read" | "replied";
 /**
  * UI-facing inquiry shape. Unlike the Convex `Inquiry` above, this represents
  * the data as it flows from the page `load` function into the inquiries page
- * components — typically sourced from a Sanity-backed feed where string fields
- * may be null, and the timestamp comes through as `submittedAt: string` rather
- * than `_creationTime: number`. Keep in sync with InquiryTable/Modal props.
+ * components, with nullable display fields and a `submittedAt: string` timestamp
+ * instead of `_creationTime: number`. Keep in sync with InquiryTable/Modal props.
  */
 export interface InquiryUI {
 	_id: string;
