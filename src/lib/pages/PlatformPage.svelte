@@ -83,7 +83,6 @@ async function handleSaveNewClient(formData: {
 	name: string;
 	email: string;
 	siteUrl: string;
-	sanityProjectId?: string;
 	tier: "basic" | "full";
 	subscriptionStatus: string;
 	adminEmails: string[];
@@ -95,7 +94,6 @@ async function handleSaveNewClient(formData: {
 			name: formData.name,
 			email: formData.email,
 			siteUrl: formData.siteUrl,
-			sanityProjectId: formData.sanityProjectId,
 			tier: formData.tier,
 			subscriptionStatus: formData.subscriptionStatus,
 			adminEmails: formData.adminEmails,
@@ -116,7 +114,6 @@ async function handleSaveEdit(formData: {
 	name: string;
 	email: string;
 	siteUrl: string;
-	sanityProjectId?: string;
 	tier: "basic" | "full";
 	subscriptionStatus: string;
 	notes?: string;
@@ -238,7 +235,6 @@ async function quickStatusUpdate(
 							<th>name</th>
 							<th>email</th>
 							<th>site url</th>
-							<th>sanity project</th>
 							<th>tier</th>
 							<th>subscription</th>
 							<th>added</th>
@@ -256,7 +252,6 @@ async function quickStatusUpdate(
 								<td class="td-name">{client.name}</td>
 								<td class="td-email">{client.email}</td>
 								<td class="td-site">{client.siteUrl}</td>
-								<td class="td-sanity">{client.sanityProjectId || "\u2014"}</td>
 								<td>
 									<span class="tier-text" class:tier-full={client.tier === "full"}>{client.tier}</span>
 								</td>
@@ -408,8 +403,7 @@ async function quickStatusUpdate(
 	}
 
 	.td-email,
-	.td-site,
-	.td-sanity {
+	.td-site {
 		color: var(--admin-text-muted);
 		font-size: 0.82rem;
 	}

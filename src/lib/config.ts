@@ -603,7 +603,6 @@ export interface AdminConfig {
 	siteName: string;
 	fromEmail: string;
 	isCreator: boolean;
-	sanityStudioUrl?: string;
 	api: AdminAPI;
 	/** Enables the expanding Site editor workspace and its declared modules. */
 	editor?: AdminEditorConfig;
