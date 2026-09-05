@@ -11,7 +11,6 @@ import type { Invoice, InvoiceStatus } from "../types";
 import {
 	isTerminalDocumentEmailRecovery,
 	type DocumentEmailRecovery,
-	type DocumentEmailResolutionOutcome,
 } from "../documentEmailRecovery";
 import { addToast } from "../toast";
 import { logger } from "../logger";
@@ -296,7 +295,6 @@ async function handleSendEmail(
 
 function handleEmailResolved(result: {
 	attemptId: string;
-	outcome: DocumentEmailResolutionOutcome;
 	recovery: DocumentEmailRecovery;
 }) {
 	const documentId = result.recovery.document.id;
@@ -335,37 +333,6 @@ function handleEmailRecovery(
 ) {
 	if (selectedInvoice && selectedInvoice._id !== invoiceId) return;
 	rememberInvoiceRecovery(invoiceId, attempt);
-}
-
-function handleEmailTerminal(result: {
-	attemptId: string;
-	recovery: DocumentEmailRecovery;
-}) {
-	const documentId = result.recovery.document.id;
-	emailRequests.clearResolved(invoiceEmailKey(documentId), result.attemptId);
-	const pending = emailRequests.pending(
-		invoiceEmailKey(documentId),
-		invoiceEmailEndpoint(documentId),
-	);
-	if (
-		(pending && pending.attemptId !== result.attemptId) ||
-		(pageEmailRecovery?.documentId === documentId &&
-			pageEmailRecovery.attempt.attemptId !== result.attemptId)
-	) {
-		return;
-	}
-	if (selectedInvoice && selectedInvoice._id !== documentId) return;
-	rememberInvoiceRecovery(documentId, {
-		attemptId: result.attemptId,
-		recovery: result.recovery,
-	});
-	if (!selectedInvoice) return;
-	if (result.recovery.status === "sent") {
-		selectedInvoice = {
-			...selectedInvoice,
-			status: statusAfterSuccessfulDocumentEmail(selectedInvoice.status),
-		} as Invoice;
-	}
 }
 
 function dismissEmailRecovery(result: {
@@ -513,7 +480,7 @@ async function handleShareLink() {
 			onemailresolved={handleEmailResolved}
 			emailRecoveryAttempt={visibleInvoiceRecovery(selectedInvoice._id as string)}
 			onemailrecovery={handleEmailRecovery}
-			onemailterminal={handleEmailTerminal}
+			onemailterminal={handleEmailResolved}
 			onemailrecoverydismiss={dismissEmailRecovery}
 			onclose={() => {
 				selectedInvoice = null;
