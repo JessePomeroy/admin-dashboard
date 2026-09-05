@@ -292,11 +292,7 @@ function syncMultiplierFromForm() {
 	}
 }
 
-function loadServerDraft(state: CatalogProductEditorState) {
-	locallyCommittedRevisionIds = [];
-	form = catalogProductDraftFromRevision(state.draft);
-	hasActiveDraft = Boolean(state.draft);
-	baseRevisionId = state.draft?.revisionId;
+function finishLoadingServerDraft(state: CatalogProductEditorState) {
 	syncLoadedPublication(state);
 	savedJson = serializeCatalogProductDraft(form);
 	syncMultiplierFromForm();
@@ -304,6 +300,14 @@ function loadServerDraft(state: CatalogProductEditorState) {
 	saveError = "";
 	variantsValid = true;
 	initialized = true;
+}
+
+function loadServerDraft(state: CatalogProductEditorState) {
+	locallyCommittedRevisionIds = [];
+	form = catalogProductDraftFromRevision(state.draft);
+	hasActiveDraft = Boolean(state.draft);
+	baseRevisionId = state.draft?.revisionId;
+	finishLoadingServerDraft(state);
 }
 
 function loadServerGraphProductDraft(state: CatalogProductEditorState) {
@@ -321,13 +325,7 @@ function loadServerGraphProductDraft(state: CatalogProductEditorState) {
 	graphSourceRevision = state.draft;
 	hasActiveDraft = Boolean(state.draft);
 	baseRevisionId = state.draft?.revisionId;
-	syncLoadedPublication(state);
-	savedJson = serializeCatalogProductDraft(form);
-	syncMultiplierFromForm();
-	saveState = "saved";
-	saveError = "";
-	variantsValid = true;
-	initialized = true;
+	finishLoadingServerDraft(state);
 }
 
 function loadServerGraphProductWithoutDraft(state: CatalogProductEditorState) {
@@ -336,13 +334,7 @@ function loadServerGraphProductWithoutDraft(state: CatalogProductEditorState) {
 	form = emptyCatalogProductDraft();
 	hasActiveDraft = false;
 	baseRevisionId = undefined;
-	syncLoadedPublication(state);
-	savedJson = serializeCatalogProductDraft(form);
-	syncMultiplierFromForm();
-	saveState = "saved";
-	saveError = "";
-	variantsValid = true;
-	initialized = true;
+	finishLoadingServerDraft(state);
 }
 
 function graphRevisionFromDraft(
