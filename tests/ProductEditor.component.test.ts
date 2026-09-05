@@ -1416,6 +1416,80 @@ describe("draft-only product editor", () => {
 		expect(input("retail price (USD)")?.getAttribute("aria-invalid")).toBe("false");
 	});
 
+	for (const [graph, action] of [[false, "save"], [true, "save"], [false, "discard"], [false, "start"], [true, "start"]] as const) {
+		for (const outcome of ["success", "error"] as const) {
+			it.each([false, true])(`ignores a late ${graph ? "graph" : "legacy"} ${action} ${outcome} after navigation (return to original: %s)`, async (returnToOriginal) => {
+				mocks.graphApiEnabled = graph;
+				const detail = (productId: string, revisionId: string, title: string, active = true) => {
+					const draft = graph
+						? { ...graphRevision, revisionId, draft: { ...graphRevision.draft, title } }
+						: { ...revision, revisionId, title };
+					return {
+						...graphDetail(), productId, graphVersion: graph ? 2 : undefined,
+						draft: active ? draft : null, published: active ? null : draft,
+					};
+				};
+				mocks.detailData = detail("product-1", "original-revision", "Original product", action !== "start");
+				let resolveOld!: (value: { revisionId: string }) => void;
+				let rejectOld!: (reason: Error) => void;
+				let resolveCurrent!: (value: { revisionId: string }) => void;
+				mocks.mutation
+					.mockImplementationOnce(() => new Promise((resolve, reject) => { resolveOld = resolve; rejectOld = reject; }))
+					.mockImplementationOnce(() => new Promise((resolve) => { resolveCurrent = resolve; }));
+				vi.spyOn(globalThis, "confirm").mockReturnValue(true);
+				const harness = mount(ProductPageNavigationHarness, { target: document.body });
+				components.push(harness);
+				await tick();
+				await tick();
+				if (action === "save") {
+					input("product name")!.value = "Original edit";
+					input("product name")!.dispatchEvent(new Event("input", { bubbles: true }));
+					await tick();
+				}
+				const actionButton = button(action === "start" ? "start a new draft" : `${action} draft`);
+				expect(actionButton?.disabled).toBe(false);
+				actionButton!.click();
+				await tick();
+				expect(mocks.mutation).toHaveBeenCalledTimes(1);
+
+				harness.navigate("product-2");
+				await updateDetailQuery(detail("product-2", "current-revision", "Current product"));
+				if (returnToOriginal) {
+					harness.navigate("product-1");
+					await updateDetailQuery(detail("product-1", "current-revision", "Current product"));
+				}
+				input("product name")!.value = "Current edit";
+				input("product name")!.dispatchEvent(new Event("input", { bubbles: true }));
+				await tick();
+				button("save draft")!.click();
+				await tick();
+				expect(mocks.mutation).toHaveBeenCalledTimes(2);
+
+				if (outcome === "success") resolveOld({ revisionId: "obsolete-result" });
+				else rejectOld(new Error("Catalog draft conflict from obsolete request"));
+				await tick();
+				await tick();
+				expect(input("product name")?.value).toBe("Current edit");
+				expect(document.querySelector(".save-state")?.textContent).toBe("saving");
+				expect(document.querySelector('[role="alert"]')).toBeNull();
+
+				resolveCurrent({ revisionId: "current-result" });
+				await tick();
+				await tick();
+				input("product name")!.value = "Next current edit";
+				input("product name")!.dispatchEvent(new Event("input", { bubbles: true }));
+				await tick();
+				button("save draft")!.click();
+				await tick();
+				expect(mocks.mutation.mock.calls[2]?.[1]).toEqual(expect.objectContaining({
+					productId: returnToOriginal ? "product-1" : "product-2",
+					expectedDraftRevisionId: "current-result",
+					draft: expect.objectContaining({ title: "Next current edit" }),
+				}));
+			});
+		}
+	}
+
 	it("publishes once with exact CAS args and waits for an exact result/query echo", async () => {
 		enablePublication();
 		mocks.detailData = graphDetail();

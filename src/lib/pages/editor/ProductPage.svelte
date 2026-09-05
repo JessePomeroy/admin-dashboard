@@ -92,6 +92,7 @@ let locallyCommittedRevisionIds = $state<Array<string | null>>([]);
 let savedJson = $state("");
 let saveState = $state<"loading" | "saved" | "dirty" | "saving" | "discarding" | "error" | "conflict">("loading");
 let saveError = $state("");
+let activeDraftOperation: object | null = null;
 let multiplierInput = $state("1.00");
 let multiplierError = $state("");
 let variantsValid = $state(true);
@@ -391,6 +392,7 @@ function clearPublicationReconciliationTimer() {
 }
 
 function resetProductScope() {
+	activeDraftOperation = null;
 	artworkUploadController?.abort();
 	artworkUploadController = null;
 	artworkUploadBusy = false;
@@ -965,6 +967,7 @@ function cancelPrivateUpload() {
 }
 
 onDestroy(() => {
+	activeDraftOperation = null;
 	const controller = privateUploadOperation?.controller;
 	const artworkController = artworkUploadController;
 	clearCompletionCheckTimer();
@@ -981,13 +984,22 @@ async function checkPrivateUploadAgain() {
 	await reconcilePrivateUpload();
 }
 
+function beginDraftMutation(state: "saving" | "discarding") {
+	const operation = {};
+	const operationProductId = productId;
+	activeDraftOperation = operation;
+	saveState = state;
+	saveError = "";
+	// A new visit to the same product must not adopt a previous visit's response.
+	return () => activeDraftOperation === operation && productId === operationProductId;
+}
+
 async function saveDraft() {
 	if (!canSave) return;
 	if (!editorState) return;
 	if (isGraphV2 && !graphSourceRevision) return;
 	if (!isGraphV2 && !editorState.draft) return;
-	saveState = "saving";
-	saveError = "";
+	const isCurrentOperation = beginDraftMutation("saving");
 	try {
 		const submittedForm = copyCatalogProductDraft(form);
 		const submittedJson = serializeCatalogProductDraft(submittedForm);
@@ -999,6 +1011,7 @@ async function saveDraft() {
 			...(baseRevisionId ? { expectedDraftRevisionId: baseRevisionId } : {}),
 			draft,
 		}) as { revisionId: string };
+		if (!isCurrentOperation()) return;
 		baseRevisionId = result.revisionId;
 		if (isGraphV2 && graphSourceRevision && "schemaVersion" in draft && draft.schemaVersion === 2) {
 			graphSourceRevision = graphRevisionFromDraft(
@@ -1011,6 +1024,7 @@ async function saveDraft() {
 		savedJson = submittedJson;
 		saveState = serializeCatalogProductDraft(form) === submittedJson ? "saved" : "dirty";
 	} catch (error) {
+		if (!isCurrentOperation()) return;
 		saveError = mutationError(error, "Could not save this product draft.");
 	}
 }
@@ -1019,10 +1033,10 @@ async function discardDraft() {
 	if (!globalThis.confirm(
 		"Discard this draft? This clears its staged product details and any unsaved changes. The product identity remains, but this editor does not yet provide a restore action.",
 	)) return;
-	saveState = "discarding";
-	saveError = "";
+	const isCurrentOperation = beginDraftMutation("discarding");
 	try {
 		await client.mutation(catalogApi.discardDraft, { productId, draftRevisionId: baseRevisionId });
+		if (!isCurrentOperation()) return;
 		rememberCommittedRevision(null);
 		hasActiveDraft = false;
 		baseRevisionId = undefined;
@@ -1032,6 +1046,7 @@ async function discardDraft() {
 		syncMultiplierFromForm();
 		saveState = "saved";
 	} catch (error) {
+		if (!isCurrentOperation()) return;
 		saveError = mutationError(error, "Could not discard this product draft.");
 	}
 }
@@ -1055,10 +1070,10 @@ async function startDraft() {
 		draft = catalogProductDraftFromRevision(editorState.published);
 		nextForm = draft;
 	}
-	saveState = "saving";
-	saveError = "";
+	const isCurrentOperation = beginDraftMutation("saving");
 	try {
 		const result = await client.mutation(catalogApi.saveDraft, { productId, draft }) as { revisionId: string };
+		if (!isCurrentOperation()) return;
 		form = nextForm;
 		hasActiveDraft = true;
 		baseRevisionId = result.revisionId;
@@ -1074,6 +1089,7 @@ async function startDraft() {
 		syncMultiplierFromForm();
 		saveState = "saved";
 	} catch (error) {
+		if (!isCurrentOperation()) return;
 		saveError = mutationError(error, "Could not start a new product draft.");
 	}
 }
