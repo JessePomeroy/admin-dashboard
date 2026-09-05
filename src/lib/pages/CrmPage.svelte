@@ -20,21 +20,26 @@ const { api } = config;
 
 let { data } = $props();
 
-const client = useAdminClient();
-const clientsQuery = useQuery(api.crm.listClients, { siteUrl: config.siteUrl });
-const statsQuery = useQuery(api.crm.getStats, { siteUrl: config.siteUrl });
-const tagsQuery = useQuery(api.tags.listTags, { siteUrl: config.siteUrl });
-
-let clients = $derived(clientsQuery.data ?? []);
-let stats = $derived(statsQuery.data ?? { total: 0, leads: 0, booked: 0, inProgress: 0, completed: 0, photography: 0, web: 0 });
-let tags = $derived(tagsQuery.data ?? []);
-let isLoading = $derived(clientsQuery.isLoading || statsQuery.isLoading || tagsQuery.isLoading);
-
 // Filter state
 let categoryFilter = $state("all");
 let statusFilter = $state("all");
 let tagFilter = $state("all");
 let searchQuery = $state("");
+
+const client = useAdminClient();
+const clientsQuery = useQuery(api.crm.listClients, () => ({
+	siteUrl: config.siteUrl,
+	...(categoryFilter === "all" ? {} : { category: categoryFilter }),
+	...(statusFilter === "all" ? {} : { status: statusFilter }),
+}));
+const statsQuery = useQuery(api.crm.getStats, { siteUrl: config.siteUrl });
+const tagsQuery = useQuery(api.tags.listTags, { siteUrl: config.siteUrl });
+
+let clients = $derived(clientsQuery.data ?? []);
+let stats = $derived(statsQuery.data ?? { total: 0, leads: 0, booked: 0, inProgress: 0, completed: 0, photography: 0, web: 0 });
+let countPrefix = $derived(stats.truncated === true ? "at least " : "");
+let tags = $derived(tagsQuery.data ?? []);
+let isLoading = $derived(clientsQuery.isLoading || statsQuery.isLoading || tagsQuery.isLoading);
 
 // Modal state
 let showAddModal = $state(false);
@@ -53,9 +58,6 @@ let tagAssignments = $state<Record<string, ClientTag[]>>({});
 
 let filteredClients = $derived(
 	clients.filter((c: Client) => {
-		if (categoryFilter !== "all" && c.category !== categoryFilter)
-			return false;
-		if (statusFilter !== "all" && c.status !== statusFilter) return false;
 		if (tagFilter !== "all") {
 			const assignments = tagAssignments[c._id];
 			if (!assignments || !assignments.some((t) => t._id === tagFilter))
@@ -304,28 +306,32 @@ function formatStatus(status: string) {
 	</header>
 
 	<div class="stats-line">
-		<span>{stats.total} total</span>
+		<span>{countPrefix}{stats.total} total</span>
 		<span class="stat-sep">&middot;</span>
-		<span>{stats.leads} leads</span>
+		<span>{countPrefix}{stats.leads} leads</span>
 		<span class="stat-sep">&middot;</span>
-		<span>{stats.booked} booked</span>
+		<span>{countPrefix}{stats.booked} booked</span>
 		<span class="stat-sep">&middot;</span>
-		<span>{stats.inProgress} in progress</span>
+		<span>{countPrefix}{stats.inProgress} in progress</span>
 		<span class="stat-sep">&middot;</span>
-		<span>{stats.completed} completed</span>
+		<span>{countPrefix}{stats.completed} completed</span>
 		<span class="stat-sep">&middot;</span>
-		<span>{stats.photography} photo</span>
+		<span>{countPrefix}{stats.photography} photo</span>
 		<span class="stat-sep">&middot;</span>
-		<span>{stats.web} web</span>
+		<span>{countPrefix}{stats.web} web</span>
 	</div>
 
+	{#if stats.truncated === true}
+		<p class="result-note">totals cover a limited set of clients; actual counts may be higher.</p>
+	{/if}
+
 	<div class="filter-bar">
-		<select class="filter-select" bind:value={categoryFilter}>
+		<select class="filter-select" aria-label="Client category" bind:value={categoryFilter}>
 			<option value="all">all categories</option>
 			<option value="photography">photography</option>
 			<option value="web">web</option>
 		</select>
-		<select class="filter-select" bind:value={statusFilter}>
+		<select class="filter-select" aria-label="Client status" bind:value={statusFilter}>
 			<option value="all">all statuses</option>
 			{#each CLIENT_STATUSES as s}
 				<option value={s}>{formatStatus(s)}</option>
@@ -342,6 +348,10 @@ function formatStatus(status: string) {
 		<input class="filter-search" type="text" placeholder="search by name or email..." bind:value={searchQuery} />
 		<button class="btn-manage-tags" onclick={() => { showTagManager = true; }}>manage tags</button>
 	</div>
+
+	{#if clients.length >= 500}
+		<p class="result-note">showing the latest 500 matching clients. search and tag filters apply to these clients.</p>
+	{/if}
 
 	<ClientTable clients={filteredClients} {tagAssignments} onselect={openDetailModal} />
 </div>
@@ -438,6 +448,12 @@ function formatStatus(status: string) {
 		margin-bottom: 24px;
 		font-size: 0.82rem;
 		color: var(--admin-text-muted);
+	}
+
+	.result-note {
+		font-size: 0.82rem;
+		color: var(--admin-text-muted);
+		margin: 0 0 24px;
 	}
 
 	.stat-sep {
