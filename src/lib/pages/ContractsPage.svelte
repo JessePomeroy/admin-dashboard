@@ -9,7 +9,6 @@ import type { Contract, ContractStatus } from "../types";
 import {
 	isTerminalDocumentEmailRecovery,
 	type DocumentEmailRecovery,
-	type DocumentEmailResolutionOutcome,
 } from "../documentEmailRecovery";
 import { addToast } from "../toast";
 import { logger } from "../logger";
@@ -260,7 +259,6 @@ async function handleSendEmail(id: string, templateId?: string, changeNote?: str
 
 function handleContractEmailResolved(result: {
 	attemptId: string;
-	outcome: DocumentEmailResolutionOutcome;
 	recovery: DocumentEmailRecovery;
 }) {
 	const documentId = result.recovery.document.id;
@@ -299,37 +297,6 @@ function handleContractEmailRecovery(
 ) {
 	if (selectedContract && selectedContract._id !== contractId) return;
 	rememberContractRecovery(contractId, attempt);
-}
-
-function handleContractEmailTerminal(result: {
-	attemptId: string;
-	recovery: DocumentEmailRecovery;
-}) {
-	const documentId = result.recovery.document.id;
-	emailRequests.clearResolved(contractEmailKey(documentId), result.attemptId);
-	const pending = emailRequests.pending(
-		contractEmailKey(documentId),
-		contractEmailEndpoint(documentId),
-	);
-	if (
-		(pending && pending.attemptId !== result.attemptId) ||
-		(pageEmailRecovery?.documentId === documentId &&
-			pageEmailRecovery.attempt.attemptId !== result.attemptId)
-	) {
-		return;
-	}
-	if (selectedContract && selectedContract._id !== documentId) return;
-	rememberContractRecovery(documentId, {
-		attemptId: result.attemptId,
-		recovery: result.recovery,
-	});
-	if (!selectedContract) return;
-	if (result.recovery.status === "sent") {
-		selectedContract = {
-			...selectedContract,
-			status: statusAfterSuccessfulDocumentEmail(selectedContract.status),
-		} as Contract;
-	}
 }
 
 function dismissContractEmailRecovery(result: {
@@ -524,7 +491,7 @@ async function handleDeleteTemplate(id: string) {
 			onemailresolved={handleContractEmailResolved}
 			emailRecoveryAttempt={visibleContractRecovery(selectedContract._id as string)}
 			onemailrecovery={handleContractEmailRecovery}
-			onemailterminal={handleContractEmailTerminal}
+			onemailterminal={handleContractEmailResolved}
 			onemailrecoverydismiss={dismissContractEmailRecovery}
 			ondelete={handleDeleteContract}
 			onsharelink={handleShareLink}
