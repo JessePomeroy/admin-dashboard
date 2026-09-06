@@ -141,6 +141,7 @@ function handleSave() {
 </form>
 
 <style>
+	@import "../../styles/form-fields.css";
 	.modal-form {
 		padding: 0 28px 28px;
 		display: flex;
@@ -154,37 +155,8 @@ function handleSave() {
 		gap: 14px;
 	}
 
-	.form-group {
-		display: flex;
-		flex-direction: column;
-		gap: 4px;
-	}
-
-	.form-label {
-		font-size: 0.76rem;
-		color: var(--admin-text-muted);
-		font-weight: 400;
-		letter-spacing: 0.02em;
-	}
-
 	.required {
 		color: var(--status-rose);
-	}
-
-	.form-input {
-		padding: 8px 10px;
-		background: rgba(255, 255, 255, 0.03);
-		color: var(--admin-text);
-		border: 1px solid var(--admin-border-strong);
-		border-radius: 6px;
-		font-size: 0.85rem;
-		font-family: "Synonym", system-ui, sans-serif;
-		outline: none;
-		transition: border-color 0.15s;
-	}
-
-	.form-input:focus {
-		border-color: var(--admin-accent);
 	}
 
 	.form-textarea {

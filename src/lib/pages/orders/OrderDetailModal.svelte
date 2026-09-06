@@ -143,6 +143,7 @@ async function saveNotes() {
 </AdminModal>
 
 <style>
+	@import "../../styles/form-controls.css";
 	.modal-sub-header {
 		padding: 0 28px 4px;
 	}
@@ -264,22 +265,6 @@ async function saveNotes() {
 	.fee-amounts {
 		display: flex;
 		gap: 6px;
-	}
-
-	.form-input {
-		padding: 8px 10px;
-		background: rgba(255, 255, 255, 0.03);
-		color: var(--admin-text);
-		border: 1px solid var(--admin-border-strong);
-		border-radius: 6px;
-		font-size: 0.85rem;
-		font-family: "Synonym", system-ui, sans-serif;
-		outline: none;
-		transition: border-color 0.15s;
-	}
-
-	.form-input:focus {
-		border-color: var(--admin-accent);
 	}
 
 	.form-textarea {
