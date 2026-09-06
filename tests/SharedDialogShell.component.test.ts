@@ -200,3 +200,28 @@ it("keeps template edit and confirmed delete actions distinct from shell dismiss
 	expect(ondelete).toHaveBeenCalledTimes(1);
 	expect(onclose).not.toHaveBeenCalled();
 });
+
+it("keeps admin emails read-only while supported client fields save", async () => {
+	const onsave = vi.fn();
+	component = mount(ClientDetailModal, {
+		target: document.body,
+		props: {
+			client: { ...client, adminEmails: ["admin@example.test"] },
+			saving: false,
+			onclose: vi.fn(), onsave,
+			ontiertoggle: vi.fn(), onstatusupdate: vi.fn(),
+		},
+	});
+	await tick();
+	expect(document.querySelector(".detail-fields")!.textContent).toContain("admin@example.test");
+	await click("edit");
+	expect(document.querySelector("form")!.textContent).not.toContain("admin emails");
+	await input("edit-name", "Updated photographer");
+	await input("edit-notes", "Call next week");
+	await submit();
+	expect(onsave).toHaveBeenCalledExactlyOnceWith({
+		name: "Updated photographer", email: client.email, siteUrl: client.siteUrl,
+		tier: "basic", subscriptionStatus: "none", notes: "Call next week",
+	});
+	expect(document.querySelector(".detail-fields")!.textContent).toContain("admin@example.test");
+});

@@ -27,7 +27,6 @@
 	let formSubscriptionStatus = $state<
 		"none" | "active" | "canceled" | "past_due"
 	>("none");
-	let formAdminEmails = $state("");
 	let formNotes = $state("");
 
 	const allTiers = ["basic", "full"] as const;
@@ -55,7 +54,6 @@
 		formSiteUrl = client.siteUrl || "";
 		formTier = client.tier || "basic";
 		formSubscriptionStatus = client.subscriptionStatus || "none";
-		formAdminEmails = (client.adminEmails || []).join(", ");
 		formNotes = client.notes || "";
 		editMode = true;
 	}
@@ -122,10 +120,6 @@
 							{/each}
 						</select>
 					</div>
-				</div>
-				<div class="form-group">
-					<label class="form-label" for="edit-admin-emails">admin emails <span class="form-hint">(comma-separated)</span></label>
-					<input id="edit-admin-emails" class="form-input" type="text" bind:value={formAdminEmails} />
 				</div>
 				<div class="form-group">
 					<label class="form-label" for="edit-notes">notes</label>
@@ -250,10 +244,6 @@
 		color: var(--admin-text-muted);
 		font-weight: 400;
 		letter-spacing: 0.02em;
-	}
-
-	.form-hint {
-		color: var(--admin-text-subtle);
 	}
 
 	.required {
