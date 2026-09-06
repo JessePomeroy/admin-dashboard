@@ -2,7 +2,6 @@ import { mount, tick, unmount } from "svelte";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import GalleriesPage from "../src/lib/pages/GalleriesPage.svelte";
 import PlatformPage from "../src/lib/pages/PlatformPage.svelte";
-import AddClientModal from "../src/lib/pages/platform/AddClientModal.svelte";
 import ClientDetailModal from "../src/lib/pages/platform/ClientDetailModal.svelte";
 
 const mocks = vi.hoisted(() => ({
@@ -54,22 +53,6 @@ async function edit() {
 }
 
 describe("current platform and gallery controls", () => {
-	it("creates a client with current fields and defaults the invitation to their email", async () => {
-		const onsave = vi.fn();
-		mounted.push(mount(AddClientModal, { target: document.body, props: {
-			isOpen: true, saving: false, onclose: vi.fn(), onsave,
-		} }));
-		await input("#add-name", "New photographer");
-		await input("#add-email", "new@example.com");
-		await input("#add-site", "new.example.com");
-		expect(document.body.textContent).not.toMatch(/sanity/i);
-		await submit();
-		expect(onsave).toHaveBeenCalledExactlyOnceWith({
-			name: "New photographer", email: "new@example.com", siteUrl: "new.example.com",
-			tier: "basic", subscriptionStatus: "none", adminEmails: ["new@example.com"], notes: undefined,
-		});
-	});
-
 	it("edits supported fields without displaying or submitting historical provider metadata", async () => {
 		const onsave = vi.fn();
 		mounted.push(mount(ClientDetailModal, { target: document.body, props: {
@@ -91,6 +74,8 @@ describe("current platform and gallery controls", () => {
 	it("keeps the platform table and edit mutation aligned with current client fields", async () => {
 		mounted.push(mount(PlatformPage, { target: document.body, props: { data: {} } }));
 		await tick();
+		expect(document.querySelector(".modal-overlay")).toBeNull();
+		expect([...document.querySelectorAll("button")].some(button => /add client/i.test(button.textContent ?? ""))).toBe(false);
 		expect([...document.querySelectorAll("th")].map((cell) => cell.textContent)).toEqual([
 			"name", "email", "site url", "tier", "subscription", "added",
 		]);

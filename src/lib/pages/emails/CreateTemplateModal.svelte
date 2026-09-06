@@ -1,4 +1,5 @@
 <script lang="ts">
+	import AdminModal from "../../components/AdminModal.svelte";
 	import {
 		emailTemplateVariablesForCategory,
 		getVariableHighlightParts,
@@ -28,10 +29,6 @@
 			.filter(Boolean);
 	}
 
-	function countVariables(body: string): number {
-		const matches = body.match(/\{\{[^}]+\}\}/g);
-		return matches ? matches.length : 0;
-	}
 
 	function resetForm() {
 		formName = "";
@@ -61,167 +58,96 @@
 </script>
 
 {#if isOpen}
-	<div
-		class="modal-overlay"
-		role="dialog"
-		tabindex="-1"
-		aria-modal="true"
-		aria-label="Create email template"
-		onclick={handleClose}
-		onkeydown={(e) => { if (e.key === "Escape") handleClose(); }}
+	<AdminModal
+		title="new email template"
+		ariaLabel="Create email template"
+		onclose={handleClose}
+		--admin-modal-max-width="660px"
+		--admin-modal-mobile-max-height="90vh"
+		--admin-modal-mobile-header-padding="20px 20px 16px"
 	>
-		<div
-			class="modal-content modal-wide"
-			role="presentation"
-			onclick={(e) => e.stopPropagation()}
-			onkeydown={(e) => e.stopPropagation()}
+		<form
+			class="modal-form"
+			onsubmit={(e) => { e.preventDefault(); handleSubmit(); }}
 		>
-			<div class="modal-header">
-				<h2 class="modal-title">new email template</h2>
-				<button class="modal-close" aria-label="Close" onclick={handleClose}>
-					<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
-				</button>
+			<div class="form-row">
+				<div class="form-group">
+					<label class="form-label" for="create-name">name <span class="required">*</span></label>
+					<input id="create-name" class="form-input" type="text" placeholder="e.g. wedding inquiry reply" bind:value={formName} required />
+				</div>
+				<div class="form-group">
+					<label class="form-label" for="create-category">category <span class="required">*</span></label>
+					<select id="create-category" class="form-input" bind:value={formCategory} required>
+						{#each categories as cat}
+							<option value={cat}>{cat}</option>
+						{/each}
+					</select>
+				</div>
 			</div>
 
-			<form
-				class="modal-form"
-				onsubmit={(e) => { e.preventDefault(); handleSubmit(); }}
-			>
-				<div class="form-row">
-					<div class="form-group">
-						<label class="form-label" for="create-name">name <span class="required">*</span></label>
-						<input id="create-name" class="form-input" type="text" placeholder="e.g. wedding inquiry reply" bind:value={formName} required />
-					</div>
-					<div class="form-group">
-						<label class="form-label" for="create-category">category <span class="required">*</span></label>
-						<select id="create-category" class="form-input" bind:value={formCategory} required>
-							{#each categories as cat}
-								<option value={cat}>{cat}</option>
-							{/each}
-						</select>
-					</div>
-				</div>
+			<div class="form-group">
+				<label class="form-label" for="create-subject">subject line <span class="required">*</span></label>
+				<input id="create-subject" class="form-input" type="text" placeholder="e.g. re: your photography inquiry" bind:value={formSubject} required />
+			</div>
 
-				<div class="form-group">
-					<label class="form-label" for="create-subject">subject line <span class="required">*</span></label>
-					<input id="create-subject" class="form-input" type="text" placeholder="e.g. re: your photography inquiry" bind:value={formSubject} required />
-				</div>
+			<div class="form-group">
+				<label class="form-label" for="create-body">body <span class="required">*</span></label>
+				<textarea
+					id="create-body"
+					class="form-input form-textarea form-textarea-large"
+					bind:value={formBody}
+					rows="10"
+					placeholder={"hi {{clientName}},\n\nthank you for reaching out..."}
+					required
+				></textarea>
+			</div>
 
-				<div class="form-group">
-					<label class="form-label" for="create-body">body <span class="required">*</span></label>
-					<textarea
-						id="create-body"
-						class="form-input form-textarea form-textarea-large"
-						bind:value={formBody}
-						rows="10"
-						placeholder={"hi {{clientName}},\n\nthank you for reaching out..."}
-						required
-					></textarea>
-				</div>
+			<div class="form-group">
+				<label class="form-label" for="create-variables"
+					>variable notes (comma-separated; does not create runtime values)</label
+				>
+				<input id="create-variables" class="form-input" type="text" placeholder="customField1, customField2" bind:value={formVariables} />
+			</div>
 
-				<div class="form-group">
-					<label class="form-label" for="create-variables"
-						>variable notes (comma-separated; does not create runtime values)</label
-					>
-					<input id="create-variables" class="form-input" type="text" placeholder="customField1, customField2" bind:value={formVariables} />
+			<div class="variables-ref">
+				<span class="variables-ref-label">
+					{formCategory === "custom"
+						? "sender-specific variable reference (unsupported values fail before send):"
+						: "variables for this sender:"}
+				</span>
+				<div class="variables-ref-list">
+					{#each referenceVariables as v}
+						<span class="variable-tag">{v}</span>
+					{/each}
 				</div>
+			</div>
 
-				<div class="variables-ref">
-					<span class="variables-ref-label">
-						{formCategory === "custom"
-							? "sender-specific variable reference (unsupported values fail before send):"
-							: "variables for this sender:"}
-					</span>
-					<div class="variables-ref-list">
-						{#each referenceVariables as v}
-							<span class="variable-tag">{v}</span>
+			{#if formBody}
+				<div class="preview-section">
+					<span class="preview-label">preview</span>
+					<div class="preview-body">
+						{#each getVariableHighlightParts(formBody) as part}
+							{#if part.isVariable}
+								<span class="var-highlight">{part.text}</span>
+							{:else}
+								{part.text}
+							{/if}
 						{/each}
 					</div>
 				</div>
+			{/if}
 
-				{#if formBody}
-					<div class="preview-section">
-						<span class="preview-label">preview</span>
-						<div class="preview-body">
-							{#each getVariableHighlightParts(formBody) as part}
-								{#if part.isVariable}
-									<span class="var-highlight">{part.text}</span>
-								{:else}
-									{part.text}
-								{/if}
-							{/each}
-						</div>
-					</div>
-				{/if}
-
-				<div class="modal-actions">
-					<button type="button" class="btn-cancel" onclick={handleClose}>cancel</button>
-					<button type="submit" class="btn-save" disabled={saving || !formName || !formSubject || !formBody}>
-						{saving ? "saving..." : "create template"}
-					</button>
-				</div>
-			</form>
-		</div>
-	</div>
+			<div class="modal-actions">
+				<button type="button" class="btn-cancel" onclick={handleClose}>cancel</button>
+				<button type="submit" class="btn-save" disabled={saving || !formName || !formSubject || !formBody}>
+					{saving ? "saving..." : "create template"}
+				</button>
+			</div>
+		</form>
+	</AdminModal>
 {/if}
 
 <style>
-	.modal-overlay {
-		position: fixed;
-		inset: 0;
-		z-index: 100;
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		background: rgba(0, 0, 0, 0.4);
-		backdrop-filter: blur(8px);
-		padding: 1rem;
-	}
-
-	.modal-content {
-		background: var(--admin-bg);
-		border: 1px solid var(--admin-border);
-		border-radius: 12px;
-		width: 100%;
-		max-width: 540px;
-		max-height: 90vh;
-		overflow-y: auto;
-		box-shadow: 0 24px 80px rgba(0, 0, 0, 0.5);
-	}
-
-	.modal-wide {
-		max-width: 660px;
-	}
-
-	.modal-header {
-		display: flex;
-		align-items: center;
-		justify-content: space-between;
-		padding: 24px 28px 20px;
-	}
-
-	.modal-title {
-		font-family: "Chillax", sans-serif;
-		font-size: 1.1rem;
-		font-weight: 500;
-		color: var(--admin-heading);
-		margin: 0;
-	}
-
-	.modal-close {
-		background: none;
-		border: none;
-		color: var(--admin-text-muted);
-		cursor: pointer;
-		padding: 4px;
-		border-radius: 4px;
-		transition: color 0.15s;
-	}
-
-	.modal-close:hover {
-		color: var(--admin-heading);
-	}
-
 	.modal-form {
 		padding: 0 28px 28px;
 		display: flex;
@@ -386,23 +312,6 @@
 	@media (max-width: 768px) {
 		.form-row {
 			grid-template-columns: 1fr;
-		}
-
-		.modal-content {
-			max-width: 100%;
-		}
-
-		.modal-overlay {
-			align-items: flex-end;
-			padding: 0;
-		}
-
-		.modal-content {
-			border-radius: 12px 12px 0 0;
-		}
-
-		.modal-header {
-			padding: 20px 20px 16px;
 		}
 
 		.modal-form {

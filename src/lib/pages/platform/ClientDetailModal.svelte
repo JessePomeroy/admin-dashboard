@@ -1,4 +1,5 @@
 <script lang="ts">
+	import AdminModal from "../../components/AdminModal.svelte";
 	import { formatTimestampDate } from "../../utils";
 
 	let { client, saving, onclose, onsave, ontiertoggle, onstatusupdate } = $props<{
@@ -83,203 +84,147 @@
 </script>
 
 {#if client}
-	<div class="modal-overlay" role="dialog" tabindex="-1" aria-modal="true" aria-label="Platform client details" onclick={handleClose} onkeydown={(e) => { if (e.key === "Escape") handleClose(); }}>
-		<div class="modal-content" role="presentation" onclick={(e) => e.stopPropagation()} onkeydown={(e) => e.stopPropagation()}>
-			<div class="modal-header">
-				<h2 class="modal-title">{editMode ? "edit client" : client.name}</h2>
-				<button class="modal-close" aria-label="Close" onclick={handleClose}>
-					<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
-				</button>
-			</div>
-
-			{#if editMode}
-				<form class="modal-form" onsubmit={(e) => { e.preventDefault(); handleSubmit(); }}>
+	<AdminModal
+		title={editMode ? "edit client" : client.name}
+		ariaLabel="Platform client details"
+		onclose={handleClose}
+		--admin-modal-mobile-max-height="90vh"
+		--admin-modal-mobile-header-padding="20px 20px 16px"
+	>
+		{#if editMode}
+			<form class="modal-form" onsubmit={(e) => { e.preventDefault(); handleSubmit(); }}>
+				<div class="form-group">
+					<label class="form-label" for="edit-name">name <span class="required">*</span></label>
+					<input id="edit-name" class="form-input" type="text" bind:value={formName} required />
+				</div>
+				<div class="form-group">
+					<label class="form-label" for="edit-email">email <span class="required">*</span></label>
+					<input id="edit-email" class="form-input" type="email" bind:value={formEmail} required />
+				</div>
+				<div class="form-group">
+					<label class="form-label" for="edit-site">site url <span class="required">*</span></label>
+					<input id="edit-site" class="form-input" type="text" placeholder="example.com" bind:value={formSiteUrl} required />
+				</div>
+				<div class="form-row">
 					<div class="form-group">
-						<label class="form-label" for="edit-name">name <span class="required">*</span></label>
-						<input id="edit-name" class="form-input" type="text" bind:value={formName} required />
-					</div>
-					<div class="form-group">
-						<label class="form-label" for="edit-email">email <span class="required">*</span></label>
-						<input id="edit-email" class="form-input" type="email" bind:value={formEmail} required />
-					</div>
-					<div class="form-group">
-						<label class="form-label" for="edit-site">site url <span class="required">*</span></label>
-						<input id="edit-site" class="form-input" type="text" placeholder="example.com" bind:value={formSiteUrl} required />
-					</div>
-					<div class="form-row">
-						<div class="form-group">
-							<label class="form-label" for="edit-tier">tier</label>
-							<select id="edit-tier" class="form-input" bind:value={formTier}>
-								{#each allTiers as t}
-									<option value={t}>{t}</option>
-								{/each}
-							</select>
-						</div>
-						<div class="form-group">
-							<label class="form-label" for="edit-status">subscription status</label>
-							<select id="edit-status" class="form-input" bind:value={formSubscriptionStatus}>
-								{#each allSubscriptionStatuses as s}
-									<option value={s}>{s === "past_due" ? "past due" : s}</option>
-								{/each}
-							</select>
-						</div>
-					</div>
-					<div class="form-group">
-						<label class="form-label" for="edit-admin-emails">admin emails <span class="form-hint">(comma-separated)</span></label>
-						<input id="edit-admin-emails" class="form-input" type="text" bind:value={formAdminEmails} />
-					</div>
-					<div class="form-group">
-						<label class="form-label" for="edit-notes">notes</label>
-						<textarea id="edit-notes" class="form-input form-textarea" bind:value={formNotes} rows="3"></textarea>
-					</div>
-					<div class="modal-actions">
-						<button type="button" class="btn-cancel" onclick={cancelEdit}>cancel</button>
-						<button type="submit" class="btn-save" disabled={saving || !formName || !formEmail || !formSiteUrl}>
-							{saving ? "saving..." : "save changes"}
-						</button>
-					</div>
-				</form>
-			{:else}
-				<div class="detail-body">
-					<div class="detail-meta-line">
-						<span class="tier-text" class:tier-full={client.tier === "full"}>{client.tier} tier</span>
-						<span class="meta-sep">&middot;</span>
-						<span class="status-indicator">
-							<span class="status-dot" style="background: {getSubscriptionColor(client.subscriptionStatus)}"></span>
-							{client.subscriptionStatus === "past_due" ? "past due" : client.subscriptionStatus}
-						</span>
-					</div>
-
-					<div class="detail-fields">
-						<div class="detail-field">
-							<span class="detail-label">email</span>
-							<span class="detail-value">{client.email}</span>
-						</div>
-						<div class="detail-field">
-							<span class="detail-label">site url</span>
-							<a class="detail-link" href={client.siteUrl} target="_blank" rel="noopener noreferrer">{client.siteUrl}</a>
-						</div>
-						{#if client.adminEmails?.length > 0}
-							<div class="detail-field">
-								<span class="detail-label">admin emails</span>
-								<span class="detail-value">{client.adminEmails.join(", ")}</span>
-							</div>
-						{/if}
-						<div class="detail-field">
-							<span class="detail-label">added</span>
-							<span class="detail-value">{formatTimestampDate(client._creationTime)}</span>
-						</div>
-						{#if client.notes}
-							<div class="detail-field">
-								<span class="detail-label">notes</span>
-								<span class="detail-value detail-notes">{client.notes}</span>
-							</div>
-						{/if}
-					</div>
-
-					<!-- Quick tier toggle -->
-					<div class="detail-status-row">
-						<span class="detail-label">tier</span>
-						<div class="status-buttons">
-							<button
-								class="status-btn"
-								class:active={client.tier === "basic"}
-								style={client.tier === "basic" ? "color: var(--admin-text); border-color: var(--admin-text-muted)" : ""}
-								onclick={ontiertoggle}
-							>
-								basic
-							</button>
-							<button
-								class="status-btn"
-								class:active={client.tier === "full"}
-								style={client.tier === "full" ? "color: var(--admin-accent-hover); border-color: var(--admin-accent)" : ""}
-								onclick={ontiertoggle}
-							>
-								full
-							</button>
-						</div>
-					</div>
-
-					<!-- Quick subscription status -->
-					<div class="detail-status-row">
-						<span class="detail-label">subscription</span>
-						<div class="status-buttons">
-							{#each allSubscriptionStatuses as s}
-								<button
-									class="status-btn"
-									class:active={client.subscriptionStatus === s}
-									style={client.subscriptionStatus === s ? `color: ${getSubscriptionColor(s)}; border-color: ${getSubscriptionColor(s)}` : ""}
-									onclick={() => onstatusupdate(s)}
-								>
-									{s === "past_due" ? "past due" : s}
-								</button>
+						<label class="form-label" for="edit-tier">tier</label>
+						<select id="edit-tier" class="form-input" bind:value={formTier}>
+							{#each allTiers as t}
+								<option value={t}>{t}</option>
 							{/each}
-						</div>
+						</select>
 					</div>
-
-					<div class="modal-actions detail-actions">
-						<button class="btn-save" onclick={startEdit}>edit</button>
+					<div class="form-group">
+						<label class="form-label" for="edit-status">subscription status</label>
+						<select id="edit-status" class="form-input" bind:value={formSubscriptionStatus}>
+							{#each allSubscriptionStatuses as s}
+								<option value={s}>{s === "past_due" ? "past due" : s}</option>
+							{/each}
+						</select>
 					</div>
 				</div>
-			{/if}
-		</div>
-	</div>
+				<div class="form-group">
+					<label class="form-label" for="edit-admin-emails">admin emails <span class="form-hint">(comma-separated)</span></label>
+					<input id="edit-admin-emails" class="form-input" type="text" bind:value={formAdminEmails} />
+				</div>
+				<div class="form-group">
+					<label class="form-label" for="edit-notes">notes</label>
+					<textarea id="edit-notes" class="form-input form-textarea" bind:value={formNotes} rows="3"></textarea>
+				</div>
+				<div class="modal-actions">
+					<button type="button" class="btn-cancel" onclick={cancelEdit}>cancel</button>
+					<button type="submit" class="btn-save" disabled={saving || !formName || !formEmail || !formSiteUrl}>
+						{saving ? "saving..." : "save changes"}
+					</button>
+				</div>
+			</form>
+		{:else}
+			<div class="detail-body">
+				<div class="detail-meta-line">
+					<span class="tier-text" class:tier-full={client.tier === "full"}>{client.tier} tier</span>
+					<span class="meta-sep">&middot;</span>
+					<span class="status-indicator">
+						<span class="status-dot" style="background: {getSubscriptionColor(client.subscriptionStatus)}"></span>
+						{client.subscriptionStatus === "past_due" ? "past due" : client.subscriptionStatus}
+					</span>
+				</div>
+
+				<div class="detail-fields">
+					<div class="detail-field">
+						<span class="detail-label">email</span>
+						<span class="detail-value">{client.email}</span>
+					</div>
+					<div class="detail-field">
+						<span class="detail-label">site url</span>
+						<a class="detail-link" href={client.siteUrl} target="_blank" rel="noopener noreferrer">{client.siteUrl}</a>
+					</div>
+					{#if client.adminEmails?.length > 0}
+						<div class="detail-field">
+							<span class="detail-label">admin emails</span>
+							<span class="detail-value">{client.adminEmails.join(", ")}</span>
+						</div>
+					{/if}
+					<div class="detail-field">
+						<span class="detail-label">added</span>
+						<span class="detail-value">{formatTimestampDate(client._creationTime)}</span>
+					</div>
+					{#if client.notes}
+						<div class="detail-field">
+							<span class="detail-label">notes</span>
+							<span class="detail-value detail-notes">{client.notes}</span>
+						</div>
+					{/if}
+				</div>
+
+				<!-- Quick tier toggle -->
+				<div class="detail-status-row">
+					<span class="detail-label">tier</span>
+					<div class="status-buttons">
+						<button
+							class="status-btn"
+							class:active={client.tier === "basic"}
+							style={client.tier === "basic" ? "color: var(--admin-text); border-color: var(--admin-text-muted)" : ""}
+							onclick={ontiertoggle}
+						>
+							basic
+						</button>
+						<button
+							class="status-btn"
+							class:active={client.tier === "full"}
+							style={client.tier === "full" ? "color: var(--admin-accent-hover); border-color: var(--admin-accent)" : ""}
+							onclick={ontiertoggle}
+						>
+							full
+						</button>
+					</div>
+				</div>
+
+				<!-- Quick subscription status -->
+				<div class="detail-status-row">
+					<span class="detail-label">subscription</span>
+					<div class="status-buttons">
+						{#each allSubscriptionStatuses as s}
+							<button
+								class="status-btn"
+								class:active={client.subscriptionStatus === s}
+								style={client.subscriptionStatus === s ? `color: ${getSubscriptionColor(s)}; border-color: ${getSubscriptionColor(s)}` : ""}
+								onclick={() => onstatusupdate(s)}
+							>
+								{s === "past_due" ? "past due" : s}
+							</button>
+						{/each}
+					</div>
+				</div>
+
+				<div class="modal-actions detail-actions">
+					<button class="btn-save" onclick={startEdit}>edit</button>
+				</div>
+			</div>
+		{/if}
+	</AdminModal>
 {/if}
 
 <style>
-	/* Modal */
-	.modal-overlay {
-		position: fixed;
-		inset: 0;
-		z-index: 100;
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		background: rgba(0, 0, 0, 0.4);
-		backdrop-filter: blur(8px);
-		padding: 1rem;
-	}
-
-	.modal-content {
-		background: var(--admin-bg);
-		border: 1px solid var(--admin-border);
-		border-radius: 12px;
-		width: 100%;
-		max-width: 540px;
-		max-height: 90vh;
-		overflow-y: auto;
-		box-shadow: 0 24px 80px rgba(0, 0, 0, 0.5);
-	}
-
-	.modal-header {
-		display: flex;
-		align-items: center;
-		justify-content: space-between;
-		padding: 24px 28px 20px;
-	}
-
-	.modal-title {
-		font-family: "Chillax", sans-serif;
-		font-size: 1.1rem;
-		font-weight: 500;
-		color: var(--admin-heading);
-		margin: 0;
-	}
-
-	.modal-close {
-		background: none;
-		border: none;
-		color: var(--admin-text-muted);
-		cursor: pointer;
-		padding: 4px;
-		border-radius: 4px;
-		transition: color 0.15s;
-	}
-
-	.modal-close:hover {
-		color: var(--admin-heading);
-	}
-
 	/* Form */
 	.modal-form {
 		padding: 0 28px 28px;
@@ -510,23 +455,6 @@
 	@media (max-width: 768px) {
 		.form-row {
 			grid-template-columns: 1fr;
-		}
-
-		.modal-content {
-			max-width: 100%;
-		}
-
-		.modal-overlay {
-			align-items: flex-end;
-			padding: 0;
-		}
-
-		.modal-content {
-			border-radius: 12px 12px 0 0;
-		}
-
-		.modal-header {
-			padding: 20px 20px 16px;
 		}
 
 		.modal-form {
