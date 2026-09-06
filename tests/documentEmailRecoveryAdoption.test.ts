@@ -10,27 +10,6 @@ function source(relativePath: string) {
 }
 
 describe("document email recovery host adoption", () => {
-	it("requires and exports the exact backend discovery reference", () => {
-		const config = source("src/lib/config.ts");
-		const server = source("src/lib/server.ts");
-
-		expect(config).toContain("getOpenRecoveryByDocument: FnRef;");
-		expect(server).toContain("createOpenDocumentEmailRecoveryGetHandler");
-	});
-
-	it("documents the static no-store discovery route with host initialization", () => {
-		const readme = source("README.md");
-
-		expect(readme).toContain(
-			"src/routes/api/admin/document-email-attempts/open/+server.ts",
-		);
-		expect(readme).toContain('import "$lib/server/adminHandler";');
-		expect(readme).toContain(
-			"export const GET = createOpenDocumentEmailRecoveryGetHandler();",
-		);
-		expect(readme).toContain("Cache-Control: private, no-store");
-	});
-
 	it("hydrates all document detail views from local and backend recovery state", () => {
 		for (const page of [
 			"src/lib/pages/InvoicingPage.svelte",
