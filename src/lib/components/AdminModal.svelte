@@ -3,12 +3,13 @@ import type { Snippet } from "svelte";
 
 interface Props {
 	title: string;
+	ariaLabel?: string;
 	onclose: () => void;
 	size?: "default" | "wide" | "narrow" | "full";
 	children: Snippet;
 }
 
-let { title, onclose, size = "default", children }: Props = $props();
+let { title, ariaLabel, onclose, size = "default", children }: Props = $props();
 
 let contentEl = $state<HTMLDivElement | null>(null);
 let previouslyFocused: HTMLElement | null = null;
@@ -57,7 +58,7 @@ function handleOverlayClick(e: MouseEvent) {
 	class="modal-overlay"
 	role="dialog"
 	aria-modal="true"
-	aria-label={title}
+	aria-label={ariaLabel ?? title}
 	tabindex="-1"
 	onclick={handleOverlayClick}
 	onkeydown={handleKeydown}
@@ -101,7 +102,7 @@ function handleOverlayClick(e: MouseEvent) {
 		border: 1px solid var(--admin-border);
 		border-radius: 12px;
 		width: 100%;
-		max-width: 540px;
+		max-width: var(--admin-modal-max-width, 540px);
 		max-height: 90vh;
 		overflow-y: auto;
 		box-shadow: 0 24px 80px rgba(0, 0, 0, 0.5);
@@ -149,6 +150,10 @@ function handleOverlayClick(e: MouseEvent) {
 	}
 
 	@media (max-width: 768px) {
+		.modal-header {
+			padding: var(--admin-modal-mobile-header-padding, 24px 28px 20px);
+		}
+
 		.modal-overlay {
 			align-items: flex-end;
 			padding: 0;
@@ -156,7 +161,7 @@ function handleOverlayClick(e: MouseEvent) {
 
 		.modal-content {
 			max-width: 100%;
-			max-height: 85vh;
+			max-height: var(--admin-modal-mobile-max-height, 85vh);
 			border-radius: 12px 12px 0 0;
 		}
 	}

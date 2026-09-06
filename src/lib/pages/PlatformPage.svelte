@@ -7,7 +7,6 @@ import type { PlatformClient } from "../types";
 import { formatTimestampDate } from "../utils";
 import { addToast } from "../toast";
 import { logger } from "../logger";
-import AddClientModal from "./platform/AddClientModal.svelte";
 import ClientDetailModal from "./platform/ClientDetailModal.svelte";
 
 const config = getAdminConfig();
@@ -19,7 +18,6 @@ const convexClient = useAdminClient();
 const clientsQuery = useQuery(api.platform.listAll, {});
 
 // Modal state
-let showAddModal = $state(false);
 let selectedClient = $state<PlatformClient | null>(null);
 let saving = $state(false);
 
@@ -53,14 +51,6 @@ let filteredClients = $derived(
 	}),
 );
 
-function openAddModal() {
-	showAddModal = true;
-}
-
-function closeAddModal() {
-	showAddModal = false;
-}
-
 function openDetailModal(client: PlatformClient) {
 	selectedClient = { ...client };
 }
@@ -77,37 +67,6 @@ function getSubscriptionColor(status: string): string {
 		none: "var(--admin-text-subtle)",
 	};
 	return colors[status] || "var(--admin-text-subtle)";
-}
-
-async function handleSaveNewClient(formData: {
-	name: string;
-	email: string;
-	siteUrl: string;
-	tier: "basic" | "full";
-	subscriptionStatus: string;
-	adminEmails: string[];
-	notes?: string;
-}) {
-	saving = true;
-	try {
-		await convexClient.mutation(api.platform.createClient, {
-			name: formData.name,
-			email: formData.email,
-			siteUrl: formData.siteUrl,
-			tier: formData.tier,
-			subscriptionStatus: formData.subscriptionStatus,
-			adminEmails: formData.adminEmails,
-			notes: formData.notes,
-		});
-
-		addToast("Client created. Their invited admin can sign in with Google to claim access.");
-		closeAddModal();
-	} catch (err) {
-		logger.error("Failed to create platform client:", err);
-		addToast("Failed to create client.");
-	} finally {
-		saving = false;
-	}
 }
 
 async function handleSaveEdit(formData: {
@@ -190,16 +149,7 @@ async function quickStatusUpdate(
 			<h1>platform clients</h1>
 			<span class="client-count">{totalClients}</span>
 		</div>
-		<!--
-			Client creation remains disabled because this package cannot safely
-			provision accounts in a tenant's Convex deployment. Onboarding is an
-			operator-run process until a cross-deployment provisioning contract
-			exists.
-		-->
-		<!-- <button class="btn-add" onclick={openAddModal}>
-			<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
-			add client
-		</button> -->
+		<!-- Tenant onboarding is operator-run; this page manages existing clients. -->
 	</header>
 
 	<!-- Stats line -->
@@ -273,12 +223,10 @@ async function quickStatusUpdate(
 		<div class="empty-state-large">
 			<svg class="empty-icon" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z"/></svg>
 			<p class="empty-title">no platform clients yet</p>
-			<p class="empty-desc">when you onboard your first photographer client, they'll appear here. click "add client" to get started.</p>
+			<p class="empty-desc">clients appear here after operator onboarding.</p>
 		</div>
 	{/if}
 </div>
-
-<AddClientModal isOpen={showAddModal} {saving} onclose={closeAddModal} onsave={handleSaveNewClient} />
 
 <ClientDetailModal client={selectedClient} {saving} onclose={closeDetailModal} onsave={handleSaveEdit} ontiertoggle={quickTierToggle} onstatusupdate={quickStatusUpdate} />
 {/if}

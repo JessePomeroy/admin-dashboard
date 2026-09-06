@@ -1,4 +1,5 @@
 <script lang="ts">
+	import AdminModal from "../../components/AdminModal.svelte";
 	import {
 		emailTemplateVariablesForCategory,
 		getVariableHighlightParts,
@@ -73,223 +74,150 @@
 </script>
 
 {#if template}
-	<div
-		class="modal-overlay"
-		role="dialog"
-		tabindex="-1"
-		aria-modal="true"
-		aria-label="Email template details"
-		onclick={handleClose}
-		onkeydown={(e) => { if (e.key === "Escape") handleClose(); }}
+	<AdminModal
+		title={editMode ? "edit template" : template.name}
+		ariaLabel="Email template details"
+		onclose={handleClose}
+		--admin-modal-max-width="660px"
+		--admin-modal-mobile-max-height="90vh"
+		--admin-modal-mobile-header-padding="20px 20px 16px"
 	>
-		<div
-			class="modal-content modal-wide"
-			role="presentation"
-			onclick={(e) => e.stopPropagation()}
-			onkeydown={(e) => e.stopPropagation()}
-		>
-			<div class="modal-header">
-				<h2 class="modal-title">
-					{editMode ? "edit template" : template.name}
-				</h2>
-				<button class="modal-close" aria-label="Close" onclick={handleClose}>
-					<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
-				</button>
-			</div>
+		{#if editMode}
+			<form
+				class="modal-form"
+				onsubmit={(e) => { e.preventDefault(); handleSave(); }}
+			>
+				<div class="form-row">
+					<div class="form-group">
+						<label class="form-label" for="edit-name">name <span class="required">*</span></label>
+						<input id="edit-name" class="form-input" type="text" bind:value={editName} required />
+					</div>
+					<div class="form-group">
+						<label class="form-label" for="edit-category">category <span class="required">*</span></label>
+						<select id="edit-category" class="form-input" bind:value={editCategory} required>
+							{#each categories as cat}
+								<option value={cat}>{cat}</option>
+							{/each}
+						</select>
+					</div>
+				</div>
 
-			{#if editMode}
-				<form
-					class="modal-form"
-					onsubmit={(e) => { e.preventDefault(); handleSave(); }}
-				>
-					<div class="form-row">
-						<div class="form-group">
-							<label class="form-label" for="edit-name">name <span class="required">*</span></label>
-							<input id="edit-name" class="form-input" type="text" bind:value={editName} required />
+				<div class="form-group">
+					<label class="form-label" for="edit-subject">subject line <span class="required">*</span></label>
+					<input id="edit-subject" class="form-input" type="text" bind:value={editSubject} required />
+				</div>
+
+				<div class="form-group">
+					<label class="form-label" for="edit-body">body <span class="required">*</span></label>
+					<textarea
+						id="edit-body"
+						class="form-input form-textarea form-textarea-large"
+						bind:value={editBody}
+						rows="10"
+						required
+					></textarea>
+				</div>
+
+				<div class="form-group">
+					<label class="form-label" for="edit-variables"
+						>variable notes (comma-separated; does not create runtime values)</label
+					>
+					<input id="edit-variables" class="form-input" type="text" bind:value={editVariables} />
+				</div>
+
+				<div class="variables-ref">
+					<span class="variables-ref-label">
+						{editCategory === "custom"
+							? "sender-specific variable reference (unsupported values fail before send):"
+							: "variables for this sender:"}
+					</span>
+					<div class="variables-ref-list">
+						{#each referenceVariables as v}
+							<span class="variable-tag">{v}</span>
+						{/each}
+					</div>
+				</div>
+
+				{#if editBody}
+					<div class="preview-section">
+						<span class="preview-label">preview</span>
+						<div class="preview-body">
+							{#each getVariableHighlightParts(editBody) as part}
+								{#if part.isVariable}
+									<span class="var-highlight">{part.text}</span>
+								{:else}
+									{part.text}
+								{/if}
+							{/each}
 						</div>
-						<div class="form-group">
-							<label class="form-label" for="edit-category">category <span class="required">*</span></label>
-							<select id="edit-category" class="form-input" bind:value={editCategory} required>
-								{#each categories as cat}
-									<option value={cat}>{cat}</option>
-								{/each}
-							</select>
-						</div>
 					</div>
+				{/if}
 
-					<div class="form-group">
-						<label class="form-label" for="edit-subject">subject line <span class="required">*</span></label>
-						<input id="edit-subject" class="form-input" type="text" bind:value={editSubject} required />
-					</div>
+				<div class="modal-actions">
+					<button type="button" class="btn-cancel" onclick={cancelEdit}>cancel</button>
+					<button type="submit" class="btn-save" disabled={saving || !editName || !editSubject || !editBody}>
+						{saving ? "saving..." : "save changes"}
+					</button>
+				</div>
+			</form>
+		{:else}
+			<div class="detail-body">
+				<div class="detail-meta-line">
+					<span class="category-label" style="color: {getCategoryColor(template.category)}">
+						<span class="category-dot" style="background: {getCategoryColor(template.category)}"></span>
+						{template.category}
+					</span>
+				</div>
 
-					<div class="form-group">
-						<label class="form-label" for="edit-body">body <span class="required">*</span></label>
-						<textarea
-							id="edit-body"
-							class="form-input form-textarea form-textarea-large"
-							bind:value={editBody}
-							rows="10"
-							required
-						></textarea>
-					</div>
+				<div class="detail-field">
+					<span class="detail-label">subject</span>
+					<span class="detail-value">{template.subject}</span>
+				</div>
 
-					<div class="form-group">
-						<label class="form-label" for="edit-variables"
-							>variable notes (comma-separated; does not create runtime values)</label
-						>
-						<input id="edit-variables" class="form-input" type="text" bind:value={editVariables} />
-					</div>
-
-					<div class="variables-ref">
-						<span class="variables-ref-label">
-							{editCategory === "custom"
-								? "sender-specific variable reference (unsupported values fail before send):"
-								: "variables for this sender:"}
-						</span>
-						<div class="variables-ref-list">
-							{#each referenceVariables as v}
-								<span class="variable-tag">{v}</span>
+				<div class="detail-fields">
+					<div class="detail-field">
+						<span class="detail-label">body</span>
+						<div class="detail-body-text">
+							{#each getVariableHighlightParts(template.body) as part}
+								{#if part.isVariable}
+									<span class="var-highlight">{part.text}</span>
+								{:else}
+									{part.text}
+								{/if}
 							{/each}
 						</div>
 					</div>
 
-					{#if editBody}
-						<div class="preview-section">
-							<span class="preview-label">preview</span>
-							<div class="preview-body">
-								{#each getVariableHighlightParts(editBody) as part}
-									{#if part.isVariable}
-										<span class="var-highlight">{part.text}</span>
-									{:else}
-										{part.text}
-									{/if}
+					{#if template.variables?.length}
+						<div class="detail-field">
+							<span class="detail-label">custom variables</span>
+							<div class="variables-ref-list">
+								{#each template.variables as v}
+									<span class="variable-tag">{v}</span>
 								{/each}
 							</div>
 						</div>
 					{/if}
-
-					<div class="modal-actions">
-						<button type="button" class="btn-cancel" onclick={cancelEdit}>cancel</button>
-						<button type="submit" class="btn-save" disabled={saving || !editName || !editSubject || !editBody}>
-							{saving ? "saving..." : "save changes"}
-						</button>
-					</div>
-				</form>
-			{:else}
-				<div class="detail-body">
-					<div class="detail-meta-line">
-						<span class="category-label" style="color: {getCategoryColor(template.category)}">
-							<span class="category-dot" style="background: {getCategoryColor(template.category)}"></span>
-							{template.category}
-						</span>
-					</div>
-
-					<div class="detail-field">
-						<span class="detail-label">subject</span>
-						<span class="detail-value">{template.subject}</span>
-					</div>
-
-					<div class="detail-fields">
-						<div class="detail-field">
-							<span class="detail-label">body</span>
-							<div class="detail-body-text">
-								{#each getVariableHighlightParts(template.body) as part}
-									{#if part.isVariable}
-										<span class="var-highlight">{part.text}</span>
-									{:else}
-										{part.text}
-									{/if}
-								{/each}
-							</div>
-						</div>
-
-						{#if template.variables?.length}
-							<div class="detail-field">
-								<span class="detail-label">custom variables</span>
-								<div class="variables-ref-list">
-									{#each template.variables as v}
-										<span class="variable-tag">{v}</span>
-									{/each}
-								</div>
-							</div>
-						{/if}
-					</div>
-
-					<div class="modal-actions detail-actions">
-						{#if confirmDelete}
-							<span class="confirm-text">delete this template?</span>
-							<button class="btn-danger" onclick={handleDelete} disabled={saving}>
-								{saving ? "deleting..." : "yes, delete"}
-							</button>
-							<button class="btn-cancel" onclick={() => { confirmDelete = false; }}>no</button>
-						{:else}
-							<button class="btn-danger-outline" onclick={() => { confirmDelete = true; }}>delete</button>
-							<button class="btn-cancel" onclick={startEdit}>edit</button>
-						{/if}
-					</div>
 				</div>
-			{/if}
-		</div>
-	</div>
+
+				<div class="modal-actions detail-actions">
+					{#if confirmDelete}
+						<span class="confirm-text">delete this template?</span>
+						<button class="btn-danger" onclick={handleDelete} disabled={saving}>
+							{saving ? "deleting..." : "yes, delete"}
+						</button>
+						<button class="btn-cancel" onclick={() => { confirmDelete = false; }}>no</button>
+					{:else}
+						<button class="btn-danger-outline" onclick={() => { confirmDelete = true; }}>delete</button>
+						<button class="btn-cancel" onclick={startEdit}>edit</button>
+					{/if}
+				</div>
+			</div>
+		{/if}
+	</AdminModal>
 {/if}
 
 <style>
-	.modal-overlay {
-		position: fixed;
-		inset: 0;
-		z-index: 100;
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		background: rgba(0, 0, 0, 0.4);
-		backdrop-filter: blur(8px);
-		padding: 1rem;
-	}
-
-	.modal-content {
-		background: var(--admin-bg);
-		border: 1px solid var(--admin-border);
-		border-radius: 12px;
-		width: 100%;
-		max-width: 540px;
-		max-height: 90vh;
-		overflow-y: auto;
-		box-shadow: 0 24px 80px rgba(0, 0, 0, 0.5);
-	}
-
-	.modal-wide {
-		max-width: 660px;
-	}
-
-	.modal-header {
-		display: flex;
-		align-items: center;
-		justify-content: space-between;
-		padding: 24px 28px 20px;
-	}
-
-	.modal-title {
-		font-family: "Chillax", sans-serif;
-		font-size: 1.1rem;
-		font-weight: 500;
-		color: var(--admin-heading);
-		margin: 0;
-	}
-
-	.modal-close {
-		background: none;
-		border: none;
-		color: var(--admin-text-muted);
-		cursor: pointer;
-		padding: 4px;
-		border-radius: 4px;
-		transition: color 0.15s;
-	}
-
-	.modal-close:hover {
-		color: var(--admin-heading);
-	}
-
 	/* Form styles */
 	.modal-form {
 		padding: 0 28px 28px;
@@ -567,23 +495,6 @@
 	@media (max-width: 768px) {
 		.form-row {
 			grid-template-columns: 1fr;
-		}
-
-		.modal-content {
-			max-width: 100%;
-		}
-
-		.modal-overlay {
-			align-items: flex-end;
-			padding: 0;
-		}
-
-		.modal-content {
-			border-radius: 12px 12px 0 0;
-		}
-
-		.modal-header {
-			padding: 20px 20px 16px;
 		}
 
 		.modal-form {
