@@ -77,3 +77,7 @@ export function getVariableHighlightParts(text: string): HighlightPart[] {
 			isVariable: VARIABLE_PART_PATTERN.test(part),
 		}));
 }
+
+export function parseEmailTemplateVariables(input: string): string[] {
+	return input.split(",").map((value) => value.trim()).filter(Boolean);
+}
