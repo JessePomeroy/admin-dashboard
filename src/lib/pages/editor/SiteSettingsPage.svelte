@@ -1,8 +1,7 @@
 <script lang="ts">
-import { browser } from "$app/environment";
-import { onMount } from "svelte";
 import { useQuery } from "convex-svelte";
 import { dragHandle, dragHandleZone } from "svelte-dnd-action";
+import { createSingletonDraft } from "../../singletonDraft.svelte";
 import { useAdminClient } from "../../adminClient";
 import {
 	getAdminConfig,
@@ -19,16 +18,6 @@ import {
 } from "../../siteSettings";
 import "../../styles/editorial-page.css";
 
-type SaveState =
-	| "loading"
-	| "saved"
-	| "dirty"
-	| "saving"
-	| "offline"
-	| "syncing"
-	| "error"
-	| "conflict";
-
 const config = getAdminConfig();
 if (!config.api.siteEditor || !config.editor?.siteSettings) {
 	throw new Error("Site editor is not configured for this host");
@@ -44,232 +33,71 @@ const editorQuery = useQuery(editorApi.getSiteSettingsEditorState, {
 });
 const storageKey = `admin:site-editor:site-settings:${config.siteUrl}`;
 
-let form = $state<SiteSettingsDraftPayload>(emptySiteSettingsDraft());
+const draft = createSingletonDraft({
+	copy: copySiteSettingsDraft,
+	serialize: serializeSiteSettingsDraft,
+	storageKey,
+	conflictMessage: publishingEnabled
+		? "The server changed while this device had unsynchronized work. Review or discard this draft before publishing."
+		: "The server changed while this device had unsynchronized work. Review or discard this draft before continuing.",
+	save: (payload, expectedDraftRevisionId) => client.mutation(editorApi.saveSiteSettingsDraft, {
+		siteUrl: config.siteUrl,
+		payload,
+		...(expectedDraftRevisionId ? { expectedDraftRevisionId } : {}),
+	}) as Promise<{ revisionId: string }>,
+});
+let form = $derived(draft.form);
 let published = $state<SiteSettingsDraftPayload>(emptySiteSettingsDraft());
-let serverDraft = $state<SiteSettingsDraftPayload>(emptySiteSettingsDraft());
-let baseRevisionId = $state<string | undefined>(undefined);
-let initialized = $state(false);
-let online = $state(true);
-let saveState = $state<SaveState>("loading");
-let saveError = $state("");
 let fieldErrors = $state<SiteSettingsFieldErrors>({});
-let lastSavedJson = $state("");
-let lastAttemptedJson = $state("");
-let saveTimer: ReturnType<typeof setTimeout> | undefined;
 type DraggableSocialLink = NonNullable<SiteSettingsDraftPayload["socialLinks"]>[number] & { id: string; isDndShadowItem?: boolean };
 let socialDragItems = $state<DraggableSocialLink[] | null>(null);
 let visibleSocialLinks: DraggableSocialLink[] = $derived(socialDragItems ?? (form.socialLinks ?? []).map((link, index) => ({ ...link, id: `social-${index}` })));
-let currentJson = $derived(serializeSiteSettingsDraft(form));
-let hasPendingWork = $derived(
-	["dirty", "saving", "offline", "syncing", "error", "conflict"].includes(
-		saveState,
-	),
-);
-
-function persistLocalDraft() {
-	if (!browser) return;
-	localStorage.setItem(
-		storageKey,
-		JSON.stringify({
-			schemaVersion: 1,
-			baseRevisionId: baseRevisionId ?? null,
-			payload: copySiteSettingsDraft(form),
-		}),
-	);
-}
-
-function clearLocalDraft() {
-	if (browser) localStorage.removeItem(storageKey);
-}
-
-function restoreLocalDraft(serverJson: string) {
-	if (!browser) return false;
-	const value = localStorage.getItem(storageKey);
-	if (!value) return false;
-	try {
-		const local = JSON.parse(value) as {
-			schemaVersion: number;
-			baseRevisionId: string | null;
-			payload: SiteSettingsDraftPayload;
-		};
-		if (local.schemaVersion !== 1) return false;
-		form = copySiteSettingsDraft(local.payload);
-		if ((local.baseRevisionId ?? undefined) !== baseRevisionId) {
-			saveState = "conflict";
-			saveError = publishingEnabled
-				? "The server changed while this device had unsynchronized work. Review or discard this draft before publishing."
-				: "The server changed while this device had unsynchronized work. Review or discard this draft before continuing.";
-			return true;
-		}
-		saveState = serializeSiteSettingsDraft(form) === serverJson ? "saved" : "dirty";
-		return true;
-	} catch {
-		clearLocalDraft();
-		return false;
-	}
-}
 
 $effect(() => {
 	const state = editorQuery.data as SiteSettingsEditorState | null | undefined;
-	if (state === undefined || initialized) return;
-	baseRevisionId = state?.draft?.revisionId;
+	if (state === undefined) return;
+	const payload = copySiteSettingsDraft(state?.draft?.payload ?? state?.published?.payload);
+	if (draft.initialized) {
+		draft.observeServer(payload, state?.draft?.revisionId);
+		return;
+	}
 	published = copySiteSettingsDraft(state?.published?.payload);
-	serverDraft = copySiteSettingsDraft(state?.draft?.payload ?? state?.published?.payload);
-	form = copySiteSettingsDraft(serverDraft);
-	lastSavedJson = serializeSiteSettingsDraft(form);
-	saveState = "saved";
-	restoreLocalDraft(lastSavedJson);
-	initialized = true;
-});
-
-async function saveNow() {
-	if (saveTimer) {
-		clearTimeout(saveTimer);
-		saveTimer = undefined;
-	}
-	if (!initialized || saveState === "conflict") return false;
-	if (currentJson === lastSavedJson) {
-		saveState = "saved";
-		clearLocalDraft();
-		return true;
-	}
-	if (!online) {
-		saveState = "offline";
-		persistLocalDraft();
-		return false;
-	}
-
-	const snapshot = copySiteSettingsDraft(form);
-	const snapshotJson = serializeSiteSettingsDraft(snapshot);
-	saveState = saveState === "offline" ? "syncing" : "saving";
-	saveError = "";
-	try {
-		const mutationArgs = {
-			siteUrl: config.siteUrl,
-			payload: snapshot,
-			...(baseRevisionId
-				? { expectedDraftRevisionId: baseRevisionId }
-				: {}),
-		};
-		const result = (await client.mutation(
-			editorApi.saveSiteSettingsDraft,
-			mutationArgs,
-		)) as { revisionId: string };
-		baseRevisionId = result.revisionId;
-		serverDraft = copySiteSettingsDraft(snapshot);
-		lastSavedJson = snapshotJson;
-		lastAttemptedJson = "";
-		if (currentJson === snapshotJson) {
-			saveState = "saved";
-			clearLocalDraft();
-		} else {
-			saveState = "dirty";
-			persistLocalDraft();
-		}
-		return true;
-	} catch (error) {
-		const message = error instanceof Error ? error.message : "Could not save";
-		saveState = message.toLowerCase().includes("conflict") ? "conflict" : "error";
-		saveError = message;
-		lastAttemptedJson = snapshotJson;
-		persistLocalDraft();
-		return false;
-	}
-}
-
-$effect(() => {
-	const changedJson = currentJson;
-	if (!initialized || changedJson === lastSavedJson || saveState === "conflict") return;
-	if (saveState === "error" && changedJson === lastAttemptedJson) return;
-	persistLocalDraft();
-	saveState = online ? "dirty" : "offline";
-	if (saveTimer) clearTimeout(saveTimer);
-	saveTimer = setTimeout(() => void saveNow(), 900);
-});
-
-onMount(() => {
-	online = navigator.onLine;
-	const handleOnline = () => {
-		online = true;
-		if (hasPendingWork && saveState !== "conflict") void saveNow();
-	};
-	const handleOffline = () => {
-		online = false;
-		if (hasPendingWork) saveState = "offline";
-	};
-	const warnBeforeUnload = (event: BeforeUnloadEvent) => {
-		if (!hasPendingWork) return;
-		event.preventDefault();
-		event.returnValue = "";
-	};
-	window.addEventListener("online", handleOnline);
-	window.addEventListener("offline", handleOffline);
-	window.addEventListener("beforeunload", warnBeforeUnload);
-	return () => {
-		if (saveTimer) clearTimeout(saveTimer);
-		window.removeEventListener("online", handleOnline);
-		window.removeEventListener("offline", handleOffline);
-		window.removeEventListener("beforeunload", warnBeforeUnload);
-	};
+	draft.initialize(payload, state?.draft?.revisionId);
 });
 
 async function publish() {
 	if (!publishSiteSettings) {
-		await saveNow();
+		await draft.saveNow();
 		return;
 	}
 	fieldErrors = validateSiteSettingsForPublish(form);
 	if (hasSiteSettingsErrors(fieldErrors)) {
-		saveError = "Complete the highlighted fields before publishing.";
+		draft.error = "Complete the highlighted fields before publishing.";
 		return;
 	}
-	if (!(await saveNow()) || !baseRevisionId) return;
-	try {
-		await client.mutation(publishSiteSettings, {
-			siteUrl: config.siteUrl,
-			draftRevisionId: baseRevisionId,
-		});
-		published = copySiteSettingsDraft(form);
-		baseRevisionId = undefined;
-		lastSavedJson = currentJson;
-		saveState = "saved";
-		saveError = "";
-		clearLocalDraft();
-	} catch (error) {
-		saveState = "error";
-		saveError = error instanceof Error ? error.message : "Could not publish";
+	const snapshot = await draft.publish((draftRevisionId) => client.mutation(publishSiteSettings, {
+		siteUrl: config.siteUrl,
+		draftRevisionId,
+	}));
+	if (snapshot) {
+		published = snapshot;
 	}
 }
 
 async function discard() {
-	if (saveState === "conflict") {
+	if (draft.state === "conflict") {
 		if (!confirm("Discard this device's unsynchronized changes and load the newer server draft?")) return;
-		form = copySiteSettingsDraft(serverDraft);
-		lastSavedJson = serializeSiteSettingsDraft(form);
-		lastAttemptedJson = "";
-		fieldErrors = {};
-		saveError = "";
-		saveState = "saved";
-		clearLocalDraft();
-		return;
-	}
-	if (!confirm(publishingEnabled
+		draft.reloadServer();
+	} else {
+		if (!confirm(publishingEnabled
 		? "Discard this draft and return to the currently published settings?"
 		: "Discard this private draft and reset the form?")) return;
-	if (baseRevisionId) {
-		await client.mutation(editorApi.discardSiteSettingsDraft, {
+		if (!(await draft.discard(published, (draftRevisionId) => client.mutation(editorApi.discardSiteSettingsDraft, {
 			siteUrl: config.siteUrl,
-			draftRevisionId: baseRevisionId,
-		});
+			draftRevisionId,
+		})))) return;
 	}
-	form = copySiteSettingsDraft(published);
-	baseRevisionId = undefined;
-	lastSavedJson = serializeSiteSettingsDraft(form);
-	lastAttemptedJson = "";
 	fieldErrors = {};
-	saveError = "";
-	saveState = "saved";
-	clearLocalDraft();
 }
 
 function addSocialLink() {
@@ -296,26 +124,26 @@ function finishSocialReorder(event: CustomEvent<{ items: DraggableSocialLink[] }
 	<header class="settings-header">
 		<h1>site settings</h1>
 		<div class="actions">
-			<span class="save-state" aria-live="polite">{saveState === "offline" ? "offline — saved on this device" : saveState}</span>
+			<span class="save-state" aria-live="polite">{draft.state === "offline" ? "offline — saved on this device" : draft.state}</span>
 			{#if publishingEnabled && siteSettingsConfig.previewHref}
 				<a href={siteSettingsConfig.previewHref} target="_blank" rel="noopener">preview</a>
 			{/if}
-			<button type="button" class="secondary" onclick={() => void discard()} disabled={!initialized || (!baseRevisionId && !hasPendingWork)}>{saveState === "conflict" ? "reload server draft" : "discard draft"}</button>
-			<button type="button" class="secondary" onclick={() => void saveNow()} disabled={!initialized || saveState === "saving" || saveState === "conflict"}>save now</button>
+			<button type="button" class="secondary" onclick={() => void discard()} disabled={!draft.initialized || (!draft.revisionId && !draft.hasPendingWork)}>{draft.state === "conflict" ? "reload server draft" : "discard draft"}</button>
+			<button type="button" class="secondary" onclick={() => void draft.saveNow()} disabled={!draft.initialized || draft.state === "saving" || draft.state === "conflict"}>save now</button>
 			{#if publishingEnabled}
-				<button type="button" class="primary" onclick={() => void publish()} disabled={!initialized || saveState === "saving" || saveState === "syncing" || saveState === "offline" || saveState === "conflict"}>publish</button>
+				<button type="button" class="primary" onclick={() => void publish()} disabled={!draft.initialized || draft.state === "saving" || draft.state === "syncing" || draft.state === "offline" || draft.state === "conflict"}>publish</button>
 			{/if}
 		</div>
 	</header>
 
-	{#if saveError}
-		<div class="alert" role="alert">{saveError}</div>
+	{#if draft.error}
+		<div class="alert" role="alert">{draft.error}</div>
 	{/if}
 
-	{#if !initialized}
+	{#if !draft.initialized}
 		<p class="loading" role="status">loading site settings…</p>
 	{:else}
-		<form onsubmit={(event) => { event.preventDefault(); publishingEnabled ? void publish() : void saveNow(); }}>
+		<form onsubmit={(event) => { event.preventDefault(); publishingEnabled ? void publish() : void draft.saveNow(); }}>
 			<section aria-labelledby="identity-heading">
 				<div class="section-heading"><span>01</span><div><h2 id="identity-heading">site identity</h2><p>{publishingEnabled ? "The public name and short description of this site." : "The name and short description prepared for a future public rollout."}</p></div></div>
 				<div class="fields two-column">

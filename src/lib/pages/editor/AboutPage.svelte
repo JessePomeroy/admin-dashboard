@@ -1,7 +1,8 @@
 <script lang="ts">
 import { browser } from "$app/environment";
-import { onMount, tick } from "svelte";
+import { tick } from "svelte";
 import { useQuery } from "convex-svelte";
+import { createSingletonDraft } from "../../singletonDraft.svelte";
 import { useAdminClient } from "../../adminClient";
 import {
 	ABOUT_PORTRAIT_MAX,
@@ -26,8 +27,6 @@ import "../../styles/editorial-page.css";
 import AboutPortraits from "./AboutPortraits.svelte";
 import AboutStructuredContent from "./AboutStructuredContent.svelte";
 import PortfolioMediaPicker from "./PortfolioMediaPicker.svelte";
-
-type SaveState = "loading" | "saved" | "dirty" | "saving" | "offline" | "syncing" | "error" | "conflict";
 
 const config = getAdminConfig();
 if (!config.api.siteEditor || !config.editor?.aboutPage) {
@@ -58,27 +57,28 @@ const mediaQuery = useQuery(listMediaAssets, {
 });
 const storageKey = `admin:site-editor:about-page:${config.siteUrl}`;
 
-let form = $state<AboutPageDraftPayload>(emptyAboutPageDraft());
+const draft = createSingletonDraft({
+	copy: copyAboutPageDraft,
+	serialize: serializeAboutPageDraft,
+	storageKey,
+	enabled: () => !setupRequired,
+	conflictMessage: "The server changed while this device had unsynchronized work. Review or reload before publishing.",
+	save: (payload, expectedDraftRevisionId) => client.mutation(saveAboutPageDraft, {
+		siteUrl: config.siteUrl,
+		payload,
+		...(expectedDraftRevisionId ? { expectedDraftRevisionId } : {}),
+	}) as Promise<{ revisionId: string }>,
+});
+let form = $derived(draft.form);
 let published = $state<AboutPageDraftPayload>(emptyAboutPageDraft());
-let serverDraft = $state<AboutPageDraftPayload>(emptyAboutPageDraft());
-let baseRevisionId = $state<string | undefined>();
-let serverRevisionId = $state<string | undefined>();
-let initialized = $state(false);
 let setupRequired = $state(false);
 let setupStatus = $state<"idle" | "saving">("idle");
-let online = $state(browser ? navigator.onLine : true);
-let saveState = $state<SaveState>("loading");
-let saveError = $state("");
 let publishMessage = $state("");
 let publishing = $state(false);
 let previewing = $state(false);
 let reviewRequested = $state(false);
-let lastSavedJson = $state("");
-let lastAttemptedJson = $state("");
 let pickerOpen = $state(false);
 let uploadedAssets = $state<PortfolioMediaAsset[]>([]);
-let saveTimer: ReturnType<typeof setTimeout> | undefined;
-let currentJson = $derived(serializeAboutPageDraft(form));
 let mediaPage = $derived(mediaQuery.data as PortfolioMediaPage | undefined);
 let referencedAssetIds = $derived([...new Set([
 	...(form.portraits ?? []).map((portrait) => portrait.assetId),
@@ -95,231 +95,87 @@ let mediaById = $derived(mergePortfolioMediaAssets(
 ));
 let selectedAssetIds = $derived(new Set((form.portraits ?? []).map((portrait) => portrait.assetId)));
 let publishIssues = $derived(validateAboutPageForPublish(form));
-let hasPendingWork = $derived(["dirty", "saving", "offline", "syncing", "error", "conflict"].includes(saveState));
-
-function clearLocalDraft() {
-	if (browser) localStorage.removeItem(storageKey);
-}
-
-function persistLocalDraft() {
-	if (!browser || setupRequired) return;
-	try {
-		localStorage.setItem(storageKey, JSON.stringify({
-			schemaVersion: 1,
-			baseRevisionId: baseRevisionId ?? null,
-			payload: copyAboutPageDraft(form),
-		}));
-	} catch {
-		saveError = "This browser could not preserve the draft on this device.";
-	}
-}
-
-function restoreLocalDraft(serverJson: string) {
-	if (!browser) return;
-	const value = localStorage.getItem(storageKey);
-	if (!value) return;
-	try {
-		const local = JSON.parse(value) as {
-			schemaVersion: number;
-			baseRevisionId: string | null;
-			payload: AboutPageDraftPayload;
-		};
-		if (local.schemaVersion !== 1) return;
-		form = copyAboutPageDraft(local.payload);
-		if ((local.baseRevisionId ?? undefined) !== baseRevisionId) {
-			saveState = "conflict";
-			saveError = "The server changed while this device had unsynchronized work. Review or reload before publishing.";
-			return;
-		}
-		saveState = serializeAboutPageDraft(form) === serverJson ? "saved" : online ? "dirty" : "offline";
-	} catch {
-		clearLocalDraft();
-	}
-}
 
 $effect(() => {
 	const state = editorQuery.data as AboutPageEditorState | null | undefined;
 	if (state === undefined) return;
-	if (initialized) {
-		if (saveState === "conflict" && state?.draft?.revisionId !== serverRevisionId) {
-			serverRevisionId = state?.draft?.revisionId;
-			serverDraft = copyAboutPageDraft(state?.draft?.payload ?? state?.published?.payload);
-		}
+	const payload = copyAboutPageDraft(state?.draft?.payload ?? state?.published?.payload);
+	if (draft.initialized) {
+		draft.observeServer(payload, state?.draft?.revisionId);
 		return;
 	}
 	if (state === null) {
-		form = copyAboutPageDraft(aboutConfig.initialPayload);
-		lastSavedJson = serializeAboutPageDraft(form);
 		setupRequired = true;
-		saveState = "saved";
-		initialized = true;
+		draft.initialize(copyAboutPageDraft(aboutConfig.initialPayload), undefined, false);
 		return;
 	}
-	baseRevisionId = state.draft?.revisionId;
-	serverRevisionId = baseRevisionId;
-	published = copyAboutPageDraft(state.published?.payload);
-	serverDraft = copyAboutPageDraft(state.draft?.payload ?? state.published?.payload);
-	form = copyAboutPageDraft(serverDraft);
-	lastSavedJson = serializeAboutPageDraft(form);
-	saveState = "saved";
-	initialized = true;
-	restoreLocalDraft(lastSavedJson);
+	published = copyAboutPageDraft(state?.published?.payload);
+	draft.initialize(payload, state?.draft?.revisionId);
 });
 
 async function beginWithCurrentContent() {
 	setupStatus = "saving";
-	saveError = "";
+	draft.error = "";
 	try {
 		const payload = copyAboutPageDraft(aboutConfig.initialPayload);
 		const result = await client.mutation(saveAboutPageDraft, {
 			siteUrl: config.siteUrl,
 			payload,
 		}) as { revisionId: string };
-		form = copyAboutPageDraft(payload);
-		serverDraft = copyAboutPageDraft(payload);
-		baseRevisionId = result.revisionId;
-		serverRevisionId = result.revisionId;
-		lastSavedJson = serializeAboutPageDraft(payload);
+		draft.initialize(payload, result.revisionId, false);
 		setupRequired = false;
-		saveState = "saved";
 	} catch (error) {
-		saveError = error instanceof Error ? error.message : "Could not copy the current content";
+		draft.error = error instanceof Error ? error.message : "Could not copy the current content";
 	} finally {
 		setupStatus = "idle";
 	}
 }
 
 function beginBlank() {
-	form = emptyAboutPageDraft();
-	serverDraft = emptyAboutPageDraft();
-	lastSavedJson = serializeAboutPageDraft(form);
+	draft.initialize(emptyAboutPageDraft(), undefined, false);
 	setupRequired = false;
-	saveState = "saved";
 }
-
-async function saveNow() {
-	if (saveTimer) clearTimeout(saveTimer);
-	saveTimer = undefined;
-	if (!initialized || setupRequired || saveState === "conflict") return false;
-	if (currentJson === lastSavedJson) {
-		saveState = "saved";
-		clearLocalDraft();
-		return true;
-	}
-	if (!online) {
-		saveState = "offline";
-		persistLocalDraft();
-		return false;
-	}
-	const snapshot = copyAboutPageDraft(form);
-	const snapshotJson = serializeAboutPageDraft(snapshot);
-	saveState = saveState === "offline" ? "syncing" : "saving";
-	saveError = "";
-	try {
-		const result = await client.mutation(saveAboutPageDraft, {
-			siteUrl: config.siteUrl,
-			payload: snapshot,
-			...(baseRevisionId ? { expectedDraftRevisionId: baseRevisionId } : {}),
-		}) as { revisionId: string };
-		baseRevisionId = result.revisionId;
-		serverRevisionId = result.revisionId;
-		serverDraft = copyAboutPageDraft(snapshot);
-		lastSavedJson = snapshotJson;
-		lastAttemptedJson = "";
-		saveState = currentJson === snapshotJson ? "saved" : "dirty";
-		if (saveState === "saved") clearLocalDraft(); else persistLocalDraft();
-		return true;
-	} catch (error) {
-		const message = error instanceof Error ? error.message : "Could not save";
-		saveState = message.toLowerCase().includes("conflict") ? "conflict" : "error";
-		saveError = message;
-		lastAttemptedJson = snapshotJson;
-		persistLocalDraft();
-		return false;
-	}
-}
-
-$effect(() => {
-	const changedJson = currentJson;
-	if (!initialized || setupRequired || changedJson === lastSavedJson || saveState === "conflict") return;
-	if (saveState === "error" && changedJson === lastAttemptedJson) return;
-	persistLocalDraft();
-	saveState = online ? "dirty" : "offline";
-	if (saveTimer) clearTimeout(saveTimer);
-	if (online) saveTimer = setTimeout(() => void saveNow(), 900);
-});
-
-onMount(() => {
-	const handleOnline = () => { online = true; if (hasPendingWork && saveState !== "conflict") void saveNow(); };
-	const handleOffline = () => { online = false; if (hasPendingWork) saveState = "offline"; };
-	const warnBeforeUnload = (event: BeforeUnloadEvent) => {
-		if (!hasPendingWork) return;
-		event.preventDefault();
-		event.returnValue = "";
-	};
-	window.addEventListener("online", handleOnline);
-	window.addEventListener("offline", handleOffline);
-	window.addEventListener("beforeunload", warnBeforeUnload);
-	return () => {
-		if (saveTimer) clearTimeout(saveTimer);
-		window.removeEventListener("online", handleOnline);
-		window.removeEventListener("offline", handleOffline);
-		window.removeEventListener("beforeunload", warnBeforeUnload);
-	};
-});
 
 async function publish() {
 	reviewRequested = true;
 	publishMessage = "";
 	if (publishIssues.length > 0) {
-		saveError = "Complete the publishing review before making this page public.";
+		draft.error = "Complete the publishing review before making this page public.";
 		await tick();
 		document.getElementById(publishIssues[0].fieldId)?.focus();
 		return;
 	}
-	if (!(await saveNow()) || !baseRevisionId) return;
 	publishing = true;
-	try {
-		await client.mutation(publishAboutPage, {
-			siteUrl: config.siteUrl,
-			draftRevisionId: baseRevisionId,
-		});
-		published = copyAboutPageDraft(form);
-		serverDraft = copyAboutPageDraft(form);
-		baseRevisionId = undefined;
-		serverRevisionId = undefined;
-		lastSavedJson = currentJson;
-		saveState = "saved";
-		saveError = "";
+	const snapshot = await draft.publish((draftRevisionId) => client.mutation(publishAboutPage, {
+		siteUrl: config.siteUrl,
+		draftRevisionId,
+	}));
+	if (snapshot) {
+		published = snapshot;
 		publishMessage = "Published.";
-		clearLocalDraft();
-	} catch (error) {
-		saveState = "error";
-		saveError = error instanceof Error ? error.message : "Could not publish";
-	} finally {
-		publishing = false;
 	}
+	publishing = false;
 }
 
 async function preview() {
 	if (!browser || !previewEndpoint) return;
 	const previewWindow = window.open("about:blank", "about-page-preview");
 	if (!previewWindow) {
-		saveError = "Allow pop-ups for this site to open the draft preview.";
+		draft.error = "Allow pop-ups for this site to open the draft preview.";
 		return;
 	}
 	previewWindow.opener = null;
 	previewing = true;
-	saveError = "";
+	draft.error = "";
 	try {
-		if (!(await saveNow()) || !baseRevisionId) {
+		if (!(await draft.saveNow()) || !draft.revisionId) {
 			previewWindow.close();
 			return;
 		}
 		const response = await fetch(previewEndpoint, {
 			method: "POST",
 			headers: { "Content-Type": "application/json" },
-			body: JSON.stringify({ draftRevisionId: baseRevisionId }),
+			body: JSON.stringify({ draftRevisionId: draft.revisionId }),
 		});
 		const result = await response.json().catch(() => null) as {
 			previewUrl?: unknown;
@@ -336,37 +192,25 @@ async function preview() {
 		);
 	} catch (error) {
 		previewWindow.close();
-		saveError = error instanceof Error ? error.message : "Could not create the draft preview.";
+		draft.error = error instanceof Error ? error.message : "Could not create the draft preview.";
 	} finally {
 		previewing = false;
 	}
 }
 
 async function discard() {
-	if (saveState === "conflict") {
+	if (draft.state === "conflict") {
 		if (!confirm("Discard this device's changes and load the newer server draft?")) return;
-		form = copyAboutPageDraft(serverDraft);
-		baseRevisionId = serverRevisionId;
+		draft.reloadServer();
 	} else {
 		if (!confirm("Discard this draft and return to the published About content?")) return;
-		if (baseRevisionId) {
-			await client.mutation(discardAboutPageDraft, {
-				siteUrl: config.siteUrl,
-				draftRevisionId: baseRevisionId,
-			});
-		}
-		form = copyAboutPageDraft(published);
-		baseRevisionId = undefined;
-		serverRevisionId = undefined;
-		serverDraft = copyAboutPageDraft(published);
+		if (!(await draft.discard(published, (draftRevisionId) => client.mutation(discardAboutPageDraft, {
+			siteUrl: config.siteUrl,
+			draftRevisionId,
+		})))) return;
 	}
-	lastSavedJson = serializeAboutPageDraft(form);
-	lastAttemptedJson = "";
 	reviewRequested = false;
-	saveError = "";
 	publishMessage = "";
-	saveState = "saved";
-	clearLocalDraft();
 }
 
 function addAsset(asset: PortfolioMediaAsset) {
@@ -386,23 +230,23 @@ function addUploadedAsset(asset: PortfolioMediaAsset) {
 <div class="settings-page">
 	<header class="settings-header">
 		<h1>about</h1>
-		{#if initialized && !setupRequired}
+		{#if draft.initialized && !setupRequired}
 			<div class="actions">
-				<span class="save-state" aria-live="polite">{saveState === "offline" ? "offline — saved on this device" : saveState}</span>
-				<button type="button" onclick={() => void discard()} disabled={!baseRevisionId && !hasPendingWork}>{saveState === "conflict" ? "reload server draft" : "discard draft"}</button>
-				<button type="button" onclick={() => void saveNow()} disabled={saveState === "saving" || saveState === "conflict"}>save now</button>
-				{#if previewEndpoint}<button type="button" onclick={() => void preview()} disabled={previewing || saveState === "saving" || saveState === "syncing" || saveState === "offline" || saveState === "conflict"}>{previewing ? "preparing preview…" : "preview"}</button>{/if}
-				<button type="button" class="primary" onclick={() => void publish()} disabled={publishing || saveState === "saving" || saveState === "syncing" || saveState === "offline" || saveState === "conflict"}>{publishing ? "publishing…" : "publish"}</button>
+				<span class="save-state" aria-live="polite">{draft.state === "offline" ? "offline — saved on this device" : draft.state}</span>
+				<button type="button" onclick={() => void discard()} disabled={!draft.revisionId && !draft.hasPendingWork}>{draft.state === "conflict" ? "reload server draft" : "discard draft"}</button>
+				<button type="button" onclick={() => void draft.saveNow()} disabled={draft.state === "saving" || draft.state === "conflict"}>save now</button>
+				{#if previewEndpoint}<button type="button" onclick={() => void preview()} disabled={previewing || draft.state === "saving" || draft.state === "syncing" || draft.state === "offline" || draft.state === "conflict"}>{previewing ? "preparing preview…" : "preview"}</button>{/if}
+				<button type="button" class="primary" onclick={() => void publish()} disabled={publishing || draft.state === "saving" || draft.state === "syncing" || draft.state === "offline" || draft.state === "conflict"}>{publishing ? "publishing…" : "publish"}</button>
 			</div>
 		{/if}
 	</header>
 
-	{#if saveError}<div class="alert" role="alert">{saveError}</div>{/if}
+	{#if draft.error}<div class="alert" role="alert">{draft.error}</div>{/if}
 	{#if publishMessage}<div class="success" role="status">{publishMessage}</div>{/if}
 	{#if reviewRequested && publishIssues.length > 0}
 		<div class="review" role="status"><strong>{publishIssues.length} {publishIssues.length === 1 ? "item needs" : "items need"} attention</strong><ul>{#each publishIssues as issue}<li><a href={`#${issue.fieldId}`}>{issue.message}</a></li>{/each}</ul></div>
 	{/if}
-	{#if !initialized}
+	{#if !draft.initialized}
 		<p class="loading" role="status">loading About content…</p>
 	{:else if setupRequired}
 		<section aria-labelledby="setup-about-heading">
