@@ -1,0 +1,14 @@
+@import "./form-controls.css";
+
+.form-group {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+}
+
+.form-label {
+	font-size: 0.76rem;
+	color: var(--admin-text-muted);
+	font-weight: 400;
+	letter-spacing: 0.02em;
+}

@@ -117,6 +117,7 @@ function autoGrow(e: Event) {
 </div>
 
 <style>
+	@import "../../styles/form-controls.css";
 	.items-section {
 		display: flex;
 		flex-direction: column;
@@ -163,22 +164,6 @@ function autoGrow(e: Event) {
 		display: flex;
 		gap: 8px;
 		align-items: center;
-	}
-
-	.form-input {
-		padding: 8px 10px;
-		background: rgba(255, 255, 255, 0.03);
-		color: var(--admin-text);
-		border: 1px solid var(--admin-border-strong);
-		border-radius: 6px;
-		font-size: 0.85rem;
-		font-family: "Synonym", system-ui, sans-serif;
-		outline: none;
-		transition: border-color 0.15s;
-	}
-
-	.form-input:focus {
-		border-color: var(--admin-accent);
 	}
 
 	.item-desc {
