@@ -16,23 +16,24 @@ function createThemeStore() {
 	// Default to dark mode
 	let initial = true;
 
-	// On client-side, check for saved preference or system preference
 	if (browser) {
-		const stored = localStorage.getItem(STORAGE_KEY);
-		if (stored) {
-			// User has a saved preference
-			initial = stored === "dark";
-		} else {
-			// Fall back to system preference
-			initial = window.matchMedia("(prefers-color-scheme: dark)").matches;
+		let stored: string | null = null;
+		try {
+			stored = localStorage.getItem(STORAGE_KEY);
+		} catch {
+			// Storage access may be denied even before getItem can be called.
 		}
+		initial = stored === "light" || stored === "dark"
+			? stored === "dark"
+			: window.matchMedia("(prefers-color-scheme: dark)").matches;
 	}
 
 	const store = writable(initial);
 
-	// Persist every change to localStorage so user preference survives reload
+	// One owner keeps public and admin UI in sync, even without a mounted layout.
 	if (browser) {
 		store.subscribe((val) => {
+			document.documentElement.classList.toggle("dark", val);
 			try {
 				localStorage.setItem(STORAGE_KEY, val ? "dark" : "light");
 			} catch {

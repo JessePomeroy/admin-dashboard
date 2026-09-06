@@ -39,11 +39,6 @@ let themeStyle = $derived(() => {
 onMount(() => {
 	const unsub = isDark.subscribe((val) => {
 		dark = val;
-		if (val) {
-			document.documentElement.classList.add("dark");
-		} else {
-			document.documentElement.classList.remove("dark");
-		}
 	});
 	return unsub;
 });

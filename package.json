@@ -15,6 +15,10 @@
       "svelte": "./dist/index.js",
       "default": "./dist/index.js"
     },
+    "./theme": {
+      "types": "./dist/theme.d.ts",
+      "default": "./dist/theme.js"
+    },
     "./server": {
       "types": "./dist/server.d.ts",
       "default": "./dist/server.js"
