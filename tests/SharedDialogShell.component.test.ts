@@ -156,6 +156,9 @@ it("keeps template creation payloads and native validation in the shared shell",
 	expect(
 		document.querySelector<HTMLButtonElement>('[type="submit"]')!.disabled,
 	).toBe(true);
+	await input("create-name", "Discard this draft");
+	await click("cancel");
+	expect((document.getElementById("create-name") as HTMLInputElement).value).toBe("");
 	await input("create-name", "Welcome");
 	await input("create-subject", "Hello");
 	await input("create-body", "Hi {{clientName}}");
@@ -182,6 +185,14 @@ it("keeps template edit and confirmed delete actions distinct from shell dismiss
 	});
 	await tick();
 	await click("edit");
+	await input("edit-subject", "Discard this edit");
+	await click("cancel");
+	await click("edit");
+	expect((document.getElementById("edit-subject") as HTMLInputElement).value).toBe("Hello");
+	await input("edit-body", "<img src=x> {{clientName}}");
+	expect(document.querySelector(".preview-body img")).toBeNull();
+	expect(document.querySelector(".preview-body")!.textContent).toContain("<img src=x>");
+	await input("edit-body", "Hi {{clientName}}");
 	await input("edit-subject", "Updated");
 	await submit();
 	expect(onsave).toHaveBeenCalledExactlyOnceWith({

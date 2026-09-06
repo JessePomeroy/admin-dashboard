@@ -1,7 +1,8 @@
 <script lang="ts">
+	import EmailTemplateFields from "./EmailTemplateFields.svelte";
 	import AdminModal from "../../components/AdminModal.svelte";
 	import {
-		emailTemplateVariablesForCategory,
+		parseEmailTemplateVariables,
 		getVariableHighlightParts,
 	} from "../../emailTemplatePreview";
 	import type { EmailTemplate } from "../../types";
@@ -24,16 +25,6 @@
 	let editSubject = $state("");
 	let editBody = $state("");
 	let editVariables = $state("");
-	let referenceVariables = $derived(
-		emailTemplateVariablesForCategory(editCategory),
-	);
-
-	function parseVariables(input: string): string[] {
-		return input
-			.split(",")
-			.map((v) => v.trim())
-			.filter(Boolean);
-	}
 
 	function handleClose() {
 		editMode = false;
@@ -57,7 +48,7 @@
 
 	function handleSave() {
 		if (!editName || !editSubject || !editBody) return;
-		const variables = parseVariables(editVariables);
+		const variables = parseEmailTemplateVariables(editVariables);
 		onsave({
 			name: editName,
 			category: editCategory,
@@ -87,71 +78,10 @@
 				class="modal-form"
 				onsubmit={(e) => { e.preventDefault(); handleSave(); }}
 			>
-				<div class="form-row">
-					<div class="form-group">
-						<label class="form-label" for="edit-name">name <span class="required">*</span></label>
-						<input id="edit-name" class="form-input" type="text" bind:value={editName} required />
-					</div>
-					<div class="form-group">
-						<label class="form-label" for="edit-category">category <span class="required">*</span></label>
-						<select id="edit-category" class="form-input" bind:value={editCategory} required>
-							{#each categories as cat}
-								<option value={cat}>{cat}</option>
-							{/each}
-						</select>
-					</div>
-				</div>
-
-				<div class="form-group">
-					<label class="form-label" for="edit-subject">subject line <span class="required">*</span></label>
-					<input id="edit-subject" class="form-input" type="text" bind:value={editSubject} required />
-				</div>
-
-				<div class="form-group">
-					<label class="form-label" for="edit-body">body <span class="required">*</span></label>
-					<textarea
-						id="edit-body"
-						class="form-input form-textarea form-textarea-large"
-						bind:value={editBody}
-						rows="10"
-						required
-					></textarea>
-				</div>
-
-				<div class="form-group">
-					<label class="form-label" for="edit-variables"
-						>variable notes (comma-separated; does not create runtime values)</label
-					>
-					<input id="edit-variables" class="form-input" type="text" bind:value={editVariables} />
-				</div>
-
-				<div class="variables-ref">
-					<span class="variables-ref-label">
-						{editCategory === "custom"
-							? "sender-specific variable reference (unsupported values fail before send):"
-							: "variables for this sender:"}
-					</span>
-					<div class="variables-ref-list">
-						{#each referenceVariables as v}
-							<span class="variable-tag">{v}</span>
-						{/each}
-					</div>
-				</div>
-
-				{#if editBody}
-					<div class="preview-section">
-						<span class="preview-label">preview</span>
-						<div class="preview-body">
-							{#each getVariableHighlightParts(editBody) as part}
-								{#if part.isVariable}
-									<span class="var-highlight">{part.text}</span>
-								{:else}
-									{part.text}
-								{/if}
-							{/each}
-						</div>
-					</div>
-				{/if}
+				<EmailTemplateFields mode="edit" {categories}
+					bind:name={editName} bind:category={editCategory}
+					bind:subject={editSubject} bind:body={editBody} bind:variables={editVariables}
+				/>
 
 				<div class="modal-actions">
 					<button type="button" class="btn-cancel" onclick={cancelEdit}>cancel</button>
@@ -226,69 +156,6 @@
 		gap: 14px;
 	}
 
-	.form-row {
-		display: grid;
-		grid-template-columns: 1fr 1fr;
-		gap: 14px;
-	}
-
-	.form-group {
-		display: flex;
-		flex-direction: column;
-		gap: 4px;
-	}
-
-	.form-label {
-		font-size: 0.76rem;
-		color: var(--admin-text-muted);
-		font-weight: 400;
-		letter-spacing: 0.02em;
-	}
-
-	.required {
-		color: var(--status-rose);
-	}
-
-	.form-input {
-		padding: 8px 10px;
-		background: rgba(255, 255, 255, 0.03);
-		color: var(--admin-text);
-		border: 1px solid var(--admin-border-strong);
-		border-radius: 6px;
-		font-size: 0.85rem;
-		font-family: "Synonym", system-ui, sans-serif;
-		outline: none;
-		transition: border-color 0.15s;
-	}
-
-	.form-input:focus {
-		border-color: var(--admin-accent);
-	}
-
-	.form-textarea {
-		resize: vertical;
-		min-height: 60px;
-		font-family: inherit;
-	}
-
-	.form-textarea-large {
-		min-height: 180px;
-		line-height: 1.6;
-	}
-
-	/* Variables reference */
-	.variables-ref {
-		display: flex;
-		flex-direction: column;
-		gap: 6px;
-	}
-
-	.variables-ref-label {
-		font-size: 0.74rem;
-		color: var(--admin-text-subtle);
-		letter-spacing: 0.02em;
-	}
-
 	.variables-ref-list {
 		display: flex;
 		flex-wrap: wrap;
@@ -304,38 +171,6 @@
 		font-size: 0.74rem;
 		color: var(--admin-accent);
 		font-family: "Synonym", monospace;
-	}
-
-	/* Preview */
-	.preview-section {
-		display: flex;
-		flex-direction: column;
-		gap: 6px;
-		border-top: 1px solid var(--admin-border);
-		padding-top: 14px;
-	}
-
-	.preview-label {
-		font-size: 0.74rem;
-		color: var(--admin-text-subtle);
-		letter-spacing: 0.02em;
-	}
-
-	.preview-body {
-		white-space: pre-wrap;
-		line-height: 1.6;
-		font-size: 0.85rem;
-		color: var(--admin-text);
-		max-height: 200px;
-		overflow-y: auto;
-		padding: 8px 0;
-	}
-
-	.preview-body :global(.var-highlight) {
-		color: var(--admin-accent);
-		background: rgba(129, 140, 248, 0.08);
-		padding: 1px 3px;
-		border-radius: 3px;
 	}
 
 	/* Detail view */
@@ -493,10 +328,6 @@
 
 	/* Responsive */
 	@media (max-width: 768px) {
-		.form-row {
-			grid-template-columns: 1fr;
-		}
-
 		.modal-form {
 			padding: 0 20px 20px;
 		}

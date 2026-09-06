@@ -1,9 +1,7 @@
 <script lang="ts">
+	import EmailTemplateFields from "./EmailTemplateFields.svelte";
 	import AdminModal from "../../components/AdminModal.svelte";
-	import {
-		emailTemplateVariablesForCategory,
-		getVariableHighlightParts,
-	} from "../../emailTemplatePreview";
+	import { parseEmailTemplateVariables } from "../../emailTemplatePreview";
 
 	let { isOpen, saving, categories, onclose, onsave } = $props<{
 		isOpen: boolean;
@@ -18,17 +16,6 @@
 	let formSubject = $state("");
 	let formBody = $state("");
 	let formVariables = $state("");
-	let referenceVariables = $derived(
-		emailTemplateVariablesForCategory(formCategory),
-	);
-
-	function parseVariables(input: string): string[] {
-		return input
-			.split(",")
-			.map((v) => v.trim())
-			.filter(Boolean);
-	}
-
 
 	function resetForm() {
 		formName = "";
@@ -45,7 +32,7 @@
 
 	function handleSubmit() {
 		if (!formName || !formCategory || !formSubject || !formBody) return;
-		const variables = parseVariables(formVariables);
+		const variables = parseEmailTemplateVariables(formVariables);
 		onsave({
 			name: formName,
 			category: formCategory,
@@ -70,72 +57,10 @@
 			class="modal-form"
 			onsubmit={(e) => { e.preventDefault(); handleSubmit(); }}
 		>
-			<div class="form-row">
-				<div class="form-group">
-					<label class="form-label" for="create-name">name <span class="required">*</span></label>
-					<input id="create-name" class="form-input" type="text" placeholder="e.g. wedding inquiry reply" bind:value={formName} required />
-				</div>
-				<div class="form-group">
-					<label class="form-label" for="create-category">category <span class="required">*</span></label>
-					<select id="create-category" class="form-input" bind:value={formCategory} required>
-						{#each categories as cat}
-							<option value={cat}>{cat}</option>
-						{/each}
-					</select>
-				</div>
-			</div>
-
-			<div class="form-group">
-				<label class="form-label" for="create-subject">subject line <span class="required">*</span></label>
-				<input id="create-subject" class="form-input" type="text" placeholder="e.g. re: your photography inquiry" bind:value={formSubject} required />
-			</div>
-
-			<div class="form-group">
-				<label class="form-label" for="create-body">body <span class="required">*</span></label>
-				<textarea
-					id="create-body"
-					class="form-input form-textarea form-textarea-large"
-					bind:value={formBody}
-					rows="10"
-					placeholder={"hi {{clientName}},\n\nthank you for reaching out..."}
-					required
-				></textarea>
-			</div>
-
-			<div class="form-group">
-				<label class="form-label" for="create-variables"
-					>variable notes (comma-separated; does not create runtime values)</label
-				>
-				<input id="create-variables" class="form-input" type="text" placeholder="customField1, customField2" bind:value={formVariables} />
-			</div>
-
-			<div class="variables-ref">
-				<span class="variables-ref-label">
-					{formCategory === "custom"
-						? "sender-specific variable reference (unsupported values fail before send):"
-						: "variables for this sender:"}
-				</span>
-				<div class="variables-ref-list">
-					{#each referenceVariables as v}
-						<span class="variable-tag">{v}</span>
-					{/each}
-				</div>
-			</div>
-
-			{#if formBody}
-				<div class="preview-section">
-					<span class="preview-label">preview</span>
-					<div class="preview-body">
-						{#each getVariableHighlightParts(formBody) as part}
-							{#if part.isVariable}
-								<span class="var-highlight">{part.text}</span>
-							{:else}
-								{part.text}
-							{/if}
-						{/each}
-					</div>
-				</div>
-			{/if}
+			<EmailTemplateFields mode="create" {categories}
+				bind:name={formName} bind:category={formCategory}
+				bind:subject={formSubject} bind:body={formBody} bind:variables={formVariables}
+			/>
 
 			<div class="modal-actions">
 				<button type="button" class="btn-cancel" onclick={handleClose}>cancel</button>
@@ -153,116 +78,6 @@
 		display: flex;
 		flex-direction: column;
 		gap: 14px;
-	}
-
-	.form-row {
-		display: grid;
-		grid-template-columns: 1fr 1fr;
-		gap: 14px;
-	}
-
-	.form-group {
-		display: flex;
-		flex-direction: column;
-		gap: 4px;
-	}
-
-	.form-label {
-		font-size: 0.76rem;
-		color: var(--admin-text-muted);
-		font-weight: 400;
-		letter-spacing: 0.02em;
-	}
-
-	.required {
-		color: var(--status-rose);
-	}
-
-	.form-input {
-		padding: 8px 10px;
-		background: rgba(255, 255, 255, 0.03);
-		color: var(--admin-text);
-		border: 1px solid var(--admin-border-strong);
-		border-radius: 6px;
-		font-size: 0.85rem;
-		font-family: "Synonym", system-ui, sans-serif;
-		outline: none;
-		transition: border-color 0.15s;
-	}
-
-	.form-input:focus {
-		border-color: var(--admin-accent);
-	}
-
-	.form-textarea {
-		resize: vertical;
-		min-height: 60px;
-		font-family: inherit;
-	}
-
-	.form-textarea-large {
-		min-height: 180px;
-		line-height: 1.6;
-	}
-
-	.variables-ref {
-		display: flex;
-		flex-direction: column;
-		gap: 6px;
-	}
-
-	.variables-ref-label {
-		font-size: 0.74rem;
-		color: var(--admin-text-subtle);
-		letter-spacing: 0.02em;
-	}
-
-	.variables-ref-list {
-		display: flex;
-		flex-wrap: wrap;
-		gap: 6px;
-	}
-
-	.variable-tag {
-		display: inline-block;
-		padding: 3px 8px;
-		background: rgba(129, 140, 248, 0.08);
-		border: 1px solid rgba(129, 140, 248, 0.15);
-		border-radius: 4px;
-		font-size: 0.74rem;
-		color: var(--admin-accent);
-		font-family: "Synonym", monospace;
-	}
-
-	.preview-section {
-		display: flex;
-		flex-direction: column;
-		gap: 6px;
-		border-top: 1px solid var(--admin-border);
-		padding-top: 14px;
-	}
-
-	.preview-label {
-		font-size: 0.74rem;
-		color: var(--admin-text-subtle);
-		letter-spacing: 0.02em;
-	}
-
-	.preview-body {
-		white-space: pre-wrap;
-		line-height: 1.6;
-		font-size: 0.85rem;
-		color: var(--admin-text);
-		max-height: 200px;
-		overflow-y: auto;
-		padding: 8px 0;
-	}
-
-	.preview-body :global(.var-highlight) {
-		color: var(--admin-accent);
-		background: rgba(129, 140, 248, 0.08);
-		padding: 1px 3px;
-		border-radius: 3px;
 	}
 
 	.modal-actions {
@@ -310,10 +125,6 @@
 	}
 
 	@media (max-width: 768px) {
-		.form-row {
-			grid-template-columns: 1fr;
-		}
-
 		.modal-form {
 			padding: 0 20px 20px;
 		}
