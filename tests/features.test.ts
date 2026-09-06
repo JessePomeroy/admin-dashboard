@@ -21,9 +21,9 @@ describe("feature policy", () => {
 		["full", false, features.filter((feature) => feature !== "messages")],
 		["full", true, features],
 	] as const)("selects the exact features for %s tier, creator=%s", (tier, isCreator, expected) => {
-		expect(features.filter((feature) => hasFeature(tier, feature, { isCreator }))).toEqual(
-			expected,
-		);
+		expect(features.filter((feature) => isCreator === undefined
+			? hasFeature(tier, feature)
+			: hasFeature(tier, feature, { isCreator }))).toEqual(expected);
 	});
 
 	it("lists exactly the full-tier upsell features", () => {
