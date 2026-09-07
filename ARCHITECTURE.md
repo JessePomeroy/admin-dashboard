@@ -221,3 +221,17 @@ identify existing Convex records, not a connection to a content provider.
 - Add a host-facing option only when hosts genuinely need different behavior.
 - Keep internal seams internal until a real alternate implementation exists.
 - Contract changes require package tests, build output, and consumer checks.
+
+## CRM read contract
+
+CRM uses `api.crm.listClientsWithTags`, a required reference to the shared
+Convex paginated query. Each page contains at most 50 clients and their bounded
+tag lists; category/status filters run before pagination. Snapshot pages use
+next/previous/refresh controls and refresh after local mutations. Search and tag
+filters apply to the current page. One-shot reads avoid experimental pagination
+split bugs and reactive journal growth beyond the joined-read budget. Hosts upgrading to
+Admin 6 must supply this reference after deploying the matching CRM API.
+
+Selected-client tags and activity use reactive queries with previous data
+disabled. The page does not keep a second tag cache or imperatively reload reads
+after mutations. Mutation completions retain their initiating client identity.

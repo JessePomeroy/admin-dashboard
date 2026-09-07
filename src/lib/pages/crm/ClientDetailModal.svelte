@@ -23,6 +23,7 @@ interface Props {
 	availableTags: ClientTag[];
 	loadingTags: boolean;
 	loadingActivity: boolean;
+	detailError?: boolean;
 	saving: boolean;
 	onclose: () => void;
 	onsave: (data: Record<string, string | undefined>) => void;
@@ -40,6 +41,7 @@ let {
 	availableTags,
 	loadingTags,
 	loadingActivity,
+	detailError = false,
 	saving,
 	onclose,
 	onsave,
@@ -81,6 +83,7 @@ function handleSave(data: Record<string, string | undefined>) {
 </script>
 
 <AdminModal title={editMode ? "edit client" : client.name} onclose={onclose} size="wide">
+	{#if detailError}<p role="alert">could not load client tags or activity. close and reopen to try again.</p>{/if}
 	{#if editMode}
 		<ClientEditForm {client} {saving} onsave={handleSave} oncancel={() => { editMode = false; }} />
 	{:else}
