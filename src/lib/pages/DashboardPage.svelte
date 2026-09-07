@@ -3,7 +3,8 @@ import { goto } from "$app/navigation";
 import { useQuery } from "convex-svelte";
 import { getAdminConfig } from "../config";
 import LoadingState from "../components/LoadingState.svelte";
-import type { Invoice, InvoiceItem, Quote } from "../types";
+import type { Invoice, Quote } from "../types";
+import { tryInvoiceAmounts } from "../invoiceAmounts";
 import { getOrderStatsPresentation } from "./dashboard/orderStatsPresentation";
 import {
 	formatStripeMinorUnits,
@@ -129,12 +130,11 @@ const invoiceStats = $derived({
 const pendingInvoiceAmount = $derived(
 	invoices
 		.filter((i: Invoice) => i.status === "draft" || i.status === "sent")
-		.reduce((sum: number, inv: Invoice) => {
-			const invoiceTotal = inv.items.reduce(
-				(t: number, item: InvoiceItem) => t + item.quantity * item.unitPrice,
-				0,
-			);
-			return sum + invoiceTotal;
+		.reduce<number | null>((sum, inv) => {
+			const amounts = tryInvoiceAmounts(inv.items, inv.taxPercent);
+			if (sum === null || !amounts) return null;
+			const total = sum + amounts.total;
+			return Number.isSafeInteger(total) ? total : null;
 		}, 0),
 );
 
@@ -338,7 +338,7 @@ let sparklineArea = $derived(() => {
 		<p class="summary-line">
 			<span class="summary-value">{invoiceStats.draft + invoiceStats.sent}</span> invoices outstanding
 			<span class="summary-sep">&middot;</span>
-			<span class="summary-value">{formatCents(pendingInvoiceAmount)}</span> pending
+			<span class="summary-value">{pendingInvoiceAmount === null ? "invalid amount" : formatCents(pendingInvoiceAmount)}</span> pending
 		</p>
 		<p class="summary-line">
 			<span class="summary-value">{quoteStats.sent}</span> quotes awaiting response

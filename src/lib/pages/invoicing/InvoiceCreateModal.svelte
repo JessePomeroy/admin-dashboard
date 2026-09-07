@@ -16,13 +16,12 @@ import type {
 	InvoiceType,
 } from "../../types";
 import {
-	calcSubtotal,
-	calcTax,
 	dollarsToCents,
 	formatCents,
 	formatDollars,
 } from "../../utils";
 import LineItemEditor from "./LineItemEditor.svelte";
+import { type InvoiceDraftItem, prepareInvoiceDraft } from "./invoiceDraft";
 
 interface Props {
 	clients: Client[];
@@ -48,10 +47,10 @@ let customEmailContentValid = $derived(
 // Form state
 let formClientId = $state("");
 let formType = $state<InvoiceType>("one-time");
-let formItems = $state<InvoiceItem[]>([
+let formItems = $state<InvoiceDraftItem[]>([
 	{ description: "", quantity: 1, unitPrice: 0 },
 ]);
-let formTaxPercent = $state(0);
+let formTaxPercent = $state<number | undefined>(0);
 let formDueDate = $state("");
 let formNotes = $state("");
 let selectedClientName = $derived(
@@ -101,26 +100,19 @@ const allTypes: InvoiceType[] = [
 	"milestone",
 ];
 
-let createSubtotal = $derived(calcSubtotal(formItems));
-let createTax = $derived(calcTax(createSubtotal, formTaxPercent));
-let createTotal = $derived(createSubtotal + createTax);
+let invoiceDraft = $derived(prepareInvoiceDraft(formItems, formTaxPercent));
 
 let depositTotal = $derived(
 	formTotalProject * (formDepositPercent / 100),
 );
 
-function buildInvoiceBody(): Record<string, unknown> {
-	const items = formItems.map((item) => ({
-		description: item.description,
-		quantity: item.quantity,
-		unitPrice: dollarsToCents(item.unitPrice),
-	}));
+function buildInvoiceBody(items: InvoiceItem[]): Record<string, unknown> {
 	const body: Record<string, unknown> = {
 		clientId: formClientId,
 		invoiceType: formType,
 		items,
 	};
-	if (formTaxPercent > 0) body.taxPercent = formTaxPercent;
+	if ((formTaxPercent ?? 0) > 0) body.taxPercent = formTaxPercent;
 	if (formDueDate) body.dueDate = formDueDate;
 	if (formNotes) body.notes = formNotes;
 
@@ -147,10 +139,10 @@ function buildInvoiceBody(): Record<string, unknown> {
 }
 
 async function handleSubmit() {
-	if (!formClientId || formItems.length === 0) return;
+	if (!formClientId || formItems.length === 0 || !invoiceDraft) return;
 	saving = true;
 	try {
-		await oncreate(buildInvoiceBody());
+		await oncreate(buildInvoiceBody(invoiceDraft.items));
 	} catch (err) {
 		logger.error("Failed to create invoice:", err);
 		addToast("Failed to create invoice.");
@@ -160,7 +152,7 @@ async function handleSubmit() {
 }
 
 async function handleSaveAndSend() {
-	if (!formClientId || formItems.length === 0) return;
+	if (!formClientId || formItems.length === 0 || !invoiceDraft) return;
 	if (!customEmailContentValid) {
 		addToast("Add both a subject and body before sending.");
 		return;
@@ -168,7 +160,7 @@ async function handleSaveAndSend() {
 	saving = true;
 	try {
 		await onsaveandsend({
-			...buildInvoiceBody(),
+			...buildInvoiceBody(invoiceDraft.items),
 			...buildDocumentEmailCreateFields(
 				{
 					templateId: selectedTemplateId || undefined,
@@ -375,7 +367,8 @@ async function handleSaveAndSend() {
 			onitems={(v) => {
 				formItems = v;
 			}}
-			formatTotal={(n) => formatDollars(n)}
+			formatTotal={formatCents}
+			convertPrice={dollarsToCents}
 			required
 		/>
 
@@ -387,7 +380,8 @@ async function handleSaveAndSend() {
 					class="form-input"
 					type="number"
 					min="0"
-					step="0.1"
+					max="100"
+					step="any"
 					bind:value={formTaxPercent}
 				/>
 			</div>
@@ -414,21 +408,23 @@ async function handleSaveAndSend() {
 		</div>
 
 		<div class="totals-line">
-			{#if formType === "deposit" && formTotalProject > 0}
+			{#if !invoiceDraft}
+				<span role="alert">enter positive quantities, valid prices, and tax from 0 to 100.</span>
+			{:else if formType === "deposit" && formTotalProject > 0}
 				<span
 					>deposit ({formDepositPercent}%): {formatDollars(
 						depositTotal,
 					)}</span
 				>
 			{:else}
-				<span>subtotal: {formatDollars(createSubtotal)}</span>
-				{#if formTaxPercent > 0}
+				<span>subtotal: {formatCents(invoiceDraft.amounts.subtotal)}</span>
+				{#if invoiceDraft.taxPercent > 0}
 					<span class="stat-sep">&middot;</span>
-					<span>tax: {formatDollars(createTax)}</span>
+					<span>tax: {formatCents(invoiceDraft.amounts.tax)}</span>
 				{/if}
 				<span class="stat-sep">&middot;</span>
 				<span class="total-amount"
-					>total: {formatDollars(createTotal)}</span
+					>total: {formatCents(invoiceDraft.amounts.total)}</span
 				>
 			{/if}
 		</div>
@@ -441,6 +437,7 @@ async function handleSaveAndSend() {
 				type="submit"
 				class="btn-save-draft"
 				disabled={saving ||
+					!invoiceDraft ||
 					!formClientId ||
 					formItems.length === 0}
 			>
@@ -451,6 +448,7 @@ async function handleSaveAndSend() {
 				class="btn-save"
 				onclick={handleSaveAndSend}
 				disabled={saving ||
+					!invoiceDraft ||
 					!formClientId ||
 					formItems.length === 0 ||
 					!customEmailContentValid}
