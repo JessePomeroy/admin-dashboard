@@ -1,5 +1,25 @@
 # @jessepomeroy/admin
 
+## 5.1.0
+
+### Minor Changes
+
+- 49e73e6: Reuse the shared accessible modal shell for email templates and platform-client details while preserving responsive sizing. Remove the unreachable platform-client creation dialog and direct users to operator onboarding.
+
+  AdminModal adds an optional accessible label and CSS sizing overrides; existing defaults remain unchanged.
+
+- f38bd95: Add the lightweight `@jessepomeroy/admin/theme` entry point for the existing `isDark` store. The root export remains available and shares the same store instance.
+
+  The store now owns the document's dark class as well as preference persistence, so public and admin consumers stay synchronized without a mounted admin layout. Unrecognized preferences fall back to the system setting, and denied storage reads or writes no longer prevent theme initialization or switching. Server imports remain free of browser side effects.
+
+### Patch Changes
+
+- 017d50f: Apply client category/status filters in the CRM query and label bounded lists and partial statistics.
+- d04bcd2: Remove the unsupported admin-email edit field from platform client details while retaining the read-only list.
+- bda205c: Share email-template fields and preview between create and edit dialogs while preserving their separate lifecycle and save behavior.
+- c015e53: Share identical input/focus styles across 13 components and field group/label styles across 10, retaining Svelte scoping, existing backgrounds and local layout overrides.
+- 2c55c92: Share singleton-editor draft recovery and save coordination. Serialize saves with publication/discard, retain edits made during requests, and preserve device drafts across offline and storage failures.
+
 ## 5.0.3
 
 ### Patch Changes
