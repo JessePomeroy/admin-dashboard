@@ -6,6 +6,7 @@ import type {
 	DocumentEmailResolutionOutcome,
 } from "../../documentEmailRecovery";
 import type { Contract, EmailTemplate } from "../../types";
+import type { ContractUpdatePayload } from "../documentFormPayloads";
 import { addToast } from "../../toast";
 import DocumentEmailRecoveryPanel from "../DocumentEmailRecoveryPanel.svelte";
 import {
@@ -26,7 +27,7 @@ interface Props {
 	contract: Contract;
 	emailTemplates: EmailTemplate[];
 	onclose: () => void;
-	onsave: (id: string, payload: Record<string, unknown>) => Promise<void>;
+	onsave: (id: string, payload: ContractUpdatePayload) => Promise<void>;
 	onaction: (id: string, action: string) => Promise<void>;
 	onsend: (id: string, templateId?: string, changeNote?: string) => Promise<void>;
 	onemailresolved: (result: {
@@ -125,7 +126,7 @@ async function handleSaveEdit() {
 	saving = true;
 	try {
 		lastChangeNote = buildChangeNote();
-		const payload: Record<string, unknown> = {
+		const payload: ContractUpdatePayload = {
 			title: editTitle,
 			body: editBody,
 			eventDate: editEventDate || undefined,

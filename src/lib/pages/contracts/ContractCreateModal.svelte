@@ -10,13 +10,14 @@ import { logger } from "../../logger";
 import { addToast } from "../../toast";
 import type { Client, ContractTemplate, EmailTemplate } from "../../types";
 import { dollarsToCents } from "../../utils";
+import type { ContractCreatePayload, ContractCreateAndSendPayload } from "../documentFormPayloads";
 
 interface Props {
 	clients: Client[];
 	templates: ContractTemplate[];
 	emailTemplates: EmailTemplate[];
-	onsave: (payload: Record<string, unknown>) => Promise<void>;
-	onsaveandsend: (payload: Record<string, unknown> & { emailTemplateId?: string; emailSubject?: string; emailBody?: string }) => Promise<void>;
+	onsave: (payload: ContractCreatePayload) => Promise<void>;
+	onsaveandsend: (payload: ContractCreateAndSendPayload) => Promise<void>;
 	onclose: () => void;
 }
 
@@ -70,23 +71,26 @@ function onTemplateSelect() {
 	}
 }
 
+function buildContractPayload(): ContractCreatePayload {
+	const payload: ContractCreatePayload = {
+		title: formTitle,
+		clientId: formClientId,
+		category: formCategory,
+		body: formBody,
+	};
+	if (formTemplateId) payload.templateId = formTemplateId;
+	if (formEventDate) payload.eventDate = formEventDate;
+	if (formEventLocation) payload.eventLocation = formEventLocation;
+	if (formTotalPrice > 0) payload.totalPrice = dollarsToCents(formTotalPrice);
+	if (formDepositAmount > 0) payload.depositAmount = dollarsToCents(formDepositAmount);
+	return payload;
+}
+
 async function handleSubmit() {
 	if (!formTitle || !formClientId || !formBody) return;
 	saving = true;
 	try {
-		const payload: Record<string, unknown> = {
-			title: formTitle,
-			clientId: formClientId,
-			category: formCategory,
-			body: formBody,
-		};
-		if (formTemplateId) payload.templateId = formTemplateId;
-		if (formEventDate) payload.eventDate = formEventDate;
-		if (formEventLocation) payload.eventLocation = formEventLocation;
-		if (formTotalPrice > 0) payload.totalPrice = dollarsToCents(formTotalPrice);
-		if (formDepositAmount > 0)
-			payload.depositAmount = dollarsToCents(formDepositAmount);
-		await onsave(payload);
+		await onsave(buildContractPayload());
 	} finally {
 		saving = false;
 	}
@@ -100,29 +104,16 @@ async function handleSaveAndSend() {
 	}
 	saving = true;
 	try {
-		const payload: Record<string, unknown> & { emailTemplateId?: string } = {
-			title: formTitle,
-			clientId: formClientId,
-			category: formCategory,
-			body: formBody,
-		};
-		if (formTemplateId) payload.templateId = formTemplateId;
-		if (formEventDate) payload.eventDate = formEventDate;
-		if (formEventLocation) payload.eventLocation = formEventLocation;
-		if (formTotalPrice > 0) payload.totalPrice = dollarsToCents(formTotalPrice);
-		if (formDepositAmount > 0)
-			payload.depositAmount = dollarsToCents(formDepositAmount);
-		Object.assign(
-			payload,
-			buildDocumentEmailCreateFields(
+		await onsaveandsend({
+			...buildContractPayload(),
+			...buildDocumentEmailCreateFields(
 				{
 					templateId: selectedTemplateId || undefined,
 					customContent: customEmailContent,
 				},
 				"emailTemplateId",
 			),
-		);
-		await onsaveandsend(payload);
+		});
 	} catch (error) {
 		logger.error("Failed to create and send contract:", error);
 		addToast("Failed to send contract.");

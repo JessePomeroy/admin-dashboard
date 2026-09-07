@@ -25,6 +25,7 @@ import {
 import InvoiceCreateModal from "./invoicing/InvoiceCreateModal.svelte";
 import InvoiceDetailModal from "./invoicing/InvoiceDetailModal.svelte";
 import InvoiceTable from "./invoicing/InvoiceTable.svelte";
+import type { InvoiceCreatePayload, InvoiceCreateAndSendPayload, InvoiceUpdatePayload } from "./documentFormPayloads";
 
 const config = getAdminConfig();
 const { api } = config;
@@ -174,45 +175,35 @@ async function sendInvoiceEmailRequest(
 	);
 }
 
-async function handleCreate(body: Record<string, unknown>) {
-	await client.mutation(api.invoices.create, {
-		siteUrl: config.siteUrl,
-		clientId: toId(body.clientId as string),
-		invoiceType: body.invoiceType as "one-time" | "recurring" | "deposit" | "package" | "milestone",
-		items: body.items as { description: string; quantity: number; unitPrice: number }[],
-		taxPercent: body.taxPercent as number | undefined,
-		notes: body.notes as string | undefined,
-		dueDate: body.dueDate as string | undefined,
-		recurring: body.recurring as Invoice["recurring"],
-		depositPercent: body.depositPercent as number | undefined,
-		totalProject: body.totalProject as number | undefined,
-		milestoneName: body.milestoneName as string | undefined,
-		milestoneIndex: body.milestoneIndex as number | undefined,
-		parentInvoiceId: toId(body.parentInvoiceId as string),
-	});
-	showCreateModal = false;
-}
-
-async function saveAndSendInvoice(body: Record<string, unknown> & { templateId?: string; emailSubject?: string; emailBody?: string }) {
-	const { templateId, emailSubject, emailBody, ...invoiceBody } = body;
+async function createInvoice(body: InvoiceCreatePayload): Promise<string> {
 	const invoiceId = await client.mutation(api.invoices.create, {
 		siteUrl: config.siteUrl,
-		clientId: toId(invoiceBody.clientId as string),
-		invoiceType: invoiceBody.invoiceType as "one-time" | "recurring" | "deposit" | "package" | "milestone",
-		items: invoiceBody.items as { description: string; quantity: number; unitPrice: number }[],
-		taxPercent: invoiceBody.taxPercent as number | undefined,
-		notes: invoiceBody.notes as string | undefined,
-		dueDate: invoiceBody.dueDate as string | undefined,
-		recurring: invoiceBody.recurring as Invoice["recurring"],
-		depositPercent: invoiceBody.depositPercent as number | undefined,
-		totalProject: invoiceBody.totalProject as number | undefined,
-		milestoneName: invoiceBody.milestoneName as string | undefined,
-		milestoneIndex: invoiceBody.milestoneIndex as number | undefined,
-		parentInvoiceId: toId(invoiceBody.parentInvoiceId as string),
+		clientId: toId(body.clientId),
+		invoiceType: body.invoiceType,
+		items: body.items,
+		taxPercent: body.taxPercent,
+		notes: body.notes,
+		dueDate: body.dueDate,
+		recurring: body.recurring,
+		depositPercent: body.depositPercent,
+		totalProject: body.totalProject,
+		milestoneName: body.milestoneName,
+		milestoneIndex: body.milestoneIndex,
+		parentInvoiceId: body.parentInvoiceId === undefined ? undefined : toId(body.parentInvoiceId),
 	});
 	showCreateModal = false;
+	return invoiceId;
+}
+
+async function handleCreate(body: InvoiceCreatePayload) {
+	await createInvoice(body);
+}
+
+async function saveAndSendInvoice(body: InvoiceCreateAndSendPayload) {
+	const { templateId, emailSubject, emailBody, ...invoiceBody } = body;
+	const invoiceId = await createInvoice(invoiceBody);
 	try {
-		await sendInvoiceEmailRequest(invoiceId as string, {
+		await sendInvoiceEmailRequest(invoiceId, {
 			templateId,
 			customSubject: emailSubject,
 			customBody: emailBody,
@@ -221,30 +212,30 @@ async function saveAndSendInvoice(body: Record<string, unknown> & { templateId?:
 		const attempt = presentableDocumentEmailRecoveryFromError(err);
 		if (
 			attempt &&
-			(!selectedInvoice || selectedInvoice._id === (invoiceId as string))
+			(!selectedInvoice || selectedInvoice._id === invoiceId)
 		) {
-			rememberInvoiceRecovery(invoiceId as string, attempt);
+			rememberInvoiceRecovery(invoiceId, attempt);
 		}
 		logger.error("Invoice saved but its email was not confirmed:", err);
 		addToast(`Invoice saved. ${documentEmailFailureMessage(err)}`);
 	}
 }
 
-async function handleSave(body: Record<string, unknown>) {
+async function handleSave(body: InvoiceUpdatePayload) {
 	if (!selectedInvoice) return;
 	const invoiceId = selectedInvoice._id as string;
 	const invoiceSnapshot = selectedInvoice;
 	await client.mutation(api.invoices.update, {
 		invoiceId: toId(invoiceId),
 		siteUrl: config.siteUrl,
-		items: body.items as { description: string; quantity: number; unitPrice: number }[] | undefined,
-		taxPercent: body.taxPercent as number | undefined,
-		notes: body.notes as string | undefined,
-		dueDate: body.dueDate as string | undefined,
-		status: body.status as string | undefined,
+		items: body.items,
+		taxPercent: body.taxPercent,
+		notes: body.notes,
+		dueDate: body.dueDate,
+		status: body.status,
 	});
 	if (selectedInvoice?._id === invoiceId) {
-		selectedInvoice = { ...invoiceSnapshot, ...body } as Invoice;
+		selectedInvoice = { ...invoiceSnapshot, ...body };
 	}
 }
 

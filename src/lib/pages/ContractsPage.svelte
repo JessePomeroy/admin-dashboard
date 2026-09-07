@@ -17,6 +17,7 @@ import ContractCreateModal from "./contracts/ContractCreateModal.svelte";
 import ContractDetailModal from "./contracts/ContractDetailModal.svelte";
 import ContractTable from "./contracts/ContractTable.svelte";
 import TemplateManager from "./contracts/TemplateManager.svelte";
+import type { ContractCreatePayload, ContractCreateAndSendPayload, ContractUpdatePayload } from "./documentFormPayloads";
 import {
 	type HydratedDocumentEmailAttempt,
 	createDocumentEmailRequestTracker,
@@ -156,44 +157,38 @@ let stats = $derived({
 });
 
 // Contract CRUD callbacks
-async function handleCreateContract(payload: Record<string, unknown>) {
-	await client.mutation(api.contracts.create, {
-		siteUrl: config.siteUrl,
-		title: payload.title as string,
-		clientId: toId(payload.clientId as string),
-		category: payload.category as "photography" | "web" | undefined,
-		templateId: toId(payload.templateId as string),
-		body: payload.body as string,
-		eventDate: payload.eventDate as string | undefined,
-		eventLocation: payload.eventLocation as string | undefined,
-		totalPrice: payload.totalPrice as number | undefined,
-		depositAmount: payload.depositAmount as number | undefined,
-	});
-	showCreateModal = false;
-}
-
-async function saveAndSendContract(payload: Record<string, unknown> & { emailTemplateId?: string; emailSubject?: string; emailBody?: string }) {
+async function createContract(payload: ContractCreatePayload): Promise<string> {
 	const contractId = await client.mutation(api.contracts.create, {
 		siteUrl: config.siteUrl,
-		title: payload.title as string,
-		clientId: toId(payload.clientId as string),
-		category: payload.category as "photography" | "web" | undefined,
-		templateId: toId(payload.templateId as string),
-		body: payload.body as string,
-		eventDate: payload.eventDate as string | undefined,
-		eventLocation: payload.eventLocation as string | undefined,
-		totalPrice: payload.totalPrice as number | undefined,
-		depositAmount: payload.depositAmount as number | undefined,
+		title: payload.title,
+		clientId: toId(payload.clientId),
+		category: payload.category,
+		templateId: payload.templateId === undefined ? undefined : toId(payload.templateId),
+		body: payload.body,
+		eventDate: payload.eventDate,
+		eventLocation: payload.eventLocation,
+		totalPrice: payload.totalPrice,
+		depositAmount: payload.depositAmount,
 	});
 	showCreateModal = false;
+	return contractId;
+}
+
+async function handleCreateContract(payload: ContractCreatePayload) {
+	await createContract(payload);
+}
+
+async function saveAndSendContract(payload: ContractCreateAndSendPayload) {
+	const { emailTemplateId, emailSubject, emailBody, ...contractBody } = payload;
+	const contractId = await createContract(contractBody);
 	try {
 		await emailRequests.post(
-			contractEmailKey(contractId as string),
-			contractEmailEndpoint(contractId as string),
+			contractEmailKey(contractId),
+			contractEmailEndpoint(contractId),
 			{
-				templateId: payload.emailTemplateId,
-				customSubject: payload.emailSubject,
-				customBody: payload.emailBody,
+				templateId: emailTemplateId,
+				customSubject: emailSubject,
+				customBody: emailBody,
 			},
 			{ retries: 2 },
 		);
@@ -201,9 +196,9 @@ async function saveAndSendContract(payload: Record<string, unknown> & { emailTem
 		const attempt = presentableDocumentEmailRecoveryFromError(err);
 		if (
 			attempt &&
-			(!selectedContract || selectedContract._id === (contractId as string))
+			(!selectedContract || selectedContract._id === contractId)
 		) {
-			rememberContractRecovery(contractId as string, attempt);
+			rememberContractRecovery(contractId, attempt);
 		}
 		logger.error("Contract saved but its email was not confirmed:", err);
 		addToast(`Contract saved. ${documentEmailFailureMessage(err)}`);
@@ -212,18 +207,18 @@ async function saveAndSendContract(payload: Record<string, unknown> & { emailTem
 
 async function handleSaveContract(
 	id: string,
-	payload: Record<string, unknown>,
+	payload: ContractUpdatePayload,
 ) {
 	await client.mutation(api.contracts.update, {
 		contractId: toId(id),
 		siteUrl: config.siteUrl,
-		title: payload.title as string | undefined,
-		body: payload.body as string | undefined,
-		eventDate: payload.eventDate as string | undefined,
-		eventLocation: payload.eventLocation as string | undefined,
-		totalPrice: payload.totalPrice as number | undefined,
-		depositAmount: payload.depositAmount as number | undefined,
-		status: payload.status as string | undefined,
+		title: payload.title,
+		body: payload.body,
+		eventDate: payload.eventDate,
+		eventLocation: payload.eventLocation,
+		totalPrice: payload.totalPrice,
+		depositAmount: payload.depositAmount,
+		status: payload.status,
 	});
 }
 
