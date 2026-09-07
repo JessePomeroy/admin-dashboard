@@ -1,6 +1,11 @@
+<script module lang="ts">
+let nextPageRequestId = 0;
+</script>
+
 <script lang="ts">
 import { goto } from "$app/navigation";
-import { usePaginatedQuery, useQuery } from "convex-svelte";
+import { useQuery } from "convex-svelte";
+import type { PaginationResult } from "convex/server";
 import { useAdminClient } from "../adminClient";
 import { getAdminConfig } from "../config";
 import FeatureGate from "../components/FeatureGate.svelte";
@@ -27,19 +32,45 @@ let tagFilter = $state("all");
 let searchQuery = $state("");
 
 const client = useAdminClient();
-const clientsQuery = usePaginatedQuery(api.crm.listClientsWithTags, () => ({
-	siteUrl: config.siteUrl,
-	...(categoryFilter === "all" ? {} : { category: categoryFilter }),
-	...(statusFilter === "all" ? {} : { status: statusFilter }),
-}), { initialNumItems: 50, keepPreviousData: false });
+let pageCursors = $state<(string | null)[]>([null]);
+let pageVersion = $state(0);
+let clientsPage = $state<PaginationResult<ClientWithTags> | null>(null);
+let loadingClients = $state(true);
+let clientsError = $state(false);
+
+// Snapshot pages avoid the installed experimental client's later-page split bug
+// and reactive pagination journals growing the joined read beyond its row budget.
+$effect(() => {
+	const args = {
+		siteUrl: config.siteUrl,
+		...(categoryFilter === "all" ? {} : { category: categoryFilter }),
+		...(statusFilter === "all" ? {} : { status: statusFilter }),
+		paginationOpts: { cursor: pageCursors[pageCursors.length - 1], numItems: 50, id: nextPageRequestId++ },
+	};
+	pageVersion;
+	let active = true;
+	loadingClients = true;
+	clientsError = false;
+	clientsPage = null;
+	void client.query(api.crm.listClientsWithTags, args).then((page) => {
+		if (active) clientsPage = page;
+	}).catch(() => {
+		if (active) clientsError = true;
+	}).finally(() => {
+		if (active) loadingClients = false;
+	});
+	return () => { active = false; };
+});
+
+function refreshClients() { pageVersion += 1; }
 const statsQuery = useQuery(api.crm.getStats, { siteUrl: config.siteUrl });
 const tagsQuery = useQuery(api.tags.listTags, { siteUrl: config.siteUrl });
 
-let clients = $derived(clientsQuery.results as ClientWithTags[]);
+let clients = $derived(clientsPage?.page ?? []);
 let stats = $derived(statsQuery.data ?? { total: 0, leads: 0, booked: 0, inProgress: 0, completed: 0, photography: 0, web: 0 });
 let countPrefix = $derived(stats.truncated === true ? "at least " : "");
 let tags = $derived(tagsQuery.data ?? []);
-let isLoading = $derived((clientsQuery.status === "LoadingFirstPage" && !clientsQuery.error) || statsQuery.isLoading || tagsQuery.isLoading);
+let isLoading = $derived(statsQuery.isLoading || tagsQuery.isLoading);
 
 // Modal state
 let showAddModal = $state(false);
@@ -101,6 +132,7 @@ async function saveNewClient(body: Record<string, string | undefined>) {
 			siteUrl_client: body.siteUrl_client || undefined,
 		});
 		showAddModal = false;
+		refreshClients();
 	} catch (err) {
 		logger.error("Failed to create client:", err);
 		addToast("Failed to create client. Please try again.");
@@ -127,7 +159,8 @@ async function saveEdit(body: Record<string, string | undefined>) {
 			notes: body.notes,
 			siteUrl_client: body.siteUrl_client,
 		});
-		if (selectedClient?._id === target._id) selectedClient = { ...target, ...body } as Client;
+		if (selectedClient?._id === target._id) selectedClient = { ...selectedClient, ...body } as Client;
+		refreshClients();
 	} catch (err) {
 		logger.error("Failed to update client:", err);
 		addToast("Failed to save changes. Please try again.");
@@ -146,6 +179,7 @@ async function deleteClient() {
 			siteUrl: config.siteUrl,
 		});
 		if (selectedClient?._id === target._id) closeDetailModal();
+		refreshClients();
 	} catch (err) {
 		logger.error("Failed to delete client:", err);
 		addToast("Failed to delete client. Please try again.");
@@ -163,7 +197,8 @@ async function quickStatusUpdate(newStatus: string) {
 			siteUrl: config.siteUrl,
 			status: newStatus,
 		});
-		if (selectedClient?._id === target._id) selectedClient = { ...target, status: newStatus } as Client;
+		if (selectedClient?._id === target._id) selectedClient = { ...selectedClient, status: newStatus } as Client;
+		refreshClients();
 	} catch (err) {
 		logger.error("Failed to update status:", err);
 		addToast("Failed to update status. Please try again.");
@@ -179,6 +214,7 @@ async function assignTagToClient(tagId: string) {
 			clientId: toId(target._id),
 			tagId: toId(tagId),
 		});
+		refreshClients();
 	} catch (err) {
 		logger.error("Failed to assign tag:", err);
 		addToast("Failed to assign tag.");
@@ -194,6 +230,7 @@ async function removeTagFromClient(tagId: string) {
 			clientId: toId(target._id),
 			tagId: toId(tagId),
 		});
+		refreshClients();
 	} catch (err) {
 		logger.error("Failed to remove tag:", err);
 		addToast("Failed to remove tag.");
@@ -221,6 +258,7 @@ async function deleteTag(tagId: string) {
 		await client.mutation(api.tags.deleteTag, {
 			tagId: toId(tagId),
 		});
+		refreshClients();
 	} catch (err) {
 		logger.error("Failed to delete tag:", err);
 		addToast("Failed to delete tag.");
@@ -271,12 +309,12 @@ function formatStatus(status: string) {
 	{/if}
 
 	<div class="filter-bar">
-		<select class="filter-select" aria-label="Client category" bind:value={categoryFilter}>
+		<select class="filter-select" aria-label="Client category" bind:value={categoryFilter} onchange={() => { pageCursors = [null]; }}>
 			<option value="all">all categories</option>
 			<option value="photography">photography</option>
 			<option value="web">web</option>
 		</select>
-		<select class="filter-select" aria-label="Client status" bind:value={statusFilter}>
+		<select class="filter-select" aria-label="Client status" bind:value={statusFilter} onchange={() => { pageCursors = [null]; }}>
 			<option value="all">all statuses</option>
 			{#each CLIENT_STATUSES as s}
 				<option value={s}>{formatStatus(s)}</option>
@@ -294,16 +332,18 @@ function formatStatus(status: string) {
 		<button class="btn-manage-tags" onclick={() => { showTagManager = true; }}>manage tags</button>
 	</div>
 
-	{#if clientsQuery.status !== "Exhausted"}
-		<p class="result-note">showing {clients.length} matching clients. search and tag filters apply to loaded clients.</p>
+	{#if clientsPage && (!clientsPage.isDone || pageCursors.length > 1)}
+		<p class="result-note">page {pageCursors.length}: {clients.length} matching clients. search and tag filters apply to this page.</p>
 	{/if}
-	{#if clientsQuery.error}<p class="result-note" role="alert">could not load clients. please try again.</p>{/if}
-	<ClientTable clients={filteredClients} onselect={openDetailModal} />
-	{#if clientsQuery.status === "CanLoadMore" || clientsQuery.status === "LoadingMore"}
-		<button class="btn-manage-tags" disabled={clientsQuery.status === "LoadingMore"} onclick={() => clientsQuery.loadMore(50)}>
-			{clientsQuery.status === "LoadingMore" ? "loading..." : "load more clients"}
-		</button>
+	{#if clientsError}<p class="result-note" role="alert">could not load clients. please try again.</p>{/if}
+	{#if loadingClients}<LoadingState />{:else}<ClientTable clients={filteredClients} onselect={openDetailModal} />{/if}
+	{#if pageCursors.length > 1}
+		<button class="btn-manage-tags" disabled={loadingClients} onclick={() => { pageCursors = pageCursors.slice(0, -1); }}>previous clients</button>
 	{/if}
+	{#if clientsPage && !clientsPage.isDone}
+		<button class="btn-manage-tags" disabled={loadingClients} onclick={() => { if (clientsPage) pageCursors = [...pageCursors, clientsPage.continueCursor]; }}>next clients</button>
+	{/if}
+	<button class="btn-manage-tags" disabled={loadingClients} onclick={refreshClients}>refresh clients</button>
 </div>
 
 {#if showAddModal}
