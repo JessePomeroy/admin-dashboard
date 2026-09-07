@@ -1,5 +1,5 @@
 <script lang="ts">
-import type { Client, ClientTag } from "../../types";
+import type { Client, ClientWithTags } from "../../types";
 import {
 	CATEGORY_COLORS,
 	CLIENT_STATUS_COLORS,
@@ -9,12 +9,11 @@ import {
 } from "../../utils";
 
 interface Props {
-	clients: Client[];
-	tagAssignments: Record<string, ClientTag[]>;
+	clients: ClientWithTags[];
 	onselect: (client: Client) => void;
 }
 
-let { clients, tagAssignments, onselect }: Props = $props();
+let { clients, onselect }: Props = $props();
 
 function formatType(type: string) {
 	return type.charAt(0).toUpperCase() + type.slice(1);
@@ -61,9 +60,9 @@ function fmtDate(timestamp: number) {
 						<td class="td-name">
 							<span class="name-with-tags">
 								{client.name}
-								{#if tagAssignments[client._id]?.length}
+								{#if client.tags?.length}
 									<span class="tag-dots">
-										{#each tagAssignments[client._id] as tag (tag._id)}
+										{#each client.tags as tag (tag._id)}
 											<span class="tag-dot-inline" style="background: {tag.color || '#818cf8'}" title={tag.name}></span>
 										{/each}
 									</span>

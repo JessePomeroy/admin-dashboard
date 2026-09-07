@@ -364,3 +364,5 @@ export interface GalleryDownload extends ConvexDocument<"galleryDownloads"> {
 	ipHash: string;
 	type: "single" | "zip" | "favorites";
 }
+
+export type ClientWithTags = Client & { tags: ClientTag[] };

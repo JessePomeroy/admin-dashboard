@@ -145,6 +145,8 @@ export interface AdminAPI {
 		updateClient: FnRef;
 		deleteClient: FnRef;
 		listClients: FnRef;
+		/** Paginated CRM rows including each client's tags. */
+		listClientsWithTags: FnRef;
 		getStats: FnRef;
 	};
 	emailLog: {

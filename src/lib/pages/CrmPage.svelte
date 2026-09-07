@@ -1,12 +1,12 @@
 <script lang="ts">
 import { goto } from "$app/navigation";
-import { useQuery } from "convex-svelte";
+import { usePaginatedQuery, useQuery } from "convex-svelte";
 import { useAdminClient } from "../adminClient";
 import { getAdminConfig } from "../config";
 import FeatureGate from "../components/FeatureGate.svelte";
 import LoadingState from "../components/LoadingState.svelte";
 import { CLIENT_STATUSES } from "../constants";
-import type { ActivityLogEntry, Client, ClientTag } from "../types";
+import type { ActivityLogEntry, Client, ClientTag, ClientWithTags } from "../types";
 import { addToast } from "../toast";
 import { logger } from "../logger";
 import { toId } from "../utils";
@@ -27,19 +27,19 @@ let tagFilter = $state("all");
 let searchQuery = $state("");
 
 const client = useAdminClient();
-const clientsQuery = useQuery(api.crm.listClients, () => ({
+const clientsQuery = usePaginatedQuery(api.crm.listClientsWithTags, () => ({
 	siteUrl: config.siteUrl,
 	...(categoryFilter === "all" ? {} : { category: categoryFilter }),
 	...(statusFilter === "all" ? {} : { status: statusFilter }),
-}));
+}), { initialNumItems: 50, keepPreviousData: false });
 const statsQuery = useQuery(api.crm.getStats, { siteUrl: config.siteUrl });
 const tagsQuery = useQuery(api.tags.listTags, { siteUrl: config.siteUrl });
 
-let clients = $derived(clientsQuery.data ?? []);
+let clients = $derived(clientsQuery.results as ClientWithTags[]);
 let stats = $derived(statsQuery.data ?? { total: 0, leads: 0, booked: 0, inProgress: 0, completed: 0, photography: 0, web: 0 });
 let countPrefix = $derived(stats.truncated === true ? "at least " : "");
 let tags = $derived(tagsQuery.data ?? []);
-let isLoading = $derived(clientsQuery.isLoading || statsQuery.isLoading || tagsQuery.isLoading);
+let isLoading = $derived((clientsQuery.status === "LoadingFirstPage" && !clientsQuery.error) || statsQuery.isLoading || tagsQuery.isLoading);
 
 // Modal state
 let showAddModal = $state(false);
@@ -47,20 +47,23 @@ let selectedClient = $state<Client | null>(null);
 let showTagManager = $state(false);
 let saving = $state(false);
 
-// Detail modal data
-let clientTags = $state<ClientTag[]>([]);
-let clientActivity = $state<ActivityLogEntry[]>([]);
-let loadingTags = $state(false);
-let loadingActivity = $state(false);
-
-// Tag assignments cache: clientId -> tags
-let tagAssignments = $state<Record<string, ClientTag[]>>({});
+const clientTagsQuery = useQuery(api.tags.getClientTags,
+	() => selectedClient ? { clientId: toId(selectedClient._id) } : "skip",
+	{ keepPreviousData: false },
+);
+const clientActivityQuery = useQuery(api.activityLog.getClientActivity,
+	() => selectedClient ? { clientId: toId(selectedClient._id) } : "skip",
+	{ keepPreviousData: false },
+);
+let clientTags = $derived((clientTagsQuery.data ?? []) as ClientTag[]);
+let clientActivity = $derived((clientActivityQuery.data ?? []) as ActivityLogEntry[]);
+let loadingTags = $derived(clientTagsQuery.isLoading);
+let loadingActivity = $derived(clientActivityQuery.isLoading);
 
 let filteredClients = $derived(
-	clients.filter((c: Client) => {
+	clients.filter((c) => {
 		if (tagFilter !== "all") {
-			const assignments = tagAssignments[c._id];
-			if (!assignments || !assignments.some((t) => t._id === tagFilter))
+			if (!c.tags.some((tag) => tag._id === tagFilter))
 				return false;
 		}
 		if (searchQuery) {
@@ -75,63 +78,12 @@ let filteredClients = $derived(
 	}),
 );
 
-// Load tags for all clients when client list changes
-async function loadAllClientTags() {
-	for (const c of clients) {
-		try {
-			const result = await client.query(api.tags.getClientTags, { clientId: c._id });
-			tagAssignments[c._id] = result || [];
-		} catch (err) {
-			logger.warn("Failed to load tags for client:", c._id, err);
-		}
-	}
-	tagAssignments = { ...tagAssignments };
-}
-
-$effect(() => {
-	if (clients.length > 0) {
-		loadAllClientTags();
-	}
-});
-
-async function loadClientTags(clientId: string) {
-	loadingTags = true;
-	try {
-		const result = await client.query(api.tags.getClientTags, { clientId: toId(clientId) });
-		clientTags = result || [];
-		tagAssignments[clientId] = clientTags;
-		tagAssignments = { ...tagAssignments };
-	} catch (err) {
-		logger.error("Failed to load client tags:", err);
-	} finally {
-		loadingTags = false;
-	}
-}
-
-async function loadClientActivity(clientId: string) {
-	loadingActivity = true;
-	try {
-		const result = await client.query(api.activityLog.getClientActivity, { clientId: toId(clientId) });
-		clientActivity = result || [];
-	} catch (err) {
-		logger.error("Failed to load client activity:", err);
-	} finally {
-		loadingActivity = false;
-	}
-}
-
-async function openDetailModal(c: Client) {
-	selectedClient = { ...c } as Client;
-	await Promise.all([
-		loadClientTags(c._id),
-		loadClientActivity(c._id),
-	]);
+function openDetailModal(c: Client) {
+	selectedClient = { ...c };
 }
 
 function closeDetailModal() {
 	selectedClient = null;
-	clientTags = [];
-	clientActivity = [];
 }
 
 async function saveNewClient(body: Record<string, string | undefined>) {
@@ -158,11 +110,12 @@ async function saveNewClient(body: Record<string, string | undefined>) {
 }
 
 async function saveEdit(body: Record<string, string | undefined>) {
-	if (!selectedClient) return;
+	const target = selectedClient;
+	if (!target) return;
 	saving = true;
 	try {
 		await client.mutation(api.crm.updateClient, {
-			clientId: toId(selectedClient._id),
+			clientId: toId(target._id),
 			siteUrl: config.siteUrl,
 			name: body.name,
 			email: body.email,
@@ -174,8 +127,7 @@ async function saveEdit(body: Record<string, string | undefined>) {
 			notes: body.notes,
 			siteUrl_client: body.siteUrl_client,
 		});
-		selectedClient = { ...selectedClient, ...body } as Client;
-		await loadClientActivity(selectedClient._id);
+		if (selectedClient?._id === target._id) selectedClient = { ...target, ...body } as Client;
 	} catch (err) {
 		logger.error("Failed to update client:", err);
 		addToast("Failed to save changes. Please try again.");
@@ -185,14 +137,15 @@ async function saveEdit(body: Record<string, string | undefined>) {
 }
 
 async function deleteClient() {
-	if (!selectedClient) return;
+	const target = selectedClient;
+	if (!target) return;
 	saving = true;
 	try {
 		await client.mutation(api.crm.deleteClient, {
-			clientId: toId(selectedClient._id),
+			clientId: toId(target._id),
 			siteUrl: config.siteUrl,
 		});
-		closeDetailModal();
+		if (selectedClient?._id === target._id) closeDetailModal();
 	} catch (err) {
 		logger.error("Failed to delete client:", err);
 		addToast("Failed to delete client. Please try again.");
@@ -202,15 +155,15 @@ async function deleteClient() {
 }
 
 async function quickStatusUpdate(newStatus: string) {
-	if (!selectedClient) return;
+	const target = selectedClient;
+	if (!target) return;
 	try {
 		await client.mutation(api.crm.updateClient, {
-			clientId: toId(selectedClient._id),
+			clientId: toId(target._id),
 			siteUrl: config.siteUrl,
 			status: newStatus,
 		});
-		selectedClient = { ...selectedClient, status: newStatus } as Client;
-		await loadClientActivity(selectedClient._id);
+		if (selectedClient?._id === target._id) selectedClient = { ...target, status: newStatus } as Client;
 	} catch (err) {
 		logger.error("Failed to update status:", err);
 		addToast("Failed to update status. Please try again.");
@@ -218,15 +171,14 @@ async function quickStatusUpdate(newStatus: string) {
 }
 
 async function assignTagToClient(tagId: string) {
-	if (!selectedClient) return;
+	const target = selectedClient;
+	if (!target) return;
 	try {
 		await client.mutation(api.tags.assignTag, {
 			siteUrl: config.siteUrl,
-			clientId: toId(selectedClient._id),
+			clientId: toId(target._id),
 			tagId: toId(tagId),
 		});
-		await loadClientTags(selectedClient._id);
-		await loadClientActivity(selectedClient._id);
 	} catch (err) {
 		logger.error("Failed to assign tag:", err);
 		addToast("Failed to assign tag.");
@@ -234,15 +186,14 @@ async function assignTagToClient(tagId: string) {
 }
 
 async function removeTagFromClient(tagId: string) {
-	if (!selectedClient) return;
+	const target = selectedClient;
+	if (!target) return;
 	try {
 		await client.mutation(api.tags.removeTag, {
 			siteUrl: config.siteUrl,
-			clientId: toId(selectedClient._id),
+			clientId: toId(target._id),
 			tagId: toId(tagId),
 		});
-		await loadClientTags(selectedClient._id);
-		await loadClientActivity(selectedClient._id);
 	} catch (err) {
 		logger.error("Failed to remove tag:", err);
 		addToast("Failed to remove tag.");
@@ -270,12 +221,6 @@ async function deleteTag(tagId: string) {
 		await client.mutation(api.tags.deleteTag, {
 			tagId: toId(tagId),
 		});
-		for (const cId of Object.keys(tagAssignments)) {
-			tagAssignments[cId] = tagAssignments[cId].filter(
-				(t) => t._id !== tagId,
-			);
-		}
-		tagAssignments = { ...tagAssignments };
 	} catch (err) {
 		logger.error("Failed to delete tag:", err);
 		addToast("Failed to delete tag.");
@@ -338,7 +283,7 @@ function formatStatus(status: string) {
 			{/each}
 		</select>
 		{#if tags.length > 0}
-			<select class="filter-select" bind:value={tagFilter}>
+			<select class="filter-select" aria-label="Client tag" bind:value={tagFilter}>
 				<option value="all">all tags</option>
 				{#each tags as tag (tag._id)}
 					<option value={tag._id}>{tag.name}</option>
@@ -349,11 +294,16 @@ function formatStatus(status: string) {
 		<button class="btn-manage-tags" onclick={() => { showTagManager = true; }}>manage tags</button>
 	</div>
 
-	{#if clients.length >= 500}
-		<p class="result-note">showing the latest 500 matching clients. search and tag filters apply to these clients.</p>
+	{#if clientsQuery.status !== "Exhausted"}
+		<p class="result-note">showing {clients.length} matching clients. search and tag filters apply to loaded clients.</p>
 	{/if}
-
-	<ClientTable clients={filteredClients} {tagAssignments} onselect={openDetailModal} />
+	{#if clientsQuery.error}<p class="result-note" role="alert">could not load clients. please try again.</p>{/if}
+	<ClientTable clients={filteredClients} onselect={openDetailModal} />
+	{#if clientsQuery.status === "CanLoadMore" || clientsQuery.status === "LoadingMore"}
+		<button class="btn-manage-tags" disabled={clientsQuery.status === "LoadingMore"} onclick={() => clientsQuery.loadMore(50)}>
+			{clientsQuery.status === "LoadingMore" ? "loading..." : "load more clients"}
+		</button>
+	{/if}
 </div>
 
 {#if showAddModal}
@@ -361,6 +311,7 @@ function formatStatus(status: string) {
 {/if}
 
 {#if selectedClient}
+	{#key selectedClient._id}
 	<ClientDetailModal
 		client={selectedClient}
 		{clientTags}
@@ -368,6 +319,7 @@ function formatStatus(status: string) {
 		availableTags={tags}
 		{loadingTags}
 		{loadingActivity}
+		detailError={Boolean(clientTagsQuery.error || clientActivityQuery.error)}
 		{saving}
 		onclose={closeDetailModal}
 		onsave={saveEdit}
@@ -388,6 +340,7 @@ function formatStatus(status: string) {
 			}
 		}}
 	/>
+	{/key}
 {/if}
 
 {#if showTagManager}
