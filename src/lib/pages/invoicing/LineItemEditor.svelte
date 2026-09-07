@@ -1,9 +1,11 @@
 <script lang="ts">
-import type { InvoiceItem } from "../../types";
+import { tryInvoiceAmounts } from "../../invoiceAmounts";
+import { dollarsToCents } from "../../utils";
+import type { InvoiceDraftItem } from "./invoiceDraft";
 
 interface Props {
-	items: InvoiceItem[];
-	onitems: (items: InvoiceItem[]) => void;
+	items: InvoiceDraftItem[];
+	onitems: (items: InvoiceDraftItem[]) => void;
 	pricePlaceholder?: string;
 	priceLabel?: string;
 	formatTotal: (cents: number) => string;
@@ -29,9 +31,14 @@ function removeItem(index: number) {
 	onitems(items.filter((_, i) => i !== index));
 }
 
-function lineTotal(item: InvoiceItem): number {
-	const total = item.quantity * item.unitPrice;
-	return convertPrice ? convertPrice(total) : total;
+function lineTotal(item: InvoiceDraftItem): string {
+	if (item.quantity === undefined || item.unitPrice === undefined
+		|| !Number.isFinite(item.unitPrice) || item.unitPrice < 0) return "—";
+	const amounts = tryInvoiceAmounts([{
+		quantity: item.quantity,
+		unitPrice: (convertPrice ?? dollarsToCents)(item.unitPrice),
+	}]);
+	return amounts ? formatTotal(convertPrice ? amounts.total : amounts.total / 100) : "—";
 }
 
 function autoGrow(e: Event) {
@@ -90,8 +97,8 @@ function autoGrow(e: Event) {
 				<input
 					class="form-input item-qty"
 					type="number"
-					min="1"
-					step="1"
+					min="0"
+					step="any"
 					placeholder="qty"
 					aria-label="Quantity"
 					bind:value={item.quantity}
@@ -107,7 +114,7 @@ function autoGrow(e: Event) {
 					bind:value={item.unitPrice}
 					required
 				/>
-				<span class="item-line-total">{formatTotal(lineTotal(item))}</span>
+				<span class="item-line-total">{lineTotal(item)}</span>
 			</div>
 		</div>
 	{/each}

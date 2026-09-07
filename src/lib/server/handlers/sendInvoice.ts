@@ -1,4 +1,5 @@
 import { toId } from "../../utils.js";
+import { calculateInvoiceAmounts } from "../../invoiceAmounts.js";
 import { renderDocumentEmail } from "../defaultDocumentEmail.js";
 import { escapeHtml } from "../html.js";
 import {
@@ -27,22 +28,16 @@ export function createInvoiceSendHandler() {
 			convex.query(api.invoices.get, { invoiceId: toId(id) }),
 		getClientEmail: (doc) => doc.clientEmail,
 		extractVars: (doc, changeNote) => {
-			const subtotal = doc.items.reduce(
-				(sum, item) => sum + item.quantity * item.unitPrice,
-				0,
-			);
-			const taxAmount = doc.taxPercent
-				? Math.round(subtotal * (doc.taxPercent / 100))
-				: 0;
+			const { lineTotals, subtotal, tax: taxAmount, total } = calculateInvoiceAmounts(doc.items, doc.taxPercent);
 			const lineItems = doc.items
-				.map((item) => {
-					const lineTotal = item.quantity * item.unitPrice;
+				.map((item, index) => {
+					const lineTotal = lineTotals[index];
 					return `<tr><td style="padding: 6px 0;">${escapeHtml(item.description)}</td><td style="padding: 6px 0; text-align: right;">${item.quantity}</td><td style="padding: 6px 0; text-align: right;">${formatCurrency(item.unitPrice)}</td><td style="padding: 6px 0; text-align: right;">${formatCurrency(lineTotal)}</td></tr>`;
 				})
 				.join("\n");
 			const lineItemsText = doc.items
-				.map((item) => {
-					const lineTotal = item.quantity * item.unitPrice;
+				.map((item, index) => {
+					const lineTotal = lineTotals[index];
 					return `${item.description} — ${item.quantity} × ${formatCurrency(item.unitPrice)} = ${formatCurrency(lineTotal)}`;
 				})
 				.join("\n");
@@ -52,7 +47,7 @@ export function createInvoiceSendHandler() {
 					clientName: doc.clientName ?? "there",
 					clientEmail: doc.clientEmail ?? "",
 					invoiceNumber: doc.invoiceNumber,
-					amount: formatCurrency(subtotal + taxAmount),
+					amount: formatCurrency(total),
 					dueDate: doc.dueDate ?? "",
 					subtotal: formatCurrency(subtotal),
 					taxLine: taxAmount

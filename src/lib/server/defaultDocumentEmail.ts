@@ -1,4 +1,5 @@
 /** Pure, dependency-free rendering for the default client document emails. */
+import { calculateInvoiceAmounts } from "../invoiceAmounts.js";
 
 export interface DocumentEmailBrand {
 	siteName: string;
@@ -129,18 +130,6 @@ function formatMoney(amountCents: number, currency = "USD"): string {
 	}).format(amountCents / 100);
 }
 
-function formatQuantity(quantity: number): string {
-	return new Intl.NumberFormat("en-US", { maximumFractionDigits: 3 }).format(
-		quantity,
-	);
-}
-
-function formatPercent(percent: number): string {
-	return new Intl.NumberFormat("en-US", { maximumFractionDigits: 2 }).format(
-		percent,
-	);
-}
-
 function formatDate(value: string): string {
 	const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
 	if (!match) return value;
@@ -234,27 +223,22 @@ function renderInvoice(
 	input: Extract<DocumentEmailInput, { kind: "invoice" }>,
 ): DocumentFrame {
 	const currency = input.currency ?? "USD";
-	const itemFacts = input.items.map((item) => {
-		const lineTotalCents = Math.round(item.quantity * item.unitPriceCents);
+	const { lineTotals, subtotal: subtotalCents, tax: taxCents, total: totalCents } = calculateInvoiceAmounts(
+		input.items.map((item) => ({ quantity: item.quantity, unitPrice: item.unitPriceCents })),
+		input.taxPercent,
+	);
+	const itemFacts = input.items.map((item, index) => {
+		const lineTotalCents = lineTotals[index];
 		return {
 			description: item.description,
-			quantity: formatQuantity(item.quantity),
+			quantity: String(item.quantity),
 			unitPrice: formatMoney(item.unitPriceCents, currency),
 			lineTotal: formatMoney(lineTotalCents, currency),
-			lineTotalCents,
 		};
 	});
-	const subtotalCents = itemFacts.reduce(
-		(sum, item) => sum + item.lineTotalCents,
-		0,
-	);
-	const taxCents = input.taxPercent
-		? Math.round(subtotalCents * (input.taxPercent / 100))
-		: 0;
-	const totalCents = subtotalCents + taxCents;
 	const dueDate = input.dueDate ? formatDate(input.dueDate) : undefined;
 	const taxPercent = input.taxPercent
-		? formatPercent(input.taxPercent)
+		? String(input.taxPercent)
 		: undefined;
 	const itemsHtml =
 		itemFacts.length === 0

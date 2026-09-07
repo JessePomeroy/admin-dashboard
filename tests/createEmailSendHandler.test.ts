@@ -27,6 +27,7 @@ import { type AdminServerConfig, setServerConfig } from "../src/lib/config";
 import { sendEmail } from "../src/lib/server/email";
 import { createEmailSendHandler } from "../src/lib/server/handlers/createEmailSendHandler";
 import { createQuoteSendHandler } from "../src/lib/server/handlers/sendQuote";
+import { createInvoiceSendHandler } from "../src/lib/server/handlers/sendInvoice";
 import type { EmailCategory } from "../src/lib/types";
 
 const ATTEMPT_ID = "11111111-1111-4111-8111-111111111111";
@@ -293,6 +294,7 @@ describe("createEmailSendHandler durable delivery", () => {
 					getByCategory: refs.getTemplateByCategory,
 				},
 				quotes: { get: "quotes.get" },
+				invoices: { get: "invoices.get" },
 				// biome-ignore lint/suspicious/noExplicitAny: partial AdminAPI mock
 			} as any,
 			siteUrl: "example.com",
@@ -303,6 +305,24 @@ describe("createEmailSendHandler durable delivery", () => {
 			resendApiKey: "re_test",
 			verifyAdmin: vi.fn(async () => true),
 		});
+	});
+
+	it.each(["default", "authored"])("keeps fractional invoice amounts identical in %s emails", async (mode) => {
+		templateQuery = (ref) => ref === "invoices.get" ? {
+			_id: DOCUMENT_ID, siteUrl: "example.com", clientId: "client-1", clientEmail: "client@example.com",
+			invoiceNumber: "INV-1", status: "draft", taxPercent: 6.25,
+			items: [{ description: "First half", quantity: 0.5, unitPrice: 1999 }, { description: "Second half", quantity: 0.5, unitPrice: 1999 }],
+		} : null;
+		await createInvoiceSendHandler()(makeEvent(mode === "authored" ? {
+			customSubject: "Invoice {{invoiceNumber}}",
+			customBody: "Subtotal {{subtotal}}\nTax {{taxLine}}\nTotal {{amount}}\n{{lineItems}}",
+		} : {}));
+		for (const content of [storedAttempt?.envelope.html, storedAttempt?.envelope.text]) {
+			for (const amount of ["$10.00", "$20.00", "$1.25", "$21.25"]) expect(content).toContain(amount);
+			expect(content).toContain("0.5");
+			expect(content).toContain("6.25%");
+		}
+		expect(sendEmail).toHaveBeenCalledOnce();
 	});
 
 	it("fails closed on missing authorization or journal configuration before provider work", async () => {

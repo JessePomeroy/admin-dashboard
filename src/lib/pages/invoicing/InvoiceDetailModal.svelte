@@ -8,18 +8,17 @@ import type {
 import { addToast } from "../../toast";
 import { logger } from "../../logger";
 import type { EmailTemplate, Invoice, InvoiceItem } from "../../types";
+import { tryInvoiceAmounts } from "../../invoiceAmounts";
 import {
-	calcSubtotal,
-	calcTax,
 	dollarsToCents,
 	formatCents,
-	formatDollars,
 	formatDate,
 	formatTimestamp,
 	getStatusColor,
 	INVOICE_STATUS_COLORS,
 } from "../../utils";
 import LineItemEditor from "./LineItemEditor.svelte";
+import { type InvoiceDraftItem, prepareInvoiceDraft } from "./invoiceDraft";
 import DocumentEmailRecoveryPanel from "../DocumentEmailRecoveryPanel.svelte";
 import {
 	type HydratedDocumentEmailAttempt,
@@ -97,25 +96,20 @@ $effect(() => {
 });
 
 // Edit form state
-let editItems = $state<InvoiceItem[]>([]);
-let editTaxPercent = $state(0);
+let editItems = $state<InvoiceDraftItem[]>([]);
+let editTaxPercent = $state<number | undefined>(0);
 let editDueDate = $state("");
 let editNotes = $state("");
 
-let detailSubtotal = $derived(calcSubtotal(invoice.items));
-let detailTax = $derived(calcTax(detailSubtotal, invoice.taxPercent || 0));
-let detailTotal = $derived(detailSubtotal + detailTax);
-
-let editSubtotal = $derived(editItems.reduce((sum, item) => sum + item.quantity * item.unitPrice, 0));
-let editTax = $derived(editSubtotal * (editTaxPercent / 100));
-let editTotal = $derived(editSubtotal + editTax);
+let detailAmounts = $derived(tryInvoiceAmounts(invoice.items, invoice.taxPercent));
+let invoiceDraft = $derived(prepareInvoiceDraft(editItems, editTaxPercent));
 
 function startEdit() {
 	editItems = invoice.items.map((it: InvoiceItem) => ({
 		...it,
 		unitPrice: it.unitPrice / 100,
 	}));
-	editTaxPercent = invoice.taxPercent || 0;
+	editTaxPercent = invoice.taxPercent ?? 0;
 	editDueDate = invoice.dueDate || "";
 	editNotes = invoice.notes || "";
 	editMode = true;
@@ -136,7 +130,7 @@ function buildChangeNote(): string {
 			const old = oldItems[i];
 			return item.description !== old.description
 				|| item.quantity !== old.quantity
-				|| dollarsToCents(item.unitPrice) !== old.unitPrice;
+				|| item.unitPrice === undefined || dollarsToCents(item.unitPrice) !== old.unitPrice;
 		});
 		if (itemsChanged) changes.push("line items updated");
 	}
@@ -147,18 +141,12 @@ function buildChangeNote(): string {
 }
 
 async function handleSaveEdit() {
-	if (editItems.length === 0) return;
+	if (editItems.length === 0 || !invoiceDraft) return;
 	saving = true;
 	try {
-		const items = editItems.map((item) => ({
-			description: item.description,
-			quantity: item.quantity,
-			unitPrice: dollarsToCents(item.unitPrice),
-		}));
 		// Capture changes before saving
 		lastChangeNote = buildChangeNote();
-		const body: Record<string, unknown> = { items };
-		if (editTaxPercent > 0) body.taxPercent = editTaxPercent;
+		const body: Record<string, unknown> = { items: invoiceDraft.items, taxPercent: invoiceDraft.taxPercent };
 		body.dueDate = editDueDate || undefined;
 		body.notes = editNotes || undefined;
 		await onsave(body);
@@ -311,7 +299,8 @@ async function handleDelete() {
 				onitems={(v) => {
 					editItems = v;
 				}}
-				formatTotal={(n) => formatDollars(n)}
+				formatTotal={formatCents}
+				convertPrice={dollarsToCents}
 			/>
 
 			<div class="form-row">
@@ -322,7 +311,8 @@ async function handleDelete() {
 						class="form-input"
 						type="number"
 						min="0"
-						step="0.1"
+						max="100"
+						step="any"
 						bind:value={editTaxPercent}
 					/>
 				</div>
@@ -348,15 +338,19 @@ async function handleDelete() {
 			</div>
 
 			<div class="totals-line">
-				<span>subtotal: {formatDollars(editSubtotal)}</span>
-				{#if editTaxPercent > 0}
+				{#if invoiceDraft}
+					<span>subtotal: {formatCents(invoiceDraft.amounts.subtotal)}</span>
+					{#if invoiceDraft.taxPercent > 0}
+						<span class="stat-sep">&middot;</span>
+						<span>tax: {formatCents(invoiceDraft.amounts.tax)}</span>
+					{/if}
 					<span class="stat-sep">&middot;</span>
-					<span>tax: {formatDollars(editTax)}</span>
+					<span class="total-amount"
+						>total: {formatCents(invoiceDraft.amounts.total)}</span
+					>
+				{:else}
+					<span role="alert">enter positive quantities, valid prices, and tax from 0 to 100.</span>
 				{/if}
-				<span class="stat-sep">&middot;</span>
-				<span class="total-amount"
-					>total: {formatDollars(editTotal)}</span
-				>
 			</div>
 
 			<div class="modal-actions">
@@ -366,7 +360,7 @@ async function handleDelete() {
 				<button
 					type="submit"
 					class="btn-save"
-					disabled={saving || editItems.length === 0}
+					disabled={saving || editItems.length === 0 || !invoiceDraft}
 				>
 					{saving ? "saving..." : "save changes"}
 				</button>
@@ -482,7 +476,7 @@ async function handleDelete() {
 						<span class="itcol-price">price</span>
 						<span class="itcol-total">total</span>
 					</div>
-					{#each invoice.items as item}
+					{#each invoice.items as item, index}
 						<div class="items-table-row">
 							<span class="itcol-desc">{item.description}</span>
 							<span class="itcol-qty">{item.quantity}</span>
@@ -490,28 +484,30 @@ async function handleDelete() {
 								>{formatCents(item.unitPrice)}</span
 							>
 							<span class="itcol-total"
-								>{formatCents(
-									item.quantity * item.unitPrice,
-								)}</span
+								>{detailAmounts ? formatCents(detailAmounts.lineTotals[index]) : "—"}</span
 							>
 						</div>
 					{/each}
 				</div>
 
 				<div class="totals-line">
-					<span>subtotal: {formatCents(detailSubtotal)}</span>
-					{#if invoice.taxPercent}
+					{#if detailAmounts}
+						<span>subtotal: {formatCents(detailAmounts.subtotal)}</span>
+						{#if invoice.taxPercent}
+							<span class="stat-sep">&middot;</span>
+							<span
+								>tax ({invoice.taxPercent}%): {formatCents(
+									detailAmounts.tax,
+								)}</span
+							>
+						{/if}
 						<span class="stat-sep">&middot;</span>
-						<span
-							>tax ({invoice.taxPercent}%): {formatCents(
-								detailTax,
-							)}</span
+						<span class="total-amount"
+							>total: {formatCents(detailAmounts.total)}</span
 						>
+					{:else}
+						<span role="alert">invalid invoice amount</span>
 					{/if}
-					<span class="stat-sep">&middot;</span>
-					<span class="total-amount"
-						>total: {formatCents(detailTotal)}</span
-					>
 				</div>
 
 				{#if invoice.notes}

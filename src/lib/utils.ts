@@ -1,5 +1,6 @@
 import type { GenericId } from "convex/values";
 import type { AdminAPI } from "./config";
+import { calculateInvoiceAmounts, calculateInvoiceTax } from "./invoiceAmounts.js";
 
 /**
  * Cast a string to a Convex GenericId. Convex IDs are strings at runtime,
@@ -31,11 +32,11 @@ export function dollarsToCents(dollars: number): number {
 export function calcSubtotal(
 	items: readonly { quantity: number; unitPrice: number }[],
 ): number {
-	return items.reduce((sum, item) => sum + item.quantity * item.unitPrice, 0);
+	return calculateInvoiceAmounts(items).subtotal;
 }
 
 export function calcTax(subtotal: number, taxPercent: number): number {
-	return Math.round(subtotal * (taxPercent / 100));
+	return calculateInvoiceTax(subtotal, taxPercent);
 }
 
 export function formatDollars(amount: number): string {

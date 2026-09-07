@@ -33,6 +33,21 @@ const invoiceInput = {
 };
 
 describe("defaultDocumentEmail", () => {
+	it("preserves the complete fractional quantity and tax percentage in invoice text", () => {
+		const { html, text } = renderDocumentEmail({
+			...invoiceInput,
+			items: [{ description: "Measured service", quantity: 0.123456, unitPriceCents: 10000 }],
+			taxPercent: 6.251,
+		});
+		for (const content of [html, text]) {
+			expect(content).toContain("0.123456");
+			expect(content).toContain("6.251%");
+			expect(content).toContain("$12.35");
+			expect(content).toContain("$0.77");
+			expect(content).toContain("$13.12");
+		}
+	});
+
 	it("renders an invoice from raw cents and dates as matching HTML and plain text", () => {
 		const { html, text } = renderDocumentEmail(invoiceInput);
 

@@ -1,9 +1,8 @@
 <script lang="ts">
 import StatusDot from "../../components/StatusDot.svelte";
 import type { Invoice } from "../../types";
+import { tryInvoiceAmounts } from "../../invoiceAmounts";
 import {
-	calcSubtotal,
-	calcTax,
 	formatCents,
 	formatDate,
 	getStatusColor,
@@ -36,9 +35,7 @@ let { invoices, onselect }: Props = $props();
 			</thead>
 			<tbody>
 				{#each invoices as inv (inv._id)}
-					{@const subtotal = calcSubtotal(inv.items)}
-					{@const tax = calcTax(subtotal, inv.taxPercent || 0)}
-					{@const total = subtotal + tax}
+					{@const amounts = tryInvoiceAmounts(inv.items, inv.taxPercent)}
 					<tr
 						class="inv-row"
 						role="button"
@@ -61,7 +58,7 @@ let { invoices, onselect }: Props = $props();
 								? "s"
 								: ""}</td
 						>
-						<td class="td-total">{formatCents(total)}</td>
+						<td class="td-total">{amounts ? formatCents(amounts.total) : "invalid amount"}</td>
 						<td class="td-date"
 							>{inv.dueDate
 								? formatDate(inv.dueDate)
