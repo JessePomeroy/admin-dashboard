@@ -108,17 +108,6 @@ describe("catalog product editor helpers", () => {
 		expect(projected.printSourceAssets?.[0].asset.assetId).toBe("legacy-asset");
 	});
 
-	it("keeps proxy-backed private-asset refs disabled without host opt-in", () => {
-		const proxyApi = new Proxy({}, {
-			get: (_, property) => ({ name: String(property) }),
-		});
-		const capability = getCatalogProductEditorCapability({
-			editor: { products: { enabledKinds: ["digital_download"] } },
-			api: { catalogProductGraphs: proxyApi },
-		} as unknown as AdminConfig);
-		expect(capability?.privateAssets).toBeNull();
-	});
-
 	it("requires explicit publication opt-in and explicitly registered refs", () => {
 		const proxyApi = new Proxy({}, {
 			get: (_, property) => ({ name: String(property) }),
@@ -198,7 +187,6 @@ describe("catalog product editor helpers", () => {
 				prepareEndpoint: "/api/private/prepare",
 				completeEndpoint: "/api/private/complete",
 			},
-			replacement: null,
 		});
 	});
 

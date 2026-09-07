@@ -50,18 +50,7 @@ export function getCatalogProductEditorCapability(config: AdminConfig) {
 					completeEndpoint: configuredPrivateUpload.completeEndpoint,
 				}
 			: null;
-		const listCandidates = settings.privateAssetReplacementEnabled === true
-			? explicitOwnRef(graphApi, "listDraftPrivateAssetCandidates")
-			: null;
-		const replacePrivateAsset = settings.privateAssetReplacementEnabled === true
-			? explicitOwnRef(graphApi, "replaceDraftPrivateAsset")
-			: null;
-		const replacement = listCandidates && replacePrivateAsset
-			? { listCandidates, replace: replacePrivateAsset }
-			: null;
-		const privateAssets = privateUpload || replacement
-			? { upload: privateUpload, replacement }
-			: null;
+		const privateAssets = privateUpload ? { upload: privateUpload } : null;
 		const publishDraft = settings.publicationEnabled === true
 			? explicitOwnRef(graphApi, "publishDraft")
 			: null;
