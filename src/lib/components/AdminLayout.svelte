@@ -53,13 +53,12 @@ function toggleTheme() {
 
 // Lock body scroll when mobile sidebar is open
 $effect(() => {
-	if (browser) {
-		if (mobileMenuOpen || editorMenuOpen) {
-			document.body.style.overflow = "hidden";
-		} else {
-			document.body.style.overflow = "";
-		}
-	}
+	if (!browser || !(mobileMenuOpen || editorMenuOpen)) return;
+	const previousOverflow = document.body.style.overflow;
+	document.body.style.overflow = "hidden";
+	return () => {
+		document.body.style.overflow = previousOverflow;
+	};
 });
 
 let capabilities = $derived(
