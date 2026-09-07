@@ -31,6 +31,7 @@ export default defineConfig({
 					alias: {
 						"$app/environment": svelteKitEnvironment,
 						"$app/navigation": svelteKitNavigation,
+						"$app/stores": fileURLToPath(new URL("./tests/stubs/svelteKitStores.ts", import.meta.url)),
 					},
 					conditions: ["browser"],
 				},

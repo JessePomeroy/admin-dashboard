@@ -1,5 +1,5 @@
 <script lang="ts">
-import { onMount } from "svelte";
+import { onDestroy, onMount } from "svelte";
 import { browser } from "$app/environment";
 import { page } from "$app/stores";
 import { useQuery } from "convex-svelte";
@@ -118,9 +118,10 @@ let authUserEmail = $state<string | undefined>(undefined);
 if (config.authClient) {
 	const sessionStore = config.authClient.useSession();
 	if (sessionStore?.subscribe) {
-		sessionStore.subscribe((val) => {
+		const unsubscribe = sessionStore.subscribe((val) => {
 			authUserEmail = val?.data?.user?.email;
 		});
+		onDestroy(unsubscribe);
 	}
 }
 

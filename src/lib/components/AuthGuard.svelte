@@ -1,5 +1,5 @@
 <script lang="ts">
-import type { Snippet } from "svelte";
+import { onDestroy, type Snippet } from "svelte";
 import { useQuery } from "convex-svelte";
 import { getTenantAdminSessionState } from "../adminSession";
 import { getAdminConfig } from "../config";
@@ -20,10 +20,11 @@ if (authClient) {
 	const sessionStore = authClient.useSession();
 	// useSession() returns a nanostore atom — subscribe to get reactive updates
 	if (sessionStore?.subscribe) {
-		sessionStore.subscribe((val) => {
+		const unsubscribe = sessionStore.subscribe((val) => {
 			sessionData = val?.data ?? null;
 			sessionPending = val?.isPending ?? false;
 		});
+		onDestroy(unsubscribe);
 	} else {
 		// Fallback: plain object (matches our interface)
 		sessionData = sessionStore?.data ?? null;
