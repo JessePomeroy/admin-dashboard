@@ -80,9 +80,14 @@ afterEach(() => {
 describe("createGalleryImageHandler", () => {
 	it("streams a tenant-scoped image through the Worker admin route", async () => {
 		configureServerConfig({ siteUrl: "tenant.example" });
-		const fetchMock = vi.fn(async () => new Response("image-bytes", {
-			headers: { "Content-Type": "image/jpeg", ETag: "test-etag" },
-		}));
+		const workerResponse = new Response("image-bytes", {
+			headers: {
+				"Content-Type": "image/jpeg",
+				ETag: "test-etag",
+				"Cache-Control": "public, max-age=31536000, immutable",
+			},
+		});
+		const fetchMock = vi.fn(async () => workerResponse);
 		vi.stubGlobal("fetch", fetchMock);
 		const request = new Request(
 			"https://tenant.example/api/admin/galleries/image?key=tenant.example%2Fgallery-1%2Fthumb%2Fphoto.jpg",
@@ -94,8 +99,11 @@ describe("createGalleryImageHandler", () => {
 			url: new URL(request.url),
 		});
 
+		expect(response.body).toBe(workerResponse.body);
 		expect(await response.text()).toBe("image-bytes");
 		expect(response.headers.get("Content-Type")).toBe("image/jpeg");
+		expect(response.headers.get("ETag")).toBe("test-etag");
+		expect(response.headers.get("Cache-Control")).toBe("private, no-store");
 		expect(fetchMock).toHaveBeenCalledWith(
 			"https://gallery.example/admin/image/tenant.example%2Fgallery-1%2Fthumb%2Fphoto.jpg",
 			{ headers: { Authorization: "Bearer gallery-secret" } },
