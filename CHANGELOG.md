@@ -1,5 +1,11 @@
 # @jessepomeroy/admin
 
+## 5.1.1
+
+### Patch Changes
+
+- 6b2c10e: Release AdminLayout and AuthGuard session subscriptions when their components are destroyed, preserving existing session and authorization behavior.
+
 ## 5.1.0
 
 ### Minor Changes
