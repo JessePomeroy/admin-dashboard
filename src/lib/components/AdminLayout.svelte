@@ -149,18 +149,31 @@ if (notificationsRef) {
 	});
 }
 
-// Mark page as seen when navigating (only after notifications query has returned)
-let lastMarkedPath = $state("");
+// A visit is acknowledged only after success. Retry failures while this visit owns the effect.
+const notificationPageKey = $derived(hrefToNotificationKey[$page.url.pathname]);
 $effect(() => {
-	const pathname = $page.url.pathname;
-	const pageKey = hrefToNotificationKey[pathname];
-	if (pageKey && pageKey !== lastMarkedPath && api.notifications?.markSeen && notificationsReady) {
-		lastMarkedPath = pageKey;
-		convexClient.mutation(api.notifications.markSeen, {
-			siteUrl: config.siteUrl,
-			page: pageKey,
-		}).catch((err: unknown) => logger.warn("Failed to mark notifications seen:", pageKey, err));
+	const pageKey = notificationPageKey;
+	const markSeen = api.notifications?.markSeen;
+	if (!pageKey || !markSeen || !notificationsReady) return;
+	let active = true;
+	let retryDelay = 1_000;
+	let retryTimer: ReturnType<typeof setTimeout> | undefined;
+	async function acknowledge() {
+		try {
+			await convexClient.mutation(markSeen, { siteUrl: config.siteUrl, page: pageKey });
+		} catch (err) {
+			logger.warn("Failed to mark notifications seen:", pageKey, err);
+			if (active) {
+				retryTimer = setTimeout(acknowledge, retryDelay);
+				retryDelay = Math.min(retryDelay * 2, 30_000);
+			}
+		}
 	}
+	void acknowledge();
+	return () => {
+		active = false;
+		clearTimeout(retryTimer);
+	};
 });
 
 let showPasswordForm = $state(false);
