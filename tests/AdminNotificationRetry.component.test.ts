@@ -74,6 +74,25 @@ describe("page-seen acknowledgement ownership", () => {
 		expect(mocks.mutation).toHaveBeenCalledTimes(2);
 	});
 
+	it("keeps the same visit across page-store refreshes without overlapping or restarting requests", async () => {
+		let reject!: (error: Error) => void;
+		mocks.mutation.mockReturnValueOnce(new Promise<void>((_resolve, fail) => { reject = fail; }));
+		await mountLayout();
+		await navigate("/admin/orders?refresh=1");
+		await vi.advanceTimersByTimeAsync(60_000);
+		expect(mocks.mutation).toHaveBeenCalledTimes(1);
+		reject(new Error("Temporary outage"));
+		await vi.advanceTimersByTimeAsync(500);
+		await navigate("/admin/orders?refresh=2");
+		await vi.advanceTimersByTimeAsync(499);
+		expect(mocks.mutation).toHaveBeenCalledTimes(1);
+		await vi.advanceTimersByTimeAsync(1);
+		expect(mocks.mutation).toHaveBeenCalledTimes(2);
+		await navigate("/admin/orders?refresh=3");
+		await vi.advanceTimersByTimeAsync(60_000);
+		expect(mocks.mutation).toHaveBeenCalledTimes(2);
+	});
+
 	it("caps the retry interval without making concurrent requests", async () => {
 		mocks.mutation.mockRejectedValue(new Error("Offline"));
 		await mountLayout();

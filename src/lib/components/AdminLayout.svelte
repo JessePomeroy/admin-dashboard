@@ -150,9 +150,9 @@ if (notificationsRef) {
 }
 
 // A visit is acknowledged only after success. Retry failures while this visit owns the effect.
+const notificationPageKey = $derived(hrefToNotificationKey[$page.url.pathname]);
 $effect(() => {
-	const pathname = $page.url.pathname;
-	const pageKey = hrefToNotificationKey[pathname];
+	const pageKey = notificationPageKey;
 	const markSeen = api.notifications?.markSeen;
 	if (!pageKey || !markSeen || !notificationsReady) return;
 	let active = true;
