@@ -2,6 +2,7 @@
 import { browser } from "$app/environment";
 import { tick } from "svelte";
 import { useQuery } from "convex-svelte";
+import { createEditorMedia } from "../../editorMedia.svelte";
 import { dragHandleZone } from "svelte-dnd-action";
 import { createSingletonDraft } from "../../singletonDraft.svelte";
 import { useAdminClient } from "../../adminClient";
@@ -22,11 +23,7 @@ import {
 	serializeModelingPageDraft,
 	validateModelingPageForPublish,
 } from "../../modelingPage";
-import {
-	mergePortfolioMediaAssets,
-	type PortfolioMediaAsset,
-	type PortfolioMediaPage,
-} from "../../portfolioEditor";
+import type { PortfolioMediaAsset } from "../../portfolioEditor";
 import "../../styles/editorial-page.css";
 import ModelingCategoryEditor from "./ModelingCategoryEditor.svelte";
 import PortfolioMediaPicker from "./PortfolioMediaPicker.svelte";
@@ -55,10 +52,6 @@ if (
 
 const client = useAdminClient();
 const editorQuery = useQuery(getModelingPageEditorState, { siteUrl: config.siteUrl });
-const mediaQuery = useQuery(listMediaAssets, {
-	siteUrl: config.siteUrl,
-	paginationOpts: { numItems: 100, cursor: null },
-});
 const storageKey = `admin:site-editor:modeling-page:${config.siteUrl}`;
 
 const draft = createSingletonDraft({
@@ -82,27 +75,14 @@ let publishing = $state(false);
 let previewing = $state(false);
 let reviewRequested = $state(false);
 let pickerGalleryKey = $state<string | null>(null);
-let uploadedAssets = $state<PortfolioMediaAsset[]>([]);
 type DraggableGallery = ModelingGalleryDraft & { id: string; isDndShadowItem?: boolean };
 let galleryDragItems = $state<DraggableGallery[] | null>(null);
 let visibleGalleries: DraggableGallery[] = $derived(galleryDragItems ?? (form.galleries ?? []).map((gallery) => ({ ...gallery, id: gallery.key })));
 
-let mediaPage = $derived(mediaQuery.data as PortfolioMediaPage | undefined);
-let referencedAssetIds = $derived([...new Set([
-	...(form.galleries ?? []).flatMap((gallery) =>
-		(gallery.images ?? []).map((image) => image.assetId)
-	),
-])]);
-const placedMediaQuery = useQuery(getPlacedMediaAssets, () => ({
-	siteUrl: config.siteUrl,
-	ids: referencedAssetIds,
-}));
-let placedAssets = $derived((placedMediaQuery.data ?? []) as PortfolioMediaAsset[]);
-let readyAssets = $derived((mediaPage?.page ?? []).filter((asset) => asset.status === "ready"));
-let mediaById = $derived(mergePortfolioMediaAssets(
-	[...(mediaPage?.page ?? []), ...uploadedAssets],
-	placedAssets,
-));
+const media = createEditorMedia({
+	siteUrl: config.siteUrl, list: listMediaAssets, placed: getPlacedMediaAssets,
+	references: () => (form.galleries ?? []).flatMap(gallery => (gallery.images ?? []).map(image => image.assetId)),
+});
 let pickerGallery = $derived(
 	(form.galleries ?? []).find((gallery) => gallery.key === pickerGalleryKey),
 );
@@ -265,7 +245,7 @@ function addAsset(galleryKey: string, asset: PortfolioMediaAsset) {
 }
 
 function addUploadedAsset(galleryKey: string, asset: PortfolioMediaAsset) {
-	uploadedAssets = [asset, ...uploadedAssets.filter((item) => item._id !== asset._id)];
+	media.addUpload(asset);
 	addAsset(galleryKey, asset);
 }
 </script>
@@ -325,7 +305,7 @@ function addUploadedAsset(galleryKey: string, asset: PortfolioMediaAsset) {
 							{index}
 							count={form.galleries?.length ?? 0}
 							isDndShadowItem={gallery.isDndShadowItem}
-							{mediaById}
+							mediaById={media.byId}
 							mediaBaseUrl={modelingConfig.mediaBaseUrl}
 							{publishIssues}
 							{reviewRequested}
@@ -349,7 +329,7 @@ function addUploadedAsset(galleryKey: string, asset: PortfolioMediaAsset) {
 </div>
 
 {#if pickerGalleryKey}
-	<PortfolioMediaPicker assets={readyAssets} {selectedAssetIds} mediaBaseUrl={modelingConfig.mediaBaseUrl} hasMore={mediaPage ? !mediaPage.isDone : false} onChoose={(asset) => addAsset(pickerGalleryKey ?? "", asset)} onClose={() => (pickerGalleryKey = null)} />
+	<PortfolioMediaPicker assets={media.ready} {selectedAssetIds} mediaBaseUrl={modelingConfig.mediaBaseUrl} hasMore={media.hasMore} onChoose={(asset) => addAsset(pickerGalleryKey ?? "", asset)} onClose={() => (pickerGalleryKey = null)} />
 {/if}
 
 <style>

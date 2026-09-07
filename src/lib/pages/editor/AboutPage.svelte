@@ -2,6 +2,7 @@
 import { browser } from "$app/environment";
 import { tick } from "svelte";
 import { useQuery } from "convex-svelte";
+import { createEditorMedia } from "../../editorMedia.svelte";
 import { createSingletonDraft } from "../../singletonDraft.svelte";
 import { useAdminClient } from "../../adminClient";
 import {
@@ -18,11 +19,7 @@ import {
 	type AboutPageDraftPayload,
 	type AboutPageEditorState,
 } from "../../config";
-import {
-	mergePortfolioMediaAssets,
-	type PortfolioMediaAsset,
-	type PortfolioMediaPage,
-} from "../../portfolioEditor";
+import type { PortfolioMediaAsset } from "../../portfolioEditor";
 import "../../styles/editorial-page.css";
 import AboutPortraits from "./AboutPortraits.svelte";
 import AboutStructuredContent from "./AboutStructuredContent.svelte";
@@ -51,10 +48,6 @@ if (
 ) throw new Error("About editor API is incomplete for this host");
 const client = useAdminClient();
 const editorQuery = useQuery(getAboutPageEditorState, { siteUrl: config.siteUrl });
-const mediaQuery = useQuery(listMediaAssets, {
-	siteUrl: config.siteUrl,
-	paginationOpts: { numItems: 100, cursor: null },
-});
 const storageKey = `admin:site-editor:about-page:${config.siteUrl}`;
 
 const draft = createSingletonDraft({
@@ -78,21 +71,10 @@ let publishing = $state(false);
 let previewing = $state(false);
 let reviewRequested = $state(false);
 let pickerOpen = $state(false);
-let uploadedAssets = $state<PortfolioMediaAsset[]>([]);
-let mediaPage = $derived(mediaQuery.data as PortfolioMediaPage | undefined);
-let referencedAssetIds = $derived([...new Set([
-	...(form.portraits ?? []).map((portrait) => portrait.assetId),
-])]);
-const placedMediaQuery = useQuery(getPlacedMediaAssets, () => ({
-	siteUrl: config.siteUrl,
-	ids: referencedAssetIds,
-}));
-let placedAssets = $derived((placedMediaQuery.data ?? []) as PortfolioMediaAsset[]);
-let readyAssets = $derived((mediaPage?.page ?? []).filter((asset) => asset.status === "ready"));
-let mediaById = $derived(mergePortfolioMediaAssets(
-	[...(mediaPage?.page ?? []), ...uploadedAssets],
-	placedAssets,
-));
+const media = createEditorMedia({
+	siteUrl: config.siteUrl, list: listMediaAssets, placed: getPlacedMediaAssets,
+	references: () => (form.portraits ?? []).map(portrait => portrait.assetId),
+});
 let selectedAssetIds = $derived(new Set((form.portraits ?? []).map((portrait) => portrait.assetId)));
 let publishIssues = $derived(validateAboutPageForPublish(form));
 
@@ -220,7 +202,7 @@ function addAsset(asset: PortfolioMediaAsset) {
 }
 
 function addUploadedAsset(asset: PortfolioMediaAsset) {
-	uploadedAssets = [asset, ...uploadedAssets.filter((item) => item._id !== asset._id)];
+	media.addUpload(asset);
 	addAsset(asset);
 }
 </script>
@@ -267,7 +249,7 @@ function addUploadedAsset(asset: PortfolioMediaAsset) {
 				</div>
 			</section>
 
-			<AboutPortraits portraits={form.portraits ?? []} {mediaById} mediaBaseUrl={aboutConfig.mediaBaseUrl} {publishIssues} {reviewRequested} uploadEndpoint={aboutConfig.uploadEndpoint} onChange={(portraits) => (form.portraits = portraits)} onChooseMedia={() => (pickerOpen = true)} onUploadReady={addUploadedAsset} />
+			<AboutPortraits portraits={form.portraits ?? []} mediaById={media.byId} mediaBaseUrl={aboutConfig.mediaBaseUrl} {publishIssues} {reviewRequested} uploadEndpoint={aboutConfig.uploadEndpoint} onChange={(portraits) => (form.portraits = portraits)} onChooseMedia={() => (pickerOpen = true)} onUploadReady={addUploadedAsset} />
 
 			<AboutStructuredContent sections={form.sections ?? []} highlights={form.highlights ?? []} {publishIssues} {reviewRequested} onSectionsChange={(sections) => (form.sections = sections)} onHighlightsChange={(highlights) => (form.highlights = highlights)} />
 
@@ -280,7 +262,7 @@ function addUploadedAsset(asset: PortfolioMediaAsset) {
 </div>
 
 {#if pickerOpen}
-	<PortfolioMediaPicker assets={readyAssets} {selectedAssetIds} mediaBaseUrl={aboutConfig.mediaBaseUrl} hasMore={mediaPage ? !mediaPage.isDone : false} onChoose={addAsset} onClose={() => (pickerOpen = false)} />
+	<PortfolioMediaPicker assets={media.ready} {selectedAssetIds} mediaBaseUrl={aboutConfig.mediaBaseUrl} hasMore={media.hasMore} onChoose={addAsset} onClose={() => (pickerOpen = false)} />
 {/if}
 
 <style>
