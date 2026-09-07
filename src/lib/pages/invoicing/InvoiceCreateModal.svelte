@@ -22,14 +22,15 @@ import {
 } from "../../utils";
 import LineItemEditor from "./LineItemEditor.svelte";
 import { type InvoiceDraftItem, prepareInvoiceDraft } from "./invoiceDraft";
+import type { InvoiceCreatePayload, InvoiceCreateAndSendPayload } from "../documentFormPayloads";
 
 interface Props {
 	clients: Client[];
 	invoices: Invoice[];
 	numberPreview: string;
 	emailTemplates: EmailTemplate[];
-	oncreate: (body: Record<string, unknown>) => Promise<void>;
-	onsaveandsend: (body: Record<string, unknown> & { templateId?: string; emailSubject?: string; emailBody?: string }) => Promise<void>;
+	oncreate: (body: InvoiceCreatePayload) => Promise<void>;
+	onsaveandsend: (body: InvoiceCreateAndSendPayload) => Promise<void>;
 	onclose: () => void;
 }
 
@@ -106,8 +107,8 @@ let depositTotal = $derived(
 	formTotalProject * (formDepositPercent / 100),
 );
 
-function buildInvoiceBody(items: InvoiceItem[]): Record<string, unknown> {
-	const body: Record<string, unknown> = {
+function buildInvoiceBody(items: InvoiceItem[]): InvoiceCreatePayload {
+	const body: InvoiceCreatePayload = {
 		clientId: formClientId,
 		invoiceType: formType,
 		items,

@@ -19,6 +19,7 @@ import {
 } from "../../utils";
 import LineItemEditor from "./LineItemEditor.svelte";
 import { type InvoiceDraftItem, prepareInvoiceDraft } from "./invoiceDraft";
+import type { InvoiceUpdatePayload } from "../documentFormPayloads";
 import DocumentEmailRecoveryPanel from "../DocumentEmailRecoveryPanel.svelte";
 import {
 	type HydratedDocumentEmailAttempt,
@@ -29,7 +30,7 @@ import {
 interface Props {
 	invoice: Invoice;
 	templates: EmailTemplate[];
-	onsave: (body: Record<string, unknown>) => Promise<void>;
+	onsave: (body: InvoiceUpdatePayload) => Promise<void>;
 	onaction: (invoiceId: string, action: string) => Promise<void>;
 	onsend: (
 		invoiceId: string,
@@ -146,7 +147,7 @@ async function handleSaveEdit() {
 	try {
 		// Capture changes before saving
 		lastChangeNote = buildChangeNote();
-		const body: Record<string, unknown> = { items: invoiceDraft.items, taxPercent: invoiceDraft.taxPercent };
+		const body: InvoiceUpdatePayload = { items: invoiceDraft.items, taxPercent: invoiceDraft.taxPercent };
 		body.dueDate = editDueDate || undefined;
 		body.notes = editNotes || undefined;
 		await onsave(body);
