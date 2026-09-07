@@ -1,6 +1,7 @@
 <script lang="ts">
 import { onDestroy } from "svelte";
 import { useQuery } from "convex-svelte";
+import { createEditorMedia } from "../../editorMedia.svelte";
 import { useAdminClient } from "../../adminClient";
 import {
 	uploadCatalogProductArtwork,
@@ -45,11 +46,7 @@ import {
 	type CatalogProductGraphV2Draft,
 } from "../../catalogProductEditor";
 import { getAdminConfig } from "../../config";
-import {
-	mergePortfolioMediaAssets,
-	type PortfolioMediaAsset,
-	type PortfolioMediaPage,
-} from "../../portfolioEditor";
+import type { PortfolioMediaAsset } from "../../portfolioEditor";
 import "../../styles/editorial-page.css";
 import CatalogProductMedia from "./CatalogProductMedia.svelte";
 import CatalogProductSetMembers from "./CatalogProductSetMembers.svelte";
@@ -97,7 +94,6 @@ let multiplierInput = $state("1.00");
 let multiplierError = $state("");
 let variantsValid = $state(true);
 let pickerOpen = $state(false);
-let uploadedAssets = $state<PortfolioMediaAsset[]>([]);
 let uploadedPrivateAssets = $state<CatalogEditorPrivateAsset[]>([]);
 let mediaActionError = $state("");
 let artworkUploadBusy = $state(false);
@@ -150,38 +146,13 @@ const PRIVATE_UPLOAD_AUTO_CHECKS = 3;
 const PRIVATE_UPLOAD_AUTO_INTERVAL_MS = 65_000;
 const PRIVATE_UPLOAD_AUTO_WINDOW_MS = 305_000;
 const usedPrivateUploadHandles = new Set<string>();
-const mediaListQuery = mediaCapability
-	? useQuery(mediaCapability.api.listForEditor, {
-			siteUrl: config.siteUrl,
-			paginationOpts: { numItems: 100, cursor: null },
-		})
-	: null;
-let mediaPage = $derived(mediaListQuery?.data as PortfolioMediaPage | undefined);
-let placedAssetIds = $derived([
-	...new Set((form.webMedia ?? []).map((placement) => placement.assetId)),
-]);
-const placedMediaQuery = mediaCapability
-	? useQuery(mediaCapability.api.getManyForEditor, () => ({
-			siteUrl: config.siteUrl,
-			ids: placedAssetIds,
-		}))
-	: null;
-let placedAssets = $derived((placedMediaQuery?.data ?? []) as PortfolioMediaAsset[]);
-let readyAssets = $derived(
-	[...new Map(
-		[
-			...uploadedAssets,
-			...((mediaPage?.page ?? []) as PortfolioMediaAsset[]),
-			...placedAssets,
-		]
-			.map((asset) => [asset._id, asset]),
-	).values()].filter((asset) => asset.status === "ready"),
-);
-let mediaById = $derived(mergePortfolioMediaAssets(
-	[...((mediaPage?.page ?? []) as PortfolioMediaAsset[]), ...uploadedAssets],
-	placedAssets,
-));
-let mediaQueryError = $derived(mediaListQuery?.error ?? placedMediaQuery?.error);
+const media = createEditorMedia({
+	siteUrl: config.siteUrl,
+	list: mediaCapability?.api.listForEditor,
+	placed: mediaCapability?.api.getManyForEditor,
+	references: () => (form.webMedia ?? []).map(placement => placement.assetId),
+	pickerIncludesAttachments: true,
+});
 let selectedAssetIds = $derived.by(() => {
 	const placements = form.webMedia ?? [];
 	const canChooseMemberAssetForCover = form.productKind === "print_set"
@@ -415,7 +386,7 @@ function resetProductScope() {
 	syncMultiplierFromForm();
 	variantsValid = true;
 	pickerOpen = false;
-	uploadedAssets = [];
+	media.resetUploads();
 	uploadedPrivateAssets = [];
 	mediaActionError = "";
 	activePrivateAssetRelation = null;
@@ -1119,7 +1090,7 @@ function addMediaAsset(asset: PortfolioMediaAsset) {
 }
 
 function addUploadedMediaAsset(asset: PortfolioMediaAsset) {
-	uploadedAssets = [asset, ...uploadedAssets.filter((item) => item._id !== asset._id)];
+	media.addUpload(asset);
 	return addMediaAsset(asset);
 }
 
@@ -1166,10 +1137,7 @@ async function uploadProductArtwork(
 			|| serializeCatalogProductDraft(form) !== operationFormJson
 		) throw new Error("This product changed while the image was uploading. Reload it and try again.");
 		form = attachCatalogProductArtwork(form, result.displayAsset, result.privateAsset);
-		uploadedAssets = [
-			result.displayAsset,
-			...uploadedAssets.filter((asset) => asset._id !== result.displayAsset._id),
-		];
+		media.addUpload(result.displayAsset);
 		uploadedPrivateAssets = [
 			result.privateAsset,
 			...uploadedPrivateAssets.filter((asset) => asset.assetId !== result.privateAsset.assetId),
@@ -1215,7 +1183,7 @@ function removeSetMember(member: CatalogProductDraftForm["setMembers"][number]) 
 		{#if saveError}<p class="alert" role="alert">{saveError}</p>{/if}
 		{#if publicationError}<div class="alert publication-alert" role="alert"><span>{publicationError}</span>{#if publicationOperation?.phase === "reload-required"}<button type="button" onclick={() => globalThis.location.reload()}>reload product</button>{/if}</div>{/if}
 		{#if mediaActionError}<p class="alert" role="alert">{mediaActionError}</p>{/if}
-		{#if mediaQueryError}<p class="alert" role="alert">Could not load product images. Refresh this page to try again.</p>{/if}
+		{#if media.error}<p class="alert" role="alert">Could not load product images. Refresh this page to try again.</p>{/if}
 		{#if publicationCapability && isGraphV2}<span class="sr-only publication-status" role="status" aria-live="polite">{publicationStatus}</span>{/if}
 		{#if publicationMessage}<p class="publication-message" role="status" aria-live="polite">{publicationMessage}</p>{/if}
 		{#if isGraphV2 && !graphProductKindEditable}
@@ -1245,7 +1213,7 @@ function removeSetMember(member: CatalogProductDraftForm["setMembers"][number]) 
 					placements={form.webMedia ?? []}
 					productKind={form.productKind}
 					members={form.setMembers}
-					{mediaById}
+					mediaById={media.byId}
 					mediaBaseUrl={mediaCapability.mediaBaseUrl}
 					uploadEndpoint={mediaCapability.uploadEndpoint}
 					disabled={editorLocked}
@@ -1337,10 +1305,10 @@ function removeSetMember(member: CatalogProductDraftForm["setMembers"][number]) 
 
 {#if pickerOpen && mediaCapability}
 	<PortfolioMediaPicker
-			assets={readyAssets}
+			assets={media.ready}
 			{selectedAssetIds}
 			mediaBaseUrl={mediaCapability.mediaBaseUrl}
-			hasMore={mediaPage ? !mediaPage.isDone : false}
+			hasMore={media.hasMore}
 			onChoose={addMediaAsset}
 			onClose={() => (pickerOpen = false)}
 	/>

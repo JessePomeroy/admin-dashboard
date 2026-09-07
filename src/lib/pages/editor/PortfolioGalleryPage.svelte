@@ -3,12 +3,12 @@ import { browser } from "$app/environment";
 import { goto } from "$app/navigation";
 import { onMount, tick } from "svelte";
 import { useQuery } from "convex-svelte";
+import { createEditorMedia } from "../../editorMedia.svelte";
 import { useAdminClient } from "../../adminClient";
 import { getAdminConfig } from "../../config";
 import {
 	copyPortfolioGalleryDraft,
 	newPortfolioPlacement,
-	mergePortfolioMediaAssets,
 	resolvePortfolioPreviewUrl,
 	serializePortfolioGalleryDraft,
 	shouldLoadPortfolioServerRevision,
@@ -16,7 +16,6 @@ import {
 	type PortfolioGalleryDraftForm,
 	type PortfolioGalleryEditorState,
 	type PortfolioMediaAsset,
-	type PortfolioMediaPage,
 	validatePortfolioGalleryForPublish,
 } from "../../portfolioEditor";
 import PortfolioGalleryImages from "./PortfolioGalleryImages.svelte";
@@ -57,10 +56,6 @@ let storageKey = $derived(`admin:portfolio-editor:${config.siteUrl}:${galleryId}
 
 const client = useAdminClient();
 const editorQuery = useQuery(getEditorState, () => ({ galleryId }));
-const mediaQuery = useQuery(listMediaAssets, {
-	siteUrl: config.siteUrl,
-	paginationOpts: { numItems: 100, cursor: null },
-});
 
 let form = $state<PortfolioGalleryDraftForm>(copyPortfolioGalleryDraft(null));
 let initialized = $state(false);
@@ -82,24 +77,14 @@ let pickerOpen = $state(false);
 let visibilityChanging = $state(false);
 let confirmingRemoval = $state(false);
 let removing = $state(false);
-let uploadedAssets = $state<PortfolioMediaAsset[]>([]);
 let saveTimer: ReturnType<typeof setTimeout> | undefined;
 let locallySavedRevisionIds: string[] = [];
 let editorState = $derived(editorQuery.data as PortfolioGalleryEditorState | undefined);
 let editorError = $derived(editorQuery.error);
-let mediaPage = $derived(mediaQuery.data as PortfolioMediaPage | undefined);
-let placedAssetIds = $derived([...new Set(form.placements.map((placement) => placement.assetId))]);
-const placedMediaQuery = useQuery(getPlacedMediaAssets, () => ({
-	siteUrl: config.siteUrl,
-	ids: placedAssetIds,
-}));
-let mediaError = $derived(mediaQuery.error || placedMediaQuery.error);
-let placedAssets = $derived((placedMediaQuery.data ?? []) as PortfolioMediaAsset[]);
-let readyAssets = $derived((mediaPage?.page ?? []).filter((asset) => asset.status === "ready"));
-let mediaById = $derived(mergePortfolioMediaAssets(
-	[...(mediaPage?.page ?? []), ...uploadedAssets],
-	placedAssets,
-));
+const media = createEditorMedia({
+	siteUrl: config.siteUrl, list: listMediaAssets, placed: getPlacedMediaAssets,
+	references: () => form.placements.map(placement => placement.assetId),
+});
 let selectedAssetIds = $derived(new Set(form.placements.map((placement) => placement.assetId)));
 let currentJson = $derived(serializePortfolioGalleryDraft(form));
 let dirty = $derived(initialized && currentJson !== savedJson);
@@ -405,7 +390,7 @@ function addAsset(asset: PortfolioMediaAsset) {
 }
 
 function addUploadedAsset(asset: PortfolioMediaAsset) {
-	uploadedAssets = [asset, ...uploadedAssets.filter((item) => item._id !== asset._id)];
+	media.addUpload(asset);
 	addAsset(asset);
 }
 
@@ -462,7 +447,7 @@ function reloadServerDraft() {
 		</header>
 
 		{#if saveError}<p class="alert" role="alert">{saveError}</p>{/if}
-		{#if mediaError}<p class="alert" role="alert">Could not load gallery media. Refresh this page to try again.</p>{/if}
+		{#if media.error}<p class="alert" role="alert">Could not load gallery media. Refresh this page to try again.</p>{/if}
 		{#if publishMessage}<p class="success" role="status">{publishMessage}</p>{/if}
 		{#if publishingEnabled}
 			<PortfolioPublishReview issues={publishIssues} />
@@ -488,7 +473,7 @@ function reloadServerDraft() {
 
 		<PortfolioGalleryImages
 			placements={form.placements}
-			{mediaById}
+			mediaById={media.byId}
 			mediaBaseUrl={portfolioConfig.mediaBaseUrl}
 			{publishIssues}
 			{reviewRequested}
@@ -516,7 +501,7 @@ function reloadServerDraft() {
 {/if}
 
 {#if pickerOpen}
-	<PortfolioMediaPicker assets={readyAssets} {selectedAssetIds} mediaBaseUrl={portfolioConfig.mediaBaseUrl} hasMore={mediaPage ? !mediaPage.isDone : false} onChoose={addAsset} onClose={() => (pickerOpen = false)} />
+	<PortfolioMediaPicker assets={media.ready} {selectedAssetIds} mediaBaseUrl={portfolioConfig.mediaBaseUrl} hasMore={media.hasMore} onChoose={addAsset} onClose={() => (pickerOpen = false)} />
 {/if}
 </PortfolioWorkbench>
 
