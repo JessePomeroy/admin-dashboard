@@ -61,6 +61,7 @@ let searchQuery = $state("");
 // Modal state
 let showCreateModal = $state(false);
 let selectedQuote = $state<Quote | null>(null);
+let quoteSelectionEpoch = $state(0);
 let saving = $state(false);
 
 // Auto-open quote from ?open= query param
@@ -84,6 +85,7 @@ let emailRecoveryDocumentId = $state("");
 const emailRequests = createDocumentEmailRequestTracker();
 let converting = $state(false);
 let convertSuccess = $state(false);
+let conversionOperation: { quoteId: Quote["_id"]; selectionEpoch: number } | null = null;
 
 // Preset modal state
 let showPresetModal = $state(false);
@@ -428,16 +430,22 @@ async function convertToInvoice(convertData: {
 	dueDate: string;
 	notes: string;
 }) {
-	if (!selectedQuote) return;
+	if (!selectedQuote || converting) return;
+	const operation = { quoteId: selectedQuote._id, selectionEpoch: quoteSelectionEpoch };
+	conversionOperation = operation;
+	const isCurrent = () => conversionOperation === operation
+		&& quoteSelectionEpoch === operation.selectionEpoch
+		&& selectedQuote?._id === operation.quoteId;
 	converting = true;
 	try {
 		const invoiceId = await client.mutation(api.quotes.convertToInvoice, {
-			quoteId: toId(selectedQuote._id),
+			quoteId: toId(operation.quoteId),
 			siteUrl: config.siteUrl,
 			invoiceType: convertData.invoiceType as "one-time" | "recurring" | "deposit" | "package" | "milestone",
 			dueDate: convertData.dueDate || undefined,
 			notes: convertData.notes || undefined,
 		});
+		if (!isCurrent() || !selectedQuote) return;
 		selectedQuote = {
 			...selectedQuote,
 			convertedToInvoice: invoiceId,
@@ -445,9 +453,12 @@ async function convertToInvoice(convertData: {
 		convertSuccess = true;
 	} catch (err) {
 		logger.error("Failed to convert quote to invoice:", err);
-		addToast("Failed to convert to invoice.");
+		if (isCurrent()) addToast("Failed to convert to invoice.");
 	} finally {
-		converting = false;
+		if (isCurrent()) {
+			converting = false;
+			conversionOperation = null;
+		}
 	}
 }
 
@@ -572,12 +583,22 @@ function visibleQuoteRecovery(quoteId: string) {
 }
 
 function openDetailModal(quote: Quote) {
+	quoteSelectionEpoch += 1;
 	selectedQuote = { ...quote };
 	sendResult = null;
 	shareLinkCopied = false;
 	converting = false;
 	convertSuccess = false;
 	void hydrateQuoteRecovery(quote._id as string);
+}
+
+function closeDetailModal() {
+	quoteSelectionEpoch += 1;
+	selectedQuote = null;
+	sendResult = null;
+	convertSuccess = false;
+	converting = false;
+	conversionOperation = null;
 }
 
 function openPresetModal(preset?: QuotePreset) {
@@ -668,6 +689,7 @@ function closePresetModal() {
 	/>
 {/if}
 
+{#key quoteSelectionEpoch}
 {#if selectedQuote}
 	<QuoteDetailModal
 		quote={selectedQuote}
@@ -680,7 +702,7 @@ function closePresetModal() {
 		{convertSuccess}
 		{converting}
 		templates={emailTemplates}
-		onclose={() => { selectedQuote = null; sendResult = null; convertSuccess = false; }}
+		onclose={closeDetailModal}
 		onsaveedit={saveQuoteEdit}
 		onsendquoteemail={sendQuoteEmail}
 		onemailresolved={handleQuoteEmailResolved}
@@ -693,6 +715,7 @@ function closePresetModal() {
 		onsendresultclear={() => { sendResult = null; }}
 	/>
 {/if}
+{/key}
 {/if}
 </FeatureGate>
 
