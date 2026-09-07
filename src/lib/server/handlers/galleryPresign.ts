@@ -604,10 +604,12 @@ export function createGalleryImageHandler() {
 				{ headers: { Authorization: `Bearer ${config.galleryAdminSecret}` } },
 			);
 			if (!res.ok) throw error(res.status, await res.text());
+			const headers = new Headers(res.headers);
+			headers.set("Cache-Control", "private, no-store");
 			return new Response(res.body, {
 				status: res.status,
 				statusText: res.statusText,
-				headers: res.headers,
+				headers,
 			});
 		} catch (err) {
 			handleServerError(err, "Failed to load gallery image");
