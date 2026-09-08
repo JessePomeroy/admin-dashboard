@@ -1,5 +1,6 @@
 <script lang="ts">
 import type { Snippet } from "svelte";
+import { modalLifecycle } from "../modalLifecycle";
 
 interface Props {
 	title: string;
@@ -11,42 +12,6 @@ interface Props {
 
 let { title, ariaLabel, onclose, size = "default", children }: Props = $props();
 
-let contentEl = $state<HTMLDivElement | null>(null);
-let previouslyFocused: HTMLElement | null = null;
-
-$effect(() => {
-	if (contentEl) {
-		previouslyFocused = document.activeElement as HTMLElement;
-		const closeBtn = contentEl.querySelector<HTMLElement>(".modal-close");
-		closeBtn?.focus();
-	}
-	return () => {
-		previouslyFocused?.focus();
-	};
-});
-
-function handleKeydown(e: KeyboardEvent) {
-	if (e.key === "Escape") {
-		onclose();
-		return;
-	}
-	if (e.key === "Tab" && contentEl) {
-		const focusable = contentEl.querySelectorAll<HTMLElement>(
-			'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
-		);
-		if (focusable.length === 0) return;
-		const first = focusable[0];
-		const last = focusable[focusable.length - 1];
-		if (e.shiftKey && document.activeElement === first) {
-			e.preventDefault();
-			last.focus();
-		} else if (!e.shiftKey && document.activeElement === last) {
-			e.preventDefault();
-			first.focus();
-		}
-	}
-}
-
 function handleOverlayClick(e: MouseEvent) {
 	if (e.target === e.currentTarget) {
 		onclose();
@@ -54,21 +19,21 @@ function handleOverlayClick(e: MouseEvent) {
 }
 </script>
 
+<!-- svelte-ignore a11y_click_events_have_key_events (modalLifecycle owns keyboard handling.) -->
 <div
+	use:modalLifecycle={onclose}
 	class="modal-overlay"
 	role="dialog"
 	aria-modal="true"
 	aria-label={ariaLabel ?? title}
 	tabindex="-1"
 	onclick={handleOverlayClick}
-	onkeydown={handleKeydown}
 >
 	<div
 		class="modal-content"
 		class:modal-content-wide={size === "wide"}
 		class:modal-content-narrow={size === "narrow"}
 		class:modal-content-full={size === "full"}
-		bind:this={contentEl}
 		role="document"
 	>
 		<div class="modal-header">

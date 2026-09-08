@@ -1,5 +1,5 @@
 <script lang="ts">
-import { onMount } from "svelte";
+import { modalLifecycle } from "../../modalLifecycle";
 import type { EditorMediaPagination } from "../../editorMedia.svelte";
 import {
 	portfolioMediaUrl,
@@ -22,52 +22,16 @@ let {
 	onClose: () => void;
 } = $props();
 
-let closeButton: HTMLButtonElement;
-let pickerElement: HTMLDivElement;
-onMount(() => {
-	const previousFocus = document.activeElement;
-	closeButton.focus();
-	return () => {
-		if (previousFocus instanceof HTMLElement) previousFocus.focus();
-	};
-});
-
-function handleKeydown(event: KeyboardEvent) {
-	if (event.key === "Escape") {
-		onClose();
-		return;
-	}
-	if (event.key !== "Tab") return;
-	const focusable = [...pickerElement.querySelectorAll<HTMLElement>(
-		'button:not([disabled]), [href], input:not([disabled]), [tabindex]:not([tabindex="-1"])',
-	)];
-	if (focusable.length === 0) return;
-	const first = focusable[0];
-	const last = focusable[focusable.length - 1];
-	if (!focusable.some(element => element === document.activeElement)) {
-		// Paging or choosing an asset may disable the currently focused button.
-		event.preventDefault();
-		(event.shiftKey ? last : first).focus();
-	} else if (event.shiftKey && document.activeElement === first) {
-		event.preventDefault();
-		last.focus();
-	} else if (!event.shiftKey && document.activeElement === last) {
-		event.preventDefault();
-		first.focus();
-	}
-}
 </script>
 
-<svelte:window onkeydown={handleKeydown} />
-
 <div class="backdrop" role="presentation">
-	<div bind:this={pickerElement} class="picker" role="dialog" aria-modal="true" aria-labelledby="media-picker-heading">
+	<div use:modalLifecycle={onClose} class="picker" role="dialog" aria-modal="true" aria-labelledby="media-picker-heading">
 		<header>
 			<div>
 				<h2 id="media-picker-heading">choose from media</h2>
 				<p>Reuse a ready web image without uploading another copy.</p>
 			</div>
-			<button bind:this={closeButton} type="button" class="close" onclick={onClose} aria-label="Close media picker">close</button>
+			<button type="button" class="close" onclick={onClose} aria-label="Close media picker">close</button>
 		</header>
 
 		{#if pagination?.loading}
