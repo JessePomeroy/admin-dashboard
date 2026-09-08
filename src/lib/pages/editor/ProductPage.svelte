@@ -969,7 +969,7 @@ function removeSetMember(member: CatalogProductDraftForm["setMembers"][number]) 
 			assets={media.ready}
 			{selectedAssetIds}
 			mediaBaseUrl={mediaCapability.mediaBaseUrl}
-			hasMore={media.hasMore}
+			pagination={media.pagination}
 			onChoose={addMediaAsset}
 			onClose={() => (pickerOpen = false)}
 	/>

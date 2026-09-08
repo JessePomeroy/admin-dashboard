@@ -262,7 +262,7 @@ function addUploadedAsset(asset: PortfolioMediaAsset) {
 </div>
 
 {#if pickerOpen}
-	<PortfolioMediaPicker assets={media.ready} {selectedAssetIds} mediaBaseUrl={aboutConfig.mediaBaseUrl} hasMore={media.hasMore} onChoose={addAsset} onClose={() => (pickerOpen = false)} />
+	<PortfolioMediaPicker assets={media.ready} {selectedAssetIds} mediaBaseUrl={aboutConfig.mediaBaseUrl} pagination={media.pagination} onChoose={addAsset} onClose={() => (pickerOpen = false)} />
 {/if}
 
 <style>

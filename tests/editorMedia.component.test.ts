@@ -11,7 +11,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock("convex-svelte", () => ({ useQuery: (ref: Parameters<typeof getFunctionName>[0], args: unknown) => {
 	const name = getFunctionName(ref);
 	mocks.queries.push({ name, args });
-	return { get data() { return name === "media:list" ? { page: [asset("library")], isDone: false } : mocks.placed; } };
+	return { get data() { return name === "media:list" ? { page: [asset("library")], isDone: false, continueCursor: "older" } : mocks.placed; } };
 } }));
 function asset(id: string, status: PortfolioMediaAsset["status"] = "ready"): PortfolioMediaAsset {
 	return { _id: id, assetId: id, originalFilename: id + ".jpg", status, createdAt: 1,
@@ -32,7 +32,7 @@ it("preserves picker scope, merge precedence and per-editor upload lifetime", as
 		expect(page.attached.ready.map(a => a._id)).toEqual(["upload", "placed"]);
 		expect(page.attached.byId.get("upload")?.originalFilename).toBe("replacement.jpg");
 		expect(page.attached.byId.get("library")?.status).toBe("deleting");
-		expect(page.library.hasMore).toBe(true);
+		expect(page.library.pagination?.hasNext).toBe(true);
 		page.attached.resetUploads(); await tick();
 		expect(page.attached.byId.has("upload")).toBe(false);
 		expect(page.library.byId.has("upload")).toBe(true);

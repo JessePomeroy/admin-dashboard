@@ -501,7 +501,7 @@ function reloadServerDraft() {
 {/if}
 
 {#if pickerOpen}
-	<PortfolioMediaPicker assets={media.ready} {selectedAssetIds} mediaBaseUrl={portfolioConfig.mediaBaseUrl} hasMore={media.hasMore} onChoose={addAsset} onClose={() => (pickerOpen = false)} />
+	<PortfolioMediaPicker assets={media.ready} {selectedAssetIds} mediaBaseUrl={portfolioConfig.mediaBaseUrl} pagination={media.pagination} onChoose={addAsset} onClose={() => (pickerOpen = false)} />
 {/if}
 </PortfolioWorkbench>
 
