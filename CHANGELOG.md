@@ -1,5 +1,15 @@
 # @jessepomeroy/admin
 
+## 6.1.0
+
+### Minor Changes
+
+- 1af0fa8: Add optional compact blog authoring with automatic metadata and Site Settings owner bylines while preserving existing post metadata and SEO. Automatic excerpts retain their ownership across failed publication and reload so retries use the latest body; explicit full-mode summary edits remain custom. Add explicit URL generation without replacing custom slugs on title blur. Deploy the matching CRM API owner-author and automatic-excerpt contracts before enabling compact mode in a host.
+
+### Patch Changes
+
+- c362fe4: Connect the blog body image picker to bounded media-library pagination, including next/previous navigation and explicit loading-error recovery. Preserve unsaved post content, editor history and already-linked images while browsing library pages.
+
 ## 6.0.1
 
 ### Patch Changes
