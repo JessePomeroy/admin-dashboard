@@ -1,5 +1,11 @@
 # @jessepomeroy/admin
 
+## 6.0.1
+
+### Patch Changes
+
+- 5ba30e3: Keep portfolio drafts, recovery data and asynchronous editor actions scoped to the selected gallery. Preserve unsaved work across navigation and ignore completed operations from a destroyed editor instance.
+
 ## 6.0.0
 
 ### Major Changes
