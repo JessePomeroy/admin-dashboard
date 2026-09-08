@@ -33,6 +33,7 @@ if (!postApi || !blogConfig) {
 
 const postEditorApi = postApi;
 const baseHref = blogConfig.baseHref ?? "/admin/editor/blog";
+const compactMode = blogConfig.mode === "compact";
 const client = useAdminClient();
 const postsQuery = useQuery(postEditorApi.listForEditor, { siteUrl: config.siteUrl });
 
@@ -55,7 +56,7 @@ let visiblePosts = $derived(posts.filter((post) => {
 }));
 
 $effect(() => {
-	if (!browser) return;
+	if (!browser || compactMode) return;
 	const syncHash = () => {
 		supportingTarget = location.hash === "#authors"
 			? "authors"
@@ -83,6 +84,7 @@ async function createPost() {
 			documentKey: newBlogDocumentKey("post"),
 			draft: {
 				...emptyPostDraft(),
+				...(compactMode ? { authorSource: "siteSettings", summarySource: "body" } : {}),
 				title,
 				slug: slugifyBlogTitle(title),
 			},
@@ -103,8 +105,10 @@ async function createPost() {
 		</div>
 		<nav aria-label="Blog collections">
 			<a href={baseHref} aria-current={selectedKind === "post" || (!selectedKind && supportingTarget === null) ? "page" : undefined} onclick={() => supportingTarget = null}>posts</a>
+			{#if !compactMode}
 			<a href={`${baseHref}#authors`} aria-current={selectedKind === "author" || (!selectedKind && supportingTarget === "authors") ? "page" : undefined} onclick={() => supportingTarget = "authors"}>authors</a>
 			<a href={`${baseHref}#categories`} aria-current={selectedKind === "category" || (!selectedKind && supportingTarget === "categories") ? "page" : undefined} onclick={() => supportingTarget = "categories"}>categories</a>
+			{/if}
 		</nav>
 	</header>
 

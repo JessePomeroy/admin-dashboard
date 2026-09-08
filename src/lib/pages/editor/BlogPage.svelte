@@ -24,26 +24,27 @@ if (!blogApi || !postApi || !blogConfig) {
 
 const editorApi = blogApi;
 const baseHref = blogConfig.baseHref ?? "/admin/editor/blog";
+const compactMode = blogConfig.mode === "compact";
 const client = useAdminClient();
-const authorsQuery = useQuery(editorApi.listForEditor, {
+const authorsQuery = compactMode ? null : useQuery(editorApi.listForEditor, {
 	siteUrl: config.siteUrl,
 	kind: "author",
 });
-const categoriesQuery = useQuery(editorApi.listForEditor, {
+const categoriesQuery = compactMode ? null : useQuery(editorApi.listForEditor, {
 	siteUrl: config.siteUrl,
 	kind: "category",
 });
 
 let authors = $derived(
-	(authorsQuery.data as BlogSupportingEditorSummary[] | undefined) ?? [],
+	(authorsQuery?.data as BlogSupportingEditorSummary[] | undefined) ?? [],
 );
-let authorsLoading = $derived(authorsQuery.isLoading);
-let authorsError = $derived(authorsQuery.error);
+let authorsLoading = $derived(authorsQuery?.isLoading);
+let authorsError = $derived(authorsQuery?.error);
 let categories = $derived(
-	(categoriesQuery.data as BlogSupportingEditorSummary[] | undefined) ?? [],
+	(categoriesQuery?.data as BlogSupportingEditorSummary[] | undefined) ?? [],
 );
-let categoriesLoading = $derived(categoriesQuery.isLoading);
-let categoriesError = $derived(categoriesQuery.error);
+let categoriesLoading = $derived(categoriesQuery?.isLoading);
+let categoriesError = $derived(categoriesQuery?.error);
 let createState = $state<"idle" | "saving" | "error">("idle");
 let createError = $state("");
 
@@ -54,6 +55,7 @@ function statusLabel(document: BlogSupportingEditorSummary) {
 }
 
 async function createSupporting(kind: BlogSupportingKind) {
+	if (compactMode) return;
 	createState = "saving";
 	createError = "";
 	try {
@@ -79,6 +81,9 @@ async function createSupporting(kind: BlogSupportingKind) {
 
 <BlogWorkbench>
 <div class="settings-page">
+	{#if compactMode}
+		<p class="empty">Choose a post to continue writing, or create a new post. New posts use your published Site Settings name as the author.</p>
+	{:else}
 	<section aria-labelledby="supporting-heading" id="supporting-content">
 		<div class="section-heading">
 			<span>02</span>
@@ -147,6 +152,7 @@ async function createSupporting(kind: BlogSupportingKind) {
 			</div>
 		</div>
 	</section>
+	{/if}
 </div>
 </BlogWorkbench>
 
