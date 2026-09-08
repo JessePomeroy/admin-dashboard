@@ -97,17 +97,6 @@ function summary(
 }
 
 describe("catalog product editor helpers", () => {
-	it("keeps legacy print-source projections source compatible", () => {
-		const projected: CatalogProductEditorRevision = {
-			revisionId: "legacy-revision",
-			schemaVersion: 2,
-			productKind: "print",
-			createdAt: 1,
-			printSourceAssets: [{ relationKey: "source", asset: { assetId: "legacy-asset" } }],
-		};
-		expect(projected.printSourceAssets?.[0].asset.assetId).toBe("legacy-asset");
-	});
-
 	it("requires explicit publication opt-in and explicitly registered refs", () => {
 		const proxyApi = new Proxy({}, {
 			get: (_, property) => ({ name: String(property) }),

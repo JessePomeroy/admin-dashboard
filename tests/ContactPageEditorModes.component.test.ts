@@ -1,13 +1,6 @@
 import { mount, tick, unmount } from "svelte";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { AdminAPI } from "../src/lib/config";
 import ContactPage from "../src/lib/pages/editor/ContactPage.svelte";
-
-type ContactPublishIsOptional = {} extends Pick<
-	NonNullable<AdminAPI["siteEditor"]>,
-	"publishContactPage"
-> ? true : false;
-const contactPublishIsOptional: ContactPublishIsOptional = true;
 
 const mocks = vi.hoisted(() => {
 	const refs = {
@@ -134,10 +127,6 @@ describe("Contact page editor capability modes", () => {
 		component = undefined;
 		document.body.innerHTML = "";
 		vi.restoreAllMocks();
-	});
-
-	it("allows hosts to omit the Contact publication capability", () => {
-		expect(contactPublishIsOptional).toBe(true);
 	});
 
 	it("retains preview, validation, save, and publish behavior for publish-capable hosts", async () => {

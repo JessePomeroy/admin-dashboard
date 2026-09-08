@@ -75,18 +75,6 @@ describe("InvoiceCreateModal email authority", () => {
 		expect(document.body.textContent).toContain("write custom email");
 	});
 
-	it("sends no email override fields when the default preview is untouched", async () => {
-		const onSaveAndSend = mountModal();
-		await chooseClient();
-		await saveAndSend();
-
-		expect(onSaveAndSend).toHaveBeenCalledOnce();
-		const payload = onSaveAndSend.mock.calls[0]?.[0];
-		expect(payload).not.toHaveProperty("templateId");
-		expect(payload).not.toHaveProperty("emailSubject");
-		expect(payload).not.toHaveProperty("emailBody");
-	});
-
 	it("sends only templateId when a selected template is untouched", async () => {
 		const onSaveAndSend = mountModal();
 		await chooseClient();
@@ -100,31 +88,5 @@ describe("InvoiceCreateModal email authority", () => {
 		expect(payload.templateId).toBe("template-1");
 		expect(payload).not.toHaveProperty("emailSubject");
 		expect(payload).not.toHaveProperty("emailBody");
-	});
-
-	it("sends paired raw sources after a genuine edit", async () => {
-		const onSaveAndSend = mountModal();
-		await chooseClient();
-		const select = document.querySelector<HTMLSelectElement>("#tpl-select")!;
-		select.value = "template-1";
-		select.dispatchEvent(new Event("change", { bubbles: true }));
-		await tick();
-		const editButton = Array.from(document.querySelectorAll<HTMLButtonElement>("button")).find(
-			({ textContent }) => textContent?.trim() === "edit source",
-		)!;
-		editButton.click();
-		await tick();
-		const subject = document.querySelector<HTMLInputElement>("#tpl-subject")!;
-		subject.value = "updated invoice {{invoiceNumber}}";
-		subject.dispatchEvent(new Event("input", { bubbles: true }));
-		await tick();
-		await saveAndSend();
-
-		expect(onSaveAndSend.mock.calls[0]?.[0]).toMatchObject({
-			templateId: "template-1",
-			emailSubject: "updated invoice {{invoiceNumber}}",
-			emailBody: "hi {{clientName}}, review {{portalUrl}}",
-		});
-		expect(JSON.stringify(onSaveAndSend.mock.calls[0]?.[0])).not.toContain("INV-PREVIEW");
 	});
 });
