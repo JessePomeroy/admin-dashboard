@@ -7,15 +7,21 @@ import {
 } from "../../documentEmailRecovery.js";
 import type { EmailCategory } from "../../types.js";
 import { formatCents } from "../../utils.js";
+import {
+	appendDocumentPortalAccess,
+	createAuthoredDocumentRenderer,
+	type DocumentEmailMessage,
+	type DocumentEmailTemplateVariables,
+	type DocumentEmailType,
+} from "../authoredDocumentEmail.js";
 import { getAuthenticatedConvex } from "../convexClient.js";
-import { replaceTemplateVariables, sendEmail } from "../email.js";
+import { sendEmail } from "../email.js";
 import { handleServerError } from "../handleError.js";
-import { escapeHtml } from "../html.js";
 import { requireAdmin } from "../requireAdmin.js";
 
+export type { DocumentEmailMessage, DocumentEmailTemplateVariables } from "../authoredDocumentEmail.js";
 export { formatCents as formatCurrency };
 
-type DocumentEmailType = "invoice" | "quote" | "contract";
 type DocumentEmailStatus =
 	| "prepared"
 	| "claimed"
@@ -29,11 +35,6 @@ interface SendableDocument extends Record<string, unknown> {
 	siteUrl: string;
 	clientId: string;
 	status: string;
-}
-
-export interface DocumentEmailMessage {
-	html: string;
-	text: string;
 }
 
 interface FrozenDocumentEmailAttempt {
@@ -85,11 +86,6 @@ type PrepareRejectionReason =
 	| "client_unavailable"
 	| "message_invalid"
 	| "portal_token_conflict";
-
-export interface DocumentEmailTemplateVariables {
-	values: Record<string, string>;
-	fragments?: Record<string, { html: string; text: string }>;
-}
 
 const UNCERTAIN_PROVIDER_ERROR_NAMES = new Set([
 	"application_error",
@@ -344,160 +340,8 @@ function normalizePortalOrigin(siteUrl: string): string {
 	return parsed.origin;
 }
 
-/**
- * Detect whether authored content is intended to be HTML. The conservative
- * prefix rule preserves existing prose templates that happen to contain `<`.
- */
-function looksLikeHtml(value: string): boolean {
-	return /^\s*<[a-zA-Z!]/.test(value);
-}
-
-function wrapPlainText(value: string): string {
-	if (looksLikeHtml(value)) return value;
-	const lines = value.replace(/\r\n?/g, "\n").split("\n");
-	const content = lines
-		.map((line) => (line.length > 0 ? escapeHtml(line) : "&nbsp;"))
-		.join("<br>\n");
-	return `<div style="font-family: Arial, Helvetica, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; line-height: 1.6;">${content}</div>`;
-}
-
-function decodeTextEntity(entity: string): string {
-	const named: Record<string, string> = {
-		amp: "&",
-		apos: "'",
-		bull: "•",
-		copy: "©",
-		hellip: "…",
-		gt: ">",
-		ldquo: "“",
-		lsquo: "‘",
-		lt: "<",
-		mdash: "—",
-		ndash: "–",
-		nbsp: " ",
-		quot: '"',
-		rdquo: "”",
-		reg: "®",
-		rsquo: "’",
-		trade: "™",
-	};
-	if (entity in named) return named[entity] ?? entity;
-	const numeric = entity.startsWith("#x")
-		? Number.parseInt(entity.slice(2), 16)
-		: entity.startsWith("#")
-			? Number.parseInt(entity.slice(1), 10)
-			: Number.NaN;
-	return Number.isSafeInteger(numeric) && numeric > 0 && numeric <= 0x10ffff
-		? String.fromCodePoint(numeric)
-		: `&${entity};`;
-}
-
-function decodeTextEntities(value: string): string {
-	return value.replace(
-		/&([a-z]+|#\d+|#x[0-9a-f]+);/gi,
-		(_match, entity: string) => decodeTextEntity(entity.toLowerCase()),
-	);
-}
-
-function plainTextAlternative(value: string): string {
-	if (!looksLikeHtml(value)) return value.trim();
-	return decodeTextEntities(
-		value
-			.replace(/<!--[\s\S]*?-->/g, "")
-			.replace(
-				/<(head|style|script|noscript|template)\b[^>]*>[\s\S]*?<\/\1\s*>/gi,
-				"",
-			)
-			.replace(
-				/<img\b[^>]*\balt\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))[^>]*>/gi,
-				(_match, doubleQuoted: string, singleQuoted: string, bare: string) =>
-					`\n${doubleQuoted ?? singleQuoted ?? bare ?? ""}\n`,
-			)
-			.replace(/<img\b[^>]*>/gi, "")
-			.replace(
-				/<a\b[^>]*\bhref\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))[^>]*>([\s\S]*?)<\/a\s*>/gi,
-				(
-					_match,
-					doubleQuoted: string,
-					singleQuoted: string,
-					bare: string,
-					content: string,
-				) => {
-					const href = doubleQuoted ?? singleQuoted ?? bare ?? "";
-					const label = content.replace(/<[^>]+>/g, "").trim();
-					return label === href ? href : `${label} (${href})`;
-				},
-			)
-			.replace(/<(?:br|hr)\s*\/?\s*>/gi, "\n")
-			.replace(
-				/<\/(?:p|div|h[1-6]|li|tr|table|section|article|address)>/gi,
-				"\n",
-			)
-			.replace(/<\/(?:td|th)>/gi, " | ")
-			.replace(/<li\b[^>]*>/gi, "• ")
-			.replace(/<[^>]+>/g, "")
-			.replace(/[ \t]+\|/g, " |")
-			.replace(/\|[ \t]*\n/g, "\n")
-			.replace(/[ \t]+\n/g, "\n")
-			.replace(/\n{3,}/g, "\n\n")
-			.trim(),
-	);
-}
-
-function portalActionLabel(type: DocumentEmailType): string {
-	switch (type) {
-		case "invoice":
-			return "View and pay invoice";
-		case "quote":
-			return "Review your quote";
-		case "contract":
-			return "Review and sign contract";
-	}
-}
-
-function insertBeforeClosingDocument(html: string, addition: string): string {
-	const bodyClose = html.search(/<\/body\s*>/i);
-	if (bodyClose >= 0) {
-		return `${html.slice(0, bodyClose)}${addition}\n${html.slice(bodyClose)}`;
-	}
-	const htmlClose = html.search(/<\/html\s*>/i);
-	return htmlClose >= 0
-		? `${html.slice(0, htmlClose)}${addition}\n${html.slice(htmlClose)}`
-		: `${html}\n${addition}`;
-}
-
-function appendPortalAccess(
-	message: DocumentEmailMessage,
-	type: DocumentEmailType,
-	portalUrl: string,
-): DocumentEmailMessage {
-	const label = portalActionLabel(type);
-	const escapedUrl = escapeHtml(portalUrl);
-	const action = `<div style="box-sizing: border-box; max-width: 600px; margin: 0 auto; padding: 0 24px 24px; font-family: Arial, Helvetica, sans-serif;">
-<table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="width: 100%; margin: 24px 0 8px; table-layout: fixed;"><tr><td bgcolor="#3f352e" style="padding: 0; border-radius: 3px; mso-padding-alt: 14px 22px; text-align: center;"><a href="${escapedUrl}" style="display: block; padding: 14px 22px; color: #ffffff; font-family: Arial, Helvetica, sans-serif; font-size: 15px; font-weight: 600; line-height: 1; text-decoration: none;">${escapeHtml(label)}</a></td></tr></table>
-<p style="margin: 18px 0 6px; color: #756c64; font-family: Arial, Helvetica, sans-serif; font-size: 12px; line-height: 1.55;">If the button does not open, copy this address into your browser:</p>
-<p style="margin: 0; font-family: Arial, Helvetica, sans-serif; font-size: 12px; line-height: 1.55; overflow-wrap: anywhere; word-break: break-word;"><a href="${escapedUrl}" style="color: #594a3f; text-decoration: underline;">${escapedUrl}</a></p>
-</div>`;
-	return {
-		html: insertBeforeClosingDocument(message.html, action),
-		text: `${message.text.trimEnd()}\n\n${label}:\n${portalUrl}`,
-	};
-}
-
 function requestString(value: unknown): string | undefined {
 	return typeof value === "string" && value.length > 0 ? value : undefined;
-}
-
-function templateVariableSets(input: DocumentEmailTemplateVariables) {
-	const text = { ...input.values };
-	const html = Object.fromEntries(
-		Object.entries(input.values).map(([key, value]) => [key, escapeHtml(value)]),
-	);
-	for (const [key, fragment] of Object.entries(input.fragments ?? {})) {
-		text[key] = fragment.text;
-		html[key] = fragment.html;
-	}
-	return { text, html };
 }
 
 async function deliveryFailureResponse(
@@ -647,18 +491,6 @@ function assertNoUnresolvedTemplateVariables(
 			`Email template contains unresolved variables: ${Array.from(variables).join(", ")}`,
 		);
 	}
-}
-
-function renderAuthoredMessage(
-	source: string,
-	variables: ReturnType<typeof templateVariableSets>,
-): DocumentEmailMessage {
-	if (looksLikeHtml(source)) {
-		const html = replaceTemplateVariables(source, variables.html);
-		return { html, text: plainTextAlternative(html) };
-	}
-	const text = replaceTemplateVariables(source, variables.text).trim();
-	return { html: wrapPlainText(text), text };
 }
 
 function assertDocumentCanBeSent(
@@ -851,15 +683,14 @@ export function createEmailSendHandler<TDoc extends SendableDocument>(
 				if (config.docType === "invoice") {
 					extractedVariables.values.invoiceLink = portalUrl;
 				}
-				const variables = templateVariableSets(extractedVariables);
+				const renderAuthored = createAuthoredDocumentRenderer(extractedVariables);
 
 				let subject: string;
 				let message: DocumentEmailMessage;
 				let authoredMessage = false;
 				if (customSubject !== undefined && customBody !== undefined) {
 					authoredMessage = true;
-					subject = replaceTemplateVariables(customSubject, variables.text);
-					message = renderAuthoredMessage(customBody, variables);
+					({ subject, message } = renderAuthored({ subject: customSubject, body: customBody }));
 				} else {
 					let template: Record<string, unknown> | null = null;
 					if (templateId) {
@@ -888,11 +719,7 @@ export function createEmailSendHandler<TDoc extends SendableDocument>(
 							"template subject",
 						);
 						const templateBody = requiredString(template.body, "template body");
-						subject = replaceTemplateVariables(
-							templateSubject,
-							variables.text,
-						);
-						message = renderAuthoredMessage(templateBody, variables);
+						({ subject, message } = renderAuthored({ subject: templateSubject, body: templateBody }));
 					} else {
 						subject = config.defaultSubject(doc);
 						message = config.buildDefaultMessage(doc, {
@@ -905,7 +732,7 @@ export function createEmailSendHandler<TDoc extends SendableDocument>(
 				}
 				if (authoredMessage) {
 					assertNoUnresolvedTemplateVariables(subject, message);
-					message = appendPortalAccess(message, config.docType, portalUrl);
+					message = appendDocumentPortalAccess(message, config.docType, portalUrl);
 				}
 				assertMessageCanBeFrozen(subject, message);
 
