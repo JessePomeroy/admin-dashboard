@@ -2653,6 +2653,108 @@ describe("draft-only product editor", () => {
 		]);
 	});
 
+	function downloadLifetimeFixture() {
+		mocks.graphApiEnabled = true;
+		mocks.privateAssetEnabled = true;
+		mocks.enabledKinds = ["digital_download"];
+		const detail = {
+			productId: "product-1", productKey: "catalog.digital.new", productKind: "digital_download",
+			graphVersion: 2, slug: "night-preset", published: null, updatedAt: 1, publishedAt: null,
+			draft: {
+				...digitalDownloadGraphRevision,
+				draft: { ...digitalDownloadGraphRevision.draft, paidFile: undefined }, paidFileAsset: null,
+			},
+		};
+		mocks.detailData = detail;
+		const file = new File([encodedZip()], "pending.zip", { type: "application/zip" });
+		const readFile = vi.fn(async () => encodedZip().buffer);
+		Object.defineProperty(file, "arrayBuffer", { value: readFile });
+		vi.spyOn(globalThis.crypto, "randomUUID")
+			.mockReturnValueOnce("123e4567-e89b-42d3-a456-426614174010")
+			.mockReturnValueOnce("123e4567-e89b-42d3-a456-426614174011");
+		const fetchMock = vi.spyOn(globalThis, "fetch")
+			.mockResolvedValueOnce(Response.json({
+				status: "upload_required", uploadHandle: "123e4567-e89b-42d3-a456-426614174011",
+				uploadUrl: "https://cms-media-worker.thinkingofview.workers.dev/v1/catalog-assets/editor-uploads/source",
+				uploadToken: "opaque-token", uploadExpiresAt: "2026-01-01T00:00:00.000Z",
+			}))
+			.mockResolvedValueOnce(new Response(null, { status: 204 }));
+		return {
+			detail, readFile, fetchMock,
+			verified: {
+				kind: "paid_digital_file", assetId: "pending-asset", status: "verified",
+				originalFilename: "pending.zip", mimeType: "application/zip", sizeBytes: 4, createdAt: 1,
+			},
+			async begin() {
+				chooseFile(document.querySelector<HTMLInputElement>('[aria-label="choose customer download ZIP"]')!, file);
+				await tick(); button("upload file")?.click(); await tick();
+			},
+		};
+	}
+
+	it("renders pre-transfer cancellation without starting a request after the file read finishes", async () => {
+		const fixture = downloadLifetimeFixture();
+		let finishReading!: (value: ArrayBuffer) => void;
+		fixture.readFile.mockReturnValueOnce(new Promise((resolve) => { finishReading = resolve; }));
+		await mountDetail(); await fixture.begin();
+		expect(button("cancel")).toBeDefined();
+		expect(button("upload file")?.disabled).toBe(true);
+		button("cancel")?.click(); await tick();
+		finishReading(encodedZip().buffer);
+		await vi.waitFor(() => expect(document.body.textContent).toContain("Upload cancelled before transfer."));
+		expect(fixture.fetchMock).not.toHaveBeenCalled();
+		expect(button("cancel")).toBeUndefined();
+	});
+
+	it("renders automatic and manual ZIP verification while retaining the one-PUT contract", async () => {
+		vi.useFakeTimers();
+		const fixture = downloadLifetimeFixture();
+		fixture.fetchMock.mockImplementation(async () => Response.json(
+			{ status: "pending_inspection" }, { status: 202, headers: { "Retry-After": "1" } },
+		));
+		await mountDetail(); await fixture.begin();
+		await vi.waitFor(() => expect(document.body.textContent).toContain("checked automatically"));
+		expect(button("cancel")).toBeUndefined();
+		expect(button("upload file")?.disabled).toBe(true);
+		await vi.advanceTimersByTimeAsync(65_000 * 3); await tick();
+		expect(button("check again")?.disabled).toBe(true);
+		await vi.advanceTimersByTimeAsync(1_000); await tick();
+		expect(button("check again")?.disabled).toBe(false);
+		fixture.fetchMock.mockResolvedValueOnce(Response.json({ status: "verified", asset: fixture.verified }));
+		button("check again")?.click();
+		await vi.waitFor(() => expect(document.body.textContent).toContain("pending.zip is attached"));
+		expect(fixture.fetchMock.mock.calls.filter(([, init]) => init?.method === "PUT")).toHaveLength(1);
+		expect(button("check again")).toBeUndefined();
+		expect(button("save draft")?.disabled).toBe(false);
+	});
+
+	it.each(["navigation", "unmount"] as const)("%s aborts a pending ZIP and ignores its late verified response", async (action) => {
+		const fixture = downloadLifetimeFixture();
+		let finishCompletion!: (response: Response) => void;
+		fixture.fetchMock.mockReturnValueOnce(new Promise((resolve) => { finishCompletion = resolve; }));
+		const harness = mount(ProductPageNavigationHarness, { target: document.body });
+		components.push(harness); await tick(); await tick(); await fixture.begin();
+		await vi.waitFor(() => expect(fixture.fetchMock).toHaveBeenCalledTimes(3));
+		const signal = fixture.fetchMock.mock.calls[2][1]?.signal;
+		if (action === "navigation") {
+			harness.navigate("product-2");
+			await updateDetailQuery({ ...fixture.detail, productId: "product-2" });
+			harness.navigate("product-1");
+			await updateDetailQuery(fixture.detail);
+		} else {
+			components.splice(components.indexOf(harness), 1); await unmount(harness);
+		}
+		expect(signal?.aborted).toBe(true);
+		finishCompletion(Response.json({ status: "verified", asset: fixture.verified }));
+		await tick(); await Promise.resolve(); await tick();
+		expect(document.body.textContent).not.toContain("pending.zip is attached");
+		expect(mocks.mutation).not.toHaveBeenCalled();
+		if (action === "navigation") {
+			expect(input("version (optional)")).toBeUndefined();
+			expect(document.querySelector<HTMLInputElement>('[aria-label="choose customer download ZIP"]')?.disabled).toBe(false);
+		}
+	});
+
 	it("attaches a customer ZIP through the compact download control", async () => {
 		mocks.graphApiEnabled = true;
 		mocks.privateAssetEnabled = true;

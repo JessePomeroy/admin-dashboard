@@ -3,18 +3,8 @@ import { onDestroy } from "svelte";
 import { useQuery } from "convex-svelte";
 import { createEditorMedia } from "../../editorMedia.svelte";
 import { useAdminClient } from "../../adminClient";
-import {
-	uploadCatalogProductArtwork,
-	type CatalogProductArtworkCheckpoint,
-	type CatalogProductArtworkStatus,
-} from "../../catalogProductArtworkUpload";
-import {
-	completeCatalogPrivateEditorUpload,
-	declareCatalogPrivateEditorUpload,
-	newCatalogPrivateEditorUploadHandle,
-	prepareCatalogPrivateEditorUpload,
-	putCatalogPrivateEditorUpload,
-} from "../../catalogPrivateEditorUpload";
+import type { CatalogProductArtworkStatus } from "../../catalogProductArtworkUpload";
+import { createCatalogProductUploadSession } from "../../catalogProductUploadSession.svelte";
 import { getCatalogProductEditorCapability } from "../../catalogProductCapability";
 import {
 	addCatalogProductWebMedia,
@@ -39,7 +29,6 @@ import {
 	serializeCatalogProductDraft,
 	slugifyCatalogProductTitle,
 	type CatalogEditorPrivateAsset,
-	type CatalogEditorPrivateAssetRelation,
 	type CatalogProductDraftForm,
 	type CatalogProductEditorState,
 	type CatalogProductEditorRevision,
@@ -96,12 +85,6 @@ let variantsValid = $state(true);
 let pickerOpen = $state(false);
 let uploadedPrivateAssets = $state<CatalogEditorPrivateAsset[]>([]);
 let mediaActionError = $state("");
-let artworkUploadBusy = $state(false);
-let artworkUploadController: AbortController | null = null;
-let artworkUploadCheckpoints = new WeakMap<File, CatalogProductArtworkCheckpoint>();
-let activePrivateAssetRelation = $state<CatalogEditorPrivateAssetRelation | null>(null);
-type PrivateAssetAttachment = { kind: "paid-download" };
-let privateAssetAttachment = $state<PrivateAssetAttachment | null>(null);
 type PublicationSnapshot = {
 	productId: string;
 	draftRevisionId: string | null;
@@ -123,29 +106,15 @@ let publicationReconciliationTimer: ReturnType<typeof setTimeout> | undefined;
 let nextPublicationRequestId = 0;
 const PUBLICATION_RECONCILIATION_MS = 8_000;
 const privateAssetUpload = privateAssetCapability?.upload ?? null;
-type PrivateUploadPhase = "reading" | "preparing" | "uploading" | "completing" | "pending" | "verified";
-type PrivateUploadOperation = {
-	uploadHandle: string;
-	snapshot: { draftRevisionId: string; relation: CatalogEditorPrivateAssetRelation };
-	phase: PrivateUploadPhase;
-	controller: AbortController | null;
-	putIssued: boolean;
-	stagedAsset: CatalogEditorPrivateAsset | null;
-};
-let selectedPrivateFile = $state<File | null>(null);
-let privateFileInput = $state<HTMLInputElement | null>(null);
-let privateZipVersion = $state("");
-let privateUploadOperation = $state<PrivateUploadOperation | null>(null);
-let privateUploadFallbackState = $state<"idle" | "error">("idle");
-let privateUploadMessage = $state("");
-let manualCheckReady = $state(false);
-let automaticChecksRemaining = $state(0);
-let automaticCheckDeadline = 0;
-let completionCheckTimer: ReturnType<typeof setTimeout> | undefined;
-const PRIVATE_UPLOAD_AUTO_CHECKS = 3;
-const PRIVATE_UPLOAD_AUTO_INTERVAL_MS = 65_000;
-const PRIVATE_UPLOAD_AUTO_WINDOW_MS = 305_000;
-const usedPrivateUploadHandles = new Set<string>();
+const uploads = createCatalogProductUploadSession({
+	upload: privateAssetUpload,
+	currentDraft: currentUploadDraft,
+});
+function currentUploadDraft() {
+	return baseRevisionId && saveState !== "conflict"
+		? { productId, draftRevisionId: baseRevisionId, draftJson: serializeCatalogProductDraft(form) }
+		: null;
+}
 const media = createEditorMedia({
 	siteUrl: config.siteUrl,
 	list: mediaCapability?.api.listForEditor,
@@ -189,7 +158,6 @@ let privateAssetRows = $derived.by(() => {
 	]);
 	return [{ asset: privateAssetById.get(form.paidFile.assetId) }];
 });
-let privateUploadState = $derived(privateUploadOperation?.phase ?? privateUploadFallbackState);
 let usesSinglePrice = $derived(
 	form.productKind === "postcard"
 		|| form.productKind === "merchandise"
@@ -204,11 +172,9 @@ let effectiveSaleAvailability = $derived(
 		: form.saleAvailability,
 );
 let dirty = $derived(initialized && hasActiveDraft && currentJson !== savedJson);
-let privateUploadBusy = $derived(["reading", "preparing", "uploading", "completing", "pending"].includes(privateUploadState));
-let privateUploadBlocked = $derived(privateUploadOperation !== null);
 let publicationRequestActive = $derived(publicationOperation !== null);
 let editorLocked = $derived(
-	privateUploadBusy || artworkUploadBusy || publicationRequestActive
+	uploads.downloadBusy || uploads.artworkBusy || publicationRequestActive
 		|| ["saving", "discarding", "conflict"].includes(saveState),
 );
 let publicationStatus = $derived.by(() => {
@@ -228,7 +194,7 @@ let publicationQueryStale = $derived(initialized && Boolean(editorState) && (
 		|| editorState?.updatedAt !== loadedUpdatedAt
 ));
 let publicationActionsLocked = $derived(
-	dirty || saveState !== "saved" || privateUploadBlocked || artworkUploadBusy
+	dirty || saveState !== "saved" || uploads.downloadBusy || uploads.artworkBusy
 		|| publicationRequestActive || publicationQueryStale,
 );
 let draftFormValid = $derived(
@@ -287,12 +253,7 @@ function loadServerGraphProductDraft(state: CatalogProductEditorState) {
 		throw new Error("The catalog graph editor requires an active draft.");
 	}
 	locallyCommittedRevisionIds = [];
-	if (privateUploadOperation && state.draft?.revisionId !== privateUploadOperation.snapshot.draftRevisionId) {
-		clearCompletionCheckTimer();
-		privateUploadOperation = null;
-		privateUploadFallbackState = "error";
-		privateUploadMessage = "This product changed while the file was uploading. Reload before trying again.";
-	}
+	uploads.draftLoaded(state.draft.revisionId);
 	form = catalogProductGraphDraftFromRevision(state.draft);
 	graphSourceRevision = state.draft;
 	hasActiveDraft = Boolean(state.draft);
@@ -364,12 +325,7 @@ function clearPublicationReconciliationTimer() {
 
 function resetProductScope() {
 	activeDraftOperation = null;
-	artworkUploadController?.abort();
-	artworkUploadController = null;
-	artworkUploadBusy = false;
-	artworkUploadCheckpoints = new WeakMap<File, CatalogProductArtworkCheckpoint>();
-	privateUploadOperation?.controller?.abort();
-	clearCompletionCheckTimer();
+	uploads.reset();
 	clearPublicationReconciliationTimer();
 	form = emptyCatalogProductDraft();
 	initialized = false;
@@ -389,20 +345,9 @@ function resetProductScope() {
 	media.resetUploads();
 	uploadedPrivateAssets = [];
 	mediaActionError = "";
-	activePrivateAssetRelation = null;
-	privateAssetAttachment = null;
 	publicationOperation = null;
 	publicationMessage = "";
 	publicationError = "";
-	selectedPrivateFile = null;
-	privateFileInput = null;
-	privateZipVersion = "";
-	privateUploadOperation = null;
-	privateUploadFallbackState = "idle";
-	privateUploadMessage = "";
-	manualCheckReady = false;
-	automaticChecksRemaining = 0;
-	automaticCheckDeadline = 0;
 }
 
 function completePublication(operation: PublicationOperation, state: CatalogProductEditorState) {
@@ -669,291 +614,41 @@ async function runPublication(action: "publish" | "unpublish") {
 	}
 }
 
-function choosePrivateFile(file: File | null) {
-	selectedPrivateFile = file;
-	privateUploadMessage = "";
-}
-
 function chooseDigitalDownloadFile(file: File | null) {
-	if (!file || form.productKind !== "digital_download") return choosePrivateFile(file);
-	if (dirty || editorLocked || !baseRevisionId) {
-		privateUploadFallbackState = "error";
-		privateUploadMessage = "Save this draft before adding the download file.";
-		return;
-	}
-	if (!privateAssetAttachment) beginSinglePrivateAssetAttachment();
-	choosePrivateFile(file);
+	if (dirty || editorLocked || !baseRevisionId || form.productKind !== "digital_download") return;
+	uploads.selectDownload(file, {
+		kind: "paid_digital_file", relationKey: newCatalogPrivateRelationKey("download"),
+	});
 }
 
 function dropDigitalDownloadFile(event: DragEvent) {
 	event.preventDefault();
-	if (privateUploadBlocked || dirty || editorLocked) return;
+	if (uploads.downloadBusy || dirty || editorLocked) return;
 	chooseDigitalDownloadFile(event.dataTransfer?.files?.[0] ?? null);
 }
 
-function resetPrivateAssetFlow(message = "") {
-	clearCompletionCheckTimer();
-	privateUploadOperation?.controller?.abort();
-	privateUploadOperation = null;
-	privateUploadFallbackState = "idle";
-	privateAssetAttachment = null;
-	activePrivateAssetRelation = null;
-	selectedPrivateFile = null;
-	privateZipVersion = "";
-	if (privateFileInput) privateFileInput.value = "";
-	privateUploadMessage = message;
-}
-
-function beginPrivateAssetAttachment(
-	attachment: PrivateAssetAttachment,
-	relation: CatalogEditorPrivateAssetRelation,
-) {
-	if (editorLocked || dirty || !baseRevisionId) return;
-	resetPrivateAssetFlow();
-	privateAssetAttachment = attachment;
-	activePrivateAssetRelation = relation;
-}
-
-function beginSinglePrivateAssetAttachment() {
-	if (form.productKind === "digital_download") {
-		beginPrivateAssetAttachment(
-			{ kind: "paid-download" },
-			{ kind: "paid_digital_file", relationKey: newCatalogPrivateRelationKey("download") },
-		);
-	}
-}
-
-function attachVerifiedPrivateAsset() {
-	const operation = privateUploadOperation;
-	const attachment = privateAssetAttachment;
-	const relation = activePrivateAssetRelation;
-	const asset = operation?.stagedAsset;
-	if (
-		!operation
-		|| operation.phase !== "verified"
-		|| !attachment
-		|| !relation
-		|| !asset
-		|| attachment.kind !== "paid-download"
-		|| relation.kind !== "paid_digital_file"
-		|| asset.kind !== "paid_digital_file"
-	) return;
-
-	uploadedPrivateAssets = [
-		asset,
-		...uploadedPrivateAssets.filter((candidate) => candidate.assetId !== asset.assetId),
-	];
-	form.paidFile = {
-		key: relation.relationKey,
-		assetId: asset.assetId,
-		...(asset.version ? { version: asset.version } : {}),
-	};
-	resetPrivateAssetFlow(`${asset.originalFilename} is attached to this draft. Save the draft to keep it.`);
-}
-
-function clearCompletionCheckTimer() {
-	if (completionCheckTimer) clearTimeout(completionCheckTimer);
-	completionCheckTimer = undefined;
-	manualCheckReady = false;
-}
-
-function exposeManualCheck() {
-	automaticChecksRemaining = 0;
-	manualCheckReady = true;
-	completionCheckTimer = undefined;
-	privateUploadMessage = "Automatic verification checks are complete. Manual checking is available.";
-}
-
-function scheduleCompletionCheck(retryAfterMs: number) {
-	clearCompletionCheckTimer();
-	if (automaticCheckDeadline === 0) automaticCheckDeadline = Date.now() + PRIVATE_UPLOAD_AUTO_WINDOW_MS;
-	const autoDelay = Math.max(retryAfterMs, PRIVATE_UPLOAD_AUTO_INTERVAL_MS);
-	if (automaticChecksRemaining > 0 && Date.now() + autoDelay <= automaticCheckDeadline) {
-		privateUploadMessage = "Verification is still pending. It will be checked automatically.";
-		const automaticCheck = { uploadHandle: privateUploadOperation?.uploadHandle, deadline: automaticCheckDeadline };
-		completionCheckTimer = setTimeout(() => {
-			completionCheckTimer = undefined;
-			if (!automaticCheck.uploadHandle || !operationStillActive(automaticCheck.uploadHandle)) return;
-			if (Date.now() >= automaticCheck.deadline) return exposeManualCheck();
-			automaticChecksRemaining -= 1;
-			void reconcilePrivateUpload();
-		}, autoDelay);
-		return;
-	}
-	automaticChecksRemaining = 0;
-	privateUploadMessage = "Automatic verification checks are complete. Check again when the action becomes available.";
-	completionCheckTimer = setTimeout(exposeManualCheck, retryAfterMs);
-}
-
-function operationStillActive(uploadHandle: string) {
-	return privateUploadOperation?.uploadHandle === uploadHandle;
-}
-
-function uploadSnapshotStillActive(operation: PrivateUploadOperation) {
-	return baseRevisionId === operation.snapshot.draftRevisionId
-		&& activePrivateAssetRelation?.kind === operation.snapshot.relation.kind
-		&& activePrivateAssetRelation.relationKey === operation.snapshot.relation.relationKey
-		&& !dirty;
-}
-
-async function reconcilePrivateUpload() {
-	const operation = privateUploadOperation;
-	if (!privateAssetUpload || !operation) return;
-	operation.phase = "completing";
-	privateUploadMessage = "Checking verified asset status…";
-	let result: Awaited<ReturnType<typeof completeCatalogPrivateEditorUpload>>;
-	try {
-		result = await completeCatalogPrivateEditorUpload(
-			privateAssetUpload.completeEndpoint,
-			operation.uploadHandle,
-			operation.controller?.signal,
-		);
-	} catch (error) {
-		if (!operationStillActive(operation.uploadHandle) && operation.controller?.signal.aborted) return;
-		throw error;
-	}
-	if (!operationStillActive(operation.uploadHandle)) return;
-	if (result.status === "verified") {
-		clearCompletionCheckTimer();
-		if (!uploadSnapshotStillActive(operation) || result.asset.kind !== operation.snapshot.relation.kind) {
-			privateUploadOperation = null;
-			privateUploadFallbackState = "error";
-			privateUploadMessage = "This product changed while the file was uploading. Reload before using it.";
-			return;
-		}
-		operation.stagedAsset = result.asset;
-		operation.phase = "verified";
-		if (privateAssetAttachment) {
-			attachVerifiedPrivateAsset();
-			return;
-		}
-		privateUploadMessage = `${result.asset.originalFilename} is verified and ready to use.`;
-		return;
-	}
-	if (result.status === "pending") {
-		operation.phase = "pending";
-		scheduleCompletionCheck(result.retryAfterMs);
-		return;
-	}
-	clearCompletionCheckTimer();
-	privateUploadOperation = null;
-	privateUploadFallbackState = "error";
-	privateUploadMessage = "The file could not be verified. Choose it again to retry.";
-}
-
 async function startPrivateUpload() {
-	if (
-		!privateAssetUpload
-		|| !selectedPrivateFile
-		|| !activePrivateAssetRelation
-		|| !baseRevisionId
-		|| dirty
-		|| editorLocked
-		|| privateUploadOperation
-	) return;
-	let file: File | null = selectedPrivateFile;
-	const productKind = form.productKind;
-	const uploadHandle = newCatalogPrivateEditorUploadHandle();
-	if (usedPrivateUploadHandles.has(uploadHandle)) {
-		privateUploadFallbackState = "error";
-		privateUploadMessage = "A new upload could not be started. Try again.";
-		return;
-	}
-	usedPrivateUploadHandles.add(uploadHandle);
-	clearCompletionCheckTimer();
-	const controller = new AbortController();
-	const operation: PrivateUploadOperation = {
-		uploadHandle,
-		snapshot: {
-			draftRevisionId: baseRevisionId,
-			relation: { ...activePrivateAssetRelation },
-		},
-		phase: "reading",
-		controller,
-		putIssued: false,
-		stagedAsset: null,
-	};
-	privateUploadOperation = operation;
-	privateUploadFallbackState = "idle";
-	privateUploadMessage = "Reading and hashing the selected file…";
-	try {
-		let declaration: Awaited<ReturnType<typeof declareCatalogPrivateEditorUpload>> | null = await declareCatalogPrivateEditorUpload(
-			file,
-			productKind,
-			uploadHandle,
-			privateZipVersion,
-			controller.signal,
-		);
-		if (!operationStillActive(uploadHandle)) return;
-		operation.phase = "preparing";
-		privateUploadMessage = "Preparing the file…";
-		let prepared: Awaited<ReturnType<typeof prepareCatalogPrivateEditorUpload>> | null = await prepareCatalogPrivateEditorUpload(
-			privateAssetUpload.prepareEndpoint,
-			declaration,
-			controller.signal,
-		);
-		if (!operationStillActive(uploadHandle) || operation.putIssued) return;
-		operation.putIssued = true;
-		selectedPrivateFile = null;
-		if (privateFileInput) privateFileInput.value = "";
-		privateZipVersion = "";
-		operation.phase = "uploading";
-		privateUploadMessage = "Uploading and verifying the file…";
-		try {
-			await putCatalogPrivateEditorUpload(
-				prepared,
-				file,
-				declaration.contentType,
-				controller.signal,
-			);
-		} catch {
-			if (controller.signal.aborted) {
-				throw new DOMException("The operation was aborted", "AbortError");
-			}
-			// A lost or rejected PUT response is reconciled only through completion.
-		}
-		prepared = null;
-		declaration = null;
-		file = null;
-		automaticChecksRemaining = PRIVATE_UPLOAD_AUTO_CHECKS;
-		automaticCheckDeadline = 0;
-		await reconcilePrivateUpload();
-	} catch {
-		if (!operationStillActive(uploadHandle)) return;
-		privateUploadOperation = null;
-		privateUploadFallbackState = "error";
-		privateUploadMessage = "The file could not be prepared safely. Review it and try again.";
-	}
-}
-
-function cancelPrivateUpload() {
-	const operation = privateUploadOperation;
-	if (!operation?.controller || !["reading", "preparing"].includes(operation.phase)) return;
-	operation.controller.abort();
-	privateUploadOperation = null;
-	privateUploadFallbackState = "idle";
-	selectedPrivateFile = null;
-	if (privateFileInput) privateFileInput.value = "";
-	privateUploadMessage = "Upload cancelled before transfer.";
+	const draft = currentUploadDraft();
+	if (!draft || dirty || editorLocked || form.productKind !== "digital_download") return;
+	await uploads.startDownload(draft, ({ relation, asset }) => {
+		uploadedPrivateAssets = [
+			asset,
+			...uploadedPrivateAssets.filter((candidate) => candidate.assetId !== asset.assetId),
+		];
+		form.paidFile = {
+			key: relation.relationKey,
+			assetId: asset.assetId,
+			...(asset.version ? { version: asset.version } : {}),
+		};
+	});
 }
 
 onDestroy(() => {
 	activeDraftOperation = null;
-	const controller = privateUploadOperation?.controller;
-	const artworkController = artworkUploadController;
-	clearCompletionCheckTimer();
+	uploads.dispose();
 	clearPublicationReconciliationTimer();
-	privateUploadOperation = null;
 	publicationOperation = null;
-	controller?.abort();
-	artworkController?.abort();
 });
-
-async function checkPrivateUploadAgain() {
-	if (!manualCheckReady || privateUploadState !== "pending") return;
-	manualCheckReady = false;
-	await reconcilePrivateUpload();
-}
 
 function beginDraftMutation(state: "saving" | "discarding") {
 	const operation = {};
@@ -1098,57 +793,23 @@ async function uploadProductArtwork(
 	file: File,
 	onStatus: (status: CatalogProductArtworkStatus) => void,
 ) {
-	if (
-		!privateAssetUpload
-		|| !mediaCapability?.uploadEndpoint
-		|| (form.productKind !== "print" && form.productKind !== "print_set")
-		|| !baseRevisionId
-		|| artworkUploadBusy
-	) throw new Error("This artwork upload is not available right now.");
-	const operationProductId = productId;
-	const operationRevisionId = baseRevisionId;
-	const operationFormJson = serializeCatalogProductDraft(form);
-	const operationKind = form.productKind;
-	const controller = new AbortController();
-	artworkUploadController = controller;
-	artworkUploadBusy = true;
-	mediaActionError = "";
-	try {
-		const result = await uploadCatalogProductArtwork(file, {
-			productKind: operationKind,
-			privatePrepareEndpoint: privateAssetUpload.prepareEndpoint,
-			privateCompleteEndpoint: privateAssetUpload.completeEndpoint,
-			mediaEndpoint: mediaCapability.uploadEndpoint,
-			signal: controller.signal,
-			checkpoint: artworkUploadCheckpoints.get(file),
-			onCheckpoint: (checkpoint) => artworkUploadCheckpoints.set(file, checkpoint),
-			onCheckpointInvalidated: (checkpoint) => {
-				if (artworkUploadCheckpoints.get(file) === checkpoint) {
-					artworkUploadCheckpoints.delete(file);
-				}
-			},
-			onStatus,
-		});
-		if (
-			artworkUploadController !== controller
-			|| saveState === "conflict"
-			|| productId !== operationProductId
-			|| baseRevisionId !== operationRevisionId
-			|| serializeCatalogProductDraft(form) !== operationFormJson
-		) throw new Error("This product changed while the image was uploading. Reload it and try again.");
-		form = attachCatalogProductArtwork(form, result.displayAsset, result.privateAsset);
-		media.addUpload(result.displayAsset);
-		uploadedPrivateAssets = [
-			result.privateAsset,
-			...uploadedPrivateAssets.filter((asset) => asset.assetId !== result.privateAsset.assetId),
-		];
-		artworkUploadCheckpoints.delete(file);
-	} finally {
-		if (artworkUploadController === controller) {
-			artworkUploadController = null;
-			artworkUploadBusy = false;
-		}
+	const draft = currentUploadDraft();
+	if (!draft || !mediaCapability?.uploadEndpoint
+		|| (form.productKind !== "print" && form.productKind !== "print_set")) {
+		throw new Error("This artwork upload is not available right now.");
 	}
+	mediaActionError = "";
+	await uploads.uploadArtwork(file, {
+		draft, productKind: form.productKind, mediaEndpoint: mediaCapability.uploadEndpoint, onStatus,
+		onVerified: (result) => {
+			form = attachCatalogProductArtwork(form, result.displayAsset, result.privateAsset);
+			media.addUpload(result.displayAsset);
+			uploadedPrivateAssets = [
+				result.privateAsset,
+				...uploadedPrivateAssets.filter((asset) => asset.assetId !== result.privateAsset.assetId),
+			];
+		},
+	});
 }
 
 function removeSetMember(member: CatalogProductDraftForm["setMembers"][number]) {
@@ -1274,22 +935,22 @@ function removeSetMember(member: CatalogProductDraftForm["setMembers"][number]) 
 				<section class="download-file" aria-labelledby="catalog-download-file-heading">
 					<div class="section-heading"><span>03</span><div><h2 id="catalog-download-file-heading">customer download</h2></div></div>
 					{#if privateAssetCapability && privateAssetUpload}
-						<label class="private-file-dropzone" class:disabled={privateUploadBlocked || dirty || editorLocked} aria-disabled={privateUploadBlocked || dirty || editorLocked} ondragover={(event) => event.preventDefault()} ondrop={dropDigitalDownloadFile}>
-							<strong>{selectedPrivateFile?.name ?? "drop a ZIP here or click to choose"}</strong>
+						<label class="private-file-dropzone" class:disabled={uploads.downloadBusy || dirty || editorLocked} aria-disabled={uploads.downloadBusy || dirty || editorLocked} ondragover={(event) => event.preventDefault()} ondrop={dropDigitalDownloadFile}>
+							<strong>{uploads.selectedFile?.name ?? "drop a ZIP here or click to choose"}</strong>
 							<small>ZIP · 16 MB max</small>
-							<input bind:this={privateFileInput} aria-label="choose customer download ZIP" type="file" accept="application/zip,application/x-zip-compressed,.zip" onchange={(event) => chooseDigitalDownloadFile(event.currentTarget.files?.[0] ?? null)} disabled={privateUploadBlocked || dirty || editorLocked} />
+							<input aria-label="choose customer download ZIP" type="file" accept="application/zip,application/x-zip-compressed,.zip" onchange={(event) => { chooseDigitalDownloadFile(event.currentTarget.files?.[0] ?? null); event.currentTarget.value = ""; }} disabled={uploads.downloadBusy || dirty || editorLocked} />
 						</label>
-						{#if privateAssetAttachment}
-							<label>version (optional)<input maxlength="64" value={privateZipVersion} oninput={(event) => (privateZipVersion = event.currentTarget.value)} disabled={privateUploadBlocked || dirty || editorLocked} /></label>
+						{#if uploads.hasDownload}
+							<label>version (optional)<input maxlength="64" value={uploads.version} oninput={(event) => (uploads.version = event.currentTarget.value)} disabled={uploads.downloadBusy || dirty || editorLocked} /></label>
 							<div class="private-upload-actions">
-								<button type="button" onclick={() => void startPrivateUpload()} disabled={!selectedPrivateFile || privateUploadBlocked || dirty || editorLocked}>upload file</button>
-								{#if privateUploadState === "reading" || privateUploadState === "preparing"}<button type="button" class="secondary" onclick={cancelPrivateUpload}>cancel</button>{/if}
-								{#if privateUploadState === "pending" && automaticChecksRemaining === 0}<button type="button" class="secondary" onclick={() => void checkPrivateUploadAgain()} disabled={!manualCheckReady}>check again</button>{/if}
+								<button type="button" onclick={() => void startPrivateUpload()} disabled={!uploads.selectedFile || uploads.downloadBusy || dirty || editorLocked}>upload file</button>
+								{#if uploads.phase === "reading" || uploads.phase === "preparing"}<button type="button" class="secondary" onclick={uploads.cancelDownload}>cancel</button>{/if}
+								{#if uploads.manualCheckVisible}<button type="button" class="secondary" onclick={() => void uploads.checkDownloadAgain()} disabled={!uploads.manualCheckReady}>check again</button>{/if}
 							</div>
 						{/if}
-						{#if privateUploadMessage}<p class:upload-error={privateUploadState === "error"} role={privateUploadState === "error" ? "alert" : "status"}>{privateUploadMessage}</p>{/if}
+						{#if uploads.message}<p class:upload-error={uploads.phase === "error"} role={uploads.phase === "error" ? "alert" : "status"}>{uploads.message}</p>{/if}
 					{/if}
-					{#if privateAssetRows[0]?.asset && !privateAssetAttachment}<p class="download-ready">{privateAssetRows[0].asset.originalFilename}</p>{/if}
+					{#if privateAssetRows[0]?.asset && !uploads.hasDownload}<p class="download-ready">{privateAssetRows[0].asset.originalFilename}</p>{/if}
 				</section>
 			{/if}
 			{#if !isGraphV2}
