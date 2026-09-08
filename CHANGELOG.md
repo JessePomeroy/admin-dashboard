@@ -1,5 +1,27 @@
 # @jessepomeroy/admin
 
+## 6.0.0
+
+### Major Changes
+
+- 1353cdc: CRM requires `api.crm.listClientsWithTags`, wired to the new paginated Convex query. Client lists use snapshot cursor pages of at most 50 rows with tags included, next/previous/refresh controls, and refresh after local mutations; detail tags/activity use reactive subscriptions instead of imperative reload caches. Existing `listClients` remains available for other consumers.
+
+### Patch Changes
+
+- 4b69d4d: Restore the previous body scroll policy when an admin or editor drawer closes or its layout unmounts, and preserve existing overflow styles while both drawers are closed.
+- eabc891: Share modal keyboard, focus restoration and scroll cleanup between the Admin shell and media picker while preserving their styling and global toast access.
+- 9f96fb8: Retry failed page-seen notification acknowledgements with bounded backoff while the page remains active. Cancel retry timers on navigation or layout teardown, and do not let a stale request schedule retries for a later visit.
+- 6e984cb: Separate pure authored document-email rendering from durable send orchestration while preserving exact HTML, text, variable snapshots, and portal action placement.
+- f0ffda1: Use one validated integer-cent invoice calculation across default and authored emails, invoice forms and displays, and pending dashboard totals. Positive fractional quantities are supported without a precision cap; each line is rounded before subtotal, then percentage tax is rounded once. Numeric form drafts convert unit dollar prices to cents first, show invalid values without crashing, and permit clearing tax to zero.
+- c8041aa: Add previous and next navigation to the shared editor media picker, retaining one active library page plus existing attachment and local-upload reads. Bound library reads and require an explicit same-cursor retry if a reactive page becomes incomplete, rather than skipping unread assets. Show loading, retryable errors, and empty ready-image pages without hiding navigation to older assets. Preserve selected/deleting states and keyboard focus when navigation disables a control.
+- 95de97d: Prevent authenticated delivery-gallery image responses from inheriting public Worker cache policies by enforcing `private, no-store` in the host proxy while preserving streamed bodies and image metadata.
+- ed795d7: Remove the unused internal private-asset replacement capability projection while preserving configured uploads, publication guards and public host configuration.
+- 64c21e0: Consolidate product artwork and download upload lifetimes in an internal session, preserving one-PUT verification, draft identity checks, and cancellation while discarding stale responses after navigation or teardown.
+- 4282840: Keep quote conversion results, errors, and pending state attached to their initiating detail selection so closing, switching, or reopening a quote cannot receive an older conversion's UI updates.
+- d979067: Remove three internal validation helpers with no production callers and their implementation-only tests. Public trimString and validateFilename exports and their behavior remain unchanged.
+- 01bc881: Share editor web-media reads, uploaded-asset state and merge rules across About, Modeling, Portfolio and Product. Preserve picker scope, current query contracts and product navigation cleanup.
+- a4ad205: Use precise package-local invoice and contract form payloads, share each document's create mutation mapping between draft and send actions, and remove duplicate contract form assembly. Preserve optional fields, fractional invoice calculations, cent conversions, and separate email overrides.
+
 ## 5.1.1
 
 ### Patch Changes
