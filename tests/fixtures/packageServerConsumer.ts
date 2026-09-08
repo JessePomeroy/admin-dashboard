@@ -16,12 +16,18 @@ import {
 	type CatalogPrivateEditorUploadPrintPrepareRequest,
 	type CatalogPrivateEditorUploadVerifiedResponse,
 } from "@jessepomeroy/admin/server";
-import { getAdminConfig, type AdminConfig } from "@jessepomeroy/admin";
+import { getAdminConfig, type AdminAPI, type AdminConfig, type CatalogProductEditorRevision } from "@jessepomeroy/admin";
 // @ts-expect-error Server configuration is available only from @jessepomeroy/admin/server.
 import { getServerConfig as invalidRootServerImport } from "@jessepomeroy/admin";
 
 const browserConfig: AdminConfig = getAdminConfig();
-void [browserConfig, invalidRootServerImport];
+// These compatibility contracts must compile against the built public declarations.
+const contactWithoutPublish: Pick<NonNullable<AdminAPI["siteEditor"]>, "publishContactPage"> = {};
+const legacyPrintProjection: CatalogProductEditorRevision = {
+	revisionId: "legacy-revision", schemaVersion: 2, productKind: "print", createdAt: 1,
+	printSourceAssets: [{ relationKey: "source", asset: { assetId: "legacy-asset" } }],
+};
+void [browserConfig, invalidRootServerImport, contactWithoutPublish, legacyPrintProjection];
 
 const uploadConfig: CatalogPrivateEditorUploadConfig = {
 	convexJournalOrigin: "https://example.convex.site",

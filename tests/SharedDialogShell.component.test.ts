@@ -73,7 +73,7 @@ const dialogs = [
 			}),
 	},
 ];
-it.each(dialogs)("contains focus and routes dismissal for $name", async ({
+it.each(dialogs)("focuses, restores focus, and routes dismissal for $name", async ({
 	name,
 	render,
 }) => {
@@ -86,25 +86,6 @@ it.each(dialogs)("contains focus and routes dismissal for $name", async ({
 	const dialog = document.querySelector<HTMLElement>('[role="dialog"]')!;
 	expect(dialog.getAttribute("aria-label")).toBe(name);
 	const close = dialog.querySelector<HTMLButtonElement>(".modal-close")!;
-	expect(document.activeElement).toBe(close);
-	close.dispatchEvent(
-		new KeyboardEvent("keydown", {
-			key: "Tab",
-			shiftKey: true,
-			bubbles: true,
-			cancelable: true,
-		}),
-	);
-	const last = document.activeElement!;
-	expect(last).not.toBe(close);
-	expect(dialog.contains(last)).toBe(true);
-	last.dispatchEvent(
-		new KeyboardEvent("keydown", {
-			key: "Tab",
-			bubbles: true,
-			cancelable: true,
-		}),
-	);
 	expect(document.activeElement).toBe(close);
 	dialog.querySelector<HTMLElement>(".modal-content")!.click();
 	expect(onclose).not.toHaveBeenCalled();

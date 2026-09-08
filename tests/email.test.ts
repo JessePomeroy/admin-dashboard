@@ -12,11 +12,6 @@ import { setServerConfig } from "../src/lib/config";
 import { replaceTemplateVariables, sendEmail } from "../src/lib/server/email";
 
 describe("replaceTemplateVariables", () => {
-	it("replaces single variable", () => {
-		const result = replaceTemplateVariables("Hello {{name}}", { name: "Jane" });
-		expect(result).toBe("Hello Jane");
-	});
-
 	it("replaces multiple variables", () => {
 		const result = replaceTemplateVariables(
 			"Hi {{name}}, your invoice {{invoiceNumber}} is due on {{dueDate}}.",

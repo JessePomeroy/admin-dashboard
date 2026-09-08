@@ -851,6 +851,7 @@ describe("draft-only product editor", () => {
 		mocks.listError = new Error("list unavailable");
 		await mountList();
 		expect(document.querySelector('[role="alert"]')?.textContent).toContain("Could not load product drafts");
+		expect(document.body.textContent).not.toContain("No product drafts yet.");
 	});
 
 	it("regenerates a manually edited URL name from the product name", async () => {
@@ -3159,16 +3160,6 @@ describe("draft-only product editor", () => {
 				draft: expect.objectContaining({ title: "Edit after restarting" }),
 			}),
 		);
-	});
-
-	it("renders the product-list query error instead of an empty state", async () => {
-		mocks.listError = new Error("list failed");
-		await mountList();
-
-		expect(document.querySelector('[role="alert"]')?.textContent).toContain(
-			"Could not load product drafts",
-		);
-		expect(document.body.textContent).not.toContain("No product drafts yet.");
 	});
 
 	it("renders the product-detail query error instead of loading forever", async () => {
