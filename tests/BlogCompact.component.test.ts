@@ -29,7 +29,7 @@ afterEach(async () => {
 });
 
 async function render(state: PostEditorState = postEditorState(), overview = false) {
-	const mutation = vi.fn((name: string, _args: Record<string, unknown>) => {
+	const mutation = vi.fn((name: string, _args: Record<string, unknown>): unknown => {
 		if (name === "post:create") return { documentId: "created" };
 		if (name === "post:save") return { revisionId: "saved" };
 		if (name === "post:publish") return null;
@@ -71,6 +71,59 @@ async function type(input: HTMLInputElement | HTMLTextAreaElement, value: string
 }
 
 describe("compact blog authoring", () => {
+	it.each([false, true])("refreshes automatic excerpts after failed publication, including reload=%s", async (reload) => {
+		let { queries, mutation } = await render();
+		mutation.mockImplementation((name) => {
+			if (name === "post:save") return { revisionId: "saved" };
+			throw new Error("Publish Site Settings before publishing");
+		});
+		button("publish").click();
+		await tick();
+		await tick();
+		await vi.waitFor(() => expect(document.body.textContent).toContain("Publish Site Settings before publishing"));
+		const saved = mutation.mock.calls.find(([name]) => name === "post:save")![1].draft as PostDraft;
+		expect(saved.summary).toBe("Keep this draft.");
+		const state = postEditorState();
+		state.draft = { ...state.draft!, revisionId: "saved", draft: saved };
+		if (reload) {
+			await unmount(component!);
+			component = undefined;
+			document.body.replaceChildren();
+			({ queries, mutation } = await render(state));
+		} else {
+			queries.emit(queries.latest("post:state"), state);
+			await tick();
+			mutation.mockImplementation(name => name === "post:save" ? { revisionId: "saved" } : null);
+		}
+		const editor = document.querySelector<HTMLElement>('[role="textbox"]')!;
+		editor.focus();
+		const paste = new Event("paste", { bubbles: true, cancelable: true });
+		Object.defineProperty(paste, "clipboardData", { value: { getData: () => "New opening after failure. " } });
+		editor.dispatchEvent(paste);
+		await tick();
+		button("publish").click();
+		await tick();
+		await tick();
+		const retryDraft = mutation.mock.calls.filter(([name]) => name === "post:save").at(-1)![1].draft as PostDraft;
+		expect(retryDraft.summary).toContain("New opening after failure.");
+		expect(retryDraft).toMatchObject({ summarySource: "body" });
+		expect(mutation.mock.calls.at(-1)?.[0]).toBe("post:publish");
+	});
+
+	it("turns an explicit full-mode summary edit into preserved custom metadata", async () => {
+		delete blogFixtureConfig.editor!.blog!.mode;
+		const state = postEditorState();
+		Object.assign(state.draft!.draft, { authorSource: "siteSettings", summarySource: "body", summary: "Generated excerpt" });
+		const { mutation } = await render(state);
+		const summary = document.querySelector('#identity-heading')!.closest("section")!.querySelector("textarea")!;
+		await type(summary, "A deliberate custom excerpt");
+		button("publish").click();
+		await tick();
+		await tick();
+		expect(mutation.mock.calls[0][1].draft).toMatchObject({ summary: "A deliberate custom excerpt" });
+		expect(mutation.mock.calls[0][1].draft).not.toHaveProperty("summarySource");
+	});
+
 	it("hides metadata and supporting controls but keeps SEO and explicit slug generation", async () => {
 		const { queries, mutation } = await render();
 		expect(document.querySelector('#structure-heading')).toBeNull();

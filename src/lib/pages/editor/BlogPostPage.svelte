@@ -186,10 +186,11 @@ function normalizedDraft(publishing = false): PostDraft {
 	const draft = copyPostDraft(form);
 	if (compactMode) {
 		if (!draft.authorDocumentId) draft.authorSource = "siteSettings";
-		// Wait until publication so an early draft save cannot freeze a stale excerpt.
-		if (publishing && !draft.summary?.trim()) {
-			draft.summary = postBodyExcerpt(draft.body) || draft.title?.trim().slice(0, 320) || "";
-		}
+		if (!draft.summary?.trim()) draft.summarySource = "body";
+	}
+	// Persist ownership so a failed publication or reload cannot freeze an automatic excerpt.
+	if (publishing && draft.summarySource === "body") {
+		draft.summary = postBodyExcerpt(draft.body) || draft.title?.trim().slice(0, 320) || "";
 	}
 	return {
 		...draft,
@@ -437,7 +438,7 @@ async function restoreDocument() {
 			<div class="fields">
 				<label>
 					summary
-					<textarea rows="4" maxlength="320" bind:value={form.summary} aria-invalid={Boolean(fieldErrors.summary)}></textarea>
+					<textarea rows="4" maxlength="320" bind:value={form.summary} aria-invalid={Boolean(fieldErrors.summary)} oninput={() => { form.summarySource = undefined; }}></textarea>
 					<small>Used as the public excerpt on Blog lists and link previews.</small>
 					{#if fieldErrors.summary}<small class="field-error">{fieldErrors.summary}</small>{/if}
 				</label>

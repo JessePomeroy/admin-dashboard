@@ -84,7 +84,7 @@ async function createPost() {
 			documentKey: newBlogDocumentKey("post"),
 			draft: {
 				...emptyPostDraft(),
-				...(compactMode ? { authorSource: "siteSettings" } : {}),
+				...(compactMode ? { authorSource: "siteSettings", summarySource: "body" } : {}),
 				title,
 				slug: slugifyBlogTitle(title),
 			},

@@ -143,6 +143,7 @@ export interface PostDraft {
 	presentation?: PostPresentation;
 	displayPublishedAt?: number;
 	summary?: string;
+	summarySource?: "body";
 	seoTitle?: string;
 	seoDescription?: string;
 	brief?: string;
@@ -453,6 +454,7 @@ export function copyPostDraft(payload: PostDraft | undefined): PostDraft {
 		presentation: payload.presentation ?? "standard",
 		displayPublishedAt: payload.displayPublishedAt ?? Date.now(),
 		summary: payload.summary ?? "",
+		...(payload.summarySource ? { summarySource: payload.summarySource } : {}),
 		seoTitle: payload.seoTitle ?? "",
 		seoDescription: payload.seoDescription ?? "",
 		brief: payload.brief ?? "",
@@ -496,6 +498,7 @@ export function serializePostDraft(payload: PostDraft) {
 		presentation: payload.presentation ?? null,
 		displayPublishedAt: payload.displayPublishedAt ?? null,
 		summary: payload.summary ?? null,
+		...(payload.summarySource ? { summarySource: payload.summarySource } : {}),
 		seoTitle: payload.seoTitle ?? null,
 		seoDescription: payload.seoDescription ?? null,
 		brief: payload.brief ?? null,

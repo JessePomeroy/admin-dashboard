@@ -218,12 +218,14 @@ identify existing Convex records, not a connection to a content provider.
 ## Compact blog authoring
 
 Hosts can opt into `editor.blog.mode: "compact"` after deploying the CRM API's
-`authorSource: "siteSettings"` contract. Compact authoring hides date, summary,
+`authorSource: "siteSettings"` and `summarySource: "body"` contracts. Compact authoring hides date, summary,
 format/presentation, and author/category management while retaining SEO and all
 existing metadata. New or authorless posts use the same site's published
 `artistName`; explicit author references remain unchanged. Missing excerpts are
-derived from current body text only at publication (or the title for image-only
-posts), so saving an early draft does not freeze the excerpt. Full mode remains
+derived from current body text at publication (or the title for image-only
+posts). Saved automatic-excerpt ownership survives failed publication and reload,
+so each publication uses the latest body. Editing a summary explicitly in full
+mode clears that ownership and preserves the custom excerpt. Full mode remains
 the default. Both modes use an explicit URL-generation button and retain the
 published-URL change acknowledgement.
 
