@@ -23,7 +23,8 @@ import {
 	type PostMediaPublishIssue,
 } from "../../blogEditor";
 import { getAdminConfig } from "../../config";
-import { type PortfolioMediaAsset, type PortfolioMediaPage } from "../../portfolioEditor";
+import { createEditorMedia } from "../../editorMedia.svelte";
+import type { PortfolioMediaAsset } from "../../portfolioEditor";
 import "../../styles/editorial-page.css";
 import BlogMediaReview from "./BlogMediaReview.svelte";
 import BlogWorkbench from "./BlogWorkbench.svelte";
@@ -117,19 +118,17 @@ let mediaAssetIds = $derived([...new Set(mediaPlacements.map((placement) => plac
 const mediaQuery = getManyMediaAssets
 	? useQuery(getManyMediaAssets, () => ({ siteUrl: config.siteUrl, ids: mediaAssetIds }))
 	: null;
-const mediaListQuery = listMediaAssets
-	? useQuery(listMediaAssets, {
-			siteUrl: config.siteUrl,
-			paginationOpts: { numItems: 100, cursor: null },
-		})
-	: null;
+// Linked-image loading/review stays independent of the current library page.
+const mediaLibrary = createEditorMedia({
+	siteUrl: config.siteUrl,
+	list: listMediaAssets,
+	placed: undefined,
+	references: () => [],
+});
 let mediaById = $derived(new Map(
 	((mediaQuery?.data ?? []) as PortfolioMediaAsset[]).map((asset) => [asset._id, asset]),
 ));
-let readyMediaLibraryAssets = $derived(
-	(((mediaListQuery?.data as PortfolioMediaPage | undefined)?.page ?? []) as PortfolioMediaAsset[])
-		.filter((asset) => asset.status === "ready"),
-);
+let readyMediaLibraryAssets = $derived(mediaLibrary.ready);
 let readyMediaAssets = $derived([
 	...new Map([
 		...readyMediaLibraryAssets,
@@ -141,8 +140,8 @@ let linkedBodyAssetIds = $derived(new Set(
 		.filter((placement) => placement.kind === "body")
 		.map((placement) => placement.assetId),
 ));
-let mediaLibraryError = $derived(mediaListQuery?.error);
-let mediaLibraryLoading = $derived(Boolean(mediaListQuery?.isLoading));
+let mediaLibraryError = $derived(mediaLibrary.pagination?.error);
+let mediaLibraryLoading = $derived(Boolean(mediaLibrary.pagination?.loading));
 let addableReadyMediaAssets = $derived(
 	mediaLibraryLoading || mediaLibraryError
 		? []
@@ -560,6 +559,7 @@ async function restoreDocument() {
 						describedBy="body-help"
 						mediaAssets={readyMediaAssets}
 						addableMediaAssets={addableReadyMediaAssets}
+						mediaPagination={mediaLibrary.pagination}
 						{mediaBaseUrl}
 						onDocumentChange={(body) => {
 							form.body = body;

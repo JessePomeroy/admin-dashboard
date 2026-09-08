@@ -9,6 +9,7 @@ import { EditorState, NodeSelection, type Command, type Plugin } from "prosemirr
 import { EditorView, type NodeView } from "prosemirror-view";
 import { onMount } from "svelte";
 import type { PostRichTextDocument } from "../../blogEditor";
+import type { EditorMediaPagination } from "../../editorMedia.svelte";
 import {
 	blogRichTextFromProseMirror,
 	blogRichTextSchema,
@@ -31,6 +32,7 @@ let {
 	describedBy,
 	mediaAssets = [],
 	addableMediaAssets = [],
+	mediaPagination,
 	mediaBaseUrl,
 	onDocumentChange,
 }: {
@@ -40,6 +42,7 @@ let {
 	describedBy?: string;
 	mediaAssets?: PortfolioMediaAsset[];
 	addableMediaAssets?: PortfolioMediaAsset[];
+	mediaPagination?: EditorMediaPagination;
 	mediaBaseUrl?: string;
 	onDocumentChange: (nextDocument: BlogRichTextDocument) => void;
 } = $props();
@@ -505,7 +508,7 @@ onMount(() => {
 			<span class="toolbar-spacer"></span>
 			<button type="button" disabled={disabled || !canUndo} onclick={() => run(undo)}>undo</button>
 			<button type="button" disabled={disabled || !canRedo} onclick={() => run(redo)}>redo</button>
-			{#if addableMediaAssets.length > 0 && mediaBaseUrl}
+			{#if mediaBaseUrl && (mediaPagination || addableMediaAssets.length > 0)}
 				<button type="button" disabled={disabled} onclick={() => (pickerOpen = true)}>add image</button>
 			{/if}
 		</div>
@@ -530,6 +533,7 @@ onMount(() => {
 			? inspection.document.blocks.filter((block) => block.type === "image").map((block) => block.assetId)
 			: [])}
 		{mediaBaseUrl}
+		pagination={mediaPagination}
 		onChoose={addImage}
 		onClose={() => (pickerOpen = false)}
 	/>
