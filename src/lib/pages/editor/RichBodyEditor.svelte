@@ -63,6 +63,7 @@ let canRedo = $state(false);
 let editorError = $state("");
 let editorPlugins: Plugin[] = [];
 let synchronizedDocumentJson = "";
+const refreshImageViews = new Set<() => void>();
 
 function documentJson(value: PostRichTextDocument) {
 	return JSON.stringify(value);
@@ -88,7 +89,6 @@ function editorState(source: BlogRichTextDocument) {
 
 $effect(() => {
 	mediaAssets;
-	addableMediaAssets;
 	mediaBaseUrl;
 	const currentDisabled = disabled;
 	const currentInspection = inspection;
@@ -106,10 +106,9 @@ $effect(() => {
 	}
 	view.setProps({
 		editable: () => !currentDisabled,
-		nodeViews: {
-			image: (node, editorView, getPos) => imageNodeView(node, editorView, getPos),
-		},
 	});
+	// Media responses must not recreate focused inputs with uncommitted text.
+	for (const refresh of refreshImageViews) refresh();
 });
 
 function markIsActive(markName: "strong" | "emphasis" | "link") {
@@ -327,15 +326,6 @@ function imageNodeView(node: ProseMirrorNode, editorView: EditorView, getPos: ()
 	dom.className = "rich-image";
 	const preview = globalThis.document.createElement("div");
 	preview.className = "rich-image-preview";
-	const asset = mediaAssets.find((candidate) => candidate._id === node.attrs.assetId);
-	if (asset && mediaBaseUrl) {
-		const image = globalThis.document.createElement("img");
-		image.src = portfolioMediaUrl(mediaBaseUrl, asset.derivatives.card.key);
-		image.alt = "";
-		preview.append(image);
-	} else {
-		preview.textContent = "linked image";
-	}
 	const fields = globalThis.document.createElement("div");
 	fields.className = "rich-image-fields";
 	const alt = globalThis.document.createElement("input");
@@ -362,6 +352,30 @@ function imageNodeView(node: ProseMirrorNode, editorView: EditorView, getPos: ()
 		actions.append(button);
 	}
 	dom.append(preview, fields, actions);
+	let currentNode = node;
+	let previewUrl: string | undefined;
+	const refresh = () => {
+		const asset = mediaAssets.find((candidate) => candidate._id === currentNode.attrs.assetId);
+		const nextUrl = asset && mediaBaseUrl
+			? portfolioMediaUrl(mediaBaseUrl, asset.derivatives.card.key)
+			: undefined;
+		if (nextUrl !== previewUrl || !preview.hasChildNodes()) {
+			previewUrl = nextUrl;
+			if (nextUrl) {
+				const image = globalThis.document.createElement("img");
+				image.src = nextUrl;
+				image.alt = "";
+				preview.replaceChildren(image);
+			} else {
+				preview.textContent = "linked image";
+			}
+		}
+		alt.disabled = disabled;
+		caption.disabled = disabled;
+		for (const button of actions.querySelectorAll("button")) button.disabled = disabled;
+	};
+	refreshImageViews.add(refresh);
+	refresh();
 	const updateNode = () => {
 		if (disabled) return;
 		const position = getPos();
@@ -381,13 +395,13 @@ function imageNodeView(node: ProseMirrorNode, editorView: EditorView, getPos: ()
 		stopEvent: (event) => event.target instanceof HTMLInputElement || event.target instanceof HTMLButtonElement,
 		update: (next) => {
 			if (next.type !== blogRichTextSchema.nodes.image) return false;
-			alt.value = next.attrs.altText ?? "";
-			caption.value = next.attrs.caption ?? "";
-			alt.disabled = disabled;
-			caption.disabled = disabled;
-			for (const button of actions.querySelectorAll("button")) button.disabled = disabled;
+			if (next.attrs.altText !== currentNode.attrs.altText) alt.value = next.attrs.altText ?? "";
+			if (next.attrs.caption !== currentNode.attrs.caption) caption.value = next.attrs.caption ?? "";
+			currentNode = next;
+			refresh();
 			return true;
 		},
+		destroy: () => { refreshImageViews.delete(refresh); },
 	};
 }
 

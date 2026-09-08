@@ -78,6 +78,38 @@ async function editDraft() {
 }
 
 describe("blog media-library pagination", () => {
+	it.each(["Image alt text", "Image caption"])("preserves focused, uncommitted %s when a pending media page arrives", async (label) => {
+		const { queries, mutation } = await render(mediaPage([mediaAsset("first")], "second"));
+		await openPicker();
+		button("next", picker()).click();
+		await tick();
+		const pending = queries.latest();
+		button("close", picker()).click();
+		await tick();
+		const selector = `input[aria-label="${label}"]`;
+		const input = document.querySelector<HTMLInputElement>(selector)!;
+		input.focus();
+		input.value = "Pending image text";
+		input.dispatchEvent(new Event("input", { bubbles: true }));
+		input.setSelectionRange(7, 12);
+		queries.emit(pending, mediaPage([mediaAsset("older")]));
+		await tick();
+		expect(document.querySelector(selector)).toBe(input);
+		expect(document.activeElement).toBe(input);
+		expect(input.value).toBe("Pending image text");
+		expect([input.selectionStart, input.selectionEnd]).toEqual([7, 12]);
+		expect(mutation).not.toHaveBeenCalled();
+		input.dispatchEvent(new Event("change", { bubbles: true }));
+		await tick();
+		button("save draft").click();
+		await tick();
+		expect(mutation).toHaveBeenCalledWith("post:save", expect.objectContaining({
+			draft: expect.objectContaining({ body: expect.objectContaining({ blocks: expect.arrayContaining([
+				expect.objectContaining({ assetId: "attached", [label === "Image alt text" ? "altText" : "caption"]: "Pending image text" }),
+			]) }) }),
+		}));
+	});
+
 	it("inserts beyond the first 100 assets without remounting the body, losing undo history or dropping linked images", async () => {
 		const firstAssets = Array.from({ length: 100 }, (_, index) => mediaAsset(`asset-${index + 1}`));
 		const { queries, mutation } = await render(mediaPage(firstAssets, "older-cursor"));
