@@ -1,9 +1,12 @@
 <script lang="ts">
 import PortfolioGalleryEditor from "./PortfolioGalleryEditor.svelte";
+import PortfolioWorkbench from "./PortfolioWorkbench.svelte";
 
 let { galleryId }: { galleryId: string } = $props();
 </script>
 
-{#key galleryId}
-	<PortfolioGalleryEditor {galleryId} />
-{/key}
+<PortfolioWorkbench selectedGalleryId={galleryId}>
+	{#key galleryId}
+		<PortfolioGalleryEditor {galleryId} />
+	{/key}
+</PortfolioWorkbench>

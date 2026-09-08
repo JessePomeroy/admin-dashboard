@@ -21,7 +21,6 @@ import {
 import PortfolioGalleryImages from "./PortfolioGalleryImages.svelte";
 import PortfolioMediaPicker from "./PortfolioMediaPicker.svelte";
 import PortfolioPublishReview from "./PortfolioPublishReview.svelte";
-import PortfolioWorkbench from "./PortfolioWorkbench.svelte";
 
 type SaveState =
 	| "loading"
@@ -434,7 +433,6 @@ function reloadServerDraft() {
 
 <svelte:head><title>Edit portfolio gallery — {config.siteName}</title></svelte:head>
 
-<PortfolioWorkbench selectedGalleryId={galleryId}>
 {#if editorError}
 	<p class="alert page-alert" role="alert">Could not load this gallery draft. Refresh this page to try again.</p>
 {:else if !initialized}
@@ -528,7 +526,6 @@ function reloadServerDraft() {
 {#if pickerOpen}
 	<PortfolioMediaPicker assets={media.ready} {selectedAssetIds} mediaBaseUrl={portfolioConfig.mediaBaseUrl} pagination={media.pagination} onChoose={addAsset} onClose={() => (pickerOpen = false)} />
 {/if}
-</PortfolioWorkbench>
 
 <style>
 	.loading, .page-alert { margin: 32px; } .loading { padding: 16px 8px; color: var(--admin-text-muted); }

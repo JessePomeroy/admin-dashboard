@@ -35,14 +35,14 @@ const editor = vi.hoisted(() => ({
 }));
 
 // Keep the public editor and its recovery/autosave logic real. Only external
-// transport and unrelated media/workbench presentation are replaced.
+// transport and unrelated media presentation are replaced.
 vi.mock("$app/navigation", () => ({ goto: editor.goto }));
 vi.mock("../src/lib/config", () => ({
 	getAdminConfig: () => ({
 		siteUrl: "angelsrest.test",
 		siteName: "Test portfolio",
 		api: { portfolioEditor: {
-			getEditorState: "get", saveDraft: "save",
+			getEditorState: "get", saveDraft: "save", listForEditor: "list",
 			...(editor.actionsEnabled ? { publish: "publish", remove: "remove" } : {}),
 		} },
 		editor: { portfolio: {
@@ -55,8 +55,11 @@ vi.mock("../src/lib/adminClient", () => ({
 	useAdminClient: () => ({ mutation: editor.mutation }),
 }));
 vi.mock("convex-svelte", () => ({
-	useQuery: (_query: unknown, args: () => { galleryId: string }) => ({
+	useQuery: (query: unknown, args: () => { galleryId: string }) => ({
 		get data() {
+			if (query === "list") return Object.values(editor.data).map((gallery) => ({
+				...gallery, updatedAt: 1,
+			}));
 			return editor.data[args().galleryId];
 		},
 		error: undefined,
@@ -65,13 +68,6 @@ vi.mock("convex-svelte", () => ({
 vi.mock("../src/lib/editorMedia.svelte", () => ({
 	createEditorMedia: () => ({ byId: new Map(), ready: [], error: undefined }),
 }));
-vi.mock(
-	"../src/lib/pages/editor/PortfolioWorkbench.svelte",
-	() => ({
-		default: (anchor: unknown, props: { children?: (anchor: unknown) => void }) =>
-			props.children?.(anchor),
-	}),
-);
 vi.mock(
 	"../src/lib/pages/editor/PortfolioGalleryImages.svelte",
 	() => ({ default: () => undefined }),
@@ -160,6 +156,21 @@ describe("portfolio gallery document identity", () => {
 		button.click();
 		await vi.advanceTimersByTimeAsync(0);
 	}
+
+	it("preserves collection search and filter while switching the selected document", async () => {
+		const search = document.querySelector<HTMLInputElement>('input[type="search"]');
+		if (!search) throw new Error("Expected the real collection search input");
+		search.value = "a";
+		search.dispatchEvent(new Event("input", { bubbles: true }));
+		await clickButton("draft");
+		expect(document.querySelectorAll(".gallery-list a")).toHaveLength(2);
+		await navigate("B");
+		expect(document.querySelector('input[type="search"]')).toBe(search);
+		expect(search.value).toBe("a");
+		expect(document.querySelector('.filters [aria-pressed="true"]')?.textContent).toBe("draft");
+		expect(document.querySelector('.gallery-list [aria-current="page"]')?.getAttribute("href")).toBe("/admin/editor/portfolio/B");
+		expect(titleInput().value).toBe("Beta");
+	});
 
 	it.each(["publish", "remove"] as const)("ignores a destroyed editor's %s completion", async (action) => {
 		await enableActions();
@@ -274,7 +285,7 @@ describe("portfolio gallery document identity", () => {
 		);
 	});
 
-	it("preserves an edit through a same-gallery data refresh and saves normally", async () => {
+	it("preserves an edit while the gallery ID stays the same and saves normally", async () => {
 		await editTitle("Alpha edited");
 		const inputBefore = titleInput();
 		await navigate("A");
