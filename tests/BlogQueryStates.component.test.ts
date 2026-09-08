@@ -262,8 +262,12 @@ describe("Blog query states", () => {
 
 		expect(document.body.textContent).toContain("Could not load the ready image library.");
 		expect(document.body.textContent).not.toContain("private media detail");
-		expect(Array.from(document.querySelectorAll("button"))
-			.some((candidate) => candidate.textContent?.trim() === "add image")).toBe(false);
+		await vi.waitFor(() => expect(button("add image")).toBeDefined());
+		button("add image")!.click();
+		await tick();
+		expect(document.querySelector('[role="dialog"] [role="alert"]')?.textContent)
+			.toContain("Unable to load this media page.");
+		expect(button("retry")?.disabled).toBe(false);
 	});
 
 	it("keeps main-image review and body-image editing at separate authorities", async () => {
