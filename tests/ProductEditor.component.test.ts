@@ -578,6 +578,18 @@ function enablePublication() {
 	mocks.publicationEnabled = true;
 	mocks.publicationRefsEnabled = true;
 }
+function legacyDetail() {
+	return {
+		productId: "product-1",
+		productKey: "print-one",
+		productKind: "print",
+		slug: "lake-print",
+		draft: revision,
+		published: null,
+		updatedAt: 1,
+		publishedAt: null,
+	};
+}
 function graphDetail(
 	draft: typeof graphRevision | null = graphRevision,
 	published: typeof graphRevision | null = null,
@@ -1072,16 +1084,7 @@ describe("draft-only product editor", () => {
 	});
 
 	it("saves an explicitly edited draft with its CAS revision and ordered variants", async () => {
-		mocks.detailData = {
-			productId: "product-1",
-			productKey: "print-one",
-			productKind: "print",
-			slug: "lake-print",
-			draft: revision,
-			published: null,
-			updatedAt: 1,
-			publishedAt: null,
-		};
+		mocks.detailData = legacyDetail();
 		await mountDetail();
 		expect(document.querySelector(".settings-header .description")).toBeNull();
 		expect(button("publish")).toBeUndefined();
@@ -1118,17 +1121,7 @@ describe("draft-only product editor", () => {
 	});
 
 	it("saves migrated V2 print drafts without dropping imported graph relations", async () => {
-		mocks.detailData = {
-			productId: "product-1",
-			productKey: "sanity.catalog.print",
-			productKind: "print",
-			graphVersion: 2,
-			slug: "avant-alien-2-2",
-			draft: graphRevision,
-			published: null,
-			updatedAt: 1,
-			publishedAt: null,
-		};
+		mocks.detailData = graphDetail(graphRevision, null, 1);
 		await mountDetail();
 		expect(document.querySelector(".settings-header .description")).toBeNull();
 		expect(document.querySelector(".publication")).toBeNull();
@@ -2864,16 +2857,7 @@ describe("draft-only product editor", () => {
 	});
 
 	it("accepts a delayed own-save query echo without replacing the next local edit", async () => {
-		mocks.detailData = {
-			productId: "product-1",
-			productKey: "print-one",
-			productKind: "print",
-			slug: "lake-print",
-			draft: revision,
-			published: null,
-			updatedAt: 1,
-			publishedAt: null,
-		};
+		mocks.detailData = legacyDetail();
 		mocks.mutation
 			.mockResolvedValueOnce({
 				productId: "product-1",
@@ -2897,19 +2881,14 @@ describe("draft-only product editor", () => {
 		name!.dispatchEvent(new Event("input", { bubbles: true }));
 		await tick();
 		await updateDetailQuery({
-			productId: "product-1",
-			productKey: "print-one",
-			productKind: "print",
-			slug: "lake-print",
+			...legacyDetail(),
 			draft: {
 				...revision,
 				revisionId: "revision-2",
 				title: "First saved title",
 				createdAt: 2,
 			},
-			published: null,
 			updatedAt: 2,
-			publishedAt: null,
 		});
 
 		expect(input("product name")?.value).toBe("A later local edit");
@@ -2933,16 +2912,7 @@ describe("draft-only product editor", () => {
 	});
 
 	it("surfaces save conflicts without replacing local work", async () => {
-		mocks.detailData = {
-			productId: "product-1",
-			productKey: "print-one",
-			productKind: "print",
-			slug: "lake-print",
-			draft: revision,
-			published: null,
-			updatedAt: 1,
-			publishedAt: null,
-		};
+		mocks.detailData = legacyDetail();
 		mocks.mutation.mockRejectedValueOnce(
 			new Error("Catalog draft conflict: reload before saving"),
 		);
@@ -2962,16 +2932,7 @@ describe("draft-only product editor", () => {
 	});
 
 	it("accepts USD prices and blocks values beyond two decimal places", async () => {
-		mocks.detailData = {
-			productId: "product-1",
-			productKey: "print-one",
-			productKind: "print",
-			slug: "lake-print",
-			draft: revision,
-			published: null,
-			updatedAt: 1,
-			publishedAt: null,
-		};
+		mocks.detailData = legacyDetail();
 		await mountDetail();
 		const name = input("product name");
 		name!.value = "Lake print revised";
@@ -3003,16 +2964,7 @@ describe("draft-only product editor", () => {
 	});
 
 	it("does not let a hidden invalid frame multiplier block an otherwise valid save", async () => {
-		mocks.detailData = {
-			productId: "product-1",
-			productKey: "print-one",
-			productKind: "print",
-			slug: "lake-print",
-			draft: revision,
-			published: null,
-			updatedAt: 1,
-			publishedAt: null,
-		};
+		mocks.detailData = legacyDetail();
 		await mountDetail();
 
 		const name = input("product name");
@@ -3047,16 +2999,7 @@ describe("draft-only product editor", () => {
 	});
 
 	it("keeps the active draft when discard confirmation is cancelled", async () => {
-		mocks.detailData = {
-			productId: "product-1",
-			productKey: "print-one",
-			productKind: "print",
-			slug: "lake-print",
-			draft: revision,
-			published: null,
-			updatedAt: 1,
-			publishedAt: null,
-		};
+		mocks.detailData = legacyDetail();
 		const confirm = vi.spyOn(globalThis, "confirm").mockReturnValue(false);
 		await mountDetail();
 
@@ -3070,16 +3013,7 @@ describe("draft-only product editor", () => {
 	});
 
 	it("preserves a restarted draft edit across delayed discard and restart query echoes", async () => {
-		mocks.detailData = {
-			productId: "product-1",
-			productKey: "print-one",
-			productKind: "print",
-			slug: "lake-print",
-			draft: revision,
-			published: null,
-			updatedAt: 1,
-			publishedAt: null,
-		};
+		mocks.detailData = legacyDetail();
 		vi.spyOn(globalThis, "confirm").mockReturnValue(true);
 		mocks.mutation
 			.mockResolvedValueOnce({ productId: "product-1", draftRevisionId: null })
@@ -3107,22 +3041,16 @@ describe("draft-only product editor", () => {
 		await tick();
 
 		await updateDetailQuery({
-			productId: "product-1",
-			productKey: "print-one",
-			productKind: "print",
+			...legacyDetail(),
 			slug: null,
 			draft: null,
-			published: null,
 			updatedAt: 2,
-			publishedAt: null,
 		});
 		expect(input("product name")?.value).toBe("Edit after restarting");
 		expect(document.querySelector('[role="alert"]')).toBeNull();
 
 		await updateDetailQuery({
-			productId: "product-1",
-			productKey: "print-one",
-			productKind: "print",
+			...legacyDetail(),
 			slug: null,
 			draft: {
 				...revision,
@@ -3137,9 +3065,7 @@ describe("draft-only product editor", () => {
 				variants: [],
 				createdAt: 3,
 			},
-			published: null,
 			updatedAt: 3,
-			publishedAt: null,
 		});
 
 		expect(input("product name")?.value).toBe("Edit after restarting");
@@ -3182,14 +3108,8 @@ describe("draft-only product editor", () => {
 			status: "enabled",
 		}));
 		mocks.detailData = {
-			productId: "product-1",
-			productKey: "print-one",
-			productKind: "print",
-			slug: "lake-print",
+			...legacyDetail(),
 			draft: { ...revision, variantCount: variants.length, variants },
-			published: null,
-			updatedAt: 1,
-			publishedAt: null,
 		};
 		await mountDetail();
 
@@ -3202,14 +3122,10 @@ describe("draft-only product editor", () => {
 
 	it("shows a truthful discarded state and can start a replacement draft", async () => {
 		mocks.detailData = {
-			productId: "product-1",
-			productKey: "print-one",
-			productKind: "print",
+			...legacyDetail(),
 			slug: null,
 			draft: null,
-			published: null,
 			updatedAt: 2,
-			publishedAt: null,
 		};
 		await mountDetail();
 		expect(
