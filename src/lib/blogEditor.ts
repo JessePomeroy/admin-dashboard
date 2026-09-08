@@ -152,6 +152,7 @@ export interface PostDraft {
 	equipment: PostTechnicalItem[];
 	materials: PostTechnicalItem[];
 	authorDocumentId?: string;
+	authorSource?: "siteSettings";
 	categories: PostCategoryReferenceDraft[];
 	mainImage?: PostMainImageDraft;
 	body: PostRichTextDocument;
@@ -253,7 +254,8 @@ export function slugifyBlogTitle(value: string) {
 		.toLowerCase()
 		.replace(/[^a-z0-9]+/g, "-")
 		.replace(/^-+|-+$/g, "")
-		.slice(0, 96);
+		.slice(0, 96)
+		.replace(/-+$/g, "");
 }
 
 export function newBlogDocumentKey(kind: BlogDocumentKind) {
@@ -331,6 +333,21 @@ export function emptyPostDraft(): PostDraft {
 		categories: [],
 		body: emptyPostBody(),
 	};
+}
+
+/** Public excerpts contain body text, never image metadata or rich markup. */
+export function postBodyExcerpt(body: PostRichTextDocument) {
+	const text = (children: unknown) => Array.isArray(children)
+		? children.map(child => isRecord(child) && child.type === "text" && typeof child.text === "string" ? child.text : "").join("")
+		: "";
+	return body.blocks.flatMap(block => {
+		if (!isRecord(block)) return [];
+		if (block.type === "paragraph" || block.type === "heading" || block.type === "quote") return [text(block.children)];
+		if (block.type === "list" && Array.isArray(block.items)) {
+			return block.items.map(item => isRecord(item) ? text(item.children) : "");
+		}
+		return [];
+	}).join(" ").replace(/\s+/g, " ").trim().slice(0, 320).trim();
 }
 
 export function emptyBlogSupportingDraft(kind: BlogSupportingKind): BlogSupportingDraft {
@@ -445,6 +462,7 @@ export function copyPostDraft(payload: PostDraft | undefined): PostDraft {
 		equipment: copyPostTechnicalItems(payload.equipment),
 		materials: copyPostTechnicalItems(payload.materials),
 		authorDocumentId: payload.authorDocumentId,
+		...(payload.authorSource ? { authorSource: payload.authorSource } : {}),
 		categories: copyPostCategories(payload.categories),
 		mainImage: payload.mainImage ? { ...payload.mainImage } : undefined,
 		body: copyPostBody(payload.body),
@@ -487,6 +505,7 @@ export function serializePostDraft(payload: PostDraft) {
 		equipment: copyPostTechnicalItems(payload.equipment),
 		materials: copyPostTechnicalItems(payload.materials),
 		authorDocumentId: payload.authorDocumentId ?? null,
+		...(payload.authorSource ? { authorSource: payload.authorSource } : {}),
 		categories: copyPostCategories(payload.categories),
 		mainImage: payload.mainImage ?? null,
 		body: payload.body ?? emptyPostBody(),
@@ -591,7 +610,12 @@ export function validatePostMetadataForPublish(payload: PostDraft): PostFieldErr
 	if ((payload.seoDescription?.length ?? 0) > 320) {
 		errors.seoDescription = "SEO description must be 320 characters or fewer.";
 	}
-	if (!payload.authorDocumentId) errors.authorDocumentId = "Choose an author before publishing.";
+	if (!payload.authorDocumentId && payload.authorSource !== "siteSettings") {
+		errors.authorDocumentId = "Choose an author before publishing.";
+	}
+	if (payload.authorDocumentId && payload.authorSource) {
+		errors.authorDocumentId = "Choose either an explicit author or the Site Settings author.";
+	}
 	if ((payload.body?.blocks.length ?? 0) === 0) {
 		errors.body = "Add body text before publishing.";
 	}

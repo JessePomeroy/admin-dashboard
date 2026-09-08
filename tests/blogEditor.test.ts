@@ -14,6 +14,7 @@ import {
 	newBlogDocumentKey,
 	presentationMatchesFormat,
 	postMediaReviewPlacements,
+	postBodyExcerpt,
 	resolveAuthorBioPlainTextEdit,
 	serializeBlogSupportingDraft,
 	serializePostDraft,
@@ -28,6 +29,27 @@ import {
 } from "../src/lib/blogEditor";
 
 describe("Blog editor helpers", () => {
+	it("preserves the explicit owner source through copying and serialization without mixing author kinds", () => {
+		const owner: PostDraft = { ...emptyPostDraft(), title: "Owner", slug: "owner", summary: "An owner note.", authorSource: "siteSettings", body: { version: 1, blocks: [{ type: "paragraph", key: "body", children: [] }] } };
+		expect(copyPostDraft(owner)).toMatchObject({ authorSource: "siteSettings" });
+		expect(JSON.parse(serializePostDraft(owner))).toMatchObject({ authorSource: "siteSettings" });
+		expect(validatePostMetadataForPublish(owner)).toEqual({});
+		expect(validatePostMetadataForPublish({ ...owner, authorDocumentId: "explicit-author" })).toHaveProperty("authorDocumentId");
+		expect(JSON.parse(serializePostDraft(emptyPostDraft()))).not.toHaveProperty("authorSource");
+	});
+
+	it("builds bounded plain excerpts from body paragraphs and lists without image metadata", () => {
+		const body = { version: 1 as const, blocks: [
+			{ type: "heading", children: [{ type: "text", text: "A heading" }] },
+			{ type: "list", items: [{ children: [{ type: "text", text: "First point" }] }, { children: [{ type: "text", text: "Second point" }] }] },
+			{ type: "image", altText: "Not an excerpt", caption: "Private caption" },
+			{ type: "paragraph", children: [{ type: "text", text: "  Closing\nwords.  " }] },
+		] };
+		expect(postBodyExcerpt(body)).toBe("A heading First point Second point Closing words.");
+		expect(postBodyExcerpt({ version: 1, blocks: [{ type: "paragraph", children: [{ type: "text", text: "x".repeat(321) }] }] })).toHaveLength(320);
+		expect(postBodyExcerpt({ version: 1, blocks: [{ type: "image", altText: "Alt only" }] })).toBe("");
+	});
+
 	it("builds bounded one-paragraph Author bios from plain text", () => {
 		const bio = authorBioFromText("  Writes about light.  ");
 		expect(bio).toEqual({
@@ -188,6 +210,7 @@ describe("Blog editor helpers", () => {
 		vi.spyOn(Date, "now").mockReturnValue(1_800_000_000_000);
 		vi.spyOn(Math, "random").mockReturnValue(0.123456);
 		expect(slugifyBlogTitle(" Café Field Notes! ")).toBe("cafe-field-notes");
+		expect(slugifyBlogTitle(`${"a".repeat(95)} more words`)).toBe("a".repeat(95));
 		expect(newBlogDocumentKey("author")).toMatch(/^author-[a-z0-9]+-[a-z0-9]+$/);
 		expect(newBlogDocumentKey("post")).toMatch(/^post-[a-z0-9]+-[a-z0-9]+$/);
 		vi.restoreAllMocks();

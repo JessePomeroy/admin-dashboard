@@ -484,6 +484,8 @@ export interface AdminEditorConfig {
 	};
 	/** Enables Blog authoring for Authors, Categories, and Posts. */
 	blog?: {
+		/** Compact owner-authored posts require the backend's Site Settings author-source contract. */
+		mode?: "full" | "compact";
 		/** Shared workspace route; defaults to `/admin/editor/blog`. */
 		baseHref?: string;
 		/** Public origin for immutable CMS image derivatives, without a trailing slash. */

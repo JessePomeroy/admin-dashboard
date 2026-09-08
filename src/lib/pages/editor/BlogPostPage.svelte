@@ -10,6 +10,7 @@ import {
 	defaultPresentationForFormat,
 	hasPostErrors,
 	postMediaReviewPlacements,
+	postBodyExcerpt,
 	serializePostDraft,
 	slugifyBlogTitle,
 	updatePostMediaAltText,
@@ -53,6 +54,7 @@ if (!blogApi || !postApi || !blogConfig) {
 }
 
 const baseHref = blogConfig.baseHref ?? "/admin/editor/blog";
+const compactMode = blogConfig.mode === "compact";
 const mediaBaseUrl = blogConfig.mediaBaseUrl;
 const getManyMediaAssets = mediaBaseUrl ? config.api.mediaAssets?.getManyForEditor : undefined;
 const listMediaAssets = mediaBaseUrl ? config.api.mediaAssets?.listForEditor : undefined;
@@ -62,11 +64,11 @@ if (mediaBaseUrl && !getManyMediaAssets) {
 const postEditorApi = postApi;
 const client = useAdminClient();
 const editorQuery = useQuery(postEditorApi.getEditorState, () => ({ documentId }));
-const authorsQuery = useQuery(blogApi.listForEditor, {
+const authorsQuery = compactMode ? null : useQuery(blogApi.listForEditor, {
 	siteUrl: config.siteUrl,
 	kind: "author",
 });
-const categoriesQuery = useQuery(blogApi.listForEditor, {
+const categoriesQuery = compactMode ? null : useQuery(blogApi.listForEditor, {
 	siteUrl: config.siteUrl,
 	kind: "category",
 });
@@ -75,13 +77,13 @@ let editorState = $derived(editorQuery.data as PostEditorState | undefined);
 let editorError = $derived(editorQuery.error);
 let form = $state<PostDraft>(copyPostDraft(undefined));
 let authorDocuments = $derived(
-	((authorsQuery.data as BlogSupportingEditorSummary[] | undefined) ?? []),
+	((authorsQuery?.data as BlogSupportingEditorSummary[] | undefined) ?? []),
 );
 let categoryDocuments = $derived(
-	((categoriesQuery.data as BlogSupportingEditorSummary[] | undefined) ?? []),
+	((categoriesQuery?.data as BlogSupportingEditorSummary[] | undefined) ?? []),
 );
-let referenceError = $derived(authorsQuery.error || categoriesQuery.error);
-let referenceLoading = $derived(authorsQuery.isLoading || categoriesQuery.isLoading);
+let referenceError = $derived(authorsQuery?.error || categoriesQuery?.error);
+let referenceLoading = $derived(authorsQuery?.isLoading || categoriesQuery?.isLoading);
 let authors = $derived(
 	blogSupportingReferenceOptions(
 		authorDocuments,
@@ -180,8 +182,15 @@ $effect(() => {
 	saveState = nextState;
 });
 
-function normalizedDraft(): PostDraft {
+function normalizedDraft(publishing = false): PostDraft {
 	const draft = copyPostDraft(form);
+	if (compactMode) {
+		if (!draft.authorDocumentId) draft.authorSource = "siteSettings";
+		// Wait until publication so an early draft save cannot freeze a stale excerpt.
+		if (publishing && !draft.summary?.trim()) {
+			draft.summary = postBodyExcerpt(draft.body) || draft.title?.trim().slice(0, 320) || "";
+		}
+	}
 	return {
 		...draft,
 		authorDocumentId: draft.authorDocumentId || undefined,
@@ -202,6 +211,7 @@ function updateMediaAltText(item: { id: string }, value: string) {
 }
 
 function updateSlugFromTitle() {
+	if (archived || saveState === "saving" || publishState === "publishing" || lifecycleState === "working" || !form.title?.trim()) return;
 	form.slug = slugifyBlogTitle(form.title ?? "");
 }
 
@@ -262,7 +272,7 @@ async function saveDraft() {
 
 async function publishDraft() {
 	if (!editorState || archived) return;
-	const draft = normalizedDraft();
+	const draft = normalizedDraft(true);
 	fieldErrors = validatePostMetadataForPublish(draft);
 	mediaIssues = validatePostMediaForPublish(draft);
 	if (hasPostErrors(fieldErrors) || mediaIssues.length > 0) return;
@@ -397,27 +407,33 @@ async function restoreDocument() {
 				<span>01</span>
 				<div>
 					<h2 id="identity-heading">identity</h2>
-					<p>Public title, URL, date, and summary for this journal entry.</p>
+					<p>{compactMode ? "Public title and URL for this journal entry." : "Public title, URL, date, and summary for this journal entry."}</p>
 				</div>
 			</div>
 			<div class="fields two">
 				<label>
-					post title
-					<input maxlength="200" bind:value={form.title} aria-invalid={Boolean(fieldErrors.title)} onblur={updateSlugFromTitle} />
+					<span class="field-heading">post title</span>
+					<input maxlength="200" bind:value={form.title} aria-invalid={Boolean(fieldErrors.title)} disabled={archived} />
 					{#if fieldErrors.title}<small class="field-error">{fieldErrors.title}</small>{/if}
 				</label>
-				<label>
-					URL name
-					<input maxlength="96" bind:value={form.slug} aria-invalid={Boolean(fieldErrors.slug)} />
+				<div class="url-field">
+					<div class="field-heading">
+						<label for="post-slug">URL name</label>
+						<button type="button" class="generate-url" onclick={updateSlugFromTitle} disabled={archived || saveState === "saving" || publishState === "publishing" || lifecycleState === "working" || !form.title?.trim()}>generate url</button>
+					</div>
+					<input id="post-slug" maxlength="96" bind:value={form.slug} aria-invalid={Boolean(fieldErrors.slug)} disabled={archived} />
 					<small>Lowercase words separated by hyphens.</small>
 					{#if fieldErrors.slug}<small class="field-error">{fieldErrors.slug}</small>{/if}
-				</label>
+				</div>
+				{#if !compactMode}
 				<label>
 					public date
 					<input type="date" value={formatDateForInput(form.displayPublishedAt)} aria-invalid={Boolean(fieldErrors.displayPublishedAt)} onchange={(event) => updateDisplayDate(event.currentTarget.value)} />
 					{#if fieldErrors.displayPublishedAt}<small class="field-error">{fieldErrors.displayPublishedAt}</small>{/if}
 				</label>
+				{/if}
 			</div>
+			{#if !compactMode}
 			<div class="fields">
 				<label>
 					summary
@@ -426,8 +442,15 @@ async function restoreDocument() {
 					{#if fieldErrors.summary}<small class="field-error">{fieldErrors.summary}</small>{/if}
 				</label>
 			</div>
+			{:else}
+				<p class="metadata-note empty-inline">New posts use your published Site Settings name, an automatic date, and an excerpt from the body. Existing metadata is preserved.</p>
+				{#each [fieldErrors.format, fieldErrors.presentation, fieldErrors.displayPublishedAt, fieldErrors.summary, fieldErrors.authorDocumentId].filter(Boolean) as message}
+					<p class="error" role="alert">{message}</p>
+				{/each}
+			{/if}
 		</section>
 
+		{#if !compactMode}
 		<section aria-labelledby="structure-heading">
 			<div class="section-heading">
 				<span>02</span>
@@ -480,8 +503,8 @@ async function restoreDocument() {
 				<div class="fields two">
 					<label>
 						author
-						<select bind:value={form.authorDocumentId} aria-invalid={Boolean(fieldErrors.authorDocumentId)}>
-							<option value="">choose an author</option>
+						<select bind:value={form.authorDocumentId} aria-invalid={Boolean(fieldErrors.authorDocumentId)} onchange={() => { if (form.authorDocumentId) form.authorSource = undefined; }}>
+							<option value="">{form.authorSource === "siteSettings" ? "Site Settings author" : "choose an author"}</option>
 							{#each authors as author}
 								<option value={author.documentId}>{supportingOptionLabel(author)}</option>
 							{/each}
@@ -507,10 +530,11 @@ async function restoreDocument() {
 				</div>
 			{/if}
 		</section>
+		{/if}
 
 		<section aria-labelledby="seo-heading">
 			<div class="section-heading">
-				<span>04</span>
+				<span>{compactMode ? "02" : "04"}</span>
 				<div>
 					<h2 id="seo-heading">search preview text</h2>
 					<p>Optional overrides. If left blank, the public site can fall back to the Post title and summary.</p>
@@ -534,7 +558,7 @@ async function restoreDocument() {
 
 		<section aria-labelledby="body-heading">
 			<div class="section-heading">
-				<span>05</span>
+				<span>{compactMode ? "03" : "05"}</span>
 				<div>
 					<h2 id="body-heading">body</h2>
 					<p>Write and format the article.</p>
@@ -573,7 +597,7 @@ async function restoreDocument() {
 
 		<section aria-labelledby="media-heading">
 			<div class="section-heading">
-				<span>06</span>
+				<span>{compactMode ? "04" : "06"}</span>
 				<div>
 					<h2 id="media-heading">image review</h2>
 					<p>Review the main image alt text here. Body-image order, alt text, and captions are edited in the rich body above.</p>
@@ -599,7 +623,7 @@ async function restoreDocument() {
 		{#if slugChanged}
 			<section aria-labelledby="slug-change-heading">
 				<div class="section-heading">
-					<span>07</span>
+					<span>{compactMode ? "05" : "07"}</span>
 					<div>
 						<h2 id="slug-change-heading">public URL change</h2>
 						<p>Publishing will retain the old URL and point it at the new slug.</p>
@@ -615,7 +639,7 @@ async function restoreDocument() {
 		{#if editorState.draft}
 			<section aria-labelledby="draft-actions-heading">
 				<div class="section-heading">
-					<span>{slugChanged ? "08" : "07"}</span>
+					<span>{compactMode ? (slugChanged ? "06" : "05") : (slugChanged ? "08" : "07")}</span>
 					<div>
 						<h2 id="draft-actions-heading">draft actions</h2>
 						<p>Discard the current draft and return to the published version.</p>
@@ -627,7 +651,7 @@ async function restoreDocument() {
 
 		<section aria-labelledby="lifecycle-heading">
 			<div class="section-heading">
-				<span>{slugChanged ? "09" : editorState.draft ? "08" : "07"}</span>
+				<span>{String((compactMode ? 5 : 7) + (slugChanged ? 1 : 0) + (editorState.draft ? 1 : 0)).padStart(2, "0")}</span>
 				<div>
 					<h2 id="lifecycle-heading">visibility and recovery</h2>
 					<p>Unpublish removes the public version. Archive hides this Post from editor lists while keeping it recoverable.</p>
@@ -647,6 +671,13 @@ async function restoreDocument() {
 </BlogWorkbench>
 
 <style>
+	.field-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 28px; }
+	.url-field { display: flex; flex-direction: column; gap: 6px; color: var(--admin-text-muted); font-size: .72rem; }
+	.metadata-note { margin-top: 14px; font-size: .72rem; line-height: 1.5; }
+	button.generate-url { min-height: 0; border: 0; padding: 4px 0; background: transparent; color: var(--admin-accent-strong); font-size: .68rem; text-underline-offset: 3px; }
+	button.generate-url:hover:not(:disabled) { background: transparent; text-decoration: underline; }
+	button.generate-url:active:not(:disabled) { transform: translateY(1px); }
+	.url-field input:focus-visible, button.generate-url:focus-visible { outline: 2px solid var(--admin-accent-strong); outline-offset: 2px; }
 	.loading {
 		padding: 48px 40px;
 		color: var(--admin-text-muted);
