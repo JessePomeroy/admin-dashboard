@@ -133,6 +133,16 @@ function response(body: unknown, init: ResponseInit = {}) {
 	return Response.json(body, init);
 }
 
+function storagePendingFetch() {
+	return vi.fn()
+		.mockResolvedValueOnce(response(journalStatus("storage_pending")))
+		.mockResolvedValueOnce(response({
+			storageContinuation: CONTINUATION,
+			leaseExpiresAt: new Date(Date.now() + 60_000).toISOString(),
+			lease: LEASE,
+		}));
+}
+
 async function listen(server: ReturnType<typeof createServer>) {
 	await new Promise<void>((resolve, reject) => {
 		server.once("error", reject);
@@ -576,13 +586,7 @@ describe("catalog private editor upload complete handler", () => {
 
 	it("claims only storage, calls only the fixed Worker storage path, ACKs, and reconciles", async () => {
 		configure();
-		const fetchMock = vi.fn()
-			.mockResolvedValueOnce(response(journalStatus("storage_pending")))
-			.mockResolvedValueOnce(response({
-				storageContinuation: CONTINUATION,
-				leaseExpiresAt: new Date(Date.now() + 60_000).toISOString(),
-				lease: LEASE,
-			}))
+		const fetchMock = storagePendingFetch()
 			.mockResolvedValueOnce(response({
 				status: "pending_inspection",
 				replayed: false,
@@ -627,13 +631,7 @@ describe("catalog private editor upload complete handler", () => {
 	it("allocates a 52s overall deadline with bounded status, claim, Worker, ACK, and reconcile stages", async () => {
 		configure();
 		const timeout = vi.spyOn(AbortSignal, "timeout");
-		vi.stubGlobal("fetch", vi.fn()
-			.mockResolvedValueOnce(response(journalStatus("storage_pending")))
-			.mockResolvedValueOnce(response({
-				storageContinuation: CONTINUATION,
-				leaseExpiresAt: new Date(Date.now() + 60_000).toISOString(),
-				lease: LEASE,
-			}))
+		vi.stubGlobal("fetch", storagePendingFetch()
 			.mockResolvedValueOnce(response({ status: "pending_inspection", replayed: false }))
 			.mockResolvedValueOnce(response({ status: "acknowledged" }))
 			.mockResolvedValueOnce(response(journalStatus("inspection_pending"))));
@@ -776,13 +774,7 @@ describe("catalog private editor upload complete handler", () => {
 
 	it("converges when the Worker response is lost after its receipt arrives", async () => {
 		configure();
-		const fetchMock = vi.fn()
-			.mockResolvedValueOnce(response(journalStatus("storage_pending")))
-			.mockResolvedValueOnce(response({
-				storageContinuation: CONTINUATION,
-				leaseExpiresAt: new Date(Date.now() + 60_000).toISOString(),
-				lease: LEASE,
-			}))
+		const fetchMock = storagePendingFetch()
 			.mockRejectedValueOnce(new TypeError("lost response"))
 			.mockResolvedValueOnce(new Response("receipt reconciled first", { status: 409 }))
 			.mockResolvedValueOnce(response(journalStatus("inspection_pending")));
@@ -800,13 +792,7 @@ describe("catalog private editor upload complete handler", () => {
 	it("converges when a replayed Worker completion verifies before ACK", async () => {
 		configure();
 		const asset = safePrintAsset();
-		const fetchMock = vi.fn()
-			.mockResolvedValueOnce(response(journalStatus("storage_pending")))
-			.mockResolvedValueOnce(response({
-				storageContinuation: CONTINUATION,
-				leaseExpiresAt: new Date(Date.now() + 60_000).toISOString(),
-				lease: LEASE,
-			}))
+		const fetchMock = storagePendingFetch()
 			.mockResolvedValueOnce(response({ status: "verified", replayed: true }))
 			.mockResolvedValueOnce(response({ status: "acknowledged" }))
 			.mockResolvedValueOnce(response(journalStatus("verified", { asset })));
@@ -819,13 +805,7 @@ describe("catalog private editor upload complete handler", () => {
 	it("ACKs retryable Worker failures and returns a bounded retry contract", async () => {
 		configure();
 		const retryAt = new Date(Date.now() + 90_000).toISOString();
-		const fetchMock = vi.fn()
-			.mockResolvedValueOnce(response(journalStatus("storage_pending")))
-			.mockResolvedValueOnce(response({
-				storageContinuation: CONTINUATION,
-				leaseExpiresAt: new Date(Date.now() + 60_000).toISOString(),
-				lease: LEASE,
-			}))
+		const fetchMock = storagePendingFetch()
 			.mockResolvedValueOnce(new Response("upload incomplete", { status: 503 }))
 			.mockResolvedValueOnce(response({ status: "retry_scheduled", retryAt }))
 			.mockResolvedValueOnce(response(journalStatus("storage_pending", { retryAt })));
@@ -842,13 +822,7 @@ describe("catalog private editor upload complete handler", () => {
 
 	it.each([400, 409, 410, 422])("ACKs definite Worker rejection %i as rejected", async (status) => {
 		configure();
-		const fetchMock = vi.fn()
-			.mockResolvedValueOnce(response(journalStatus("storage_pending")))
-			.mockResolvedValueOnce(response({
-				storageContinuation: CONTINUATION,
-				leaseExpiresAt: new Date(Date.now() + 60_000).toISOString(),
-				lease: LEASE,
-			}))
+		const fetchMock = storagePendingFetch()
 			.mockResolvedValueOnce(new Response("sensitive", { status }))
 			.mockResolvedValueOnce(response({ status: "rejected" }))
 			.mockResolvedValueOnce(response(journalStatus("failed")));
@@ -863,13 +837,7 @@ describe("catalog private editor upload complete handler", () => {
 
 	it("rejects malformed or extra Worker success and never leaks continuations", async () => {
 		configure();
-		const fetchMock = vi.fn()
-			.mockResolvedValueOnce(response(journalStatus("storage_pending")))
-			.mockResolvedValueOnce(response({
-				storageContinuation: CONTINUATION,
-				leaseExpiresAt: new Date(Date.now() + 60_000).toISOString(),
-				lease: LEASE,
-			}))
+		const fetchMock = storagePendingFetch()
 			.mockResolvedValueOnce(response({
 				status: "pending_inspection", replayed: false,
 				inspectionContinuation: "must-not-pass",
@@ -890,13 +858,7 @@ describe("catalog private editor upload complete handler", () => {
 
 	it("rejects an oversized Worker response, ACKs retryable, and remains generic", async () => {
 		configure();
-		const fetchMock = vi.fn()
-			.mockResolvedValueOnce(response(journalStatus("storage_pending")))
-			.mockResolvedValueOnce(response({
-				storageContinuation: CONTINUATION,
-				leaseExpiresAt: new Date(Date.now() + 60_000).toISOString(),
-				lease: LEASE,
-			}))
+		const fetchMock = storagePendingFetch()
 			.mockResolvedValueOnce(new Response(`{"secret":"${"x".repeat(9000)}"}`, {
 				headers: { "Content-Type": "application/json" },
 			}))
