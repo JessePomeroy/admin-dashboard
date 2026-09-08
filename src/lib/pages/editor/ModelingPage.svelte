@@ -329,7 +329,7 @@ function addUploadedAsset(galleryKey: string, asset: PortfolioMediaAsset) {
 </div>
 
 {#if pickerGalleryKey}
-	<PortfolioMediaPicker assets={media.ready} {selectedAssetIds} mediaBaseUrl={modelingConfig.mediaBaseUrl} hasMore={media.hasMore} onChoose={(asset) => addAsset(pickerGalleryKey ?? "", asset)} onClose={() => (pickerGalleryKey = null)} />
+	<PortfolioMediaPicker assets={media.ready} {selectedAssetIds} mediaBaseUrl={modelingConfig.mediaBaseUrl} pagination={media.pagination} onChoose={(asset) => addAsset(pickerGalleryKey ?? "", asset)} onClose={() => (pickerGalleryKey = null)} />
 {/if}
 
 <style>

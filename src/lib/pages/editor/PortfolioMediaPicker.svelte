@@ -1,5 +1,6 @@
 <script lang="ts">
 import { onMount } from "svelte";
+import type { EditorMediaPagination } from "../../editorMedia.svelte";
 import {
 	portfolioMediaUrl,
 	type PortfolioMediaAsset,
@@ -9,14 +10,14 @@ let {
 	assets,
 	selectedAssetIds,
 	mediaBaseUrl,
-	hasMore = false,
+	pagination,
 	onChoose,
 	onClose,
 }: {
 	assets: PortfolioMediaAsset[];
 	selectedAssetIds: Set<string>;
 	mediaBaseUrl: string;
-	hasMore?: boolean;
+	pagination?: EditorMediaPagination;
 	onChoose: (asset: PortfolioMediaAsset) => void;
 	onClose: () => void;
 } = $props();
@@ -43,7 +44,11 @@ function handleKeydown(event: KeyboardEvent) {
 	if (focusable.length === 0) return;
 	const first = focusable[0];
 	const last = focusable[focusable.length - 1];
-	if (event.shiftKey && document.activeElement === first) {
+	if (!focusable.some(element => element === document.activeElement)) {
+		// Paging or choosing an asset may disable the currently focused button.
+		event.preventDefault();
+		(event.shiftKey ? last : first).focus();
+	} else if (event.shiftKey && document.activeElement === first) {
 		event.preventDefault();
 		last.focus();
 	} else if (!event.shiftKey && document.activeElement === last) {
@@ -65,12 +70,20 @@ function handleKeydown(event: KeyboardEvent) {
 			<button bind:this={closeButton} type="button" class="close" onclick={onClose} aria-label="Close media picker">close</button>
 		</header>
 
-		{#if assets.length === 0}
-			<div class="empty">
-				<strong>No ready media yet.</strong>
-				<p>Upload an image from an editor, then reuse it here.</p>
+		{#if pagination?.loading}
+			<p class="page-message" role="status">Loading media…</p>
+		{:else if pagination?.error}
+			<div class="page-message" role="alert">
+				<p>Unable to load this media page.</p>
+				<button type="button" onclick={pagination.retry}>retry</button>
 			</div>
-		{:else}
+		{/if}
+		{#if assets.length === 0 && !pagination?.loading && !pagination?.error}
+			<div class="empty">
+				<strong>No ready media on this page.</strong>
+				<p>Try another page, or upload an image from an editor.</p>
+			</div>
+		{:else if assets.length > 0}
 			<ul>
 				{#each assets as asset (asset._id)}
 					{@const selected = selectedAssetIds.has(asset._id)}
@@ -86,7 +99,13 @@ function handleKeydown(event: KeyboardEvent) {
 					</li>
 				{/each}
 			</ul>
-			{#if hasMore}<p class="limit-note">Showing the newest 100 ready assets. Search and additional pages arrive with the full Media library.</p>{/if}
+		{/if}
+		{#if pagination}
+			<nav class="pagination" aria-label="Media library pages">
+				<button type="button" onclick={pagination.previous} disabled={pagination.loading || !pagination.hasPrevious}>previous</button>
+				<span role="status">page {pagination.pageNumber}</span>
+				<button type="button" onclick={pagination.next} disabled={pagination.loading || !pagination.hasNext}>next</button>
+			</nav>
 		{/if}
 	</div>
 </div>
@@ -110,7 +129,9 @@ function handleKeydown(event: KeyboardEvent) {
 	.empty { display: grid; place-items: center; min-height: 260px; padding: 32px; text-align: center; }
 	.empty strong { color: var(--admin-heading); }
 	.empty p { margin: 8px 0 0; color: var(--admin-text-muted); }
-	.limit-note { margin: 0; padding: 12px 18px; border-top: 1px solid var(--admin-border); color: var(--admin-text-subtle); font-size: .72rem; }
+	.page-message { margin: 0; padding: 18px 24px; color: var(--admin-text-muted); font-size: .8rem; }
+	.page-message p { margin: 0 0 12px; }
+	.pagination { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 12px 18px; border-top: 1px solid var(--admin-border); color: var(--admin-text-subtle); font-size: .76rem; }
 	@media (max-width: 700px) {
 		.backdrop { padding: 0; align-items: end; }
 		.picker { width: 100%; max-height: 92vh; border-radius: 12px 12px 0 0; }
