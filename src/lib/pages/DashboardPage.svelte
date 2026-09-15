@@ -234,12 +234,12 @@ let sparklineArea = $derived(() => {
 {#if isLoading}
 	<LoadingState />
 {:else}
-<div class="dashboard">
+<div class="dashboard admin-page">
 	<header class="page-header">
 		<h1>dashboard</h1>
 	</header>
 
-	<!-- Stats as inline text -->
+	<!-- Currency groups remain separate; the layout only changes their hierarchy. -->
 	<div
 		class="stats-line"
 		class:has-completeness-note={orderStatsPresentation.completenessNote !== null}
@@ -436,8 +436,15 @@ let sparklineArea = $derived(() => {
 	.dashboard {
 		padding: 48px 40px;
 		max-width: 1000px;
+		display: grid;
+		grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
+		column-gap: 40px;
 	}
 
+	.dashboard > :not(.chart-section):not(.activity-summary) {
+		grid-column: 1 / -1;
+		min-width: 0;
+	}
 	.page-header {
 		margin-bottom: 40px;
 	}
@@ -453,11 +460,11 @@ let sparklineArea = $derived(() => {
 
 	/* Stats line */
 	.stats-line {
-		display: flex;
-		align-items: baseline;
-		gap: 12px;
-		flex-wrap: wrap;
-		margin-bottom: 48px;
+		display: grid;
+		grid-template-columns: repeat(4, minmax(0, 1fr));
+		align-items: start;
+		gap: 28px 20px;
+		margin-bottom: 32px;
 		padding-bottom: 32px;
 		border-bottom: 1px solid var(--admin-border);
 	}
@@ -473,18 +480,24 @@ let sparklineArea = $derived(() => {
 	}
 
 	.stat-item {
-		display: inline-flex;
-		align-items: baseline;
-		gap: 6px;
+		display: flex;
+		flex-direction: column;
+		align-items: flex-start;
+		gap: 8px;
+		min-width: 0;
 	}
 
 	.stat-label {
-		font-size: 0.82rem;
+		font-size: 0.875rem;
 		color: var(--admin-text-muted);
 	}
 
 	.stat-value {
-		font-size: 1.1rem;
+		font-size: clamp(1.4rem, 2.3vw, 2rem);
+		line-height: 1.15;
+		letter-spacing: -0.035em;
+		font-variant-numeric: tabular-nums;
+		overflow-wrap: anywhere;
 		font-weight: 500;
 		color: var(--admin-heading);
 	}
@@ -495,27 +508,26 @@ let sparklineArea = $derived(() => {
 	}
 
 	.stat-sep {
-		color: var(--admin-text-subtle);
-		font-size: 0.9rem;
+		display: none;
 	}
 
 	/* Chart */
 	.chart-section {
-		margin-bottom: 48px;
+		margin-bottom: 40px;
+		min-width: 0;
 	}
 
 	.section-label {
-		font-family: "Synonym", system-ui, sans-serif;
-		font-size: 0.78rem;
-		font-weight: 400;
-		color: var(--admin-text-muted);
-		letter-spacing: 0.04em;
-		margin: 0 0 16px;
+		font-family: var(--admin-font-body);
+		font-size: 0.94rem;
+		font-weight: 500;
+		color: var(--admin-heading);
+		margin: 0 0 20px;
 	}
 
 	.chart-container {
 		width: 100%;
-		height: 60px;
+		height: 136px;
 		position: relative;
 	}
 
@@ -561,20 +573,20 @@ let sparklineArea = $derived(() => {
 		width: 100%;
 		border-collapse: collapse;
 		text-align: left;
-		font-size: 0.86rem;
+		font-size: 0.94rem;
+		font-variant-numeric: tabular-nums;
 	}
 
 	.orders-table th {
 		color: var(--admin-text-subtle);
 		font-weight: 400;
-		font-size: 0.75rem;
-		letter-spacing: 0.04em;
-		padding: 0 16px 12px 0;
+		font-size: 0.8rem;
+		padding: 12px 16px 12px 0;
 		border-bottom: 1px solid var(--admin-border);
 	}
 
 	.orders-table td {
-		padding: 14px 16px 14px 0;
+		padding: 18px 16px 18px 0;
 		border-bottom: 1px solid var(--admin-border);
 		color: var(--admin-text);
 	}
@@ -660,13 +672,14 @@ let sparklineArea = $derived(() => {
 
 	/* Activity summary */
 	.activity-summary {
-		margin-bottom: 48px;
+		margin-bottom: 40px;
+		min-width: 0;
 	}
 
 	.summary-line {
-		font-size: 0.86rem;
+		font-size: 0.94rem;
 		color: var(--admin-text-muted);
-		margin: 0 0 6px;
+		margin: 0 0 12px;
 		line-height: 1.6;
 	}
 
@@ -713,19 +726,20 @@ let sparklineArea = $derived(() => {
 		display: flex;
 		align-items: center;
 		gap: 12px;
-		padding: 12px 0;
+		padding: 18px 0;
+		min-height: 56px;
 		width: 100%;
 		background: none;
 		border: none;
 		font-family: inherit;
-		font-size: 0.86rem;
+		font-size: 0.94rem;
 		text-align: left;
 		cursor: pointer;
-		transition: opacity 0.12s;
+		transition: background-color 0.12s;
 	}
 
 	.feed-item-btn:hover {
-		opacity: 0.75;
+		background: var(--admin-active);
 	}
 
 	.feed-type-badge {
@@ -773,6 +787,7 @@ let sparklineArea = $derived(() => {
 	@media (max-width: 768px) {
 		.dashboard {
 			padding: 20px 16px;
+			grid-template-columns: minmax(0, 1fr);
 		}
 
 		.page-header {
@@ -780,7 +795,8 @@ let sparklineArea = $derived(() => {
 		}
 
 		.stats-line {
-			gap: 8px;
+			grid-template-columns: repeat(2, minmax(0, 1fr));
+			gap: 24px 16px;
 			margin-bottom: 32px;
 			padding-bottom: 24px;
 		}
@@ -808,7 +824,7 @@ let sparklineArea = $derived(() => {
 			display: inline;
 		}
 
-		.feed-item {
+		.feed-item-btn {
 			flex-wrap: wrap;
 			gap: 8px;
 		}

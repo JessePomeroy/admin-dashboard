@@ -141,7 +141,7 @@ function finishReorder(event: CustomEvent<{ items: DraggableVariant[] }>) {
 		{/each}
 	</div>
 {:else}
-	<section aria-labelledby="catalog-variants-heading">
+	<section class="catalog-variants" aria-labelledby="catalog-variants-heading">
 		<div class="section-heading"><span>03</span><div><h2 id="catalog-variants-heading">prices and options</h2><p>{variants.length} {variants.length === 1 ? "variant" : "variants"}. Their order is saved exactly as shown.</p></div><button type="button" onclick={() => onChange(addCatalogProductVariant(variants))} disabled={disabled || variants.length >= CATALOG_PRODUCT_VARIANT_LIMIT}>add variant</button></div>
 		{#if variants.length >= CATALOG_PRODUCT_VARIANT_LIMIT}<p class="limit" role="status">This {productLabel} has reached the 100-variant limit.</p>{/if}
 		{#if variants.length === 0}
@@ -150,8 +150,9 @@ function finishReorder(event: CustomEvent<{ items: DraggableVariant[] }>) {
 			<ol aria-label="Reorder product variants" use:dragHandleZone={{ items: visibleVariants, dragDisabled: disabled || variants.length < 2, flipDurationMs: 140, morphDisabled: true, dropTargetStyle: {}, type: "catalog-variants" }} onconsider={(event) => dragItems = event.detail.items} onfinalize={finishReorder}>
 				{#each visibleVariants as variant, index (variant.id)}
 					{@const options = resolvedOptions(variant)}
+					{@const variantLabel = [options?.materials.find((option) => option.value === variant.materialOptionKey)?.label, options?.sizes.find((option) => option.value === variant.sizeOptionKey)?.label].filter(Boolean).join(" · ")}
 					<li class:dnd-shadow={variant.isDndShadowItem}>
-						<div class="variant-heading"><span class="position">{String(index + 1).padStart(2, "0")}</span><div><strong>variant {index + 1}</strong><small>{variant.key}</small></div></div>
+						<div class="variant-heading"><span class="position">{String(index + 1).padStart(2, "0")}</span><h3>{variantLabel || `variant ${index + 1}`}</h3></div>
 						<div class="variant-fields">
 							{#if options}
 								<EditorListbox id={`catalog-material-${variant.key}`} label="material" value={variant.materialOptionKey} options={pickerOptions(options.materials, variant.materialOptionKey)} placeholder="choose a material" {disabled} onChange={(value) => updateMaterial(index, value)} />
@@ -182,8 +183,7 @@ function finishReorder(event: CustomEvent<{ items: DraggableVariant[] }>) {
 	button:disabled { opacity: .4; cursor: default; } ol { margin: 0; padding: 0; list-style: none; }
 	li { display: grid; grid-template-columns: minmax(140px, .45fr) minmax(360px, 1.55fr) auto; gap: 18px; align-items: start; padding: 20px 0; border-top: 1px solid var(--admin-border); }
 	.variant-heading { display: grid; grid-template-columns: 26px 1fr; gap: 8px; }
-	.variant-heading strong, .variant-heading small { display: block; } .variant-heading strong { color: var(--admin-heading); font-size: .82rem; font-weight: 500; }
-	.variant-heading small { overflow: hidden; margin-top: 5px; color: var(--admin-text-subtle); font-size: .65rem; text-overflow: ellipsis; }
+	.variant-heading h3 { min-width: 0; margin: 0; color: var(--admin-heading); font-size: .82rem; font-weight: 500; line-height: 1.5; }
 	.variant-fields { display: grid; grid-template-columns: repeat(2, minmax(140px, 1fr)); gap: 14px; }
 	.fixed-price-field { min-width: 0; }
 	label { display: flex; flex-direction: column; gap: 7px; color: var(--admin-text-muted); font-size: .76rem; }

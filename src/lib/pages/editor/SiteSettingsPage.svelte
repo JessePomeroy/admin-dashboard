@@ -120,7 +120,7 @@ function finishSocialReorder(event: CustomEvent<{ items: DraggableSocialLink[] }
 
 <svelte:head><title>Site settings — {config.siteName}</title></svelte:head>
 
-<div class="settings-page rail-aligned-header">
+<div class="settings-page editor-document">
 	<header class="settings-header">
 		<h1>site settings</h1>
 		<div class="actions">
@@ -144,7 +144,7 @@ function finishSocialReorder(event: CustomEvent<{ items: DraggableSocialLink[] }
 		<p class="loading" role="status">loading site settings…</p>
 	{:else}
 		<form onsubmit={(event) => { event.preventDefault(); publishingEnabled ? void publish() : void draft.saveNow(); }}>
-			<section aria-labelledby="identity-heading">
+			<section class="document-section" aria-labelledby="identity-heading">
 				<div class="section-heading"><span>01</span><div><h2 id="identity-heading">site identity</h2><p>{publishingEnabled ? "The public name and short description of this site." : "The name and short description prepared for a future public rollout."}</p></div></div>
 				<div class="fields two-column">
 					<label>artist or business name<input maxlength="120" bind:value={form.artistName} aria-invalid={Boolean(fieldErrors.artistName)} />{#if fieldErrors.artistName}<small class="field-error">{fieldErrors.artistName}</small>{/if}</label>
@@ -153,7 +153,7 @@ function finishSocialReorder(event: CustomEvent<{ items: DraggableSocialLink[] }
 				</div>
 			</section>
 
-			<section aria-labelledby="social-heading">
+			<section class="document-section" aria-labelledby="social-heading">
 				<div class="section-heading"><span>02</span><div><h2 id="social-heading">social links</h2><p>Shown in the deliberate order below.</p></div><button type="button" class="text-action" onclick={addSocialLink} disabled={(form.socialLinks?.length ?? 0) >= 20}>add link</button></div>
 				<div class="social-list" aria-label="Reorder social links" use:dragHandleZone={{ items: visibleSocialLinks, dragDisabled: (form.socialLinks?.length ?? 0) < 2, flipDurationMs: 140, morphDisabled: true, dropTargetStyle: {}, type: "site-social-links" }} onconsider={(event) => socialDragItems = event.detail.items} onfinalize={finishSocialReorder}>
 					{#each visibleSocialLinks as link, index (link.id)}
@@ -170,9 +170,9 @@ function finishSocialReorder(event: CustomEvent<{ items: DraggableSocialLink[] }
 				</div>
 			</section>
 
-			<section aria-labelledby="seo-heading">
+			<section class="document-section" aria-labelledby="seo-heading">
 				<div class="section-heading"><span>03</span><div><h2 id="seo-heading">search defaults</h2><p>Used when an individual page does not provide a more specific description.</p></div></div>
-				<label>default SEO description<textarea rows="4" maxlength="320" bind:value={form.seoDescription} placeholder="For example: Detroit-based photographer creating…" aria-describedby="seo-help" aria-invalid={Boolean(fieldErrors.seoDescription)}></textarea><small id="seo-help">Describe who the site belongs to, what they create, and where they work in one or two natural sentences.</small>{#if fieldErrors.seoDescription}<small class="field-error">{fieldErrors.seoDescription}</small>{/if}</label>
+				<label>default search description<textarea rows="4" maxlength="320" bind:value={form.seoDescription} placeholder="For example: Detroit-based photographer creating…" aria-describedby="seo-help" aria-invalid={Boolean(fieldErrors.seoDescription)}></textarea><small id="seo-help">Describe who the site belongs to, what they create, and where they work in one or two natural sentences.</small>{#if fieldErrors.seoDescription}<small class="field-error">{fieldErrors.seoDescription}</small>{/if}</label>
 			</section>
 		</form>
 	{/if}

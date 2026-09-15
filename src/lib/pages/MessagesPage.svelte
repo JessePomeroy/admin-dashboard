@@ -148,7 +148,7 @@ function handleNewMessageKeydown(e: KeyboardEvent) {
 {#if threadsQuery.status === "LoadingFirstPage"}
 	<LoadingState />
 {:else}
-<div class="messages-page">
+<div class="messages-page admin-page">
 	<header class="page-header">
 		<h1>messages</h1>
 		{#if clientsWithoutThreads.length > 0}
@@ -210,7 +210,7 @@ function handleNewMessageKeydown(e: KeyboardEvent) {
 <style>
 	.messages-page {
 		padding: 36px 40px;
-		height: 100vh;
+		height: 100dvh;
 		display: flex;
 		flex-direction: column;
 	}
@@ -263,7 +263,7 @@ function handleNewMessageKeydown(e: KeyboardEvent) {
 		margin-top: 4px;
 		background: var(--admin-dropdown-bg);
 		border: 1px solid var(--admin-border-strong);
-		border-radius: 8px;
+		border-radius: 0;
 		box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4);
 		min-width: 240px;
 		max-height: 300px;
@@ -328,6 +328,7 @@ function handleNewMessageKeydown(e: KeyboardEvent) {
 	@media (max-width: 768px) {
 		.messages-page {
 			padding: 16px 12px;
+			height: calc(100dvh - 56px);
 		}
 
 		.page-header {

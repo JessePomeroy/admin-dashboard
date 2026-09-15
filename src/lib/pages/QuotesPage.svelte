@@ -616,7 +616,7 @@ function closePresetModal() {
 {#if isLoading}
 	<LoadingState />
 {:else}
-<div class="quote-page">
+<div class="quote-page admin-page">
 	<header class="page-header">
 		<div class="header-left">
 			<h1>quotes</h1>
@@ -779,6 +779,7 @@ function closePresetModal() {
 
 	.tab-bar {
 		display: flex;
+		flex-wrap: wrap;
 		gap: 0;
 		margin-bottom: 24px;
 		border-bottom: 1px solid var(--admin-border);
@@ -794,7 +795,7 @@ function closePresetModal() {
 		padding: 8px 16px;
 		cursor: pointer;
 		transition: color 0.15s, border-color 0.15s;
-		margin-bottom: -1px;
+		margin-bottom: 0;
 	}
 
 	.tab-btn:hover {
@@ -864,11 +865,6 @@ function closePresetModal() {
 
 		.stat-sep {
 			display: none;
-		}
-
-		.tab-bar {
-			overflow-x: auto;
-			-webkit-overflow-scrolling: touch;
 		}
 
 		.filter-bar {

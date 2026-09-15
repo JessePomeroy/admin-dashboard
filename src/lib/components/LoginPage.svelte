@@ -112,7 +112,8 @@ async function handleGoogle() {
 
 <style>
 	.login-page {
-		min-height: 100vh;
+		min-height: 100dvh;
+		box-sizing: border-box;
 		display: flex;
 		align-items: center;
 		justify-content: center;
@@ -144,9 +145,9 @@ async function handleGoogle() {
 	.login-error {
 		background: rgba(220, 38, 38, 0.1);
 		border: 1px solid rgba(220, 38, 38, 0.2);
-		color: rgb(248, 113, 113);
+		color: var(--status-rose);
 		padding: 10px 14px;
-		border-radius: 6px;
+		border-radius: 0;
 		font-size: 0.84rem;
 		margin-bottom: 20px;
 	}

@@ -365,7 +365,7 @@ async function handleShareLink() {
 	{#if isLoading}
 		<LoadingState />
 	{:else}
-	<div class="invoice-page">
+	<div class="invoice-page admin-page">
 		<PageHeader title="invoicing">
 			{#snippet actions()}
 				<button

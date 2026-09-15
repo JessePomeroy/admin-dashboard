@@ -80,9 +80,12 @@ async function createSupporting(kind: BlogSupportingKind) {
 <svelte:head><title>Blog — {config.siteName}</title></svelte:head>
 
 <BlogWorkbench>
-<div class="settings-page">
+<div class="settings-page editor-document" class:document-overview={compactMode}>
 	{#if compactMode}
-		<p class="empty">Choose a post to continue writing, or create a new post. New posts use your published Site Settings name as the author.</p>
+		<span class="overview-label">blog</span>
+		<h2 class="overview-title">choose a post</h2>
+		<p class="overview-copy">Select a post to continue writing, or create a new one.</p>
+		<p class="overview-note">New posts use your published site name as the author.</p>
 	{:else}
 	<section aria-labelledby="supporting-heading" id="supporting-content">
 		<div class="section-heading">

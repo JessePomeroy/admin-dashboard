@@ -11,7 +11,7 @@ if (!config.api.portfolioEditor || !config.editor?.portfolio) {
 <svelte:head><title>Portfolio — {config.siteName}</title></svelte:head>
 
 <PortfolioWorkbench>
-	<div class="portfolio-overview">
+	<div class="portfolio-overview editor-document document-overview">
 		<span>portfolio</span>
 		<h2>select a gallery</h2>
 		<p>Choose one from the list, or create a new gallery.</p>

@@ -13,7 +13,7 @@ if (!getCatalogProductEditorCapability(config)) {
 <svelte:head><title>Products — {config.siteName}</title></svelte:head>
 
 <ProductWorkbench>
-	<div class="product-overview">
+	<div class="product-overview editor-document document-overview">
 		<span>products</span>
 		<h2>choose a product</h2>
 		<p>Select one from the list, or create a new product draft.</p>

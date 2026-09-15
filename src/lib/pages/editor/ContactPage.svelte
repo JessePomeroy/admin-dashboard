@@ -196,7 +196,7 @@ function finishChoiceReorder(event: CustomEvent<{ items: DraggableChoice[] }>) {
 
 <svelte:head><title>Contact &amp; booking — {config.siteName}</title></svelte:head>
 
-<div class="settings-page">
+<div class="settings-page editor-document">
 	<header class="settings-header">
 		<h1>contact &amp; booking</h1>
 		{#if draft.initialized && !setupRequired}
@@ -226,7 +226,7 @@ function finishChoiceReorder(event: CustomEvent<{ items: DraggableChoice[] }>) {
 		</section>
 	{:else}
 		<form onsubmit={(event) => { event.preventDefault(); publishingEnabled ? void publish() : void draft.saveNow(); }}>
-			<section aria-labelledby="contact-copy-heading">
+			<section class="document-section" aria-labelledby="contact-copy-heading">
 				<div class="section-heading"><span>01</span><div><h2 id="contact-copy-heading">contact copy</h2><p>The introduction and contact details shown above the form.</p></div></div>
 				<div class="fields two-column">
 					<label class="wide">heading<input maxlength="120" bind:value={form.heading} aria-invalid={Boolean(fieldErrors.heading)} />{#if fieldErrors.heading}<small class="field-error">{fieldErrors.heading}</small>{/if}</label>
@@ -239,7 +239,7 @@ function finishChoiceReorder(event: CustomEvent<{ items: DraggableChoice[] }>) {
 				</div>
 			</section>
 
-			<section aria-labelledby="booking-copy-heading">
+			<section class="document-section" aria-labelledby="booking-copy-heading">
 				<div class="section-heading"><span>02</span><div><h2 id="booking-copy-heading">booking</h2><p>The words and destination for the optional booking link.</p></div></div>
 				<div class="fields two-column">
 					<label class="toggle wide"><span><input type="checkbox" bind:checked={form.bookingEnabled} /> offer an external booking link</span><small>Turning this off keeps the existing inquiry fallback; it does not disable the contact form.</small></label>
@@ -249,7 +249,7 @@ function finishChoiceReorder(event: CustomEvent<{ items: DraggableChoice[] }>) {
 				</div>
 			</section>
 
-			<section aria-labelledby="inquiry-choices-heading">
+			<section class="document-section" aria-labelledby="inquiry-choices-heading">
 				<div class="section-heading"><span>03</span><div><h2 id="inquiry-choices-heading">inquiry choices</h2><p>Optional subjects visitors can choose when they write.</p></div><button type="button" class="text-action" onclick={addChoice} disabled={(form.inquiryChoices?.length ?? 0) >= 12}>add choice</button></div>
 				<div class="choice-list" aria-label="Reorder inquiry choices" use:dragHandleZone={{ items: visibleChoices, dragDisabled: (form.inquiryChoices?.length ?? 0) < 2, flipDurationMs: 140, morphDisabled: true, dropTargetStyle: {}, type: "contact-inquiry-choices" }} onconsider={(event) => choiceDragItems = event.detail.items} onfinalize={finishChoiceReorder}>
 					{#each visibleChoices as choice, index (choice.id)}

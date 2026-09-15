@@ -105,15 +105,19 @@ function handleWindowClick(event: MouseEvent) {
 	if (open && root && event.target instanceof Node && !root.contains(event.target)) open = false;
 }
 
-async function handleFocusOut() {
-	await tick();
-	if (open && root && !root.contains(document.activeElement)) open = false;
+function handleFocusOut(event: FocusEvent) {
+	// activeElement can still be body between blur and focus, even after tick().
+	// Use the destination so an option is not unmounted before its pointer click.
+	const destination = event.relatedTarget;
+	if (open && root && (!(destination instanceof Node) || !root.contains(destination))) {
+		open = false;
+	}
 }
 </script>
 
 <svelte:window onclick={handleWindowClick} />
 
-<div bind:this={root} class="listbox-field" onfocusout={() => void handleFocusOut()}>
+<div bind:this={root} class="listbox-field" onfocusout={handleFocusOut}>
 	<span id={`${id}-label`} class="field-label">{label}</span>
 	<button
 		bind:this={trigger}

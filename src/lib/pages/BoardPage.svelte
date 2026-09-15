@@ -230,7 +230,7 @@ function openDetail(card: CardItem) {
 {#if isLoading}
 	<LoadingState />
 {:else}
-<div class="board-page">
+<div class="board-page admin-page">
 	<header class="page-header">
 		<div class="header-top">
 			<h1>board</h1>

@@ -131,6 +131,7 @@ function handleKeydown(e: KeyboardEvent) {
 		display: flex;
 		flex-direction: column;
 		min-height: 0;
+		min-width: 0;
 	}
 
 	.convo-header {
@@ -243,32 +244,30 @@ function handleKeydown(e: KeyboardEvent) {
 
 	.message-bubble {
 		max-width: 70%;
-		padding: 10px 14px;
-		border-radius: 12px;
+		padding: 14px 16px;
+		border-radius: 0;
 	}
 
 	.bubble-creator {
-		background: rgba(129, 140, 248, 0.12);
-		border-bottom-right-radius: 4px;
+		background: var(--admin-control-selected);
 	}
 
 	.bubble-client {
 		background: var(--admin-surface-raised);
-		border-bottom-left-radius: 4px;
 	}
 
 	.message-content {
 		margin: 0;
-		font-size: 0.85rem;
+		font-size: 0.94rem;
 		color: var(--admin-heading);
-		line-height: 1.45;
+		line-height: 1.6;
 		white-space: pre-wrap;
 		word-break: break-word;
 	}
 
 	.message-time {
 		display: block;
-		font-size: 0.68rem;
+		font-size: 0.75rem;
 		color: var(--admin-text-subtle);
 		margin-top: 4px;
 	}
@@ -312,8 +311,8 @@ function handleKeydown(e: KeyboardEvent) {
 		display: flex;
 		align-items: center;
 		justify-content: center;
-		width: 38px;
-		height: 38px;
+		width: 48px;
+		height: 48px;
 		border-radius: 8px;
 		background: var(--admin-accent);
 		border: none;

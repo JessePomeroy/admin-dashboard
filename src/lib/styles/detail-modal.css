@@ -4,13 +4,13 @@
 	padding: 0 28px 28px;
 	display: flex;
 	flex-direction: column;
-	gap: 14px;
+	gap: 20px;
 }
 
 :global([data-admin] .form-row) {
 	display: grid;
-	grid-template-columns: 1fr 1fr;
-	gap: 14px;
+	grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+	gap: 20px;
 }
 
 :global([data-admin] .form-group) {
@@ -69,8 +69,9 @@
 :global([data-admin] .modal-actions) {
 	display: flex;
 	justify-content: flex-end;
+	flex-wrap: wrap;
 	gap: 10px;
-	padding-top: 6px;
+	padding-top: 20px;
 }
 
 :global([data-admin] .detail-body) {
@@ -289,7 +290,7 @@
 
 :global([data-admin] .send-success) {
 	font-size: 0.82rem;
-	color: #4ade80;
+	color: var(--status-sage);
 	margin-right: auto;
 	align-self: center;
 }

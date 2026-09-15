@@ -143,7 +143,7 @@ async function quickStatusUpdate(
 {#if clientsQuery.isLoading}
 	<LoadingState />
 {:else}
-<div class="platform-page">
+<div class="platform-page admin-page">
 	<header class="page-header">
 		<div class="header-left">
 			<h1>platform clients</h1>
@@ -317,21 +317,21 @@ async function quickStatusUpdate(
 		width: 100%;
 		border-collapse: collapse;
 		text-align: left;
-		font-size: 0.85rem;
+		font-size: 0.94rem;
+		font-variant-numeric: tabular-nums;
 	}
 
 	.client-table th {
-		padding: 0 16px 12px 0;
+		padding: 12px 20px 14px 0;
 		color: var(--admin-text-subtle);
 		font-weight: 400;
-		font-size: 0.75rem;
-		letter-spacing: 0.04em;
+		font-size: 0.8rem;
 		border-bottom: 1px solid var(--admin-border);
 		white-space: nowrap;
 	}
 
 	.client-table td {
-		padding: 14px 16px 14px 0;
+		padding: 20px 20px 20px 0;
 		border-bottom: 1px solid var(--admin-border);
 		white-space: nowrap;
 	}
@@ -368,7 +368,8 @@ async function quickStatusUpdate(
 	}
 
 	.tier-full {
-		color: var(--admin-accent-hover);
+		color: var(--admin-heading);
+		font-weight: 500;
 	}
 
 	/* Status indicators */

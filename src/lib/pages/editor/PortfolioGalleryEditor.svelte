@@ -431,27 +431,27 @@ function reloadServerDraft() {
 }
 </script>
 
-<svelte:head><title>Edit portfolio gallery — {config.siteName}</title></svelte:head>
+<svelte:head><title>{form.title.trim() || "Untitled gallery"} — {config.siteName}</title></svelte:head>
 
 {#if editorError}
 	<p class="alert page-alert" role="alert">Could not load this gallery draft. Refresh this page to try again.</p>
 {:else if !initialized}
 	<p class="loading" role="status">loading gallery…</p>
 {:else}
-	<div class="gallery-page">
+	<div class="gallery-page editor-document editor-workbench">
 		<header>
 			<div>
 				<a class="back" href={portfolioBaseHref}>← portfolio</a>
 				<h1>{form.title || "untitled gallery"}</h1>
 			</div>
 			<div class="actions">
-				<span class="status" aria-live="polite">{isPublished && !isVisible
+				<span class="status" data-save-state={saveState} aria-live="polite">{isPublished && !isVisible
 					? "hidden"
 					: saveState === "offline"
 					? "offline — saved on this device"
 					: publicationCurrent
 						? "published"
-						: !publishingEnabled && saveState === "saved" ? "draft saved" : saveState}</span>
+						: saveState === "saved" ? "draft saved" : saveState === "dirty" ? "unsaved changes" : saveState}</span>
 				{#if saveState === "conflict"}
 					<button type="button" class="secondary" onclick={reloadServerDraft}>reload server draft</button>
 				{:else}
@@ -461,7 +461,7 @@ function reloadServerDraft() {
 					<button type="button" class="secondary" onclick={() => void preview()} disabled={previewing || saveState === "saving" || saveState === "syncing" || saveState === "offline" || saveState === "conflict"}>{previewing ? "preparing preview…" : "preview"}</button>
 				{/if}
 				{#if publishingEnabled}
-					<button type="button" onclick={() => void publish()} disabled={publicationCurrent || publishing || saveState === "saving" || saveState === "syncing" || saveState === "offline" || saveState === "conflict"}>{publishing ? "publishing…" : "publish"}</button>
+					<button type="button" class="primary" onclick={() => void publish()} disabled={publicationCurrent || publishing || saveState === "saving" || saveState === "syncing" || saveState === "offline" || saveState === "conflict"}>{publishing ? "publishing…" : "publish"}</button>
 				{/if}
 				{#if setPortfolioGalleryVisibility && isPublished}
 					<button type="button" class="visibility-toggle" class:is-hidden={!isVisible} aria-pressed={!isVisible} aria-busy={visibilityChanging} onclick={() => void toggleVisibility()} disabled={visibilityChanging}>{visibilityChanging ? "updating…" : isVisible ? "hide from site" : "show on site"}</button>
@@ -476,7 +476,7 @@ function reloadServerDraft() {
 			<PortfolioPublishReview issues={publishIssues} />
 		{/if}
 
-		<section aria-labelledby="gallery-details-heading">
+		<section class="document-section" aria-labelledby="gallery-details-heading">
 			<div class="section-heading"><h2 id="gallery-details-heading">gallery details</h2><p>{publicLifecycleEnabled ? "Name, description, and public path." : "Name, description, and saved URL name."}</p></div>
 			<div class="fields">
 				<div class="field">
@@ -485,10 +485,11 @@ function reloadServerDraft() {
 				</div>
 				<div class="field">
 					<div class="field-heading">
-						<label for="gallery-slug">{publicLifecycleEnabled ? "public URL" : "URL name"}</label>
+						<label for="gallery-slug">gallery URL path</label>
 						<button type="button" class="generate-url" onclick={generateSlug} disabled={!form.title.trim()}>generate url</button>
 					</div>
-					<input id="gallery-slug" maxlength="80" bind:value={form.slug} spellcheck="false" aria-invalid={reviewRequested && !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(form.slug)} />
+					<input id="gallery-slug" maxlength="80" bind:value={form.slug} spellcheck="false" aria-describedby="gallery-slug-help" aria-invalid={reviewRequested && !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(form.slug)} />
+					<small id="gallery-slug-help">Lowercase words separated by hyphens, not a full URL.</small>
 				</div>
 				<label class="wide">description<textarea rows="3" maxlength="2000" bind:value={form.description}></textarea></label>
 			</div>

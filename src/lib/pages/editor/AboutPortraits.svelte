@@ -127,6 +127,7 @@ function handleFinalize(event: CustomEvent<{ items: DraggablePortrait[] }>) {
 	li { display: grid; grid-template-columns: minmax(190px, .65fr) minmax(280px, 1.35fr) auto; gap: 16px; align-items: start; padding: 18px 0; border-top: 1px solid var(--admin-border); }
 	li.dnd-shadow { opacity: .34; }
 	.image-summary { display: flex; gap: 12px; min-width: 0; align-items: center; }
+	.image-summary > div { min-width: 0; }
 	.image-summary img, .missing { width: 84px; height: 84px; flex: 0 0 auto; border-radius: 5px; object-fit: cover; background: var(--admin-bg); }
 	.missing { display: grid; place-items: center; color: var(--admin-text-subtle); font-size: .64rem; text-align: center; }
 	.image-summary strong, .image-summary span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -144,9 +145,9 @@ function handleFinalize(event: CustomEvent<{ items: DraggablePortrait[] }>) {
 	.remove { min-height: 36px; padding: 7px 9px; }
 	:global(#dnd-action-dragged-el) { grid-template-columns: minmax(190px, .65fr) minmax(280px, 1.35fr) auto !important; box-sizing: border-box; padding: 18px !important; overflow: hidden; border-radius: 6px !important; outline: 1px solid var(--admin-border-strong); box-shadow: 0 12px 30px color-mix(in srgb, #000 30%, transparent); opacity: .98; pointer-events: none; }
 	:global(#dnd-action-dragged-el > *) { min-width: 0; }
-	.empty { display: grid; place-items: center; min-height: 180px; text-align: center; }
+	.empty { display: flex; align-items: baseline; flex-wrap: wrap; gap: 8px 18px; margin-top: 16px; text-align: left; font-size: .76rem; }
 	.empty strong { color: var(--admin-heading); }
-	.empty p { margin: 7px 0 0; color: var(--admin-text-muted); }
+	.empty p { max-width: 62ch; margin: 0; color: var(--admin-text-muted); }
 	.field-error { color: var(--status-rose); line-height: 1.45; }
 	@media (max-width: 820px) { section { padding: 22px 0 26px; } .section-heading { align-items: flex-start; flex-direction: column; } li { grid-template-columns: 1fr; } .actions { display: flex; flex-wrap: wrap; } :global(#dnd-action-dragged-el) { grid-template-columns: 1fr !important; } :global(#dnd-action-dragged-el .placement-fields) { display: none; } button, .remove { min-height: 44px; } }
 </style>
