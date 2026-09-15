@@ -47,7 +47,7 @@ const statusLabels: Record<string, string> = {
 </script>
 
 <FeatureGate feature="galleryDelivery" {adminSession}>
-<div class="delivery-page">
+<div class="delivery-page admin-page">
 	<PageHeader title="client galleries">
 		{#snippet actions()}
 			<button class="create-btn" onclick={() => (showCreateModal = true)}>+ new gallery</button>
@@ -129,7 +129,11 @@ const statusLabels: Record<string, string> = {
 
 	.filter-row {
 		display: flex;
-		gap: 8px;
+		gap: 0;
+		width: fit-content;
+		max-width: 100%;
+		flex-wrap: wrap;
+		border: 1px solid var(--admin-control-edge);
 		margin-bottom: 24px;
 	}
 
@@ -265,14 +269,14 @@ const statusLabels: Record<string, string> = {
 
 	.status-badge {
 		font-size: 0.72rem;
-		padding: 2px 10px;
-		border-radius: 10px;
+		padding: 4px 8px;
+		border-radius: 0;
 		font-weight: 500;
 	}
 
 	.status-draft { background: var(--admin-surface-raised); color: var(--admin-text-muted); }
-	.status-uploading { background: var(--status-amber); color: #000; }
-	.status-published { background: var(--status-sage); color: #000; }
+	.status-uploading { background: color-mix(in srgb, var(--status-amber) 12%, transparent); color: var(--admin-heading); }
+	.status-published { background: color-mix(in srgb, var(--status-sage) 12%, transparent); color: var(--admin-heading); }
 	.status-archived { background: var(--admin-border); color: var(--admin-text-subtle); }
 
 	.gallery-date {
@@ -291,5 +295,7 @@ const statusLabels: Record<string, string> = {
 		.delivery-page { padding: 20px 16px; }
 		.gallery-row { flex-direction: column; align-items: flex-start; gap: 10px; }
 		.gallery-meta { flex-wrap: wrap; gap: 12px; }
+		.row-main { width: 100%; flex-wrap: wrap; gap: 12px; }
+		.gallery-info { flex-basis: 100%; }
 	}
 </style>

@@ -122,7 +122,7 @@ function truncate(text: string, max: number): string {
 		display: block;
 		width: 100%;
 		text-align: left;
-		padding: 14px 16px;
+		padding: 20px 16px;
 		background: none;
 		border: none;
 		border-bottom: 1px solid var(--admin-border);
@@ -138,13 +138,14 @@ function truncate(text: string, max: number): string {
 	}
 
 	.thread-item.active {
-		background: var(--admin-active);
+		background: var(--admin-control-selected);
+		box-shadow: inset 2px 0 var(--admin-heading);
 	}
 
 	.thread-info {
 		display: flex;
 		flex-direction: column;
-		gap: 3px;
+		gap: 6px;
 	}
 
 	.thread-top {
@@ -156,7 +157,7 @@ function truncate(text: string, max: number): string {
 	.thread-name {
 		font-weight: 500;
 		color: var(--admin-heading);
-		font-size: 0.88rem;
+		font-size: 0.94rem;
 	}
 
 	.thread-time {
@@ -182,9 +183,9 @@ function truncate(text: string, max: number): string {
 		min-width: 18px;
 		height: 18px;
 		padding: 0 5px;
-		border-radius: 9px;
-		background: var(--admin-accent);
-		color: #fff;
+		border-radius: 0;
+		background: var(--admin-heading);
+		color: var(--admin-bg);
 		font-size: 0.68rem;
 		font-weight: 600;
 	}

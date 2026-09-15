@@ -1,12 +1,14 @@
 /* Imported into component styles so Svelte retains local selector scoping. */
 .form-input {
-	padding: 8px 10px;
-	background: rgba(255, 255, 255, 0.03);
-	color: var(--admin-text);
-	border: 1px solid var(--admin-border-strong);
-	border-radius: 6px;
-	font-size: 0.85rem;
-	font-family: "Synonym", system-ui, sans-serif;
+	padding: 10px 12px;
+	min-height: 48px;
+	box-sizing: border-box;
+	background: var(--admin-control-well);
+	color: var(--admin-heading);
+	border: 1px solid var(--admin-control-edge);
+	border-radius: 0;
+	font-size: 1rem;
+	font-family: var(--admin-font-body);
 	outline: none;
 	transition: border-color 0.15s;
 }

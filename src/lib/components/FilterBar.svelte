@@ -78,6 +78,8 @@ let {
 		align-items: center;
 		gap: 10px;
 		flex-wrap: wrap;
+		min-width: 0;
+		flex: 1;
 	}
 
 	.filter-select {
@@ -132,6 +134,7 @@ let {
 
 		.filter-controls {
 			flex-direction: column;
+			align-items: stretch;
 		}
 
 		.filter-select,

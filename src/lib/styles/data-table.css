@@ -9,21 +9,21 @@
 	width: 100%;
 	border-collapse: collapse;
 	text-align: left;
-	font-size: 0.85rem;
+	font-size: 0.94rem;
+	font-variant-numeric: tabular-nums;
 }
 
 :global([data-admin] .data-table th) {
-	padding: 0 16px 10px 0;
+	padding: 12px 20px 14px 0;
 	color: var(--admin-text-subtle);
 	font-weight: 400;
-	font-size: 0.75rem;
-	letter-spacing: 0.06em;
-	text-transform: uppercase;
+	font-size: 0.8rem;
+	text-transform: lowercase;
 	border-bottom: 1px solid var(--admin-border);
 }
 
 :global([data-admin] .data-table td) {
-	padding: 16px 16px 16px 0;
+	padding: 20px 20px 20px 0;
 	border-bottom: 1px solid var(--admin-border);
 }
 

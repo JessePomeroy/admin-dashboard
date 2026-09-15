@@ -371,7 +371,7 @@ async function restoreDocument() {
 }
 </script>
 
-<svelte:head><title>post — {config.siteName}</title></svelte:head>
+<svelte:head><title>{form.title?.trim() || "Untitled post"} — {config.siteName}</title></svelte:head>
 
 <BlogWorkbench selectedDocumentId={documentId} selectedKind="post">
 {#if editorError}
@@ -379,11 +379,11 @@ async function restoreDocument() {
 {:else if editorState === undefined}
 	<p class="loading" role="status">loading post…</p>
 {:else}
-	<div class="settings-page">
+	<div class="settings-page editor-document">
 		<header class="settings-header">
 			<div>
 				<a class="back" href={baseHref}>← blog</a>
-				<h1>post</h1>
+				<h1>{form.title?.trim() || "untitled post"}</h1>
 			</div>
 			<div class="header-actions">
 				<span class="save-status">{saveState}</span>
@@ -403,7 +403,7 @@ async function restoreDocument() {
 			<p class="notice" role="status">This Post is archived. Restore it before editing or publishing.</p>
 		{/if}
 
-		<section aria-labelledby="identity-heading">
+		<section class="document-section" aria-labelledby="identity-heading">
 			<div class="section-heading">
 				<span>01</span>
 				<div>
@@ -452,7 +452,7 @@ async function restoreDocument() {
 		</section>
 
 		{#if !compactMode}
-		<section aria-labelledby="structure-heading">
+		<section class="document-section" aria-labelledby="structure-heading">
 			<div class="section-heading">
 				<span>02</span>
 				<div>
@@ -488,7 +488,7 @@ async function restoreDocument() {
 			</div>
 		</section>
 
-		<section aria-labelledby="references-heading">
+		<section class="document-section" aria-labelledby="references-heading">
 			<div class="section-heading">
 				<span>03</span>
 				<div>
@@ -533,7 +533,7 @@ async function restoreDocument() {
 		</section>
 		{/if}
 
-		<section aria-labelledby="seo-heading">
+		<section class="document-section" aria-labelledby="seo-heading">
 			<div class="section-heading">
 				<span>{compactMode ? "02" : "04"}</span>
 				<div>
@@ -543,13 +543,13 @@ async function restoreDocument() {
 			</div>
 			<div class="fields">
 				<label>
-					SEO title
+					search title
 					<input maxlength="200" bind:value={form.seoTitle} aria-invalid={Boolean(fieldErrors.seoTitle)} />
 					<small>Example: “A quiet wedding morning in Detroit — Margaret Helena”.</small>
 					{#if fieldErrors.seoTitle}<small class="field-error">{fieldErrors.seoTitle}</small>{/if}
 				</label>
 				<label>
-					SEO description
+					search description
 					<textarea rows="3" maxlength="320" bind:value={form.seoDescription} aria-invalid={Boolean(fieldErrors.seoDescription)}></textarea>
 					<small>One or two plain-language sentences describing what the reader will find.</small>
 					{#if fieldErrors.seoDescription}<small class="field-error">{fieldErrors.seoDescription}</small>{/if}
@@ -596,7 +596,7 @@ async function restoreDocument() {
 			{#if fieldErrors.body}<small class="field-error">{fieldErrors.body}</small>{/if}
 		</section>
 
-		<section aria-labelledby="media-heading">
+		<section class="document-section" aria-labelledby="media-heading">
 			<div class="section-heading">
 				<span>{compactMode ? "04" : "06"}</span>
 				<div>
@@ -638,7 +638,7 @@ async function restoreDocument() {
 		{/if}
 
 		{#if editorState.draft}
-			<section aria-labelledby="draft-actions-heading">
+			<section class="document-section" aria-labelledby="draft-actions-heading">
 				<div class="section-heading">
 					<span>{compactMode ? (slugChanged ? "06" : "05") : (slugChanged ? "08" : "07")}</span>
 					<div>
@@ -650,7 +650,7 @@ async function restoreDocument() {
 			</section>
 		{/if}
 
-		<section aria-labelledby="lifecycle-heading">
+		<section class="document-section" aria-labelledby="lifecycle-heading">
 			<div class="section-heading">
 				<span>{String((compactMode ? 5 : 7) + (slugChanged ? 1 : 0) + (editorState.draft ? 1 : 0)).padStart(2, "0")}</span>
 				<div>

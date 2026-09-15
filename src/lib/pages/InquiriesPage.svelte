@@ -80,7 +80,7 @@ async function updateStatus(id: string, newStatus: string) {
 }
 </script>
 
-<div class="inquiries-page">
+<div class="inquiries-page admin-page">
 	<header class="page-header">
 		<h1>inquiries</h1>
 	</header>

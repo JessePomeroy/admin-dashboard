@@ -17,6 +17,8 @@ import EditorNavigation from "./EditorNavigation.svelte";
 import { getAdminNavItems, hrefToNotificationKey, isAdminRouteActive } from "./adminNavigation";
 import "../theme.css";
 import "../styles/editor-shell.css";
+import "../styles/editor-document.css";
+import "../styles/editor-workbench.css";
 
 const config = getAdminConfig();
 const { api } = config;
@@ -413,7 +415,10 @@ function closeMobileMenu() {
 		background: none;
 		border: none;
 		cursor: pointer;
-		padding: 4px;
+		padding: 12px;
+		min-width: 44px;
+		min-height: 44px;
+		justify-content: center;
 	}
 
 	.hamburger-line {
@@ -512,7 +517,9 @@ function closeMobileMenu() {
 		align-items: center;
 		gap: 10px;
 		padding: 10px 12px;
-		border-radius: 6px;
+		border-radius: 0;
+		min-height: 44px;
+		box-sizing: border-box;
 		color: var(--admin-text-muted);
 		text-decoration: none;
 		font-family: var(--admin-font-body);
@@ -535,11 +542,14 @@ function closeMobileMenu() {
 
 	.nav-item:hover {
 		color: var(--admin-heading);
+		background: var(--admin-active);
 	}
 
 	.nav-item.active {
 		color: var(--admin-heading);
 		font-weight: 500;
+		background: var(--admin-control-selected);
+		box-shadow: inset 2px 0 var(--admin-heading);
 	}
 
 	.nav-icon {
@@ -614,7 +624,8 @@ function closeMobileMenu() {
 		align-items: center;
 		gap: 10px;
 		padding: 10px 12px;
-		border-radius: 6px;
+		border-radius: 0;
+		min-height: 44px;
 		color: var(--admin-text-subtle);
 		background: none;
 		border: none;
@@ -635,7 +646,9 @@ function closeMobileMenu() {
 		align-items: center;
 		gap: 10px;
 		padding: 10px 12px;
-		border-radius: 6px;
+		border-radius: 0;
+		min-height: 44px;
+		box-sizing: border-box;
 		color: var(--admin-text-subtle);
 		text-decoration: none;
 		font-family: var(--admin-font-body);
@@ -656,10 +669,9 @@ function closeMobileMenu() {
 		overflow-x: hidden;
 	}
 
-	/* Keep every operational workspace on the same quiet 64px header seam as
-	 * the editor. Page-local layouts still own their content below the line. */
-	:global(.admin-main:not(.editor-active) > [class$="-page"]),
-	:global(.admin-main:not(.editor-active) > .dashboard) {
+	/* Operational workspaces share a title rhythm and gutter; editor rails
+	 * retain their own header geometry. */
+	:global(.admin-main:not(.editor-active) > .admin-page) {
 		box-sizing: border-box;
 		width: 100%;
 		max-width: 1120px;
@@ -668,13 +680,16 @@ function closeMobileMenu() {
 
 	:global(.admin-main:not(.editor-active) .page-header) {
 		min-height: var(--editor-header-height, 64px);
-		margin: 0 0 28px;
+		box-sizing: border-box;
+		padding-block: 20px;
+		margin: 0 0 32px;
 		border-bottom: 1px solid var(--admin-border);
 	}
 
 	:global(.admin-main:not(.editor-active) .page-header h1) {
-		font-size: 1.3rem;
+		font-size: clamp(1.5rem, 2vw, 1.8rem);
 		font-weight: 500;
+		line-height: 1.25;
 	}
 
 	/* Mobile responsive */
@@ -701,8 +716,7 @@ function closeMobileMenu() {
 			max-width: 100vw;
 		}
 
-		:global(.admin-main:not(.editor-active) > [class$="-page"]),
-		:global(.admin-main:not(.editor-active) > .dashboard) {
+		:global(.admin-main:not(.editor-active) > .admin-page) {
 			padding: 0 20px 48px;
 		}
 

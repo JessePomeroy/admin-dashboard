@@ -209,7 +209,7 @@ function addUploadedAsset(asset: PortfolioMediaAsset) {
 
 <svelte:head><title>About — {config.siteName}</title></svelte:head>
 
-<div class="settings-page">
+<div class="settings-page editor-document">
 	<header class="settings-header">
 		<h1>about</h1>
 		{#if draft.initialized && !setupRequired}
@@ -238,7 +238,7 @@ function addUploadedAsset(asset: PortfolioMediaAsset) {
 		</section>
 	{:else}
 		<form onsubmit={(event) => { event.preventDefault(); void publish(); }}>
-			<section aria-labelledby="about-copy-heading">
+			<section class="document-section" aria-labelledby="about-copy-heading">
 				<div class="section-heading"><div><h2 id="about-copy-heading">identity &amp; biography</h2><p>The name and story shown on the About page.</p></div></div>
 				<div class="fields two-column">
 					<label>page heading<input id="about-heading" maxlength="120" bind:value={form.heading} aria-invalid={reviewRequested && publishIssues.some((issue) => issue.fieldId === "about-heading")} /></label>
@@ -253,8 +253,8 @@ function addUploadedAsset(asset: PortfolioMediaAsset) {
 
 			<AboutStructuredContent sections={form.sections ?? []} highlights={form.highlights ?? []} {publishIssues} {reviewRequested} onSectionsChange={(sections) => (form.sections = sections)} onHighlightsChange={(highlights) => (form.highlights = highlights)} />
 
-			<section aria-labelledby="about-seo-heading">
-				<div class="section-heading"><div><h2 id="about-seo-heading">search &amp; sharing</h2><p>Write a concise, natural summary of who this page is about and what visitors will find. Example: “About Margaret Helena, a Michigan photographer and multidisciplinary artist working across portraiture, direction, and performance.”</p></div></div>
+			<section class="document-section" aria-labelledby="about-seo-heading">
+				<div class="section-heading"><div><h2 id="about-seo-heading">search &amp; sharing</h2><p>A short introduction to the person and work on this page.</p></div></div>
 				<div class="fields"><label class="wide">search description<textarea id="about-seo-description" rows="4" maxlength="320" bind:value={form.seoDescription} aria-invalid={reviewRequested && publishIssues.some((issue) => issue.fieldId === "about-seo-description")}></textarea><small>{form.seoDescription?.length ?? 0} / 320. The site uses its default sharing image for link previews.</small></label></div>
 			</section>
 		</form>

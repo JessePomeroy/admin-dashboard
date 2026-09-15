@@ -148,7 +148,7 @@ async function deleteTemplate() {
 {#if templatesQuery.isLoading}
 	<LoadingState />
 {:else}
-<div class="emails-page">
+<div class="emails-page admin-page">
 	<header class="page-header">
 		<div class="header-left">
 			<h1>email templates</h1>
@@ -313,7 +313,7 @@ async function deleteTemplate() {
 		align-items: center;
 		justify-content: space-between;
 		gap: 16px;
-		padding: 16px 0;
+		padding: 22px 0;
 		background: none;
 		border: none;
 		border-bottom: 1px solid var(--admin-border);
@@ -336,13 +336,13 @@ async function deleteTemplate() {
 	}
 
 	.template-name {
-		font-size: 0.88rem;
+		font-size: 0.94rem;
 		color: var(--admin-heading);
 		font-weight: 500;
 	}
 
 	.template-subject {
-		font-size: 0.8rem;
+		font-size: 0.875rem;
 		color: var(--admin-text-muted);
 		overflow: hidden;
 		text-overflow: ellipsis;

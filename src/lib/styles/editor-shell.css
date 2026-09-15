@@ -44,7 +44,7 @@
 	height: 37px;
 	padding-inline: 10px;
 	padding-block: 0;
-	min-height: 37px;
+	min-height: 44px;
 	border-radius: 0;
 	background: transparent;
 	box-shadow: none;
@@ -107,7 +107,7 @@
 	height: 37px;
 	padding-inline: 8px;
 	padding-block: 0;
-	min-height: 37px;
+	min-height: 44px;
 	border-radius: 0;
 	background: transparent;
 }
@@ -187,8 +187,8 @@
 	[data-admin] .sidebar .nav-item,
 	[data-admin] .sidebar.editor-compact .nav-item {
 		box-sizing: border-box;
-		height: 37px;
-		min-height: 37px;
+		height: 44px;
+		min-height: 44px;
 		padding-inline: 10px;
 		padding-block: 0;
 	}
@@ -203,8 +203,8 @@
 
 	[data-admin] .sidebar .theme-toggle,
 	[data-admin] .sidebar .back-link {
-		height: 37px;
-		min-height: 37px;
+		height: 44px;
+		min-height: 44px;
 		padding-inline: 8px;
 		padding-block: 0;
 	}

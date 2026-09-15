@@ -1,6 +1,7 @@
 <script lang="ts">
 import type { Snippet } from "svelte";
 import { modalLifecycle } from "../modalLifecycle";
+import { dragSheet, sheetBackdropTransition, sheetTransition } from "./adminSheet";
 
 interface Props {
 	title: string;
@@ -22,6 +23,7 @@ function handleOverlayClick(e: MouseEvent) {
 <!-- svelte-ignore a11y_click_events_have_key_events (modalLifecycle owns keyboard handling.) -->
 <div
 	use:modalLifecycle={onclose}
+	transition:sheetBackdropTransition|global
 	class="modal-overlay"
 	role="dialog"
 	aria-modal="true"
@@ -31,11 +33,15 @@ function handleOverlayClick(e: MouseEvent) {
 >
 	<div
 		class="modal-content"
+		transition:sheetTransition|global
 		class:modal-content-wide={size === "wide"}
 		class:modal-content-narrow={size === "narrow"}
 		class:modal-content-full={size === "full"}
 		role="document"
 	>
+		<div class="sheet-handle" aria-hidden="true" use:dragSheet={onclose}>
+			<span></span>
+		</div>
 		<div class="modal-header">
 			<h2 class="modal-title">{title}</h2>
 			<button class="modal-close" aria-label="Close dialog" onclick={onclose}>
@@ -45,7 +51,9 @@ function handleOverlayClick(e: MouseEvent) {
 			</button>
 		</div>
 
-		{@render children()}
+		<div class="modal-scroll-region">
+			{@render children()}
+		</div>
 	</div>
 </div>
 
@@ -64,11 +72,12 @@ function handleOverlayClick(e: MouseEvent) {
 
 	.modal-content {
 		background: var(--admin-bg);
-		border: 1px solid var(--admin-border);
-		border-radius: 12px;
+		border: 1px solid var(--admin-control-edge);
+		border-radius: 0;
 		width: 100%;
 		max-width: var(--admin-modal-max-width, 540px);
-		max-height: 90vh;
+		max-height: 90dvh;
+		box-sizing: border-box;
 		overflow-y: auto;
 		box-shadow: 0 24px 80px rgba(0, 0, 0, 0.5);
 	}
@@ -89,12 +98,15 @@ function handleOverlayClick(e: MouseEvent) {
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
-		padding: 24px 28px 20px;
+		gap: 16px;
+		padding: 20px 28px;
+		margin-bottom: 24px;
+		border-bottom: 1px solid var(--admin-border-strong);
 	}
 
 	.modal-title {
 		font-family: "Chillax", sans-serif;
-		font-size: 1.1rem;
+		font-size: 1.35rem;
 		font-weight: 500;
 		color: var(--admin-heading);
 		margin: 0;
@@ -114,9 +126,38 @@ function handleOverlayClick(e: MouseEvent) {
 		color: var(--admin-heading);
 	}
 
+	.sheet-handle {
+		display: none;
+	}
+
+	.modal-scroll-region {
+		display: contents;
+	}
+
 	@media (max-width: 768px) {
+		.sheet-handle {
+			display: grid;
+			place-items: center;
+			flex: 0 0 36px;
+			background: var(--admin-bg);
+			touch-action: none;
+			user-select: none;
+			cursor: grab;
+		}
+
+		.sheet-handle:active { cursor: grabbing; }
+
+		.sheet-handle span {
+			width: 44px;
+			height: 4px;
+			background: var(--admin-text-muted);
+			pointer-events: none;
+		}
+
 		.modal-header {
-			padding: var(--admin-modal-mobile-header-padding, 24px 28px 20px);
+			flex-shrink: 0;
+			background: var(--admin-bg);
+			padding: var(--admin-modal-mobile-header-padding, 16px 20px);
 		}
 
 		.modal-overlay {
@@ -125,9 +166,19 @@ function handleOverlayClick(e: MouseEvent) {
 		}
 
 		.modal-content {
+			display: flex;
+			flex-direction: column;
 			max-width: 100%;
-			max-height: var(--admin-modal-mobile-max-height, 85vh);
-			border-radius: 12px 12px 0 0;
+			max-height: var(--admin-modal-mobile-max-height, 90dvh);
+			border-radius: 0;
+			overflow: hidden;
+		}
+
+		.modal-scroll-region {
+			display: block;
+			min-height: 0;
+			overflow-y: auto;
+			overscroll-behavior: contain;
 		}
 	}
 </style>

@@ -828,7 +828,7 @@ function removeSetMember(member: CatalogProductDraftForm["setMembers"][number]) 
 }
 </script>
 
-<svelte:head><title>Product — {config.siteName}</title></svelte:head>
+<svelte:head><title>{canEditGraphProduct || !isGraphV2 ? form.title?.trim() || "Untitled product" : catalogProductEditorTitle(readOnlyRevision)?.trim() || "Product"} — {config.siteName}</title></svelte:head>
 {#key productId}
 <ProductWorkbench selectedProductId={productId}>
 {#if editorError}
@@ -836,10 +836,19 @@ function removeSetMember(member: CatalogProductDraftForm["setMembers"][number]) 
 {:else if editorState === undefined || editorState.productId !== productId}
 	<p class="loading" role="status">Loading product draft…</p>
 {:else}
-		<div class="settings-page product-page">
+		<div class="settings-page product-page editor-document editor-workbench">
 		<header class="settings-header">
-			<div><a class="back" href={baseHref}>← products</a><h1>{canEditGraphProduct || !isGraphV2 ? form.title?.trim() || editorState.productKey : catalogProductEditorTitle(readOnlyRevision)?.trim() || editorState.productKey}</h1></div>
-			{#if hasActiveDraft && (!isGraphV2 || canEditGraphProduct)}<div class="actions"><span class="sr-only save-state" aria-live="polite">{saveState}</span>{#if dirty || saveState === "saving" || saveState === "error"}<button type="button" class="primary" onclick={() => void saveDraft()} disabled={!canSave}>{saveState === "saving" ? "saving…" : saveState === "error" ? "try save again" : "save draft"}</button>{:else if canPublish}<button type="button" class="primary" onclick={() => void runPublication("publish")}>{editorState.published ? "publish changes" : publishesToShop ? "publish to Shop" : "publish to Convex CMS"}</button>{/if}</div>{/if}
+			<div><a class="back" href={baseHref}>← products</a><h1>{canEditGraphProduct || !isGraphV2 ? form.title?.trim() || "Untitled product" : catalogProductEditorTitle(readOnlyRevision)?.trim() || "Product"}</h1></div>
+			{#if hasActiveDraft && (!isGraphV2 || canEditGraphProduct)}
+				<div class="actions">
+					<span class="save-state" data-save-state={saveState} aria-live="polite">{saveState === "saved" ? "draft saved" : saveState === "dirty" ? "unsaved changes" : saveState}</span>
+					{#if dirty || saveState === "saving" || saveState === "error"}
+						<button type="button" class="primary" onclick={() => void saveDraft()} disabled={!canSave}>{saveState === "saving" ? "saving…" : saveState === "error" ? "try save again" : "save draft"}</button>
+					{:else if canPublish}
+						<button type="button" class="primary" onclick={() => void runPublication("publish")}>{editorState.published ? "publish changes" : publishesToShop ? "publish to Shop" : "publish to Convex CMS"}</button>
+					{/if}
+				</div>
+			{/if}
 		</header>
 		{#if saveError}<p class="alert" role="alert">{saveError}</p>{/if}
 		{#if publicationError}<div class="alert publication-alert" role="alert"><span>{publicationError}</span>{#if publicationOperation?.phase === "reload-required"}<button type="button" onclick={() => globalThis.location.reload()}>reload product</button>{/if}</div>{/if}
@@ -886,7 +895,7 @@ function removeSetMember(member: CatalogProductDraftForm["setMembers"][number]) 
 						: undefined}
 				/>
 			{/if}
-			<section aria-labelledby="product-identity-heading">
+			<section class="document-section" aria-labelledby="product-identity-heading">
 				<div class="section-heading"><span>01</span><div><h2 id="product-identity-heading">product details</h2><p>The working name, URL name, and description stored with this draft.</p></div></div>
 				<div class="fields two-column">
 					<label>product name<input maxlength="160" value={form.title ?? ""} oninput={(event) => updateOptionalField("title", event.currentTarget.value)} onblur={fillSlugIfEmpty} disabled={editorLocked} /></label>
@@ -894,7 +903,7 @@ function removeSetMember(member: CatalogProductDraftForm["setMembers"][number]) 
 					<label class="wide">description<textarea rows="5" maxlength="5000" value={form.description ?? ""} oninput={(event) => updateOptionalField("description", event.currentTarget.value)} disabled={editorLocked}></textarea></label>
 				</div>
 			</section>
-			<section aria-labelledby="sale-settings-heading">
+			<section class="document-section" aria-labelledby="sale-settings-heading">
 				<div class="section-heading"><span>02</span><div><h2 id="sale-settings-heading">{usesSinglePrice ? "price and availability" : "sale settings"}</h2>{#if !usesSinglePrice}<p>Choose how the {catalogProductKindLabel(form.productKind)} is fulfilled and whether customers may currently order it.</p>{/if}</div></div>
 				<div class="sale-control-grid">
 					{#if form.productKind === "print" || form.productKind === "print_set"}

@@ -180,7 +180,7 @@ function handleGalleryFinalize(event: CustomEvent<{ items: DraggablePlacement[] 
 	</li>
 {/snippet}
 
-<section aria-labelledby="catalog-product-media-heading">
+<section class="product-media" aria-labelledby="catalog-product-media-heading">
 	<div class="section-heading">
 		<div>
 			<h2 id="catalog-product-media-heading">product images</h2>

@@ -68,7 +68,7 @@ function handleFinalize(event: CustomEvent<{ items: DraggablePlacement[] }>) {
 }
 </script>
 
-<section aria-labelledby="gallery-images-heading">
+<section class="portfolio-images" aria-labelledby="gallery-images-heading">
 	<div class="section-heading">
 		<div><h2 id="gallery-images-heading" tabindex="-1">images</h2><p>{placements.length} {placements.length === 1 ? "image" : "images"} in this draft. Drag images to set their {publishingEnabled ? "public" : "saved"} order.</p></div>
 		<button type="button" class="secondary" onclick={onChooseMedia}>choose from media</button>
@@ -78,7 +78,7 @@ function handleFinalize(event: CustomEvent<{ items: DraggablePlacement[] }>) {
 	{/if}
 
 	{#if placements.length === 0}
-		<div class="empty"><strong>No images selected.</strong><p>Upload new images here or choose a ready image from the shared site media library.</p></div>
+		<div class="empty"><strong>No images yet.</strong><p>{uploadEndpoint ? "Upload above or choose from media." : "Choose an image from the shared media library."}</p></div>
 	{:else}
 		<ol
 			class="image-list"
@@ -154,9 +154,9 @@ function handleFinalize(event: CustomEvent<{ items: DraggablePlacement[] }>) {
 	.drag-handle:active:not(:disabled) { cursor: grabbing; }
 	:global(#dnd-action-dragged-el) { grid-template-columns: 28px minmax(150px, 190px) minmax(0, 1fr) auto !important; box-sizing: border-box; padding: 14px !important; overflow: hidden; border-radius: 4px !important; outline: 1px solid var(--admin-border-strong); box-shadow: 0 12px 30px color-mix(in srgb, #000 30%, transparent); opacity: .98; pointer-events: none; }
 	:global(#dnd-action-dragged-el > *) { min-width: 0; }
-	.empty { display: grid; place-items: center; min-height: 180px; text-align: center; }
+	.empty { display: flex; align-items: baseline; flex-wrap: wrap; gap: 8px 18px; margin-top: 16px; text-align: left; font-size: .76rem; }
 	.empty strong { color: var(--admin-heading); }
-	.empty p { margin: 7px 0 0; color: var(--admin-text-muted); }
+	.empty p { margin: 0; color: var(--admin-text-muted); }
 	@media (max-width: 820px) {
 		section { padding: 18px 0 22px; }
 		.section-heading { align-items: flex-start; flex-direction: column; }

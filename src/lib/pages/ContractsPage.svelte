@@ -358,7 +358,7 @@ async function handleDeleteTemplate(id: string) {
 	{#if isLoading}
 		<LoadingState />
 	{:else}
-	<div class="contracts-page">
+	<div class="contracts-page admin-page">
 		<header class="page-header">
 			<div class="header-left">
 				<h1>contracts</h1>
@@ -555,6 +555,7 @@ async function handleDeleteTemplate(id: string) {
 
 	.tab-bar {
 		display: flex;
+		flex-wrap: wrap;
 		gap: 0;
 		margin-bottom: 24px;
 		border-bottom: 1px solid var(--admin-border);
@@ -570,7 +571,7 @@ async function handleDeleteTemplate(id: string) {
 		color: var(--admin-text-muted);
 		cursor: pointer;
 		transition: color 0.15s, border-color 0.15s;
-		margin-bottom: -1px;
+		margin-bottom: 0;
 	}
 
 	.tab-btn:hover {
@@ -640,11 +641,6 @@ async function handleDeleteTemplate(id: string) {
 
 		.stat-sep {
 			display: none;
-		}
-
-		.tab-bar {
-			overflow-x: auto;
-			-webkit-overflow-scrolling: touch;
 		}
 
 		.filter-bar {

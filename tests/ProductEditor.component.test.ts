@@ -1091,7 +1091,8 @@ describe("draft-only product editor", () => {
 		expect(document.querySelector("#catalog-publication-heading")).toBeNull();
 		button("add variant")?.click();
 		await tick();
-		const newVariantKey = document.querySelectorAll(".variant-heading small")[1]?.textContent ?? "";
+		const newVariantKey = document.querySelectorAll<HTMLInputElement>(".variant-fields .price-field input")[1]?.id.replace(/^catalog-price-/, "") ?? "";
+		expect(newVariantKey).not.toBe("");
 		document.querySelector("#catalog-variants-heading")?.closest("section")?.querySelector("ol")?.dispatchEvent(new CustomEvent("finalize", { bubbles: true, detail: { items: [{ key: newVariantKey, status: "enabled", id: newVariantKey }, { ...revision.variants[0], id: revision.variants[0].key }], info: { source: "pointer", trigger: "droppedIntoZone", id: newVariantKey } } }));
 		const name = input("product name");
 		name!.value = "Lake print revised";
@@ -1135,7 +1136,8 @@ describe("draft-only product editor", () => {
 		segmentedChoice("sale availability", "not for sale")!.click();
 		button("add variant")?.click();
 		await tick();
-		const newVariantKey = document.querySelectorAll(".variant-heading small")[1]?.textContent ?? "";
+		const newVariantKey = document.querySelectorAll<HTMLInputElement>(".variant-fields .price-field input")[1]?.id.replace(/^catalog-price-/, "") ?? "";
+		expect(newVariantKey).not.toBe("");
 		document.querySelector("#catalog-variants-heading")?.closest("section")?.querySelector("ol")?.dispatchEvent(new CustomEvent("finalize", { bubbles: true, detail: { items: [{ key: newVariantKey, status: "enabled", id: newVariantKey }, { ...graphRevision.draft.variants[0], id: graphRevision.draft.variants[0].key }], info: { source: "pointer", trigger: "droppedIntoZone", id: newVariantKey } } }));
 		await tick();
 
@@ -1271,6 +1273,8 @@ describe("draft-only product editor", () => {
 		)!;
 		expect(material.textContent).toContain("Archival Matte");
 		expect(size.textContent).toContain("4×6");
+		expect(document.querySelector(".variant-heading h3")?.textContent).toBe("Archival Matte · 4×6");
+		expect(document.querySelector(".variant-heading")?.textContent).not.toContain("variant-original");
 		material.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true }));
 		await tick();
 		await Promise.resolve();
@@ -2161,7 +2165,10 @@ describe("draft-only product editor", () => {
 		await tick();
 		await Promise.resolve();
 		await tick();
-		expect(document.querySelector(".save-state")?.textContent).toBe("dirty");
+		const saveStatus = document.querySelector(".save-state");
+		expect(saveStatus?.textContent).toBe("unsaved changes");
+		expect(saveStatus?.getAttribute("data-save-state")).toBe("dirty");
+		expect(saveStatus?.classList.contains("sr-only")).toBe(false);
 		expect(button("save draft")?.disabled).toBe(false);
 
 		button("save draft")?.click();

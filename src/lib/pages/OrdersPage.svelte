@@ -236,7 +236,7 @@ function exportCSV() {
 {#if ordersQuery.isLoading}
 	<LoadingState />
 {:else}
-<div class="orders-page">
+<div class="orders-page admin-page">
 	<header class="page-header">
 		<h1>orders</h1>
 	</header>

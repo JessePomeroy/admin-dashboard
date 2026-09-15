@@ -42,6 +42,7 @@ let { title, actions }: Props = $props();
 		display: flex;
 		align-items: center;
 		gap: 10px;
+		flex-wrap: wrap;
 	}
 
 	@media (max-width: 768px) {

@@ -147,7 +147,7 @@ let {
 
 	.column-title {
 		font-family: "Synonym", system-ui, sans-serif;
-		font-size: 0.82rem;
+		font-size: 0.94rem;
 		font-weight: 500;
 		color: var(--admin-text-muted);
 		letter-spacing: 0.03em;
@@ -157,9 +157,9 @@ let {
 	.column-count {
 		font-size: 0.72rem;
 		color: var(--admin-text-subtle);
-		background: var(--admin-surface);
+		background: transparent;
 		padding: 2px 7px;
-		border-radius: 10px;
+		border-radius: 0;
 	}
 
 	.column-actions {
@@ -190,7 +190,7 @@ let {
 		right: 0;
 		background: var(--admin-dropdown-bg);
 		border: 1px solid var(--admin-border-strong);
-		border-radius: 6px;
+		border-radius: 0;
 		padding: 4px;
 		z-index: 20;
 		min-width: 120px;
@@ -203,7 +203,8 @@ let {
 		background: none;
 		border: none;
 		color: var(--admin-text);
-		padding: 8px 12px;
+		padding: 12px;
+		min-height: 44px;
 		font-family: "Synonym", system-ui, sans-serif;
 		font-size: 0.82rem;
 		cursor: pointer;
@@ -263,18 +264,18 @@ let {
 		display: block;
 		width: 100%;
 		text-align: left;
-		background: var(--admin-surface-raised);
-		border: 1px solid var(--admin-border);
-		border-radius: 8px;
-		padding: 14px 16px;
+		background: var(--admin-control-well);
+		border: 0;
+		border-left: 2px solid var(--admin-control-edge);
+		border-radius: 0;
+		padding: 20px 16px;
 		cursor: grab;
 		transition: background 0.15s, border-color 0.15s, box-shadow 0.15s;
 	}
 
 	.board-card:hover {
-		background: rgba(255, 255, 255, 0.07);
-		border-color: var(--admin-border-strong);
-		box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+		background: var(--admin-control-face);
+		border-color: var(--admin-heading);
 	}
 
 	.board-card:active {
@@ -283,7 +284,7 @@ let {
 
 	.card-name {
 		display: block;
-		font-size: 0.88rem;
+		font-size: 0.94rem;
 		font-weight: 500;
 		color: var(--admin-heading);
 		margin-bottom: 8px;

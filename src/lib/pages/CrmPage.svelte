@@ -277,7 +277,7 @@ function formatStatus(status: string) {
 {#if isLoading}
 	<LoadingState />
 {:else}
-<div class="crm-page">
+<div class="crm-page admin-page">
 	<header class="page-header">
 		<div class="header-left">
 			<h1>clients</h1>
@@ -515,7 +515,8 @@ function formatStatus(status: string) {
 		}
 
 		.page-header {
-			flex-direction: column;
+			align-items: center;
+			flex-wrap: wrap;
 		}
 
 		.btn-add {
@@ -523,8 +524,7 @@ function formatStatus(status: string) {
 		}
 
 		.stats-line {
-			flex-direction: column;
-			gap: 4px;
+			gap: 6px 16px;
 		}
 
 		.stat-sep {
@@ -532,11 +532,24 @@ function formatStatus(status: string) {
 		}
 
 		.filter-bar {
-			flex-direction: column;
+			display: grid;
+			grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+			align-items: stretch;
+		}
+
+		.filter-select {
+			width: 100%;
 		}
 
 		.filter-search {
 			min-width: unset;
+			width: 100%;
+			grid-column: 1 / -1;
+		}
+
+		.filter-bar .btn-manage-tags {
+			grid-column: 1 / -1;
+			justify-self: start;
 		}
 	}
 </style>

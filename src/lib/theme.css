@@ -1,3 +1,5 @@
+@import "./styles/admin-controls.css";
+
 /* Admin Theme
  *
  * Each client site sets these two CSS custom properties to control the admin palette:
@@ -18,6 +20,12 @@
 	--admin-font-body: "Synonym", system-ui, sans-serif;
 	--admin-font-display: "Chillax", system-ui, sans-serif;
 	--admin-font-mono: ui-monospace, monospace;
+	--admin-control-edge: color-mix(in srgb, var(--admin-heading) 56%, var(--admin-bg));
+	--admin-control-well: color-mix(in srgb, var(--admin-bg) 97%, var(--admin-heading));
+	--admin-control-face: color-mix(in srgb, var(--admin-bg) 88%, var(--admin-heading));
+	--admin-control-hover: color-mix(in srgb, var(--admin-bg) 82%, var(--admin-heading));
+	--admin-control-shadow: color-mix(in srgb, var(--admin-heading) 20%, transparent);
+	--admin-control-selected: color-mix(in srgb, var(--admin-accent) 16%, var(--admin-bg));
 
 	--admin-bg: rgb(var(--_dark));
 	--admin-surface: rgba(var(--_light), 0.03);

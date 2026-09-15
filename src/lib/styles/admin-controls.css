@@ -1,0 +1,231 @@
+/* Shared controls stay inside the mounted admin; structural rows remain flat. */
+[data-admin] :is(input, textarea, select, button)[class] {
+	box-sizing: border-box;
+	font-family: var(--admin-font-body);
+	border-radius: 0;
+}
+
+[data-admin]
+	:is(
+		input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):where(
+			:not([type="hidden"]):not([type="color"]):not([type="range"])
+		),
+		textarea,
+		select
+	) {
+	min-width: 0;
+	max-width: 100%;
+	min-height: 48px;
+	padding: 10px 12px;
+	border-radius: 0;
+	border: 1px solid var(--admin-control-edge);
+	background: var(--admin-control-well);
+	color: var(--admin-heading);
+	box-shadow: inset 0 2px 3px color-mix(in srgb, var(--admin-heading) 7%, transparent);
+	font-size: 1rem;
+	line-height: 1.5;
+}
+
+[data-admin] :is(input, textarea)::placeholder {
+	color: var(--admin-text-muted);
+}
+
+[data-admin] :is(form, .detail-body) .form-group {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	min-width: 0;
+}
+
+[data-admin] :is(form, .detail-body) :is(.form-label, .detail-label) {
+	font-size: 0.875rem;
+	line-height: 1.45;
+	letter-spacing: 0;
+	color: var(--admin-text);
+}
+
+[data-admin]
+	:is(
+		button[class^="btn-"],
+		button.action-btn,
+		button.create-btn,
+		button.init-btn,
+		button.save-btn,
+		button.cancel-btn,
+		button.submit-btn,
+		button.view-btn,
+		button.share-btn,
+		button.send-btn,
+		button.status-action-btn,
+		button.browse-btn,
+		button.add-more-btn,
+		button.retry-btn,
+		button.retry-all-btn,
+		button.pause-btn,
+		button.delete-selected-btn,
+		button.login-button,
+		button.google-button,
+		button.denied-button
+	) {
+	min-height: 44px;
+	padding: 10px 16px;
+	border-radius: 0;
+	border: 1px solid var(--admin-control-edge);
+	border-bottom-width: 2px;
+	background: var(--admin-control-face);
+	box-shadow: 0 2px 0 var(--admin-control-shadow);
+	color: var(--admin-heading);
+	font-size: 0.875rem;
+	font-weight: 500;
+	line-height: 1.4;
+	cursor: pointer;
+}
+
+[data-admin]
+	:is(
+		button.btn-add,
+		button.btn-save,
+		button.btn-send,
+		button.btn-new,
+		button.create-btn,
+		button.init-btn,
+		button.save-btn,
+		button.submit-btn,
+		button.send-btn,
+		button.login-button,
+		button.action-btn.primary,
+		button.action-btn.publish
+	) {
+	border-color: var(--admin-heading);
+	background: var(--admin-heading);
+	color: var(--admin-bg);
+}
+
+[data-admin]
+	:is(
+		button.btn-cancel,
+		button.cancel-btn,
+		button.btn-danger-outline,
+		button.btn-remove-item,
+		button.btn-remove-included
+	) {
+	border-color: transparent;
+	background: transparent;
+	box-shadow: none;
+	font-weight: 400;
+}
+
+[data-admin]
+	:is(
+		button.btn-danger,
+		button.btn-danger-outline,
+		button.btn-remove-item,
+		button.btn-remove-included,
+		button.delete-selected-btn
+	) {
+	color: var(--admin-heading);
+	text-decoration: underline;
+	text-decoration-color: var(--status-rose);
+	text-underline-offset: 5px;
+}
+
+[data-admin] :is(button.filter-chip, button.tab-btn, button.btn-tag-toggle, button.status-btn) {
+	min-height: 44px;
+	padding: 10px 14px;
+	border: 0;
+	background: transparent;
+	box-shadow: none;
+	font-size: 0.875rem;
+	color: var(--admin-text-muted);
+}
+
+[data-admin]
+	:is(button.filter-chip, button.tab-btn, button.btn-tag-toggle, button.status-btn):is(
+		.active,
+		.tab-active,
+		.selected,
+		[aria-pressed="true"]
+	) {
+	background: var(--admin-control-selected);
+	color: var(--admin-heading);
+	font-weight: 500;
+}
+
+[data-admin] :is(button.column-menu-btn, button.modal-close, button.close-btn, button.back-btn) {
+	min-width: 44px;
+	min-height: 44px;
+	padding: 10px;
+}
+
+[data-admin] :is(button, a, summary, input, textarea, select):focus-visible {
+	outline: 2px solid var(--admin-heading);
+	outline-offset: 3px;
+}
+
+[data-admin]
+	button:active:not(:disabled):not(.board-card):not(.feed-item-btn):not(.row-main):not(
+		.thread-item
+	) {
+	transform: translateY(1px);
+	box-shadow: none;
+}
+
+[data-admin] button:disabled {
+	cursor: not-allowed;
+}
+
+[data-admin] button[class]:disabled {
+	border-color: var(--admin-border-strong);
+	background: transparent;
+	box-shadow: none;
+	color: var(--admin-text-muted);
+	opacity: 1;
+}
+
+@media (hover: hover) {
+	[data-admin]
+		:is(
+			button[class^="btn-"],
+			button.action-btn,
+			button.create-btn,
+			button.save-btn,
+			button.login-button,
+			button.google-button
+		):hover:not(:disabled) {
+		border-color: var(--admin-heading);
+		background: var(--admin-control-hover);
+		color: var(--admin-heading);
+	}
+	[data-admin]
+		:is(
+			button.btn-add,
+			button.btn-save,
+			button.btn-send,
+			button.btn-new,
+			button.create-btn,
+			button.init-btn,
+			button.save-btn,
+			button.submit-btn,
+			button.send-btn,
+			button.login-button,
+			button.action-btn.primary,
+			button.action-btn.publish
+		):hover:not(:disabled) {
+		background: var(--admin-heading);
+		color: var(--admin-bg);
+	}
+	[data-admin] :is(button.filter-chip, button.tab-btn):hover:not(:disabled) {
+		background: var(--admin-control-selected);
+		color: var(--admin-heading);
+	}
+}
+
+@media (prefers-reduced-motion: no-preference) {
+	[data-admin] :is(button, input, textarea, select) {
+		transition:
+			background-color 120ms ease,
+			border-color 120ms ease,
+			box-shadow 120ms ease,
+			transform 80ms ease;
+	}
+}

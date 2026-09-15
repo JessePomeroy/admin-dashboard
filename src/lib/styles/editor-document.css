@@ -1,0 +1,379 @@
+/* Document-side layout only. Navigation, collection panes and owner theme stay separate. */
+[data-admin].editor-workspace .editor-document {
+	container: editor-document / inline-size;
+	box-sizing: border-box;
+	width: 100%;
+	max-width: 1160px;
+	padding: 24px 32px 72px;
+}
+
+[data-admin].editor-workspace .editor-document > :is(header, .settings-header) {
+	display: flex;
+	flex-direction: row;
+	align-items: flex-end;
+	justify-content: space-between;
+	gap: 16px 28px;
+	flex-wrap: wrap;
+	min-height: 0;
+	margin: 0;
+	padding: 0 0 24px;
+	border: 0;
+}
+
+[data-admin].editor-workspace .editor-document > header > div:first-child {
+	min-width: 0;
+}
+
+[data-admin].editor-workspace .editor-document h1 {
+	margin: 0;
+	font-size: clamp(1.45rem, 2vw, 1.8rem);
+	line-height: 1.25;
+	font-weight: 500;
+	overflow-wrap: anywhere;
+	text-wrap: balance;
+}
+
+[data-admin].editor-workspace .editor-document .back {
+	display: inline-flex;
+	align-items: center;
+	min-height: 32px;
+	margin: 0 0 4px;
+	font-size: 0.76rem;
+	text-decoration: none;
+	color: var(--admin-text-muted);
+}
+
+[data-admin].editor-workspace .editor-document :is(.actions, .header-actions) {
+	gap: 8px;
+}
+
+[data-admin].editor-workspace
+	.editor-document
+	:is(.save-state:not(.sr-only), .save-status, .actions .status) {
+	color: var(--admin-text-muted);
+	font-size: 0.75rem;
+	line-height: 1.5;
+}
+
+[data-admin].editor-workspace .editor-document > form {
+	gap: 0;
+}
+
+[data-admin].editor-workspace .editor-document :is(section, .document-section) {
+	margin-block: 0;
+	padding-block: 28px;
+	border-radius: 0;
+	box-shadow: none;
+}
+
+[data-admin].editor-workspace .editor-document .section-heading {
+	gap: 10px;
+	margin-bottom: 20px;
+}
+
+[data-admin].editor-workspace .editor-document .section-heading > div {
+	min-width: 0;
+}
+
+[data-admin].editor-workspace .editor-document .section-heading h2 {
+	font-size: 0.94rem;
+	font-weight: 500;
+	line-height: 1.4;
+}
+
+[data-admin].editor-workspace .editor-document .section-heading p {
+	max-width: 48ch;
+	margin-top: 7px;
+	font-size: 0.76rem;
+	line-height: 1.55;
+}
+
+[data-admin].editor-workspace
+	.editor-document
+	:is(
+		.description,
+		.metadata-note,
+		.empty-inline,
+		.setup-note,
+		.editor-help,
+		label > small,
+		.field > small
+	) {
+	max-width: 48ch;
+	line-height: 1.55;
+}
+
+[data-admin].editor-workspace .editor-document .fields {
+	gap: 18px 20px;
+	min-width: 0;
+}
+
+[data-admin].editor-workspace .editor-document .fields:is(.two-column, .two),
+[data-admin].editor-workspace .editor-document.gallery-page .fields {
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+[data-admin].editor-workspace .editor-document :is(label, .field, .url-field) {
+	min-width: 0;
+	font-size: 0.79rem;
+}
+
+[data-admin].editor-workspace
+	.editor-document
+	:is(
+		input:not([type="checkbox"]):not([type="radio"]):not([type="file"]),
+		textarea,
+		select
+	) {
+	font-size: 0.84rem;
+	line-height: 1.55;
+	padding: 10px 12px;
+	border-radius: 0;
+}
+
+[data-admin].editor-workspace .editor-document :is(button, .actions a) {
+	border-radius: 0;
+	font-size: 0.76rem;
+}
+
+[data-admin].editor-workspace .editor-document button:not(:disabled) {
+	color: var(--admin-heading);
+}
+
+[data-admin].editor-workspace
+	.editor-document
+	:is(.segmented-choice > div, .segmented-choice label) {
+	border-radius: 0;
+}
+
+[data-admin].editor-workspace
+	.editor-document
+	:is(button.danger, .row-actions .remove, .generate-url:not(:disabled)) {
+	color: var(--admin-heading);
+}
+
+[data-admin].editor-workspace .editor-document .identity span {
+	color: var(--admin-text-muted);
+}
+
+[data-admin].editor-workspace .editor-document .media-lists {
+	padding: 0;
+	background: transparent;
+}
+
+[data-admin].editor-workspace .editor-document .media-lists li {
+	padding-inline: 0;
+	border-top: 1px solid var(--admin-border);
+	background: transparent;
+}
+
+/* Neutral owner colors keep the action readable even with a very light accent. */
+[data-admin].editor-workspace .editor-document button.primary,
+[data-admin].editor-workspace
+	.editor-document
+	button.primary:hover:not(:disabled) {
+	background: var(--admin-heading);
+	border-color: transparent;
+	color: var(--admin-bg);
+	filter: none;
+}
+
+[data-admin].editor-workspace .editor-document.document-overview {
+	padding-top: 44px;
+}
+
+[data-admin].editor-workspace .document-overview > :is(span, .overview-label) {
+	color: var(--admin-text-muted);
+	font-size: 0.72rem;
+	letter-spacing: 0.04em;
+	text-transform: lowercase;
+}
+
+[data-admin].editor-workspace .document-overview > :is(h2, .overview-title) {
+	margin: 12px 0 0;
+	font-family: var(--admin-font-display);
+	font-size: clamp(1.45rem, 2vw, 1.8rem);
+	font-weight: 500;
+	line-height: 1.3;
+}
+
+[data-admin].editor-workspace .editor-document.document-overview > p {
+	max-width: 54ch;
+	margin: 14px 0 0;
+	color: var(--admin-text-muted);
+	font-size: 0.84rem;
+	line-height: 1.6;
+}
+
+[data-admin].editor-workspace .document-overview > .overview-note {
+	font-size: 0.76rem;
+}
+
+[data-admin].editor-workspace
+	.editor-document
+	:is(
+		.alert,
+		.success,
+		.review,
+		.notice,
+		.money-input,
+		.multiplier-input,
+		.private-file-dropzone,
+		.uploader,
+		.empty,
+		.editor-frame,
+		.rich-body-editor,
+		.rich-image,
+		.rich-image-preview,
+		.unsupported
+	) {
+	border-radius: 0;
+	box-shadow: none;
+}
+
+[data-admin].editor-workspace .editor-document .rich-body-editor {
+	border-inline: 0;
+	background: transparent;
+}
+
+[data-admin].editor-workspace .editor-document .rich-image {
+	border-inline: 0;
+	background: transparent;
+}
+
+[data-admin].editor-workspace
+	.editor-document
+	.rich-editor-surface
+	:is(p, blockquote, ul, ol) {
+	max-width: 54ch;
+}
+
+[data-admin].editor-workspace .editor-document .rich-editor-surface a {
+	color: var(--admin-heading);
+	text-decoration-color: currentColor;
+	text-underline-offset: 0.18em;
+}
+
+[data-admin].editor-workspace
+	.editor-document
+	:is(.image-summary, .image-summary > div, .placement-fields) {
+	min-width: 0;
+}
+
+[data-admin].editor-workspace
+	.editor-document
+	:is(img, .missing, .media-preview) {
+	border-radius: 0;
+}
+
+[data-admin].editor-workspace
+	.editor-document
+	.document-section
+	> :not(.section-heading) {
+	min-width: 0;
+}
+
+@container editor-document (min-width: 48rem) {
+	[data-admin].editor-workspace .editor-document .entry-copy {
+		display: grid;
+		grid-template-columns: minmax(140px, 0.3fr) minmax(0, 1fr);
+		gap: 24px;
+		align-items: baseline;
+	}
+	[data-admin].editor-workspace .editor-document .document-section {
+		display: grid;
+		grid-template-columns: minmax(150px, 0.25fr) minmax(0, 1fr);
+		column-gap: 36px;
+		row-gap: 16px;
+		align-items: start;
+	}
+
+	[data-admin].editor-workspace
+		.editor-document
+		.document-section
+		> .section-heading {
+		grid-column: 1;
+		grid-row: 1;
+		flex-direction: column;
+		align-items: flex-start;
+		gap: 8px;
+		margin: 0;
+	}
+
+	[data-admin].editor-workspace
+		.editor-document
+		.document-section
+		> .section-heading
+		> span {
+		padding: 0;
+		font-variant-numeric: tabular-nums;
+	}
+
+	[data-admin].editor-workspace
+		.editor-document
+		.document-section
+		> .section-heading
+		> button {
+		margin: 8px 0 0;
+	}
+
+	[data-admin].editor-workspace
+		.editor-document
+		.document-section
+		> :not(.section-heading) {
+		grid-column: 2;
+	}
+}
+
+@container editor-document (max-width: 47.999rem) {
+	[data-admin].editor-workspace .editor-document .sale-control-grid {
+		grid-template-columns: 1fr;
+	}
+}
+
+@container editor-document (max-width: 34rem) {
+	[data-admin].editor-workspace .editor-document .fields:is(.two-column, .two),
+	[data-admin].editor-workspace .editor-document.gallery-page .fields {
+		grid-template-columns: 1fr;
+	}
+}
+
+@media (max-width: 900px) {
+	[data-admin].editor-workspace .editor-document {
+		padding-inline: 24px;
+	}
+}
+
+@media (max-width: 640px) {
+	[data-admin].editor-workspace .editor-document {
+		padding: 20px 20px 64px;
+	}
+	[data-admin].editor-workspace
+		.editor-document
+		> :is(header, .settings-header) {
+		flex-direction: column;
+		align-items: stretch;
+		padding-bottom: 20px;
+	}
+	[data-admin].editor-workspace
+		.editor-document
+		:is(section, .document-section) {
+		padding-block: 24px;
+	}
+	[data-admin].editor-workspace .editor-document .back {
+		min-height: 44px;
+	}
+	[data-admin].editor-workspace
+		.editor-document
+		:is(button:not(.generate-url), .actions a) {
+		min-height: 44px;
+	}
+	[data-admin].editor-workspace
+		.editor-document
+		:is(.actions, .header-actions) {
+		position: static;
+		justify-content: flex-start;
+		width: auto;
+		padding: 0;
+	}
+}
