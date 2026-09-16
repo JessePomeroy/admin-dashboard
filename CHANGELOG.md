@@ -1,5 +1,11 @@
 # @jessepomeroy/admin
 
+## 6.1.2
+
+### Patch Changes
+
+- c8adfae: Keep an overdue invoice reminder bound to its original invoice when the modal closes during the pending update. Strengthen regression checks for reduced motion, invoice email recovery after close, and edited document email payloads.
+
 ## 6.1.1
 
 ### Patch Changes
