@@ -191,19 +191,21 @@ async function handleSendEmail(templateId?: string, changeNote?: string) {
 }
 
 async function handleAction(action: string) {
+	// The parent clears the live invoice prop when this modal closes mid-request.
+	const invoiceId = invoice._id;
 	saving = true;
 	try {
-		await onaction(invoice._id, action);
+		await onaction(invoiceId, action);
 		// Auto-send reminder email when marking overdue
 		if (action === "overdue") {
 			try {
-				await onsend(invoice._id, undefined, "payment overdue");
+				await onsend(invoiceId, undefined, "payment overdue");
 			} catch (err) {
 				emailRecoveryAttempt =
 					presentableDocumentEmailRecoveryFromError(err) ?? null;
 				if (emailRecoveryAttempt) {
 					sendResult = "uncertain";
-					onemailrecovery(invoice._id, emailRecoveryAttempt);
+					onemailrecovery(invoiceId, emailRecoveryAttempt);
 				}
 				addToast(`Marked overdue. ${documentEmailFailureMessage(err)}`);
 			}

@@ -417,7 +417,7 @@ describe("Blog editor helpers", () => {
 		});
 	});
 
-	it("reports draft, changed, and published statuses", () => {
+	it("reports draft and changed statuses", () => {
 		expect(blogDocumentStatus({
 			documentId: "1",
 			documentKey: "a",

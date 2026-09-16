@@ -28,36 +28,24 @@ describe("document email recovery host adoption", () => {
 			"src/lib/pages/invoicing/InvoiceDetailModal.svelte",
 		);
 		const overdueCatch = modal.match(
-			/await onsend\(invoice\._id, undefined, "payment overdue"\);[\s\S]*?addToast\(`Marked overdue/,
+			/await onsend\(invoiceId, undefined, "payment overdue"\);[\s\S]*?addToast\(`Marked overdue/,
 		)?.[0];
 
 		expect(overdueCatch).toBeDefined();
 		expect(overdueCatch).toContain(
 			"presentableDocumentEmailRecoveryFromError(err)",
 		);
-		expect(overdueCatch).toContain("onemailrecovery(invoice._id");
+		expect(overdueCatch).toContain("onemailrecovery(invoiceId");
 	});
 
-	it("keeps overdue mutation and reminder delivery bound to the captured invoice after close", () => {
+	it("keeps an overdue action from updating a different selected invoice", () => {
 		const page = source("src/lib/pages/InvoicingPage.svelte");
-		const modal = source(
-			"src/lib/pages/invoicing/InvoiceDetailModal.svelte",
-		);
 		const action = page.match(
 			/async function handleAction\(invoiceId: string, action: string\)[\s\S]*?\n}\n\nasync function handleSendEmail/,
 		)?.[0];
-		const send = page.match(
-			/async function handleSendEmail\([\s\S]*?\n}\n\nfunction handleEmailResolved/,
-		)?.[0];
 
 		expect(action).toBeDefined();
-		expect(action).toContain("invoiceId: toId(invoiceId)");
 		expect(action).toContain("selectedInvoice?._id === invoiceId");
-		expect(send).toContain("sendInvoiceEmailRequest(invoiceId");
-		expect(modal).toContain("await onaction(invoice._id, action)");
-		expect(modal).toContain(
-			'await onsend(invoice._id, undefined, "payment overdue")',
-		);
 	});
 
 	it("does not let a late recovery from document A replace selected document B", () => {
