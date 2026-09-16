@@ -407,11 +407,17 @@ direct browser-to-Worker path.
 
 ## Development
 
-```bash
+Install Chromium once for the browser-backed reduced-motion regression:
+
+```fish
+pnpm exec playwright install chromium
 pnpm check
 pnpm test
 pnpm build
 ```
+
+CI installs Chromium and its system libraries before running the Vitest suite.
+The motion check uses production styles in a local browser without a dev server.
 
 `pnpm build` writes the publishable `dist/` package.
 

@@ -54,7 +54,7 @@ describe("message pagination controls", () => {
 		unmount(component);
 	});
 
-	it("loads earlier messages without replacing the rendered conversation", () => {
+	it("requests earlier messages from a populated conversation", () => {
 		const onloadearlier = vi.fn();
 		const component = mount(ConversationView, {
 			target: document.body,

@@ -1,4 +1,4 @@
-import { mount, tick, unmount } from "svelte";
+import { type ComponentProps, mount, tick, unmount } from "svelte";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import InvoiceCreateModal from "../src/lib/pages/invoicing/InvoiceCreateModal.svelte";
 
@@ -15,7 +15,8 @@ const emailTemplates = [
 ];
 
 function mountModal(templates = emailTemplates) {
-	const onSaveAndSend = vi.fn(async () => {});
+	const onSaveAndSend = vi.fn<ComponentProps<typeof InvoiceCreateModal>["onsaveandsend"]>()
+		.mockResolvedValue(undefined);
 	components.push(
 		mount(InvoiceCreateModal, {
 			target: document.body,
@@ -88,5 +89,44 @@ describe("InvoiceCreateModal email authority", () => {
 		expect(payload.templateId).toBe("template-1");
 		expect(payload).not.toHaveProperty("emailSubject");
 		expect(payload).not.toHaveProperty("emailBody");
+	});
+
+	it("sends paired raw sources after a genuine edit", async () => {
+		const onSaveAndSend = mountModal();
+		await chooseClient();
+		const select = document.querySelector<HTMLSelectElement>("#tpl-select")!;
+		select.value = "template-1";
+		select.dispatchEvent(new Event("change", { bubbles: true }));
+		await tick();
+		const editButton = Array.from(document.querySelectorAll<HTMLButtonElement>("button")).find(
+			({ textContent }) => textContent?.trim() === "edit source",
+		)!;
+		editButton.click();
+		await tick();
+		const subject = document.querySelector<HTMLInputElement>("#tpl-subject")!;
+		subject.value = "updated invoice {{invoiceNumber}}";
+		subject.dispatchEvent(new Event("input", { bubbles: true }));
+		await tick();
+		await saveAndSend();
+		expect(onSaveAndSend).toHaveBeenCalledOnce();
+		expect(onSaveAndSend.mock.calls[0][0]).toMatchObject({
+			templateId: "template-1",
+			emailSubject: "updated invoice {{invoiceNumber}}",
+			emailBody: "hi {{clientName}}, review {{portalUrl}}",
+		});
+		const body = document.querySelector<HTMLTextAreaElement>("#tpl-body")!;
+		body.value = "updated message for {{clientName}}: {{portalUrl}}";
+		body.dispatchEvent(new Event("input", { bubbles: true }));
+		await tick();
+		await saveAndSend();
+
+		expect(onSaveAndSend).toHaveBeenCalledTimes(2);
+		expect(onSaveAndSend.mock.calls[1][0]).toMatchObject({
+			templateId: "template-1",
+			emailSubject: "updated invoice {{invoiceNumber}}",
+			emailBody: "updated message for {{clientName}}: {{portalUrl}}",
+		});
+		expect(JSON.stringify(onSaveAndSend.mock.calls[0][0])).not.toContain("INV-PREVIEW");
+		expect(JSON.stringify(onSaveAndSend.mock.calls[1][0])).not.toContain("INV-PREVIEW");
 	});
 });

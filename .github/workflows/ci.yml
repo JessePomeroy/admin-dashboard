@@ -25,6 +25,7 @@ jobs:
           token: ""
       - run: corepack enable
       - run: corepack pnpm install --frozen-lockfile --ignore-scripts
+      - run: corepack pnpm exec playwright install --with-deps chromium
       - name: Require a changeset for public package changes
         if: github.event_name == 'pull_request'
         env:
