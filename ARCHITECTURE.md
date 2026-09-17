@@ -131,6 +131,15 @@ canonicalization) before either an upload-session grant or request-level admin
 authorization can permit a Worker call. A grant is valid only on its receiving
 host and for one single-segment gallery ID.
 
+The optional upload-policy query controls picker presentation; a server-only
+resolver independently derives owner permission from the request's stored
+membership. Upload sessions sign that decision for their existing four-hour
+lifetime. An absent resolver or legacy session means media-only. Presign ignores
+browser policy claims, validates filenames using the signed decision, and sends
+expanded policy to the Worker only for a verified owner. The Worker restricts
+expanded tokens to Angels Rest and binds policy, key, MIME and size through PUT
+and multipart redemption. Other tenants retain the photo/video extension set.
+
 Upload authority remains Worker-owned across both browser transports. The
 controller sends the exact `File.size` during presign and retains the returned
 short-lived capability separately from the upload URL. A direct PUT sends that

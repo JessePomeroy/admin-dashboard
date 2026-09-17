@@ -93,8 +93,8 @@ async function handleDelete(image: GalleryImage) {
 {#if images.length === 0}
 	<p class="empty">
 		{knownImageCount && knownImageCount > 0
-			? `loading ${knownImageCount} uploaded image${knownImageCount !== 1 ? "s" : ""}...`
-			: "no images uploaded yet"}
+			? `loading ${knownImageCount} uploaded file${knownImageCount !== 1 ? "s" : ""}...`
+			: "no files uploaded yet"}
 	</p>
 {:else}
 	<div

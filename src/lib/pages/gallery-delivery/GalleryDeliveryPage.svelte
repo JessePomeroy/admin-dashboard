@@ -74,7 +74,7 @@ const statusLabels: Record<string, string> = {
 			{#if statusFilter !== "all"}
 				no {statusFilter} galleries
 			{:else}
-				no client galleries yet — create one to start delivering photos
+				no client galleries yet — create one to start delivering files
 			{/if}
 		</div>
 	{:else}
@@ -87,7 +87,7 @@ const statusLabels: Record<string, string> = {
 							<span class="gallery-client">{gallery.clientName}</span>
 						</div>
 						<div class="gallery-meta">
-							<span class="meta-item">{gallery.imageCount} image{gallery.imageCount !== 1 ? "s" : ""}</span>
+							<span class="meta-item">{gallery.imageCount} file{gallery.imageCount !== 1 ? "s" : ""}</span>
 							<span class="meta-item">{formatBytes(gallery.totalSizeBytes)}</span>
 							<span class="status-badge status-{gallery.status}">{statusLabels[gallery.status]}</span>
 						</div>

@@ -53,7 +53,7 @@ describe("GalleryImageGrid", () => {
 	it("shows the true empty state when the gallery has no known images", () => {
 		const component = mountGrid();
 
-		expect(document.body.textContent).toContain("no images uploaded yet");
+		expect(document.body.textContent).toContain("no files uploaded yet");
 		expect(document.body.textContent).not.toContain("loading");
 
 		unmount(component);
@@ -62,8 +62,8 @@ describe("GalleryImageGrid", () => {
 	it("shows a loading state when known gallery images have not hydrated yet", () => {
 		const component = mountGrid({ knownImageCount: 593 });
 
-		expect(document.body.textContent).toContain("loading 593 uploaded images...");
-		expect(document.body.textContent).not.toContain("no images uploaded yet");
+		expect(document.body.textContent).toContain("loading 593 uploaded files...");
+		expect(document.body.textContent).not.toContain("no files uploaded yet");
 
 		unmount(component);
 	});

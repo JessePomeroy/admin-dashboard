@@ -6,6 +6,7 @@ import {
 	createGalleryDeleteHandler,
 	createGalleryImageHandler,
 	createGalleryProcessHandler,
+	createGalleryPresignHandler,
 	createGalleryUploadSessionHandler,
 } from "../src/lib/server/handlers/galleryPresign";
 
@@ -112,6 +113,39 @@ describe("createGalleryImageHandler", () => {
 });
 
 describe("createGalleryUploadSessionHandler", () => {
+	it("binds the server-resolved file policy into the session and ignores browser policy claims", async () => {
+		const resolvePolicy = vi.fn(async () => "all-files" as const);
+		configureServerConfig({ resolveGalleryUploadPolicy: resolvePolicy });
+		const ownerToken = await issueUploadSessionToken();
+		configureServerConfig({ resolveGalleryUploadPolicy: async () => "media" });
+		const clientToken = await issueUploadSessionToken();
+		const fetchMock = vi.fn(async (_url: string, init: RequestInit) => {
+			const { filename } = JSON.parse(String(init.body));
+			const r2Key = `https://tenant.example/gallery-1/original/${filename}`;
+			return Response.json({ r2Key, uploadToken: "worker-token", uploadUrl: `/upload/put?key=${encodeURIComponent(r2Key)}` });
+		});
+		vi.stubGlobal("fetch", fetchMock);
+		const presignRequest = (uploadSessionToken?: string) => ({
+			request: makeJsonRequest("/api/admin/galleries/presign", {
+				siteUrl: "https://tenant.example", galleryId: "gallery-1", filename: "project.zip",
+				contentType: "application/octet-stream", sizeBytes: 11, uploadSessionToken,
+				uploadPolicy: "all-files", isCreator: true,
+			}),
+		});
+		await expect(createGalleryPresignHandler()(presignRequest(clientToken))).rejects.toMatchObject({ status: 400 });
+		await expect(createGalleryPresignHandler()(presignRequest())).rejects.toMatchObject({ status: 400 });
+		expect(fetchMock).not.toHaveBeenCalled();
+		const response = await createGalleryPresignHandler()(presignRequest(ownerToken));
+		expect(response.status).toBe(200);
+		expect(JSON.parse(String(fetchMock.mock.calls[0][1].body))).toMatchObject({ uploadPolicy: "all-files" });
+		expect(resolvePolicy).toHaveBeenCalledTimes(1);
+	});
+
+	it("refuses an expanded session when owner authorization fails", async () => {
+		configureServerConfig({ resolveGalleryUploadPolicy: async () => { throw error(403, "Not an owner"); } });
+		await expect(issueUploadSessionToken()).rejects.toMatchObject({ status: 403 });
+	});
+
 	it("does not issue an upload-session grant without authorization configuration", async () => {
 		configureServerConfig({ verifyAdmin: undefined });
 		const handler = createGalleryUploadSessionHandler();

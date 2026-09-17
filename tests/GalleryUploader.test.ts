@@ -5,8 +5,12 @@ import GalleryUploader from "../src/lib/pages/gallery-delivery/GalleryUploader.s
 
 const mocks = vi.hoisted(() => {
 	const mutation = vi.fn(async () => "image-id");
-	return { mutation };
+	return { mutation, uploadPolicy: "media", hasPolicyReference: false };
 });
+
+vi.mock("convex-svelte", () => ({
+	useQuery: () => ({ data: mocks.uploadPolicy }),
+}));
 
 vi.mock("../src/lib/adminClient", () => ({
 	useAdminClient: () => ({ mutation: mocks.mutation }),
@@ -21,6 +25,7 @@ vi.mock("../src/lib/config", () => ({
 		galleryWorkerUrl: "https://gallery-worker.example",
 		api: {
 			galleryDelivery: {
+				...(mocks.hasPolicyReference ? { getUploadPolicy: { name: "galleries:getUploadPolicy" } } : {}),
 				addImage: { name: "galleryDelivery:addImage" },
 				removeImage: { name: "galleryDelivery:removeImage" },
 			},
@@ -108,6 +113,8 @@ function setInputFiles(input: HTMLInputElement, files: File[]): void {
 describe("GalleryUploader", () => {
 	beforeEach(() => {
 		mocks.mutation.mockClear();
+		mocks.uploadPolicy = "media";
+		mocks.hasPolicyReference = false;
 		controlledFetch.mockClear();
 		presignFailuresRemaining = 0;
 		holdDirectUploads = false;
@@ -135,6 +142,32 @@ describe("GalleryUploader", () => {
 	afterEach(() => {
 		vi.unstubAllGlobals();
 		document.body.innerHTML = "";
+	});
+
+	it.each(["media", "all-files"])("uses the resolved %s policy for file picking and upload intake", async (policy) => {
+		mocks.uploadPolicy = policy;
+		mocks.hasPolicyReference = true;
+		const component = mount(GalleryUploader, {
+			target: document.body,
+			props: {
+				galleryId: "gallery",
+				adminSession: { status: "authorized", email: "owner@example.invalid", tier: "full", isCreator: true },
+				onupload: vi.fn(),
+			},
+		});
+		const input = document.querySelector<HTMLInputElement>("input[type='file']")!;
+		expect(input.hasAttribute("accept")).toBe(policy === "media");
+		setInputFiles(input, [new File(["zip bytes"], "project.zip", { type: "application/zip" })]);
+		if (policy === "all-files") {
+			await vi.waitFor(() => expect(mocks.mutation).toHaveBeenCalledTimes(1));
+			expect(mocks.mutation).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ filename: "project.zip", width: 0, height: 0 }));
+			expect(URL.createObjectURL).not.toHaveBeenCalled();
+		} else {
+			await tick();
+			expect(document.body.textContent).toContain("File type not allowed");
+			expect(controlledFetch).not.toHaveBeenCalled();
+		}
+		await unmount(component);
 	});
 
 	it("keeps header, selection, and cleared batch summary in sync with controller state", async () => {

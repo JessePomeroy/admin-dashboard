@@ -1,4 +1,4 @@
-import { GALLERY_UPLOAD_EXTENSIONS, galleryFileExtension } from "../galleryUploadPolicy.js";
+import { GALLERY_UPLOAD_EXTENSIONS, galleryFileExtension, type GalleryUploadPolicy } from "../galleryUploadPolicy.js";
 
 export function trimString(
 	value: string | undefined | null,
@@ -10,14 +10,15 @@ export function trimString(
 
 /**
  * Validate a filename for gallery uploads.
- * Rejects path traversal, excessively long names, and non-image extensions.
+ * Rejects path traversal and excessive names; expanded types require a resolved owner policy.
  */
-export function validateFilename(filename: string): string {
+export function validateFilename(filename: string, policy: GalleryUploadPolicy = "media"): string {
 	if (!filename || typeof filename !== "string") {
 		throw new Error("Filename is required");
 	}
 
 	const trimmed = filename.trim();
+	if (!trimmed) throw new Error("Filename is required");
 	if (trimmed.length > 255) {
 		throw new Error("Filename must be 255 characters or less");
 	}
@@ -26,7 +27,7 @@ export function validateFilename(filename: string): string {
 	}
 
 	const ext = galleryFileExtension(trimmed);
-	if (!GALLERY_UPLOAD_EXTENSIONS.has(ext)) {
+	if (policy !== "all-files" && !GALLERY_UPLOAD_EXTENSIONS.has(ext)) {
 		throw new Error(`File type not allowed: ${ext}`);
 	}
 
