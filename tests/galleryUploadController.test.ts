@@ -42,6 +42,7 @@ function createController(options: {
 	getImageDimensions?: ReturnType<typeof vi.fn>;
 	onupload?: ReturnType<typeof vi.fn>;
 	onchange?: (snapshot: GalleryUploadSnapshot) => void;
+	uploadPolicy?: () => "media" | "all-files";
 } = {}) {
 	const storage = options.storage ?? createStorage();
 	const addImage = options.addImage ?? vi.fn(async ({ filename }: { filename: string }) => `image-${filename}`);
@@ -52,6 +53,7 @@ function createController(options: {
 		storage,
 		siteUrl: "site",
 		galleryId: "gallery",
+		uploadPolicy: options.uploadPolicy,
 		addImage,
 		removeImage,
 		getImageDimensions,
@@ -65,6 +67,34 @@ function createController(options: {
 }
 
 describe("createGalleryUploadController", () => {
+	it("uploads arbitrary owner files as binary originals without attempting image decoding", async () => {
+		const { controller, storage, addImage, getImageDimensions } = createController({
+			uploadPolicy: () => "all-files",
+		});
+		controller.addFiles([
+			file("archive.zip", 4, "application/zip"),
+			file("page.html", 4, "text/html"),
+			file("README", 4, ""),
+		]);
+		await vi.waitFor(() => expect(addImage).toHaveBeenCalledTimes(3));
+		expect(controller.getSnapshot().completedCount).toBe(3);
+		expect(getImageDimensions).not.toHaveBeenCalled();
+		for (const filename of ["archive.zip", "page.html", "README"]) {
+			expect(storage.presign).toHaveBeenCalledWith(expect.objectContaining({ filename, contentType: "application/octet-stream" }));
+			expect(addImage).toHaveBeenCalledWith(expect.objectContaining({ filename, width: 0, height: 0 }));
+		}
+	});
+
+	it("does not let a browser MIME hint grant arbitrary file permissions", () => {
+		const { controller, storage } = createController();
+		controller.addFiles([
+			file("archive.zip", 4, "application/octet-stream"),
+			file("document.pdf", 4, "image/jpeg"),
+		]);
+		expect(controller.getSnapshot()).toMatchObject({ rejectedFileCount: 2, acceptedFileCount: 0 });
+		expect(storage.startUploadSession).not.toHaveBeenCalled();
+	});
+
 	it("admits valid files and marks invalid files as non-retryable without blocking valid uploads", async () => {
 		const ids = ["valid-id", "video-id", "metadata-id", "invalid-id"];
 		const { controller, addImage } = createController({

@@ -172,6 +172,8 @@ export interface AdminAPI {
 		list: FnRef;
 	};
 	galleryDelivery?: {
+		/** Server-owned upload policy; omitted hosts retain photo/video uploads. */
+		getUploadPolicy?: FnRef;
 		create: FnRef;
 		setPassword: FnRef;
 		update: FnRef;
@@ -683,6 +685,8 @@ export interface AdminServerConfig extends AdminConfig {
 	convexUrl: string;
 	resendApiKey: string;
 	galleryAdminSecret?: string;
+	/** Resolve from authenticated, stored owner membership. Never trust browser role flags. */
+	resolveGalleryUploadPolicy?: (request: Request) => Promise<"media" | "all-files">;
 	/** Server-only base URL for the isolated public CMS media Worker. */
 	cmsMediaWorkerUrl?: string;
 	/** Server-only bearer scoped to this config's exact siteUrl. */

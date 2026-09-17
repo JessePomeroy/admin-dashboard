@@ -405,6 +405,23 @@ Worker admin bearer. Host-provider request limits still apply: Vercel currently
 limits inbound function bodies to 4.5 MB, so larger gallery files require the
 direct browser-to-Worker path.
 
+Delivery galleries default to photo/video uploads. The optional
+`api.galleryDelivery.getUploadPolicy` query drives the picker and returns
+`"media"` or `"all-files"` from authenticated, stored membership. The server's
+optional `resolveGalleryUploadPolicy(request)` must independently resolve that
+same permission. Neither `isCreator` nor a request-body flag grants upload
+authority. Issued four-hour gallery upload sessions sign the resolved policy;
+older sessions and hosts without the resolver stay on `"media"`.
+
+Presign forwards expanded policy only from that verified session/request. The
+matching Worker accepts it only for the Angels Rest tenant. Non-media files use
+`application/octet-stream`, retain their original bytes, and skip image decoding;
+they appear as file cards. Empty files and unsafe filenames remain rejected.
+Deploy the matching Worker and Convex policy query before adopting this Admin
+release in Angels Rest. Other hosts need no config change and retain media-only
+uploads. This feature does not add transcoding, malware scanning, folder sync,
+or new customer permission controls.
+
 ## Development
 
 Install Chromium once for the browser-backed reduced-motion regression:

@@ -1,5 +1,6 @@
 import { error, json } from "@sveltejs/kit";
 import { getServerConfig } from "../../config.js";
+import { isAllowedGalleryFileName, type GalleryUploadPolicy } from "../../galleryUploadPolicy.js";
 import { isValidGalleryUploadSize } from "../../galleryUploadSize.js";
 import { handleServerError } from "../handleError.js";
 import {
@@ -20,6 +21,7 @@ interface GalleryUploadSessionPayload {
 	scope: typeof UPLOAD_SESSION_SCOPE;
 	siteUrl: string;
 	galleryId: string;
+	uploadPolicy?: GalleryUploadPolicy;
 	iat: number;
 	exp: number;
 }
@@ -168,6 +170,7 @@ async function createUploadSessionToken(
 	secret: string,
 	siteUrl: string,
 	galleryId: string,
+	uploadPolicy: GalleryUploadPolicy,
 ): Promise<{ token: string; expiresAt: number }> {
 	const now = Date.now();
 	const expiresAt = now + DEFAULT_UPLOAD_SESSION_TTL_MS;
@@ -175,6 +178,7 @@ async function createUploadSessionToken(
 		scope: UPLOAD_SESSION_SCOPE,
 		siteUrl,
 		galleryId,
+		uploadPolicy,
 		iat: now,
 		exp: expiresAt,
 	};
@@ -208,6 +212,7 @@ async function verifyUploadSessionToken(
 	}
 
 	if (payload.scope !== UPLOAD_SESSION_SCOPE) return null;
+	if (payload.uploadPolicy !== undefined && payload.uploadPolicy !== "media" && payload.uploadPolicy !== "all-files") return null;
 	if (typeof payload.siteUrl !== "string" || typeof payload.galleryId !== "string") return null;
 	if (typeof payload.exp !== "number" || payload.exp <= Date.now()) return null;
 	return payload;
@@ -221,7 +226,7 @@ async function requireGalleryUploadAccess(
 		r2Key?: string;
 		uploadSessionToken?: string | null;
 	},
-): Promise<void> {
+): Promise<GalleryUploadPolicy> {
 	// A scoped upload grant can replace a repeated cookie/session check, but it
 	// must never make missing host authorization configuration fail open.
 	getRequiredAdminVerifier();
@@ -255,10 +260,16 @@ async function requireGalleryUploadAccess(
 		if (constraints.r2Key && !isGalleryOriginalKeyForSession(constraints.r2Key, session)) {
 			throw error(403, "Upload session cannot access this file");
 		}
-		return;
+		return session.uploadPolicy ?? "media";
 	}
 
 	await requireAdmin(request);
+	return await resolveUploadPolicy(request);
+}
+
+async function resolveUploadPolicy(request: Request): Promise<GalleryUploadPolicy> {
+	const policy = await getServerConfig().resolveGalleryUploadPolicy?.(request);
+	return policy === "all-files" ? "all-files" : "media";
 }
 
 /** Standard headers for gallery worker requests. */
@@ -369,6 +380,7 @@ export function createGalleryUploadSessionHandler() {
 			config.galleryAdminSecret!,
 			siteUrl,
 			galleryId,
+			await resolveUploadPolicy(request),
 		);
 
 		return json({ uploadSessionToken: token, expiresAt });
@@ -405,7 +417,7 @@ export function createGalleryPresignHandler() {
 		const galleryId = requireGalleryId(input.galleryId);
 		const sizeBytes = optionalGalleryUploadSize(input.sizeBytes);
 		const uploadSessionToken = optionalUploadSessionToken(input.uploadSessionToken);
-		await requireGalleryUploadAccess(request, {
+		const uploadPolicy = await requireGalleryUploadAccess(request, {
 			siteUrl,
 			galleryId,
 			uploadSessionToken,
@@ -413,9 +425,12 @@ export function createGalleryPresignHandler() {
 
 		let filename: string;
 		try {
-			filename = validateFilename(input.filename);
+			filename = validateFilename(input.filename, uploadPolicy);
 		} catch (err) {
 			throw error(400, (err as Error).message);
+		}
+		if (!isAllowedGalleryFileName(filename) && input.contentType !== "application/octet-stream") {
+			throw error(415, "Non-media files must use application/octet-stream");
 		}
 
 		try {
@@ -427,6 +442,7 @@ export function createGalleryPresignHandler() {
 					galleryId,
 					filename,
 					contentType: input.contentType,
+					...(uploadPolicy === "all-files" ? { uploadPolicy } : {}),
 					...(sizeBytes === undefined ? {} : { sizeBytes }),
 				}),
 			});

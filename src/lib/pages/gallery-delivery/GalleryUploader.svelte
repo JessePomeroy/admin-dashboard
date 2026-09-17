@@ -1,11 +1,12 @@
 <script lang="ts">
+import { useQuery } from "convex-svelte";
 import { useAdminClient } from "../../adminClient";
 import { getAdminConfig } from "../../config";
 import { toId } from "../../utils";
 import FeatureGate from "../../components/FeatureGate.svelte";
 import { logger } from "../../logger";
 import type { TenantAdminServerSession } from "../../adminSession";
-import { GALLERY_UPLOAD_ACCEPT } from "../../galleryUploadPolicy";
+import { GALLERY_UPLOAD_ACCEPT, type GalleryUploadPolicy } from "../../galleryUploadPolicy";
 import { createGalleryStoragePort } from "./galleryStoragePort";
 import {
 	createGalleryUploadController,
@@ -23,6 +24,11 @@ let { galleryId, adminSession, onupload, onbatchchange = () => {} }: {
 const config = getAdminConfig();
 const { api } = config;
 const galleryApi = api.galleryDelivery!;
+const uploadPolicyQuery = galleryApi.getUploadPolicy
+	? useQuery(galleryApi.getUploadPolicy, () => ({ siteUrl: config.siteUrl }))
+	: undefined;
+let uploadPolicy: GalleryUploadPolicy = $derived(uploadPolicyQuery?.data === "all-files" ? "all-files" : "media");
+let uploadAccept = $derived(uploadPolicy === "all-files" ? undefined : GALLERY_UPLOAD_ACCEPT);
 const client = useAdminClient();
 const storage = createGalleryStoragePort({
 	fetch,
@@ -56,6 +62,7 @@ const uploadController = createGalleryUploadController({
 	storage,
 	siteUrl: config.siteUrl,
 	galleryId: () => galleryId,
+	uploadPolicy: () => uploadPolicy,
 	addImage: async (input) => {
 		const imageId = await client.mutation(galleryApi.addImage, {
 			siteUrl: input.siteUrl,
@@ -238,13 +245,13 @@ function formatFileSize(bytes: number): string {
 >
 	{#if files.length === 0}
 		<div class="drop-zone">
-			<p class="drop-text">drag photos and videos here</p>
+			<p class="drop-text">{uploadPolicy === "all-files" ? "drag files here" : "drag photos and videos here"}</p>
 			<p class="drop-hint">or</p>
 			<label class="browse-btn">
 				browse files
-				<input type="file" multiple accept={GALLERY_UPLOAD_ACCEPT} onchange={handleFileInput} hidden />
+				<input type="file" multiple accept={uploadAccept} onchange={handleFileInput} hidden />
 			</label>
-			<p class="drop-limits">photos, raw files, mov, mp4, webm</p>
+			<p class="drop-limits">{uploadPolicy === "all-files" ? "any file type · photos, videos, documents, archives" : "photos, raw files, mov, mp4, webm"}</p>
 		</div>
 	{:else}
 		<div class="upload-list" aria-live="polite">
@@ -272,7 +279,7 @@ function formatFileSize(bytes: number): string {
 					</span>
 					<label class="add-more-btn">
 						+ add more
-						<input type="file" multiple accept={GALLERY_UPLOAD_ACCEPT} onchange={handleFileInput} hidden />
+						<input type="file" multiple accept={uploadAccept} onchange={handleFileInput} hidden />
 					</label>
 					{#if paused && hasQueuedWork}
 						<button class="pause-btn" onclick={() => uploadController.resumeUploads()}>resume</button>

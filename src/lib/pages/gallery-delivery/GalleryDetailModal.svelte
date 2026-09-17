@@ -49,7 +49,7 @@ let uploadBatch = $state<UploadBatchSummary | null>(null);
 let headerStats = $derived(
 	uploadBatch && uploadBatch.totalCount > 0
 		? `${uploadBatch.completedCount}/${uploadBatch.totalCount} uploaded — ${formatBytes(uploadBatch.totalSizeBytes)}`
-		: `${liveGallery.imageCount} image${liveGallery.imageCount !== 1 ? "s" : ""} — ${formatBytes(liveGallery.totalSizeBytes)}`,
+		: `${liveGallery.imageCount} file${liveGallery.imageCount !== 1 ? "s" : ""} — ${formatBytes(liveGallery.totalSizeBytes)}`,
 );
 
 // Settings state
@@ -161,7 +161,7 @@ async function handleSaveSettings() {
 }
 
 async function handleDelete() {
-	if (!confirm("Delete this gallery and all its images? This cannot be undone.")) return;
+	if (!confirm("Delete this gallery and all its files? This cannot be undone.")) return;
 	deleting = true;
 	try {
 		const r2Keys = await loadGalleryFileKeys();
@@ -229,7 +229,7 @@ async function handleShare() {
 		</div>
 
 		<div class="tabs" role="tablist">
-			<button class="tab" class:active={tab === "images"} role="tab" aria-selected={tab === "images"} onclick={() => (tab = "images")}>images</button>
+			<button class="tab" class:active={tab === "images"} role="tab" aria-selected={tab === "images"} onclick={() => (tab = "images")}>files</button>
 			<button class="tab" class:active={tab === "settings"} role="tab" aria-selected={tab === "settings"} onclick={() => (tab = "settings")}>settings</button>
 		</div>
 

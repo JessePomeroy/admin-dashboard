@@ -1,6 +1,8 @@
 import {
 	galleryFileContentType,
 	isAllowedGalleryFile,
+	isBrowserPreviewableGalleryFile,
+	type GalleryUploadPolicy,
 } from "../../galleryUploadPolicy";
 import { isValidGalleryUploadSize } from "../../galleryUploadSize";
 import type { GalleryStoragePort, GalleryUploadSession } from "./galleryStoragePort";
@@ -52,6 +54,7 @@ interface GalleryUploadControllerOptions {
 	storage: GalleryStoragePort;
 	siteUrl: string;
 	galleryId: string | (() => string);
+	uploadPolicy?: () => GalleryUploadPolicy;
 	addImage(input: {
 		siteUrl: string;
 		galleryId: string;
@@ -199,7 +202,7 @@ export function createGalleryUploadController(
 		batchSourceSizeBytes += sourceFiles.reduce((sum, file) => sum + file.size, 0);
 
 		for (const file of sourceFiles) {
-			if (!isAllowedGalleryFile(file)) {
+			if (!isAllowedGalleryFile(file, options.uploadPolicy?.())) {
 				newFiles.push({
 					file,
 					id: randomId(),
@@ -290,7 +293,9 @@ export function createGalleryUploadController(
 			await options.storage.process({ r2Key, uploadSessionToken, signal });
 			throwIfCanceled(signal);
 
-			const dims = await options.getImageDimensions(next.file);
+			const dims = isBrowserPreviewableGalleryFile(next.file.name)
+				? await options.getImageDimensions(next.file)
+				: { width: 0, height: 0 };
 			throwIfCanceled(signal);
 
 			const imageId = await options.addImage({

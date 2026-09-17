@@ -1,5 +1,7 @@
 const BROWSER_PREVIEW_EXTENSIONS = [".jpg", ".jpeg", ".png", ".webp"] as const;
 
+export type GalleryUploadPolicy = "media" | "all-files";
+
 const TIFF_EXTENSIONS = [".tif", ".tiff"] as const;
 
 const VIDEO_CONTENT_TYPES = {
@@ -89,13 +91,14 @@ export function isBrowserPreviewableGalleryFile(filename: string): boolean {
 	return GALLERY_BROWSER_PREVIEW_EXTENSIONS.has(galleryFileExtension(filename));
 }
 
-export function isAllowedGalleryFile(file: File): boolean {
+export function isAllowedGalleryFile(file: File, policy: GalleryUploadPolicy = "media"): boolean {
 	if (file.name.toLowerCase().startsWith("._")) return false;
-	if (isAllowedGalleryFileName(file.name)) return true;
-	return file.type ? GALLERY_UPLOAD_MIME_TYPES.has(file.type) : false;
+	return policy === "all-files" || isAllowedGalleryFileName(file.name);
 }
 
 export function galleryFileContentType(file: File): string {
+	// Non-media originals are download-only, regardless of the browser's MIME hint.
+	if (!isAllowedGalleryFileName(file.name)) return "application/octet-stream";
 	if (file.type && GALLERY_UPLOAD_MIME_TYPES.has(file.type)) return file.type;
 	const extension = galleryFileExtension(file.name);
 	if (extension === ".dng") return "image/x-adobe-dng";
