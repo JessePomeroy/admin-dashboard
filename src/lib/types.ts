@@ -53,6 +53,7 @@ export interface Invoice extends ConvexDocument<"invoices"> {
 	depositPercent?: number;
 	totalProject?: number;
 	paidAmount?: number;
+	paymentRevision?: number;
 	milestoneName?: string;
 	milestoneIndex?: number;
 	parentInvoiceId?: GenericId<"invoices">;

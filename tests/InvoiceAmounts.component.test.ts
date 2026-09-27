@@ -17,9 +17,10 @@ const invoice: Invoice = {
 		{ description: "Second half", quantity: 0.5, unitPrice: 1999 },
 	],
 };
+let listedInvoices = [invoice];
 
 vi.mock("convex-svelte", () => ({
-	useQuery: (ref: string) => ({ data: ref === "invoices" ? [invoice] : undefined, isLoading: false }),
+	useQuery: (ref: string) => ({ data: ref === "invoices" ? listedInvoices : undefined, isLoading: false }),
 }));
 vi.mock("../src/lib/config", () => ({
 	getAdminConfig: () => ({
@@ -31,6 +32,7 @@ vi.mock("../src/lib/config", () => ({
 afterEach(async () => {
 	for (const component of components.splice(0)) await unmount(component);
 	document.body.replaceChildren();
+	listedInvoices = [invoice];
 });
 
 async function input(selector: string, value: string) {
@@ -139,4 +141,33 @@ describe("fractional invoice amounts", () => {
 		expect(button("save changes").disabled).toBe(true);
 		expect(save).not.toHaveBeenCalled();
 	});
+});
+
+describe("invoice payment balances",()=>{
+ it("counts only unpaid balances, including partial and overdue invoices, on the dashboard",async()=>{
+  listedInvoices = [
+   {...invoice,status:"partial",paidAmount:1000},
+   {...invoice,_id:toId<"invoices">("invoice-2"),status:"overdue"},
+   {...invoice,_id:toId<"invoices">("invoice-3"),status:"paid",paidAmount:2125},
+  ];
+  components.push(mount(DashboardPage,{target:document.body,props:{data:{newInquiryCount:0}}}));
+  await tick();
+  const summary=Array.from(document.querySelectorAll(".summary-line")).find(entry=>entry.textContent?.includes("invoices outstanding"));
+  expect(summary?.textContent).toMatch(/\$32\.50\s+pending/);
+ });
+ it("shows the partial balance and keeps revisions available",async()=>{
+  renderDetail({...invoice,status:"partial",paidAmount:1000});
+  await tick();
+  expect(document.body.textContent).toContain("payments received");
+  expect(document.body.textContent).toContain("$11.25");
+  button("edit").click(); await tick();
+  expect(document.body.textContent).toContain("save changes");
+ });
+ it("shows overpayments without offering an automatic refund",async()=>{
+  renderDetail({...invoice,status:"paid",paidAmount:2500});
+  await tick();
+  expect(document.body.textContent).toContain("overpayment: $3.75");
+  expect(document.body.textContent).toContain("remaining balance");
+  expect(document.body.textContent).toContain("$0.00");
+ });
 });
