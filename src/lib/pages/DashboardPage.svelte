@@ -129,11 +129,12 @@ const invoiceStats = $derived({
 });
 const pendingInvoiceAmount = $derived(
 	invoices
-		.filter((i: Invoice) => i.status === "draft" || i.status === "sent")
+		.filter((i: Invoice) => ["draft", "sent", "overdue", "partial"].includes(i.status))
 		.reduce<number | null>((sum, inv) => {
 			const amounts = tryInvoiceAmounts(inv.items, inv.taxPercent);
 			if (sum === null || !amounts) return null;
-			const total = sum + amounts.total;
+			if (inv.status === "partial" && inv.paidAmount === undefined) return null;
+			const total = sum + Math.max(0, amounts.total - (inv.paidAmount ?? 0));
 			return Number.isSafeInteger(total) ? total : null;
 		}, 0),
 );

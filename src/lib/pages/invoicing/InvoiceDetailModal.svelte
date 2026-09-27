@@ -103,6 +103,9 @@ let editDueDate = $state("");
 let editNotes = $state("");
 
 let detailAmounts = $derived(tryInvoiceAmounts(invoice.items, invoice.taxPercent));
+let paidCents = $derived(invoice.paidAmount ?? (invoice.status === "paid" ? detailAmounts?.total ?? 0 : 0));
+let remainingCents = $derived(detailAmounts ? Math.max(0, detailAmounts.total - paidCents) : 0);
+let overpaidCents = $derived(detailAmounts ? Math.max(0, paidCents - detailAmounts.total) : 0);
 let invoiceDraft = $derived(prepareInvoiceDraft(editItems, editTaxPercent));
 
 function startEdit() {
@@ -521,6 +524,12 @@ async function handleDelete() {
 						>
 					</div>
 				{/if}
+				{#if paidCents > 0}
+					<div class="detail-field"><span class="detail-label">payments received</span><span class="detail-value">{formatCents(paidCents)}</span></div>
+					<div class="detail-field"><span class="detail-label">remaining balance</span><span class="detail-value">{formatCents(remainingCents)}</span></div>
+				{/if}
+				{#if overpaidCents > 0}<p role="status">overpayment: {formatCents(overpaidCents)} — review the payment history before arranging a refund or credit.</p>{/if}
+				{#if invoice.status === "canceled" && paidCents > 0}<p role="status">payment received for a canceled invoice — review before arranging a refund or credit.</p>{/if}
 
 				{#if invoice.sentAt}
 					<div class="detail-field">
@@ -679,8 +688,9 @@ async function handleDelete() {
 						>paid on {formatTimestamp(invoice.paidAt ?? 0)}</span
 					>
 				{:else if invoice.status === "partial"}
+					<button class="btn-cancel" onclick={startEdit}>edit</button>
 					<span class="paid-note"
-						>partially paid — remaining-balance email and checkout are not yet enabled</span
+						>partially paid — use the share link to collect the remaining balance</span
 					>
 				{/if}
 			</div>

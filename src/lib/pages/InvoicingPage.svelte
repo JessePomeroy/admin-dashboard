@@ -132,6 +132,7 @@ const allStatuses: InvoiceStatus[] = [
 	"draft",
 	"sent",
 	"paid",
+	"partial",
 	"overdue",
 	"canceled",
 ];
@@ -225,7 +226,7 @@ async function handleSave(body: InvoiceUpdatePayload) {
 	if (!selectedInvoice) return;
 	const invoiceId = selectedInvoice._id as string;
 	const invoiceSnapshot = selectedInvoice;
-	await client.mutation(api.invoices.update, {
+	const updated: Invoice | null = await client.mutation(api.invoices.update, {
 		invoiceId: toId(invoiceId),
 		siteUrl: config.siteUrl,
 		items: body.items,
@@ -235,7 +236,7 @@ async function handleSave(body: InvoiceUpdatePayload) {
 		status: body.status,
 	});
 	if (selectedInvoice?._id === invoiceId) {
-		selectedInvoice = { ...invoiceSnapshot, ...body };
+		selectedInvoice = updated?._id === invoiceId ? updated : { ...invoiceSnapshot, ...body };
 	}
 }
 
