@@ -301,11 +301,13 @@ so its initial rollout requires no data backfill.
 
 `createCatalogPrivateEditorUploadPrepareHandler` and
 `createCatalogPrivateEditorUploadCompleteHandler` implement the production
-Angels Rest private catalog upload bridge. The optional server config contains
+tenant-scoped private catalog upload bridge. The optional server config contains
 only the exact HTTPS Convex journal origin and host-journal bearer, the literal
 queryless production Worker origin
 `https://cms-media-worker.thinkingofview.workers.dev` and storage-caller bearer,
-and the exact `https://www.angelsrest.online` browser origin. Runtime validation
+and the exact canonical HTTPS browser origin for the configured tenant (its domain
+or `www` hostname). Register this tenant/origin in both the backend and CMS Worker
+before enabling the upload controls. Runtime validation
 rejects every alternate Worker host, path, query, and userinfo before reading the
 request body, authenticating, returning a browser upload URL, or sending storage
 authority. Convex alone owns Worker prepare,

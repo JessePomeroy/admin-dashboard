@@ -8,8 +8,6 @@ import {
 import { getServerConfig, type CatalogPrivateEditorUploadConfig } from "../../config.js";
 import { requireAdmin } from "../requireAdmin.js";
 
-const SUPPORTED_SITE = "angelsrest.online";
-const PRODUCTION_BROWSER_ORIGIN = "https://www.angelsrest.online";
 const PRODUCTION_WORKER_ORIGIN = "https://cms-media-worker.thinkingofview.workers.dev";
 const SOURCE_PATH = "/v1/catalog-assets/editor-uploads/source";
 const STORAGE_PATH = "/v1/catalog-assets/editor-uploads/storage";
@@ -205,8 +203,7 @@ function requireUploadConfig(): CatalogPrivateEditorUploadConfig | null {
 	const config = getServerConfig();
 	const upload = config.catalogPrivateEditorUpload;
 	if (
-		config.siteUrl !== SUPPORTED_SITE
-		|| !upload
+		!upload
 		|| !exactKeys(upload as unknown as Record<string, unknown>, [
 			"convexJournalOrigin",
 			"hostJournalSecret",
@@ -220,7 +217,10 @@ function requireUploadConfig(): CatalogPrivateEditorUploadConfig | null {
 		|| !validSecret(upload.hostJournalSecret)
 		|| !validSecret(upload.storageCallerSecret)
 		|| upload.hostJournalSecret === upload.storageCallerSecret
-		|| upload.browserOrigin !== PRODUCTION_BROWSER_ORIGIN
+		|| !parseOrigin(upload.browserOrigin)
+		|| !/^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(config.siteUrl)
+		|| ![config.siteUrl, `www.${config.siteUrl}`].includes(new URL(upload.browserOrigin).hostname)
+		|| Boolean(new URL(upload.browserOrigin).port)
 	) return null;
 	return upload;
 }

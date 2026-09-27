@@ -339,7 +339,7 @@ describe("catalog private editor upload prepare handler", () => {
 		["wrong browser", { catalogPrivateEditorUpload: {
 			convexJournalOrigin: JOURNAL_ORIGIN, hostJournalSecret: HOST_SECRET,
 			workerOrigin: WORKER_ORIGIN, storageCallerSecret: STORAGE_SECRET,
-			browserOrigin: "https://angelsrest.online",
+			browserOrigin: "https://unregistered.example",
 		} }],
 		["short journal secret", { catalogPrivateEditorUpload: {
 			convexJournalOrigin: JOURNAL_ORIGIN, hostJournalSecret: "short",
@@ -915,4 +915,21 @@ describe("catalog private editor upload complete handler", () => {
 		expect(logs).not.toContain(LEASE);
 		expect(logs).not.toContain("upstream-details");
 	});
+});
+
+
+describe("tenant catalog upload host", () => {
+ it("admits a configured tenant origin while retaining host membership and purpose credentials", async () => {
+  const origin = "https://queenworm.example";
+  const verify = configure(vi.fn(async () => true), { siteUrl: "queenworm.example", isCreator: false, catalogPrivateEditorUpload: { convexJournalOrigin:JOURNAL_ORIGIN, hostJournalSecret:HOST_SECRET, workerOrigin:WORKER_ORIGIN, storageCallerSecret:STORAGE_SECRET, browserOrigin:origin } });
+  const upstream = vi.fn().mockResolvedValueOnce(response(prepareProjection())); vi.stubGlobal("fetch", upstream);
+  const request = new Request(`${origin}/api/admin/catalog/upload`, { method:"POST", headers:{ Origin:origin, "Sec-Fetch-Site":"same-origin", "Sec-Fetch-Mode":"cors", "Sec-Fetch-Dest":"empty", "Content-Type":"application/json" }, body:JSON.stringify(printInput()) });
+  const result = await createCatalogPrivateEditorUploadPrepareHandler()({ request });
+  expect(result.status).toBe(200);
+  expect(verify).toHaveBeenCalled();
+  expect(upstream).toHaveBeenCalledTimes(1);
+  const headers = new Headers(upstream.mock.calls[0][1].headers);
+  expect(headers.get("Authorization")).toBe(`Bearer ${HOST_SECRET}`);
+  expect(JSON.stringify(await result.json())).not.toContain(STORAGE_SECRET);
+ });
 });
