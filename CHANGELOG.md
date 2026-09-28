@@ -1,5 +1,11 @@
 # @jessepomeroy/admin
 
+## 6.5.2
+
+### Patch Changes
+
+- f85ab7f: Wrap portfolio gallery filters within the collection sidebar so every status stays visible without a horizontal scrollbar.
+
 ## 6.5.1
 
 ### Patch Changes
