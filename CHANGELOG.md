@@ -1,5 +1,11 @@
 # @jessepomeroy/admin
 
+## 6.5.3
+
+### Patch Changes
+
+- 37386f5: Use existing status tokens for login and password feedback, send/action buttons, and danger treatments so host palettes apply consistently.
+
 ## 6.5.2
 
 ### Patch Changes
