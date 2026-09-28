@@ -65,17 +65,26 @@ it("rejects missing membership, cross-origin requests and tenant/body injection 
 	expect(f.query).not.toHaveBeenCalled();
 	expect(fetcher).not.toHaveBeenCalled();
 });
-it("uses current authenticated inventory, verifies transport and rereads source before returning bytes", async () => {
+it.each(["declared-length", "chunked"])("verifies a %s response and rereads source before returning bytes", async (transport) => {
 	const archive = new TextEncoder().encode("synthetic-verified-archive");
 	const hash = await exportSha256(archive);
+	const body = new ReadableStream<Uint8Array>({
+		start(controller) {
+			controller.enqueue(archive.subarray(0, 8));
+			controller.enqueue(archive.subarray(8));
+			controller.close();
+		},
+	});
 	const fetcher = vi
 		.fn()
 		.mockResolvedValueOnce(Response.json({ siteUrl, files: [] }))
 		.mockResolvedValueOnce(
-			new Response(archive, {
+			new Response(body, {
 				headers: {
 					"Content-Type": "application/zip",
-					"Content-Length": String(archive.length),
+					...(transport === "declared-length"
+						? { "Content-Length": String(archive.length) }
+						: {}),
 					"X-Export-Sha256": hash,
 				},
 			}),
@@ -94,6 +103,9 @@ it("uses current authenticated inventory, verifies transport and rereads source 
 it.each([
 	"wrong-tenant",
 	"wrong-hash",
+	"wrong-length",
+	"chunked-wrong-hash",
+	"chunked-missing-hash",
 	"changed",
 	"too-large",
 ])("blocks %s without returning an archive", async (scenario) => {
@@ -113,6 +125,12 @@ it.each([
 	});
 	const archive = new TextEncoder().encode("verified");
 	const hash = await exportSha256(archive);
+	const chunked = scenario.startsWith("chunked-");
+	const headers = new Headers({ "Content-Type": "application/zip" });
+	if (!chunked)
+		headers.set("Content-Length", String(archive.length + (scenario === "wrong-length" ? 1 : 0)));
+	if (scenario !== "chunked-missing-hash")
+		headers.set("X-Export-Sha256", scenario.endsWith("wrong-hash") ? "0".repeat(64) : hash);
 	vi.stubGlobal(
 		"fetch",
 		vi
@@ -122,17 +140,37 @@ it.each([
 					? new Response(null, { status: 413 })
 					: Response.json({ siteUrl, files: [] }),
 			)
-			.mockResolvedValueOnce(
-				new Response(archive, {
-					headers: {
-						"Content-Type": "application/zip",
-						"Content-Length": String(archive.length),
-						"X-Export-Sha256": scenario === "wrong-hash" ? "0".repeat(64) : hash,
-					},
-				}),
-			),
+			.mockResolvedValueOnce(new Response(archive, { headers })),
 	);
 	await expect(createContentExportHandler()({ request: request() })).rejects.toMatchObject({
-		status: scenario === "wrong-hash" ? 502 : scenario === "too-large" ? 413 : 409,
+		status:
+			scenario === "too-large"
+				? 413
+				: scenario === "wrong-tenant" || scenario === "changed"
+					? 409
+					: 502,
 	});
+});
+
+it("enforces the archive byte limit when the streamed response omits Content-Length", async () => {
+	const cancel = vi.fn();
+	let chunks = 0;
+	const body = new ReadableStream<Uint8Array>({
+		pull(controller) {
+			controller.enqueue(new Uint8Array(chunks++ === 0 ? 16 * 1024 * 1024 : 1));
+		},
+		cancel,
+	});
+	vi.stubGlobal(
+		"fetch",
+		vi.fn()
+			.mockResolvedValueOnce(Response.json({ siteUrl, files: [] }))
+			.mockResolvedValueOnce(new Response(body, {
+				headers: { "Content-Type": "application/zip", "X-Export-Sha256": "0".repeat(64) },
+			})),
+	);
+	await expect(createContentExportHandler()({ request: request() })).rejects.toMatchObject({
+		status: 413,
+	});
+	expect(cancel).toHaveBeenCalled();
 });
