@@ -198,8 +198,10 @@ export function createContentExportHandler() {
 				throw error(502, "Invalid export archive.");
 			}
 			const archive = await readBounded(response, ARCHIVE_MAX);
+			// Streaming responses may omit their transport length; the archive hash remains mandatory.
+			const declaredLength = response.headers.get("Content-Length");
 			if (
-				archive.length !== Number(response.headers.get("Content-Length")) ||
+				(declaredLength !== null && archive.length !== Number(declaredLength)) ||
 				(await exportSha256(archive)) !== expectedHash
 			)
 				throw error(502, "Export archive integrity mismatch.");
