@@ -30,11 +30,18 @@ export function createPublicSiteGate(options: {
 		if (!active) {
 			const html =
 				event.request.headers.get("accept")?.includes("text/html") && !event.isDataRequest;
+			// Use an absolute same-origin URL so //paths cannot become external redirects.
+			// Omit fragments so retry always makes a fresh request, including from an error page.
+			const retryUrl = (event.url.origin + event.url.pathname + event.url.search)
+				.replaceAll("&", "&amp;")
+				.replaceAll('"', "&quot;")
+				.replaceAll("<", "&lt;")
+				.replaceAll(">", "&gt;");
 			return new Response(
 				event.request.method === "HEAD"
 					? null
 					: html
-						? '<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Website unavailable</title><body><main><h1>This website is unavailable.</h1><p>Please check back later.</p></main></body></html>'
+						? `<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Website unavailable</title><body><main><h1>Temporarily unavailable.</h1><p>Please try again in a moment.</p><a href="${retryUrl}">Try again</a></main></body></html>`
 						: JSON.stringify({
 								error: "site_unavailable",
 								message: "This website is unavailable.",

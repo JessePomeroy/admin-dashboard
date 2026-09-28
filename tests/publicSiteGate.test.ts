@@ -14,6 +14,21 @@ function input(path: string, accept = "text/html", method = "GET", data = false)
 	} as unknown as Parameters<Handle>[0];
 }
 describe("public-site offboarding gate", () => {
+	it("offers an escaped same-origin retry without a fragment while retaining no content", async () => {
+		const gate = createPublicSiteGate({
+			isActive: async () => {
+				throw new Error("unavailable");
+			},
+		});
+		const response = await gate(input('//outside.example/shop?from="test"&retry=1#old'));
+		const text = await response.text();
+		expect(text).toContain(
+			'<a href="https://tenant.example//outside.example/shop?from=%22test%22&amp;retry=1">Try again</a>',
+		);
+		expect(text).not.toContain("#old");
+		expect(text).not.toContain("secret public content");
+		expect(response.status).toBe(503);
+	});
 	it.each([
 		"/",
 		"/portfolio/old-slug",
