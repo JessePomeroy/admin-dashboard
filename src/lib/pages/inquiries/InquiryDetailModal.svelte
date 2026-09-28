@@ -11,10 +11,13 @@ import {
 interface Props {
 	inquiry: InquiryUI;
 	onclose: () => void;
+	ondelete?: (id: string) => Promise<void>;
+	deleting?: boolean;
+	busy?: boolean;
 	onupdatestatus: (id: string, status: InquiryStatus) => void;
 }
 
-let { inquiry, onclose, onupdatestatus }: Props = $props();
+let { inquiry, onclose, onupdatestatus, ondelete, deleting = false, busy = false }: Props = $props();
 
 function replyViaEmail(email: string, subject: string) {
 	const mailtoSubject = subject ? `Re: ${subject}` : "";
@@ -55,13 +58,14 @@ function replyViaEmail(email: string, subject: string) {
 		</div>
 
 		<div class="modal-actions">
+			{#if ondelete}<button class="action-btn" disabled={busy} onclick={() => void ondelete?.(inquiry._id)}>{deleting ? "deleting…" : "delete inquiry"}</button>{/if}
 			{#if inquiry.status !== "read"}
-				<button class="action-btn" onclick={() => onupdatestatus(inquiry._id, "read")}>
+				<button class="action-btn" disabled={busy} onclick={() => onupdatestatus(inquiry._id, "read")}>
 					mark read
 				</button>
 			{/if}
 			{#if inquiry.status !== "replied"}
-				<button class="action-btn" onclick={() => onupdatestatus(inquiry._id, "replied")}>
+				<button class="action-btn" disabled={busy} onclick={() => onupdatestatus(inquiry._id, "replied")}>
 					mark replied
 				</button>
 			{/if}

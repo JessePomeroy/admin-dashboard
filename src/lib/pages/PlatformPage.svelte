@@ -228,7 +228,7 @@ async function quickStatusUpdate(
 	{/if}
 </div>
 
-<ClientDetailModal client={selectedClient} {saving} onclose={closeDetailModal} onsave={handleSaveEdit} ontiertoggle={quickTierToggle} onstatusupdate={quickStatusUpdate} />
+<ClientDetailModal offboardingEnabled={!!api.platformOffboarding} client={selectedClient} {saving} onclose={closeDetailModal} onsave={handleSaveEdit} ontiertoggle={quickTierToggle} onstatusupdate={quickStatusUpdate} />
 {/if}
 
 <style>

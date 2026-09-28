@@ -458,3 +458,30 @@ explicit authority after its exact package and lock update is verified.
 For unpublished cross-repo work, consumers may temporarily use
 `link:../admin-dashboard`; do not commit that link unless the change explicitly
 requires a coordinated local-development branch.
+
+### Optional upload cleanup
+
+After deploying the matching CRM API and CMS Worker cleanup contracts, mount
+`createCatalogPrivateDeleteHandler()` from `@jessepomeroy/admin/server` at a
+site-admin-protected route. Supply `api.catalogPrivateAssets.listForCleanup`,
+`listExpiredUploadsForCleanup`, and `requestDeletion`, then set
+`editor.products.privateAssetDeleteEndpoint`. To include web media, mount the
+existing `createCmsMediaDeleteHandler`, supply `portfolioEditor.requestDeletion`,
+and set `editor.products.mediaDeleteEndpoint`.
+
+The **products → manage uploads** dialog supports confirmed cleanup and retry.
+Optional product `remove` and inquiry `remove` refs expose their corresponding
+confirmed actions. Cleanup does not erase upload journals or assets retained by
+orders, checkout, or product history. See `ARCHITECTURE.md` for the full boundary.
+
+Optional `api.contentCleanup` (`list`, `listRevisions`, `purgeArchived`, `pruneRevision`) enables the Blog **manage content history** dialog. Active/referenced revisions are protected by the backend; archived document purge preserves identity/URL reservations and leaves files for separate cleanup.
+
+Optional `api.platformOffboarding` (`getState`, `disable`, `restoreAccess`, `requestErasure`, `eraseRecords`) enables creator-only client offboarding controls. Default retention is 90 days with explicit immediate-erasure confirmation for eligible CRM records. The UI does not claim to revoke provider subscriptions/credentials or perform complete tenant/account erasure. Hosts must deploy the matching backend authorization/retention checks before enabling these APIs.
+
+`createPublicSiteGate({ isActive, preservePaths? })` is a server-only SvelteKit hook
+for client hosts. It checks availability on every public request, fails closed with
+a generic no-store 503, and prevents caching of active public responses. Admin/auth
+and app assets bypass this gate; hosts explicitly preserve any existing recipient,
+delivery or order-service routes. Each preserved route still requires its normal
+authorization. Mount the hook after deploying the availability contract; do not cache
+its callback or assume it revokes files served directly by an external CDN.

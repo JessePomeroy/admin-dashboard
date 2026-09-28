@@ -69,3 +69,6 @@ export {
 	createCatalogPrivateEditorUploadCompleteHandler,
 	createCatalogPrivateEditorUploadPrepareHandler,
 } from "./server/handlers/catalogPrivateEditorUpload.js";
+
+export { createCatalogPrivateDeleteHandler } from "./server/handlers/catalogPrivateDeletion.js";
+export { createPublicSiteGate } from "./server/publicSiteGate.js";

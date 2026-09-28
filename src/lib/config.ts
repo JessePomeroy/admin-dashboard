@@ -119,6 +119,7 @@ export interface AdminAPI {
 		createDraft: FnRef;
 		saveDraft: FnRef;
 		discardDraft: FnRef;
+		remove?: FnRef;
 	};
 	/** Private V2 catalog graph operations for multi-kind product read-back and staged editing. */
 	catalogProductGraphs?: {
@@ -127,6 +128,7 @@ export interface AdminAPI {
 		createDraft: FnRef;
 		saveDraft: FnRef;
 		discardDraft: FnRef;
+		remove?: FnRef;
 		/** Optional verified private-asset selection capability; both refs are required. */
 		listDraftPrivateAssetCandidates?: FnRef;
 		replaceDraftPrivateAsset?: FnRef;
@@ -134,6 +136,7 @@ export interface AdminAPI {
 		publishDraft?: FnRef;
 		unpublish?: FnRef;
 	};
+	catalogPrivateAssets?: { listForCleanup: FnRef; listExpiredUploadsForCleanup?: FnRef; requestDeletion: FnRef };
 	/** Tenant-scoped CMS media reads shared by editor modules. */
 	mediaAssets?: {
 		listForEditor?: FnRef;
@@ -188,6 +191,7 @@ export interface AdminAPI {
 	};
 	inquiries: {
 		updateStatus: FnRef;
+		remove?: FnRef;
 	};
 	invoices: {
 		create: FnRef;
@@ -224,6 +228,14 @@ export interface AdminAPI {
 		updateStatus: FnRef;
 		getStats: FnRef;
 	};
+	platformOffboarding?: {
+		getState: FnRef;
+		disable: FnRef;
+		requestErasure: FnRef;
+		restoreAccess: FnRef;
+		eraseRecords: FnRef;
+	};
+	contentCleanup?: { list: FnRef; listRevisions: FnRef; purgeArchived: FnRef; pruneRevision: FnRef };
 	platform: {
 		createClient: FnRef;
 		updateClient: FnRef;
@@ -508,6 +520,9 @@ export interface AdminEditorConfig {
 		/** States that this host's public Shop reads the published Convex catalog directly. */
 		publicShopEnabled?: boolean;
 		/** Optional purpose-specific private upload routes; both rooted queryless paths are required. */
+		/** Optional endpoint for reference-checked permanent private-file cleanup. */
+		privateAssetDeleteEndpoint?: string;
+		mediaDeleteEndpoint?: string;
 		privateAssetUpload?: {
 			prepareEndpoint: string;
 			completeEndpoint: string;

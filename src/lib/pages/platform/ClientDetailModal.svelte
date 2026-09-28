@@ -1,9 +1,11 @@
 <script lang="ts">
+	import ClientOffboarding from "./ClientOffboarding.svelte";
 	import AdminModal from "../../components/AdminModal.svelte";
 	import { formatTimestampDate } from "../../utils";
 
-	let { client, saving, onclose, onsave, ontiertoggle, onstatusupdate } = $props<{
+	let { client, saving, onclose, onsave, ontiertoggle, onstatusupdate, offboardingEnabled = false } = $props<{
 		client: any;
+		offboardingEnabled?: boolean;
 		saving: boolean;
 		onclose: () => void;
 		onsave: (data: {
@@ -210,6 +212,9 @@
 					</div>
 				</div>
 
+				{#if offboardingEnabled}
+					{#key client._id}<ClientOffboarding clientId={client._id} />{/key}
+				{/if}
 				<div class="modal-actions detail-actions">
 					<button class="btn-save" onclick={startEdit}>edit</button>
 				</div>

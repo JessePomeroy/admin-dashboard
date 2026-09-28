@@ -1,4 +1,6 @@
 <script lang="ts">
+import ContentCleanup from "./ContentCleanup.svelte";
+import AdminModal from "../../components/AdminModal.svelte";
 import { goto } from "$app/navigation";
 import { browser } from "$app/environment";
 import { useQuery } from "convex-svelte";
@@ -44,6 +46,7 @@ let search = $state("");
 let filter = $state<"all" | "draft" | "published" | "changed">("all");
 let createState = $state<"idle" | "saving" | "error">("idle");
 let createError = $state("");
+let cleanupOpen = $state(false);
 let supportingTarget = $state<"authors" | "categories" | null>(null);
 let normalizedSearch = $derived(search.trim().toLocaleLowerCase());
 let visiblePosts = $derived(posts.filter((post) => {
@@ -98,6 +101,10 @@ async function createPost() {
 }
 </script>
 
+{#if cleanupOpen}
+<AdminModal title="content cleanup" ariaLabel="Content cleanup" onclose={() => cleanupOpen = false}><ContentCleanup /></AdminModal>
+{/if}
+
 <div class="blog-workbench" class:has-selection={Boolean(selectedDocumentId)} class:supporting-view={supportingTarget !== null}>
 	<header class="workbench-heading editor-workbench-header">
 		<div>
@@ -110,6 +117,7 @@ async function createPost() {
 			<a href={`${baseHref}#categories`} aria-current={selectedKind === "category" || (!selectedKind && supportingTarget === "categories") ? "page" : undefined} onclick={() => supportingTarget = "categories"}>categories</a>
 			{/if}
 		</nav>
+	{#if config.api.contentCleanup}<button type="button" onclick={() => cleanupOpen = true}>manage content history</button>{/if}
 	</header>
 
 	<div class="workbench-grid">

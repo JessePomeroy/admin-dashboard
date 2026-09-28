@@ -35,7 +35,24 @@ function closeModal() {
 	selectedInquiry = null;
 }
 
+let deletingInquiry = $state(false);
+let inquiryBusy = $state(false);
+async function deleteInquiry(id: string) {
+	if (!api.inquiries.remove || inquiryBusy || !globalThis.confirm("Permanently delete this inquiry? Sent email and activity history are retained.")) return;
+	deletingInquiry = true;
+	inquiryBusy = true;
+	try {
+		await convexClient.mutation(api.inquiries.remove, { id: toId(id) });
+		inquiries = inquiries.filter((inquiry) => inquiry._id !== id);
+		if (selectedInquiry?._id === id) selectedInquiry = null;
+		addToast("Inquiry deleted.");
+	} catch { addToast("Could not delete the inquiry. Refresh and try again."); }
+	finally { deletingInquiry = false; inquiryBusy = false; }
+}
+
 async function updateStatus(id: string, newStatus: string) {
+	if (inquiryBusy) return;
+	inquiryBusy = true;
 	// Capture the current status BEFORE applying the optimistic update so that
 	// a failure reverts to the last-known-good state (not to the page-load
 	// snapshot, which may itself be stale after earlier updates).
@@ -76,7 +93,7 @@ async function updateStatus(id: string, newStatus: string) {
 		}
 		logger.error("Failed to update inquiry status:", err);
 		addToast("Failed to update inquiry status.");
-	}
+	} finally { inquiryBusy = false; }
 }
 </script>
 
@@ -108,6 +125,9 @@ async function updateStatus(id: string, newStatus: string) {
 		inquiry={selectedInquiry}
 		onclose={closeModal}
 		onupdatestatus={updateStatus}
+		ondelete={api.inquiries.remove ? deleteInquiry : undefined}
+		deleting={deletingInquiry}
+		busy={inquiryBusy}
 	/>
 {/if}
 
