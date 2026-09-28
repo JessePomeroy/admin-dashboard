@@ -22,6 +22,10 @@
     "./server": {
       "types": "./dist/server.d.ts",
       "default": "./dist/server.js"
+    },
+    "./content-export": {
+      "types": "./dist/server/contentExportCore.d.ts",
+      "default": "./dist/server/contentExportCore.js"
     }
   },
   "files": [

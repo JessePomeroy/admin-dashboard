@@ -1,4 +1,5 @@
 <script lang="ts">
+import { goto } from "$app/navigation";
 import { onDestroy } from "svelte";
 import { useQuery } from "convex-svelte";
 import { createEditorMedia } from "../../editorMedia.svelte";
@@ -173,7 +174,9 @@ let effectiveSaleAvailability = $derived(
 );
 let dirty = $derived(initialized && hasActiveDraft && currentJson !== savedJson);
 let publicationRequestActive = $derived(publicationOperation !== null);
+let deletingProduct = $state(false);
 let editorLocked = $derived(
+	deletingProduct ||
 	uploads.downloadBusy || uploads.artworkBusy || publicationRequestActive
 		|| ["saving", "discarding", "conflict"].includes(saveState),
 );
@@ -694,6 +697,23 @@ async function saveDraft() {
 		saveError = mutationError(error, "Could not save this product draft.");
 	}
 }
+async function deleteProduct() {
+	if (!catalogApi.remove || !editorState || editorLocked || editorState.published) return;
+	if (!globalThis.confirm("Permanently delete this product and all its drafts? Products linked to orders or checkout cannot be deleted. Uploaded files remain available for separate cleanup.")) return;
+	const selectedId = productId;
+	const isCurrentOperation = beginDraftMutation("discarding");
+	deletingProduct = true;
+	try {
+		await client.mutation(catalogApi.remove, { productId: selectedId, expectedUpdatedAt: editorState.updatedAt });
+		if (isCurrentOperation()) await goto(baseHref);
+	} catch (error) {
+		if (isCurrentOperation()) saveError = mutationError(error, "Could not delete this product. It may be retained by an order or checkout.");
+	} finally {
+		deletingProduct = false;
+		if (isCurrentOperation()) saveState = "saved";
+	}
+}
+
 async function discardDraft() {
 	if (!hasActiveDraft || !baseRevisionId) return;
 	if (!globalThis.confirm(
@@ -832,7 +852,7 @@ function removeSetMember(member: CatalogProductDraftForm["setMembers"][number]) 
 {#key productId}
 <ProductWorkbench selectedProductId={productId}>
 {#if editorError}
-	<p class="alert page-alert" role="alert">Could not load this product draft. Refresh this page to try again.</p>
+	<p class="alert page-alert" role="alert">Could not load this product draft. It may have been deleted. <a href={baseHref}>Return to products</a> or refresh to try again.</p>
 {:else if editorState === undefined || editorState.productId !== productId}
 	<p class="loading" role="status">Loading product draft…</p>
 {:else}
@@ -850,6 +870,9 @@ function removeSetMember(member: CatalogProductDraftForm["setMembers"][number]) 
 				</div>
 			{/if}
 		</header>
+		{#if catalogApi.remove && !editorState.published}
+			<button type="button" class="danger quiet-action" disabled={editorLocked} onclick={() => void deleteProduct()}>{deletingProduct ? "deleting…" : "delete product permanently"}</button>
+		{/if}
 		{#if saveError}<p class="alert" role="alert">{saveError}</p>{/if}
 		{#if publicationError}<div class="alert publication-alert" role="alert"><span>{publicationError}</span>{#if publicationOperation?.phase === "reload-required"}<button type="button" onclick={() => globalThis.location.reload()}>reload product</button>{/if}</div>{/if}
 		{#if mediaActionError}<p class="alert" role="alert">{mediaActionError}</p>{/if}

@@ -269,3 +269,44 @@ or empty registry admits nobody. The host supplies only its own browser origin,
 host-journal credential, and distinct storage-caller credential. Changing/removing
 an origin revokes pending Worker capabilities. Drain or intentionally abandon
 pending operations first; Convex never rewrites their frozen declarations.
+
+## Website-content export boundary
+
+`content-export` is a portable, side-effect-free package subpath: it validates
+projected inventory, preserves portable relationships, and prepares metadata,
+manifest checksums and file paths. Both the operator command and dashboard handler
+use it. The handler owns session/site authorization and fresh authenticated Convex
+queries; the CMS Worker owns exact-key R2 reads and bounded ZIP creation/reopening.
+The browser supplies no tenant, source URL or file list. It receives a download
+only after the host verifies archive integrity and rechecks the source fingerprint.
+The optional dashboard is bounded; large exports remain an operator workflow.
+
+## Catalog cleanup boundary
+
+Hosts opt into catalog cleanup through optional API references and product-editor
+endpoints. The product header opens the shared upload cleanup dialog on desktop
+and mobile. The browser submits only an asset/operation ID and kind. The host
+checks same-origin requests and site-admin authority, then uses a fresh authenticated
+Convex client to request a deletion fence. That public mutation returns only status
+and an opaque deletion ID.
+
+The host retrieves the closed storage manifest from the fixed Convex
+`/cms-media/catalog-private-assets/deletion-manifest` endpoint using its existing
+per-tenant deletion-completion secret. It sends only validated facts to the CMS
+Worker's fixed `/v1/catalog-assets/delete` endpoint, then acknowledges completion
+through `/cms-media/catalog-private-assets/complete-deletion`. No storage key or
+hash enters a browser response. Storage failures and lost completion responses
+are retried against the same durable target. Upload journals remain audit history.
+
+The backend blocks product/file cleanup while catalog revisions, orders, checkout
+reservations or frozen production inputs retain them. Expired unfinished uploads
+must outlive their continuation and capability windows and have no active lease.
+The Worker replaces the exact private original with an empty conditional-write
+marker; it must never erase that marker and reopen the old upload capability.
+
+The additive refs are `catalogProducts.remove`, `catalogProductGraphs.remove`,
+`inquiries.remove`, and `catalogPrivateAssets.{listForCleanup,listExpiredUploadsForCleanup,requestDeletion}`.
+The host must deploy the corresponding backend/Worker first, mount
+`createCatalogPrivateDeleteHandler`, and configure `privateAssetDeleteEndpoint`
+and the existing `mediaDeleteEndpoint`. Older hosts omit these options and retain
+their existing UI. No endpoint or credential is inferred from another tenant.

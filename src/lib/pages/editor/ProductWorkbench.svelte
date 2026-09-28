@@ -17,6 +17,8 @@ import {
 	type CatalogProductKind,
 } from "../../catalogProductEditor";
 import { getAdminConfig } from "../../config";
+import AdminModal from "../../components/AdminModal.svelte";
+import CatalogPrivateCleanup from "./CatalogPrivateCleanup.svelte";
 import EditorListbox from "./EditorListbox.svelte";
 
 let {
@@ -98,6 +100,7 @@ let visibleGroups = $derived(productGroups
 	}))
 	.filter((group) => group.products.length > 0));
 let visibleCount = $derived(visibleGroups.reduce((count, group) => count + group.products.length, 0));
+let cleanupOpen = $state(false);
 let creating = $state(false);
 let title = $state("");
 let slug = $state("");
@@ -247,9 +250,10 @@ async function createProduct() {
 }
 </script>
 
-<div class="product-workbench" class:has-selection={Boolean(selectedProductId)} inert={creating}>
+<div class="product-workbench" class:has-selection={Boolean(selectedProductId)} inert={creating || cleanupOpen}>
 	<header class="workbench-heading editor-workbench-header">
 		<h1>products</h1>
+		{#if productsConfig.privateAssetDeleteEndpoint || productsConfig.mediaDeleteEndpoint}<button type="button" class="new-product" onclick={() => cleanupOpen = true}>manage uploads</button>{/if}
 		<div class="heading-meta"><span>{loading ? "loading…" : `${products.length} ${products.length === 1 ? "product" : "products"}`}</span><small>{supportedKinds.length} {supportedKinds.length === 1 ? "kind" : "kinds"}</small></div>
 	</header>
 
@@ -335,6 +339,12 @@ async function createProduct() {
 			{#if createdProductHref}<p class="success" role="status">Product draft created. <a href={createdProductHref}>Open the product draft.</a></p>{/if}
 		</div>
 	</div>
+{/if}
+
+{#if cleanupOpen}
+	<AdminModal title="upload cleanup" onclose={() => cleanupOpen = false}>
+		<CatalogPrivateCleanup />
+	</AdminModal>
 {/if}
 
 <style>

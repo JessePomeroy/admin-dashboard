@@ -458,3 +458,49 @@ explicit authority after its exact package and lock update is verified.
 For unpublished cross-repo work, consumers may temporarily use
 `link:../admin-dashboard`; do not commit that link unless the change explicitly
 requires a coordinated local-development branch.
+
+### Optional website-content export
+
+After deploying and verifying the matching Convex/CMS Worker export contracts, supply
+`api.contentExport.page`, set `contentExportEndpoint`, and mount
+`createContentExportHandler()` from `@jessepomeroy/admin/server` at that same-origin
+POST route. Existing site-admin verification, a fresh Convex token, and tenant CMS
+Worker credentials are required. The dashboard then offers prepare, cancel and
+download controls; it never accepts a browser-selected tenant or sends email.
+
+Downloads contain current saved drafts/published website content and retained
+website/product files, excluding CRM/customer delivery/financial records. The host
+checks source stability and the verified ZIP checksum before returning a download.
+The immediate dashboard path allows at most 16 MiB per archive, 100 media files,
+250 inventory records and 1 MiB metadata, with a 180-second preparation deadline.
+Larger sites receive an operator-assistance message. The streaming, resumable
+operator command in Angels Rest supports larger exports and shares the pure
+`@jessepomeroy/admin/content-export` inventory/package core. No export is stored
+by this handler. Leave `contentExportEndpoint` unset until live verification passes.
+
+### Optional upload cleanup
+
+After deploying the matching CRM API and CMS Worker cleanup contracts, mount
+`createCatalogPrivateDeleteHandler()` from `@jessepomeroy/admin/server` at a
+site-admin-protected route. Supply `api.catalogPrivateAssets.listForCleanup`,
+`listExpiredUploadsForCleanup`, and `requestDeletion`, then set
+`editor.products.privateAssetDeleteEndpoint`. To include web media, mount the
+existing `createCmsMediaDeleteHandler`, supply `portfolioEditor.requestDeletion`,
+and set `editor.products.mediaDeleteEndpoint`.
+
+The **products → manage uploads** dialog supports confirmed cleanup and retry.
+Optional product `remove` and inquiry `remove` refs expose their corresponding
+confirmed actions. Cleanup does not erase upload journals or assets retained by
+orders, checkout, or product history. See `ARCHITECTURE.md` for the full boundary.
+
+Optional `api.contentCleanup` (`list`, `listRevisions`, `purgeArchived`, `pruneRevision`) enables the Blog **manage content history** dialog. Active/referenced revisions are protected by the backend; archived document purge preserves identity/URL reservations and leaves files for separate cleanup.
+
+Optional `api.platformOffboarding` (`getState`, `disable`, `restoreAccess`, `requestErasure`, `eraseRecords`) enables creator-only client offboarding controls. Default retention is 90 days with explicit immediate-erasure confirmation for eligible CRM records. The UI does not claim to revoke provider subscriptions/credentials or perform complete tenant/account erasure. Hosts must deploy the matching backend authorization/retention checks before enabling these APIs.
+
+`createPublicSiteGate({ isActive, preservePaths? })` is a server-only SvelteKit hook
+for client hosts. It checks availability on every public request, fails closed with
+a generic no-store 503, and prevents caching of active public responses. Admin/auth
+and app assets bypass this gate; hosts explicitly preserve any existing recipient,
+delivery or order-service routes. Each preserved route still requires its normal
+authorization. Mount the hook after deploying the availability contract; do not cache
+its callback or assume it revokes files served directly by an external CDN.
