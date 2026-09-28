@@ -322,7 +322,7 @@ async function handleGalleryFinalize(event: CustomEvent<{ items: DraggableGaller
 	h1 { font-size: clamp(1.18rem, 1.7vw, 1.48rem); } h2 { font-size: 1rem; }
 	.heading-meta { display: grid; justify-items: end; gap: 5px; color: var(--admin-text-subtle); font-size: .7rem; }
 	.heading-meta .error, .collection-message.error, .create-message.error, .field-error { color: var(--status-rose); }
-	.workbench-grid { display: grid; grid-template-columns: minmax(228px, 252px) minmax(520px, 1fr); min-height: calc(100vh - var(--editor-header-height, 64px)); }
+	.workbench-grid { display: grid; grid-template-columns: 18rem minmax(520px, 1fr); min-height: calc(100vh - var(--editor-header-height, 64px)); }
 	.collection-pane { min-width: 0; padding: 18px 14px 32px; border-right: 1px solid var(--admin-border); background: var(--editor-collection); }
 	.collection-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
 	.collection-note { margin: -6px 0 13px; color: var(--admin-text-muted); font-size: .66rem; line-height: 1.4; }
