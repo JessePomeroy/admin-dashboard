@@ -52,6 +52,6 @@ async function submit(event: Event) {
 	.pw-input::placeholder { color: var(--admin-text-subtle); }
 	.pw-submit { background: var(--admin-accent); color: var(--admin-bg); border: none; border-radius: 4px; padding: 7px 12px; font-size: 0.8rem; font-family: "Synonym", system-ui, sans-serif; cursor: pointer; margin-top: 2px; }
 	.pw-submit:disabled { opacity: 0.5; }
-	.pw-error { color: rgb(248, 113, 113); font-size: 0.78rem; margin: 0; }
-	.pw-success { color: rgb(74, 222, 128); font-size: 0.78rem; margin: 0; }
+	.pw-error { color: var(--status-rose); font-size: 0.78rem; margin: 0; }
+	.pw-success { color: var(--status-sage); font-size: 0.78rem; margin: 0; }
 </style>

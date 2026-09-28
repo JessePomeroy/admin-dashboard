@@ -294,8 +294,8 @@
 	}
 
 	.btn-danger {
-		background: rgba(248, 113, 113, 0.15);
-		border-color: rgba(248, 113, 113, 0.3);
+		background: color-mix(in srgb, var(--status-rose) 15%, transparent);
+		border-color: color-mix(in srgb, var(--status-rose) 30%, transparent);
 		color: var(--status-rose);
 	}
 
@@ -307,11 +307,11 @@
 	.btn-danger-outline {
 		background: transparent;
 		color: var(--status-rose);
-		border-color: rgba(248, 113, 113, 0.25);
+		border-color: color-mix(in srgb, var(--status-rose) 25%, transparent);
 	}
 
 	.btn-danger-outline:hover {
-		background: rgba(248, 113, 113, 0.08);
+		background: color-mix(in srgb, var(--status-rose) 8%, transparent);
 	}
 
 	.detail-actions {

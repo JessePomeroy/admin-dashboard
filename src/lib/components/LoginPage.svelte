@@ -143,8 +143,8 @@ async function handleGoogle() {
 	}
 
 	.login-error {
-		background: rgba(220, 38, 38, 0.1);
-		border: 1px solid rgba(220, 38, 38, 0.2);
+		background: color-mix(in srgb, var(--status-rose) 10%, transparent);
+		border: 1px solid color-mix(in srgb, var(--status-rose) 20%, transparent);
 		color: var(--status-rose);
 		padding: 10px 14px;
 		border-radius: 0;
