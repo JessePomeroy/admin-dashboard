@@ -335,7 +335,7 @@ async function handleGalleryFinalize(event: CustomEvent<{ items: DraggableGaller
 	.generate-url:hover:not(:disabled) { text-decoration: underline; }
 	.generate-url:active:not(:disabled) { transform: translateY(1px); }
 	.generate-url:disabled { color: var(--admin-text-subtle); cursor: default; }
-	.filters { display: flex; gap: 4px; margin: 9px 0 13px; overflow-x: auto; }
+	.filters { display: flex; flex-wrap: wrap; gap: 4px; margin: 9px 0 13px; }
 	.filters button { border: 0; border-radius: 3px; padding: 5px 7px; background: transparent; color: var(--admin-text-subtle); font-size: .66rem; cursor: pointer; }
 	.filters button:hover, .filters button.active { background: var(--admin-active); color: var(--admin-heading); }
 	.ordering-note { margin: -10px 0 14px; color: var(--admin-text-subtle); font-size: .66rem; line-height: 1.4; }
