@@ -72,3 +72,5 @@ export {
 
 export { createCatalogPrivateDeleteHandler } from "./server/handlers/catalogPrivateDeletion.js";
 export { createPublicSiteGate } from "./server/publicSiteGate.js";
+
+export { createContentExportHandler } from "./server/handlers/contentExport.js";

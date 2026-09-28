@@ -270,6 +270,17 @@ host-journal credential, and distinct storage-caller credential. Changing/removi
 an origin revokes pending Worker capabilities. Drain or intentionally abandon
 pending operations first; Convex never rewrites their frozen declarations.
 
+## Website-content export boundary
+
+`content-export` is a portable, side-effect-free package subpath: it validates
+projected inventory, preserves portable relationships, and prepares metadata,
+manifest checksums and file paths. Both the operator command and dashboard handler
+use it. The handler owns session/site authorization and fresh authenticated Convex
+queries; the CMS Worker owns exact-key R2 reads and bounded ZIP creation/reopening.
+The browser supplies no tenant, source URL or file list. It receives a download
+only after the host verifies archive integrity and rechecks the source fingerprint.
+The optional dashboard is bounded; large exports remain an operator workflow.
+
 ## Catalog cleanup boundary
 
 Hosts opt into catalog cleanup through optional API references and product-editor

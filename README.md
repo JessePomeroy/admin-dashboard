@@ -459,6 +459,25 @@ For unpublished cross-repo work, consumers may temporarily use
 `link:../admin-dashboard`; do not commit that link unless the change explicitly
 requires a coordinated local-development branch.
 
+### Optional website-content export
+
+After deploying and verifying the matching Convex/CMS Worker export contracts, supply
+`api.contentExport.page`, set `contentExportEndpoint`, and mount
+`createContentExportHandler()` from `@jessepomeroy/admin/server` at that same-origin
+POST route. Existing site-admin verification, a fresh Convex token, and tenant CMS
+Worker credentials are required. The dashboard then offers prepare, cancel and
+download controls; it never accepts a browser-selected tenant or sends email.
+
+Downloads contain current saved drafts/published website content and retained
+website/product files, excluding CRM/customer delivery/financial records. The host
+checks source stability and the verified ZIP checksum before returning a download.
+The immediate dashboard path allows at most 16 MiB per archive, 100 media files,
+250 inventory records and 1 MiB metadata, with a 180-second preparation deadline.
+Larger sites receive an operator-assistance message. The streaming, resumable
+operator command in Angels Rest supports larger exports and shares the pure
+`@jessepomeroy/admin/content-export` inventory/package core. No export is stored
+by this handler. Leave `contentExportEndpoint` unset until live verification passes.
+
 ### Optional upload cleanup
 
 After deploying the matching CRM API and CMS Worker cleanup contracts, mount

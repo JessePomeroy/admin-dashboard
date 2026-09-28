@@ -1,4 +1,5 @@
 <script lang="ts">
+import ContentExport from "./dashboard/ContentExport.svelte";
 import { goto } from "$app/navigation";
 import { useQuery } from "convex-svelte";
 import { getAdminConfig } from "../config";
@@ -430,6 +431,9 @@ let sparklineArea = $derived(() => {
 			</div>
 		{/if}
 	</div>
+	{#if config.contentExportEndpoint}
+		<ContentExport endpoint={config.contentExportEndpoint} />
+	{/if}
 </div>
 {/if}
 

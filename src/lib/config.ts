@@ -28,6 +28,8 @@ export interface NanostoreAtom<T> {
 }
 
 export interface AdminAPI {
+	/** Current tenant-owned content and media export projection. */
+	contentExport?: { page: FnRef };
 	activityLog: {
 		getClientActivity: FnRef;
 	};
@@ -620,6 +622,8 @@ export interface AdminAuthClient {
 }
 
 export interface AdminConfig {
+	/** Enables the authenticated, bounded on-demand website-content export. */
+	contentExportEndpoint?: string;
 	siteUrl: string;
 	siteName: string;
 	fromEmail: string;
