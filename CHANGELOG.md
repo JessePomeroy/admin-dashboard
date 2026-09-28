@@ -1,5 +1,11 @@
 # @jessepomeroy/admin
 
+## 6.5.4
+
+### Patch Changes
+
+- 7b51e6d: Widen the portfolio gallery column so all five status filters fit on one row in the desktop editor.
+
 ## 6.5.3
 
 ### Patch Changes
