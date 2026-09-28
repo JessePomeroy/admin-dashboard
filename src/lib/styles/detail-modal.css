@@ -225,14 +225,14 @@
 }
 
 :global([data-admin] .btn-send) {
-	background: rgba(74, 222, 128, 0.12);
-	border-color: rgba(74, 222, 128, 0.25);
-	color: #4ade80;
+	background: color-mix(in srgb, var(--status-sage) 12%, transparent);
+	border-color: color-mix(in srgb, var(--status-sage) 25%, transparent);
+	color: var(--status-sage);
 	font-weight: 500;
 }
 
 :global([data-admin] .btn-send:hover) {
-	background: rgba(74, 222, 128, 0.2);
+	background: color-mix(in srgb, var(--status-sage) 20%, transparent);
 }
 
 :global([data-admin] .btn-send:disabled) {
@@ -241,13 +241,13 @@
 }
 
 :global([data-admin] .btn-action) {
-	background: rgba(212, 160, 83, 0.12);
-	border-color: rgba(212, 160, 83, 0.25);
+	background: color-mix(in srgb, var(--status-amber) 12%, transparent);
+	border-color: color-mix(in srgb, var(--status-amber) 25%, transparent);
 	color: var(--status-amber);
 }
 
 :global([data-admin] .btn-action:hover) {
-	background: rgba(212, 160, 83, 0.2);
+	background: color-mix(in srgb, var(--status-amber) 20%, transparent);
 }
 
 :global([data-admin] .btn-action:disabled) {
@@ -256,8 +256,8 @@
 }
 
 :global([data-admin] .btn-danger) {
-	background: rgba(248, 113, 113, 0.15);
-	border-color: rgba(248, 113, 113, 0.3);
+	background: color-mix(in srgb, var(--status-rose) 15%, transparent);
+	border-color: color-mix(in srgb, var(--status-rose) 30%, transparent);
 	color: var(--status-rose);
 }
 
@@ -269,11 +269,11 @@
 :global([data-admin] .btn-danger-outline) {
 	background: transparent;
 	color: var(--status-rose);
-	border-color: rgba(248, 113, 113, 0.25);
+	border-color: color-mix(in srgb, var(--status-rose) 25%, transparent);
 }
 
 :global([data-admin] .btn-danger-outline:hover) {
-	background: rgba(248, 113, 113, 0.08);
+	background: color-mix(in srgb, var(--status-rose) 8%, transparent);
 }
 
 :global([data-admin] .btn-danger-outline:disabled) {
