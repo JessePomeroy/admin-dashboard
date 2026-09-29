@@ -135,7 +135,7 @@ describe("BlogWorkbench", () => {
 		document.querySelector<HTMLButtonElement>('.filters button:nth-child(4)')?.click();
 		await tick();
 		expect(Array.from(document.querySelectorAll(".post-list strong"), (item) => item.textContent)).toEqual(["Field Notes"]);
-		expect(document.querySelector(".post-list small")?.textContent).toBe("draft changes");
+		expect(document.querySelector(".post-list small")?.textContent).toBe("published · draft changes");
 	});
 
 	it("keeps supporting collections reachable and creates through the existing post mutation", async () => {

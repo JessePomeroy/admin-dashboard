@@ -187,6 +187,25 @@ describe("compact blog authoring", () => {
 		expect(mutation.mock.calls.map(([name]) => name)).toEqual(["post:save", "post:publish"]);
 	});
 
+	it("unpublishes a post without saving pending edits or archiving it", async () => {
+		const confirm = vi.spyOn(globalThis, "confirm").mockReturnValue(true);
+		const state = postEditorState();
+		state.published = state.draft;
+		const { queries, mutation } = await render(state);
+		mutation.mockImplementation(() => null);
+		await type(field("post title"), "Keep these draft edits");
+		button("unpublish").click();
+		await tick();
+		expect(mutation.mock.calls.map(([name]) => name)).toEqual(["post:unpublish"]);
+		expect(mutation).toHaveBeenCalledWith("post:unpublish", { documentId: state.documentId });
+		queries.emit(queries.latest("post:state"), { ...state, published: null });
+		await tick();
+		expect(field("post title").value).toBe("Keep these draft edits");
+		expect(document.querySelector(".publication-status")?.textContent).toBe("unpublished");
+		await vi.waitFor(() => expect(button("publish")).toBeDefined());
+		confirm.mockRestore();
+	});
+
 	it("retains public URL confirmation and disables generation for archived posts", async () => {
 		const state = postEditorState();
 		state.published = { ...state.draft!, revisionId: "published", draft: { ...state.draft!.draft, summary: "Existing summary", authorDocumentId: "author" } };
@@ -195,14 +214,15 @@ describe("compact blog authoring", () => {
 		await type(field("post title"), "New public title");
 		button("generate url").click();
 		await tick();
-		button("publish").click();
+		button("publish changes").click();
 		await tick();
 		expect(document.body.textContent).toContain("Confirm the public URL change");
 		expect(mutation).not.toHaveBeenCalled();
 		queries.emit(queries.latest("post:state"), { ...state, archivedAt: 1 });
 		await tick();
 		expect(button("generate url").disabled).toBe(true);
-		expect(button("publish").disabled).toBe(true);
+		expect(document.querySelector(".publication-actions")).toBeNull();
+		expect(document.querySelector(".publication-status")?.textContent).toBe("archived");
 	});
 
 	it("creates owner-authored posts without exposing author/category management or honoring old hashes", async () => {

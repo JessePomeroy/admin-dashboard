@@ -393,7 +393,7 @@ describe("Blog query states", () => {
 		title!.value = "Post one revised";
 		title!.dispatchEvent(new Event("input", { bubbles: true }));
 		await tick();
-		expect(document.querySelector(".save-status")?.textContent).toBe("dirty");
+		expect(document.querySelector(".save-status")?.textContent).toBe("unsaved changes");
 
 		button("save draft")?.click();
 		await tick();
@@ -402,7 +402,7 @@ describe("Blog query states", () => {
 		finishSave?.({ revisionId: "revision-2" });
 		await tick();
 		await tick();
-		expect(document.querySelector(".save-status")?.textContent).toBe("saved");
+		expect(document.querySelector(".save-status")?.textContent).toBe("draft saved");
 	});
 
 	it("keeps a failed save distinguishable and retryable", async () => {

@@ -1,4 +1,5 @@
 <script lang="ts">
+import PublicationControl from "./PublicationControl.svelte";
 import { browser } from "$app/environment";
 import { useQuery } from "convex-svelte";
 import { dragHandle, dragHandleZone } from "svelte-dnd-action";
@@ -48,6 +49,9 @@ const draft = createSingletonDraft({
 	}) as Promise<{ revisionId: string }>,
 });
 let form = $derived(draft.form);
+let publicationState = $derived(editorQuery.data as ContactPageEditorState | null | undefined);
+let publicationHasChanges = $derived(draft.hasPendingWork || Boolean(draft.revisionId && draft.revisionId !== publicationState?.published?.revisionId));
+
 let published = $state<ContactPageDraftPayload>(emptyContactPageDraft());
 let setupRequired = $state(false);
 let setupStatus = $state<"idle" | "saving">("idle");
@@ -201,11 +205,11 @@ function finishChoiceReorder(event: CustomEvent<{ items: DraggableChoice[] }>) {
 		<h1>contact &amp; booking</h1>
 		{#if draft.initialized && !setupRequired}
 			<div class="actions">
-				<span class="save-state" aria-live="polite">{draft.state === "offline" ? "offline — saved on this device" : draft.state}</span>
+				<span class="save-state" data-publication-save-state={draft.state} aria-live="polite">{draft.state === "offline" ? "offline — saved on this device" : draft.state === "saved" ? "draft saved" : draft.state === "dirty" ? "unsaved changes" : draft.state}</span>
 				<button type="button" onclick={() => void discard()} disabled={!draft.revisionId && !draft.hasPendingWork}>{draft.state === "conflict" ? "reload server draft" : "discard draft"}</button>
-				<button type="button" onclick={() => void draft.saveNow()} disabled={draft.state === "saving" || draft.state === "conflict"}>save now</button>
+				{#if draft.hasPendingWork}<button type="button" onclick={() => void draft.saveNow()} disabled={draft.state === "saving" || draft.state === "conflict"}>save draft</button>{/if}
 				{#if previewEndpoint}<button type="button" onclick={() => void preview()} disabled={previewing || draft.state === "saving" || draft.state === "syncing" || draft.state === "offline" || draft.state === "conflict"}>{previewing ? "preparing preview…" : "preview"}</button>{/if}
-				{#if publishingEnabled}<button type="button" class="primary" onclick={() => void publish()} disabled={draft.state === "saving" || draft.state === "syncing" || draft.state === "offline" || draft.state === "conflict"}>publish</button>{/if}
+				{#if publishingEnabled}<PublicationControl published={Boolean(publicationState?.published)} hasChanges={publicationHasChanges} onpublish={publish} publishDisabled={draft.state === "saving" || draft.state === "syncing" || draft.state === "offline" || draft.state === "conflict"} />{/if}
 			</div>
 		{/if}
 	</header>

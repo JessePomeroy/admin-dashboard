@@ -1,4 +1,5 @@
 <script lang="ts">
+import PublicationControl from "./PublicationControl.svelte";
 import { browser } from "$app/environment";
 import { goto } from "$app/navigation";
 import { onDestroy, onMount, tick } from "svelte";
@@ -289,7 +290,7 @@ onMount(() => {
 });
 
 async function publish() {
-	if (!publishPortfolioGallery) return;
+	if (!publishPortfolioGallery || publishing || visibilityChanging) return;
 	reviewRequested = true;
 	publishMessage = "";
 	if (publishIssues.length > 0) {
@@ -309,6 +310,7 @@ async function publish() {
 		if (!active) return;
 		publishedRevisionId = result.revisionId;
 		isPublished = true;
+		isVisible = true;
 		saveError = "";
 		publishMessage = "Published. This saved revision is now available to the public site.";
 		clearLocalDraft();
@@ -321,23 +323,21 @@ async function publish() {
 	}
 }
 
-async function toggleVisibility() {
-	if (!setPortfolioGalleryVisibility || !isPublished) return;
+async function unpublish() {
+	if (!setPortfolioGalleryVisibility || !isPublished || !isVisible || visibilityChanging || publishing) return;
 	visibilityChanging = true;
 	publishMessage = "";
 	try {
 		const result = await client.mutation(setPortfolioGalleryVisibility, {
 			galleryId,
-			isVisible: !isVisible,
+			isVisible: false,
 		}) as { isVisible: boolean };
 		if (!active) return;
 		isVisible = result.isVisible;
-		publishMessage = isVisible
-			? "Shown. This gallery is available on the public site."
-			: "Hidden. The saved gallery remains here and can be shown again.";
+		publishMessage = "Unpublished. Your gallery stays saved so you can publish it again.";
 	} catch (error) {
 		if (!active) return;
-		saveError = error instanceof Error ? error.message : "Could not change gallery visibility.";
+		saveError = error instanceof Error ? error.message : "Could not unpublish gallery.";
 	} finally {
 		if (active) visibilityChanging = false;
 	}
@@ -445,26 +445,17 @@ function reloadServerDraft() {
 				<h1>{form.title || "untitled gallery"}</h1>
 			</div>
 			<div class="actions">
-				<span class="status" data-save-state={saveState} aria-live="polite">{isPublished && !isVisible
-					? "hidden"
-					: saveState === "offline"
-					? "offline — saved on this device"
-					: publicationCurrent
-						? "published"
-						: saveState === "saved" ? "draft saved" : saveState === "dirty" ? "unsaved changes" : saveState}</span>
+				<span class="status" data-save-state={saveState} aria-live="polite">{saveState === "offline" ? "offline — saved on this device" : saveState === "saved" ? "draft saved" : saveState === "dirty" ? "unsaved changes" : saveState}</span>
 				{#if saveState === "conflict"}
 					<button type="button" class="secondary" onclick={reloadServerDraft}>reload server draft</button>
-				{:else}
-					<button type="button" class="secondary" onclick={() => void saveNow()} disabled={!dirty || saveState === "saving" || saveState === "syncing"}>save now</button>
+				{:else if hasPendingWork}
+					<button type="button" class="secondary" onclick={() => void saveNow()} disabled={!dirty || saveState === "saving" || saveState === "syncing"}>save draft</button>
 				{/if}
 				{#if previewEndpoint}
 					<button type="button" class="secondary" onclick={() => void preview()} disabled={previewing || saveState === "saving" || saveState === "syncing" || saveState === "offline" || saveState === "conflict"}>{previewing ? "preparing preview…" : "preview"}</button>
 				{/if}
-				{#if publishingEnabled}
-					<button type="button" class="primary" onclick={() => void publish()} disabled={publicationCurrent || publishing || saveState === "saving" || saveState === "syncing" || saveState === "offline" || saveState === "conflict"}>{publishing ? "publishing…" : "publish"}</button>
-				{/if}
-				{#if setPortfolioGalleryVisibility && isPublished}
-					<button type="button" class="visibility-toggle" class:is-hidden={!isVisible} aria-pressed={!isVisible} aria-busy={visibilityChanging} onclick={() => void toggleVisibility()} disabled={visibilityChanging}>{visibilityChanging ? "updating…" : isVisible ? "hide from site" : "show on site"}</button>
+				{#if publicLifecycleEnabled}
+					<PublicationControl published={isPublished && isVisible} hasChanges={!publicationCurrent} item="gallery" onpublish={publishingEnabled ? publish : undefined} onunpublish={setPortfolioGalleryVisibility ? unpublish : undefined} publishDisabled={saveState === "saving" || saveState === "syncing" || saveState === "offline" || saveState === "conflict"} unpublishDisabled={saveState === "offline"} busy={publishing || visibilityChanging || removing} />
 				{/if}
 			</div>
 		</header>
@@ -540,9 +531,6 @@ function reloadServerDraft() {
 	button:disabled { opacity: .45; cursor: default; }
 	button:focus-visible, input:focus-visible, textarea:focus-visible, .back:focus-visible { outline: 2px solid var(--admin-accent); outline-offset: 2px; }
 	.secondary { border-color: var(--admin-border-strong); background: transparent; color: var(--admin-text); }
-	.visibility-toggle { min-width: 106px; border-color: var(--admin-accent-strong); background: color-mix(in srgb, var(--admin-accent) 8%, var(--editor-control)); color: var(--admin-heading); }
-	.visibility-toggle:hover:not(:disabled), .visibility-toggle.is-hidden { background: var(--admin-accent-strong); color: var(--admin-bg); }
-	.visibility-toggle:active:not(:disabled) { transform: translateY(1px); }
 	.danger { border-color: color-mix(in srgb, var(--status-rose) 55%, transparent); background: transparent; color: var(--status-rose); }
 	.danger.solid { background: var(--status-rose); color: var(--admin-bg); }
 	.alert { padding: 12px 14px; border: 1px solid color-mix(in srgb, var(--status-rose) 45%, transparent); border-radius: 6px; color: var(--status-rose); }

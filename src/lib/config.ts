@@ -79,7 +79,7 @@ export interface AdminAPI {
 		listForEditor: FnRef;
 		getEditorState: FnRef;
 		saveDraft: FnRef;
-		/** Optional while a host stages private drafts before connecting a public provider. */
+		/** Optional for draft-only hosts. Publishing must also restore a hidden gallery to public reads. */
 		publish?: FnRef;
 		/** Reversibly include or exclude a published gallery from public reads. */
 		setVisibility?: FnRef;

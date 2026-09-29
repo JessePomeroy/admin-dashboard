@@ -50,8 +50,8 @@ let createError = $state("");
 
 function statusLabel(document: BlogSupportingEditorSummary) {
 	const status = blogDocumentStatus(document);
-	if (status === "changed") return "draft changes";
-	return status;
+	if (status === "changed") return "published · draft changes";
+	return status === "draft" ? "unpublished" : status;
 }
 
 async function createSupporting(kind: BlogSupportingKind) {

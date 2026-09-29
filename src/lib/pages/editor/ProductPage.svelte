@@ -1,4 +1,5 @@
 <script lang="ts">
+import PublicationControl from "./PublicationControl.svelte";
 import { goto } from "$app/navigation";
 import { onDestroy } from "svelte";
 import { useQuery } from "convex-svelte";
@@ -180,15 +181,6 @@ let editorLocked = $derived(
 	uploads.downloadBusy || uploads.artworkBusy || publicationRequestActive
 		|| ["saving", "discarding", "conflict"].includes(saveState),
 );
-let publicationStatus = $derived.by(() => {
-	const draftRevisionId = editorState?.draft?.revisionId ?? null;
-	const publishedRevisionId = editorState?.published?.revisionId ?? null;
-	if (!publishedRevisionId) return "unpublished";
-	if (!draftRevisionId) return "published — no active draft";
-	return draftRevisionId === publishedRevisionId
-		? "published — current draft"
-		: "published — newer draft available";
-});
 let publicationQueryStale = $derived(initialized && Boolean(editorState) && (
 	editorState?.productId !== productId
 		|| (editorState?.draft?.revisionId ?? null) !== (baseRevisionId ?? null)
@@ -360,7 +352,7 @@ function completePublication(operation: PublicationOperation, state: CatalogProd
 	publicationError = "";
 	publicationMessage = operation.action === "publish"
 		? publishesToShop ? "Published to the Shop." : "Published in Convex CMS."
-		: publishesToShop ? "Removed from the Shop." : "Unpublished from Convex CMS.";
+		: publishesToShop ? "Unpublished. Your product stays saved." : "Unpublished from Convex CMS.";
 }
 
 function publicationConflict() {
@@ -557,9 +549,6 @@ function schedulePublicationReconciliation(operation: PublicationOperation) {
 async function runPublication(action: "publish" | "unpublish") {
 	if (!publicationCapability || !editorState) return;
 	if (action === "publish" ? !canPublish : !canUnpublish) return;
-	if (action === "unpublish" && !globalThis.confirm(
-		publishesToShop ? "Remove this product from your Shop?" : "Unpublish this product from Convex CMS?",
-	)) return;
 	const before = publicationSnapshot(editorState);
 	const operation: PublicationOperation = {
 		requestId: ++nextPublicationRequestId,
@@ -572,7 +561,7 @@ async function runPublication(action: "publish" | "unpublish") {
 	publicationError = "";
 	publicationMessage = action === "publish"
 		? publishesToShop ? "Publishing once to the Shop…" : "Publishing once to Convex CMS…"
-		: publishesToShop ? "Removing once from the Shop…" : "Unpublishing once from Convex CMS…";
+		: publishesToShop ? "Unpublishing…" : "Unpublishing once from Convex CMS…";
 	const mutation = action === "publish"
 		? publicationCapability.publishDraft
 		: publicationCapability.unpublish;
@@ -864,10 +853,11 @@ function removeSetMember(member: CatalogProductDraftForm["setMembers"][number]) 
 					<span class="save-state" data-save-state={saveState} aria-live="polite">{saveState === "saved" ? "draft saved" : saveState === "dirty" ? "unsaved changes" : saveState}</span>
 					{#if dirty || saveState === "saving" || saveState === "error"}
 						<button type="button" class="primary" onclick={() => void saveDraft()} disabled={!canSave}>{saveState === "saving" ? "saving…" : saveState === "error" ? "try save again" : "save draft"}</button>
-					{:else if canPublish}
-						<button type="button" class="primary" onclick={() => void runPublication("publish")}>{editorState.published ? "publish changes" : publishesToShop ? "publish to Shop" : "publish to Convex CMS"}</button>
 					{/if}
 				</div>
+			{/if}
+			{#if publicationCapability}
+				<PublicationControl published={Boolean(editorState.published)} hasChanges={Boolean(editorState.draft && (dirty || editorState.draft.revisionId !== editorState.published?.revisionId))} item="product" onpublish={editorState.draft ? () => runPublication("publish") : undefined} onunpublish={() => runPublication("unpublish")} publishDisabled={!canPublish} unpublishDisabled={!canUnpublish} busy={publicationRequestActive || deletingProduct} />
 			{/if}
 		</header>
 		{#if catalogApi.remove && !editorState.published}
@@ -877,7 +867,6 @@ function removeSetMember(member: CatalogProductDraftForm["setMembers"][number]) 
 		{#if publicationError}<div class="alert publication-alert" role="alert"><span>{publicationError}</span>{#if publicationOperation?.phase === "reload-required"}<button type="button" onclick={() => globalThis.location.reload()}>reload product</button>{/if}</div>{/if}
 		{#if mediaActionError}<p class="alert" role="alert">{mediaActionError}</p>{/if}
 		{#if media.error}<p class="alert" role="alert">Could not load product images. Refresh this page to try again.</p>{/if}
-		{#if publicationCapability && isGraphV2}<span class="sr-only publication-status" role="status" aria-live="polite">{publicationStatus}</span>{/if}
 		{#if publicationMessage}<p class="publication-message" role="status" aria-live="polite">{publicationMessage}</p>{/if}
 		{#if isGraphV2 && !graphProductKindEditable}
 			<section aria-labelledby="product-readback-heading">
@@ -892,13 +881,11 @@ function removeSetMember(member: CatalogProductDraftForm["setMembers"][number]) 
 				{#if catalogProductEditorDescription(readOnlyRevision)}
 					<p class="readback-description">{catalogProductEditorDescription(readOnlyRevision)}</p>
 				{/if}
-				{#if canUnpublish}<div class="shop-publication" aria-label={publishesToShop ? "Shop actions" : "Convex CMS actions"}><button type="button" class="danger quiet-action" onclick={() => void runPublication("unpublish")}>{publishesToShop ? "remove from Shop" : "unpublish from Convex CMS"}</button></div>{/if}
 			</section>
 		{:else if !hasActiveDraft}
 			<section aria-labelledby="discarded-product-heading">
 				<div class="section-heading"><span>01</span><div><h2 id="discarded-product-heading">no active draft</h2><p>This product identity remains in the catalog, but its editable draft was discarded. No product details are currently staged.</p></div></div>
 				<button type="button" onclick={() => void startDraft()} disabled={editorLocked}>{saveState === "saving" ? "starting…" : "start a new draft"}</button>
-				{#if canUnpublish}<div class="shop-publication" aria-label={publishesToShop ? "Shop actions" : "Convex CMS actions"}><button type="button" class="danger quiet-action" onclick={() => void runPublication("unpublish")}>{publishesToShop ? "remove from Shop" : "unpublish from Convex CMS"}</button></div>{/if}
 			</section>
 		{:else}
 			{#if isGraphV2 && mediaCapability}
@@ -942,11 +929,6 @@ function removeSetMember(member: CatalogProductDraftForm["setMembers"][number]) 
 				</div>
 				{#if form.productKind === "print" || form.productKind === "print_set"}
 					{#if form.frameOptionsEnabled}<label class="multiplier">frame price multiplier<span class="multiplier-input"><input id="catalog-frame-price-multiplier" inputmode="decimal" value={multiplierInput} oninput={(event) => updateMultiplier(event.currentTarget.value)} aria-invalid={Boolean(multiplierError)} aria-describedby={`catalog-frame-multiplier-hint${multiplierError ? " catalog-frame-multiplier-error" : ""}`} disabled={editorLocked} /><span aria-hidden="true">×</span></span><small id="catalog-frame-multiplier-hint">Applied to the frame cost in the profit estimate.</small>{#if multiplierError}<small id="catalog-frame-multiplier-error" class="field-error" role="alert">{multiplierError}</small>{/if}</label>{/if}
-				{/if}
-				{#if publicationCapability && isGraphV2}
-					<div class="shop-publication" aria-label={publishesToShop ? "Shop actions" : "Convex CMS actions"}>
-						{#if canUnpublish}<button type="button" class="danger quiet-action" onclick={() => void runPublication("unpublish")}>{publishesToShop ? "remove from Shop" : "unpublish from Convex CMS"}</button>{/if}
-					</div>
 				{/if}
 			</section>
 			{#if !usesSinglePrice}
@@ -1018,9 +1000,7 @@ function removeSetMember(member: CatalogProductDraftForm["setMembers"][number]) 
 	.multiplier-input > span { padding-right: 11px; color: var(--admin-text-muted); }
 	.multiplier-input:focus-within { outline: 2px solid var(--admin-accent-strong); outline-offset: 2px; }
 	.publication-message { margin: 0; color: var(--admin-text-muted); font-size: .78rem; line-height: 1.5; text-align: right; }
-	.shop-publication { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 22px; }
 	.quiet-action { border-color: transparent; }
-	.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
 	.publication-alert { display: flex; justify-content: space-between; gap: 12px; align-items: center; }
 	.readback-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 0; margin: 0; border-block: 1px solid var(--admin-border); }
 	.readback-grid div { min-width: 0; padding: 14px; border-left: 1px solid var(--admin-border); }

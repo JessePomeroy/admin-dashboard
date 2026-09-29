@@ -222,6 +222,7 @@ describe("Portfolio editor capability modes", () => {
 		mocks.mutation.mockClear();
 		mocks.goto.mockClear();
 		mocks.state.failMutationName = "";
+		vi.spyOn(globalThis, "confirm").mockReturnValue(true);
 		mocks.state.queryFailures.clear();
 		mocks.state.galleries = [mocks.defaultGallery];
 		mocks.state.placements = [];
@@ -246,6 +247,19 @@ describe("Portfolio editor capability modes", () => {
 		await tick();
 		expect(buttonLabels()).toContain("create unpublished gallery");
 		expect(document.body.textContent).toContain("The public site follows this deliberate order.");
+	});
+
+	it("includes hidden galleries in the unpublished editor filter", async () => {
+		mocks.state.galleries = [
+			{ ...mocks.defaultGallery, isVisible: false },
+			{ ...mocks.defaultGallery, galleryId: "other", slug: "other", draft: { ...mocks.defaultGallery.draft, title: "Live gallery" } },
+		];
+		await mountList();
+		const filter = [...document.querySelectorAll(".filters button")].find(button => button.textContent === "unpublished");
+		(filter as HTMLButtonElement).click();
+		await tick();
+		expect([...document.querySelectorAll(".gallery-list strong")].map(node => node.textContent)).toEqual(["Selected work"]);
+		expect(document.querySelector(".gallery-list .status")?.textContent).toContain("unpublished");
 	});
 
 	it("presents every collection record as a private draft when publish is absent", async () => {
@@ -281,15 +295,15 @@ describe("Portfolio editor capability modes", () => {
 		);
 	});
 
-	it("keeps publish behavior unchanged when the capability is present", async () => {
+	it("offers unpublish for the current published revision", async () => {
 		mocks.previewEnabled = false;
 		await mountDetail();
 
 		expect(document.querySelector(".gallery-page > header p")).toBeNull();
-		expect(buttonLabels()).toContain("publish");
+		expect(buttonLabels()).toContain("unpublish");
 		expect(buttonLabels()).not.toContain("preview");
 		expect(document.querySelector("#publish-review-heading")?.textContent).toBe("publishing review");
-		expect(document.querySelector('[aria-live="polite"]')?.textContent).toBe("published");
+		expect(document.querySelector(".publication-status")?.textContent).toBe("published");
 	});
 
 	it("keeps preview and draft editing while removing publication semantics in staging mode", async () => {
@@ -494,7 +508,7 @@ describe("Portfolio editor capability modes", () => {
 		expect(Array.from(document.querySelectorAll(".image-summary strong"), (item) => item.textContent))
 			.toEqual(["2.jpg", "1.jpg"]);
 		const saveNow = Array.from(document.querySelectorAll<HTMLButtonElement>("button"))
-			.find((button) => button.textContent === "save now");
+			.find((button) => button.textContent === "save draft");
 		saveNow?.click();
 		await settle();
 		expect(mocks.mutation).toHaveBeenCalledWith(mocks.refs.saveDraft, expect.objectContaining({
@@ -507,12 +521,32 @@ describe("Portfolio editor capability modes", () => {
 		}));
 	});
 
+	it("republishes a hidden gallery through publish, with no separate show action", async () => {
+		mocks.state.placements = [{ key: "one", assetId: "asset-one", altText: "Portrait" }];
+		await mountDetail();
+		const press = (label: string) => {
+			const button = [...document.querySelectorAll("button")].find(button => button.textContent?.trim() === label);
+			expect(button).toBeDefined();
+			button!.click();
+		};
+		press("unpublish");
+		await settle();
+		expect(document.querySelector(".publication-status")?.textContent).toBe("unpublished");
+		mocks.mutation.mockClear();
+		press("publish");
+		await settle();
+		expect(mocks.mutation).toHaveBeenCalledWith(mocks.publishRef, { galleryId: "gallery-1", draftRevisionId: "published-revision" });
+		expect(mocks.mutation).not.toHaveBeenCalledWith(mocks.setVisibilityRef, expect.anything());
+		expect(document.querySelector(".publication-status")?.textContent).toContain("published");
+		expect(buttonLabels()).not.toContain("show on site");
+	});
+
 	it("hides a published gallery and confirms permanent deletion without deleting shared media", async () => {
 		await mountDetail();
 		const hide = Array.from(document.querySelectorAll<HTMLButtonElement>("button"))
-			.find((button) => button.textContent === "hide from site");
-		expect(hide?.classList.contains("visibility-toggle")).toBe(true);
-		expect(hide?.getAttribute("aria-pressed")).toBe("false");
+			.find((button) => button.textContent === "unpublish");
+		expect(hide).toBeDefined();
+		expect(hide?.hasAttribute("aria-pressed")).toBe(false);
 		hide?.click();
 		await settle();
 		expect(mocks.mutation).toHaveBeenCalledWith(mocks.setVisibilityRef, {
@@ -520,8 +554,9 @@ describe("Portfolio editor capability modes", () => {
 			isVisible: false,
 		});
 		const show = Array.from(document.querySelectorAll<HTMLButtonElement>("button"))
-			.find((button) => button.textContent === "show on site");
-		expect(show?.getAttribute("aria-pressed")).toBe("true");
+			.find((button) => button.textContent === "publish");
+		expect(show).toBeDefined();
+		expect(document.querySelector(".publication-status")?.textContent).toBe("unpublished");
 		expect(show?.classList.contains("hidden")).toBe(false);
 		expect(document.querySelector('label[for="gallery-title"]')?.parentElement?.classList.contains("field-heading")).toBe(true);
 

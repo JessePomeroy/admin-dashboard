@@ -45,7 +45,7 @@ let reorderMessage = $state("");
 let dragOrigin = $state<PortfolioGalleryEditorSummary[] | null>(null);
 let dragItems = $state<DraggableGallery[] | null>(null);
 let search = $state("");
-let filter = $state<"all" | "draft" | "published" | "changed" | "hidden">("all");
+let filter = $state<"all" | "draft" | "unpublished" | "published" | "changed">("all");
 let creating = $state(false);
 let title = $state("");
 let slug = $state("");
@@ -59,13 +59,13 @@ let titleInput = $state<HTMLInputElement>();
 let normalizedSearch = $derived(search.trim().toLocaleLowerCase());
 let orderingDisabled = $derived(Boolean(normalizedSearch) || filter !== "all");
 let filterOptions = $derived(publicLifecycleEnabled
-	? (["all", "draft", "published", "changed", "hidden"] as const)
+	? (["all", "unpublished", "published", "changed"] as const)
 	: (["all", "draft"] as const));
 let visibleGalleries = $derived((galleries ?? []).filter((gallery) => {
-	const status = publicLifecycleEnabled ? portfolioGalleryStatus(gallery) : "draft";
-	if (filter === "published" && status !== "published") return false;
+	const status = publicLifecycleEnabled ? publicationStatus(gallery) : "draft";
+	if (filter === "published" && status !== "published" && status !== "draft changes") return false;
 	if (filter === "changed" && status !== "draft changes") return false;
-	if (filter === "hidden" && status !== "hidden") return false;
+	if (filter === "unpublished" && status !== "unpublished") return false;
 	if (filter === "draft" && !["draft", "unpublished"].includes(status)) return false;
 	if (!normalizedSearch) return true;
 	return `${portfolioGalleryLabel(gallery)} ${gallery.slug}`
@@ -86,8 +86,15 @@ $effect(() => {
 	if (pendingOrderJson === serverOrderJson) pendingOrderJson = null;
 });
 
+function publicationStatus(gallery: PortfolioGalleryEditorSummary) {
+	const status = portfolioGalleryStatus(gallery);
+	return status === "hidden" ? "unpublished" : status;
+}
+
 function statusLabel(gallery: PortfolioGalleryEditorSummary) {
-	return publicLifecycleEnabled ? portfolioGalleryStatus(gallery) : "draft";
+	if (!publicLifecycleEnabled) return "draft";
+	const status = publicationStatus(gallery);
+	return status === "draft changes" ? "published · draft changes" : status;
 }
 
 function formatUpdatedAt(value: number) {

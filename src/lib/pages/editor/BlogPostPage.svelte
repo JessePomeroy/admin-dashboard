@@ -1,4 +1,5 @@
 <script lang="ts">
+import PublicationControl from "./PublicationControl.svelte";
 import { goto } from "$app/navigation";
 import { useQuery } from "convex-svelte";
 import { onMount, untrack } from "svelte";
@@ -115,6 +116,8 @@ let publishedSlug = $derived(publishedDraft?.slug?.trim() || "");
 let draftSlug = $derived(form.slug?.trim() || "");
 let slugChanged = $derived(Boolean(publishedSlug && draftSlug && publishedSlug !== draftSlug));
 let archived = $derived(Boolean(editorState?.archivedAt));
+let publicationBusy = $derived(saveState === "saving" || publishState === "publishing" || lifecycleState === "working");
+let publicationHasChanges = $derived(currentJson !== lastSavedJson || Boolean(editorState?.draft && editorState.draft.revisionId !== editorState.published?.revisionId));
 let mediaPlacements = $derived(postMediaReviewPlacements(form));
 let mediaAssetIds = $derived([...new Set(mediaPlacements.map((placement) => placement.assetId))]);
 const mediaQuery = getManyMediaAssets
@@ -272,7 +275,7 @@ async function saveDraft() {
 }
 
 async function publishDraft() {
-	if (!editorState || archived) return;
+	if (!editorState || archived || publicationBusy) return;
 	const draft = normalizedDraft(true);
 	fieldErrors = validatePostMetadataForPublish(draft);
 	mediaIssues = validatePostMediaForPublish(draft);
@@ -327,7 +330,7 @@ async function discardDraft() {
 }
 
 async function unpublishDocument() {
-	if (!editorState?.published || archived) return;
+	if (!editorState?.published || archived || publicationBusy) return;
 	lifecycleState = "working";
 	lifecycleError = "";
 	try {
@@ -386,13 +389,11 @@ async function restoreDocument() {
 				<h1>{form.title?.trim() || "untitled post"}</h1>
 			</div>
 			<div class="header-actions">
-				<span class="save-status">{saveState}</span>
-				<button type="button" onclick={() => void saveDraft()} disabled={!canSave || archived}>
-					save draft
-				</button>
-				<button type="button" class="primary" onclick={() => void publishDraft()} disabled={publishState === "publishing" || archived}>
-					{publishState === "publishing" ? "publishing…" : "publish"}
-				</button>
+				<span class="save-status" data-publication-save-state={saveState}>{saveState === "saved" ? "draft saved" : saveState === "dirty" ? "unsaved changes" : saveState}</span>
+				{#if !archived && (canSave || saveState === "saving")}
+					<button type="button" onclick={() => void saveDraft()} disabled={!canSave || publicationBusy}>save draft</button>
+				{/if}
+				<PublicationControl published={Boolean(editorState.published)} hasChanges={publicationHasChanges} {archived} item={"post"} onpublish={publishDraft} onunpublish={unpublishDocument} busy={publicationBusy} />
 			</div>
 		</header>
 
@@ -654,15 +655,14 @@ async function restoreDocument() {
 			<div class="section-heading">
 				<span>{String((compactMode ? 5 : 7) + (slugChanged ? 1 : 0) + (editorState.draft ? 1 : 0)).padStart(2, "0")}</span>
 				<div>
-					<h2 id="lifecycle-heading">visibility and recovery</h2>
-					<p>Unpublish removes the public version. Archive hides this Post from editor lists while keeping it recoverable.</p>
+					<h2 id="lifecycle-heading">archive and recovery</h2>
+					<p>Archive removes this post from the public site and editor lists. You can restore it later.</p>
 				</div>
 			</div>
 			<div class="action-row">
 				{#if archived}
 					<button type="button" onclick={() => void restoreDocument()} disabled={lifecycleState === "working"}>restore</button>
 				{:else}
-					<button type="button" onclick={() => void unpublishDocument()} disabled={!editorState.published || lifecycleState === "working"}>unpublish</button>
 					<button type="button" class="danger" onclick={() => void archiveDocument()} disabled={lifecycleState === "working"}>archive</button>
 				{/if}
 			</div>
@@ -719,14 +719,8 @@ async function restoreDocument() {
 		cursor: pointer;
 	}
 
-	button.primary {
-		border-color: transparent;
-		background: var(--admin-accent);
-		color: var(--admin-bg);
-	}
 
 	button:hover:not(:disabled) { background: var(--admin-active); }
-	button.primary:hover:not(:disabled) { background: var(--admin-accent); filter: brightness(1.06); }
 	button:active:not(:disabled) { transform: translateY(1px); }
 
 	button.danger {

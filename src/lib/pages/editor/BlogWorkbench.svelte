@@ -51,7 +51,7 @@ let supportingTarget = $state<"authors" | "categories" | null>(null);
 let normalizedSearch = $derived(search.trim().toLocaleLowerCase());
 let visiblePosts = $derived(posts.filter((post) => {
 	const status = blogDocumentStatus(post);
-	if (filter !== "all" && status !== filter) return false;
+	if (filter === "published" ? status === "draft" : filter !== "all" && status !== filter) return false;
 	if (!normalizedSearch) return true;
 	return `${blogDocumentLabel(post)} ${post.slug ?? ""}`
 		.toLocaleLowerCase()
@@ -74,7 +74,7 @@ $effect(() => {
 
 function statusLabel(post: PostEditorSummary) {
 	const status = blogDocumentStatus(post);
-	return status === "changed" ? "draft changes" : status;
+	return status === "changed" ? "published · draft changes" : status === "draft" ? "unpublished" : status;
 }
 
 async function createPost() {
@@ -142,7 +142,7 @@ async function createPost() {
 						aria-pressed={filter === option}
 						onclick={() => filter = option as typeof filter}
 					>
-						{option === "changed" ? "changed" : option}
+						{option === "draft" ? "unpublished" : option}
 					</button>
 				{/each}
 			</div>
@@ -290,9 +290,9 @@ async function createPost() {
 
 	.filters {
 		display: flex;
+		flex-wrap: wrap;
 		gap: 4px;
 		margin: 9px 0 13px;
-		overflow-x: auto;
 	}
 
 	.filters button {
