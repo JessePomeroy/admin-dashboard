@@ -26,6 +26,21 @@
     "./content-export": {
       "types": "./dist/server/contentExportCore.d.ts",
       "default": "./dist/server/contentExportCore.js"
+    },
+    "./core": {
+      "types": "./dist/core.d.ts",
+      "svelte": "./dist/core.js",
+      "default": "./dist/core.js"
+    },
+    "./pages/*": {
+      "types": "./dist/pages/*.svelte.d.ts",
+      "svelte": "./dist/pages/*.svelte",
+      "default": "./dist/pages/*.svelte"
+    },
+    "./components/*": {
+      "types": "./dist/components/*.svelte.d.ts",
+      "svelte": "./dist/components/*.svelte",
+      "default": "./dist/components/*.svelte"
     }
   },
   "files": [

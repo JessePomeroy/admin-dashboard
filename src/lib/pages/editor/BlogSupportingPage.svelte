@@ -1,4 +1,7 @@
 <script lang="ts">
+import EditorDocumentHeader from "./EditorDocumentHeader.svelte";
+import EditorSlugField from "./EditorSlugField.svelte";
+import PublishedSlugChange from "./PublishedSlugChange.svelte";
 import PublicationControl from "./PublicationControl.svelte";
 import { goto } from "$app/navigation";
 import { useQuery } from "convex-svelte";
@@ -22,6 +25,7 @@ import { type PortfolioMediaAsset } from "../../portfolioEditor";
 import "../../styles/editorial-page.css";
 import BlogMediaReview from "./BlogMediaReview.svelte";
 import BlogWorkbench from "./BlogWorkbench.svelte";
+import { createBlogDocumentLifecycle } from "./blogDocumentLifecycle.svelte";
 
 let {
 	documentId,
@@ -53,27 +57,13 @@ let editorError = $derived(editorQuery.error);
 let form = $state<BlogSupportingDraft>({ kind: "author", name: "", slug: "" });
 let bioText = $state("");
 let initializedBioText = $state("");
-let initializedRevisionId = $state<string | null>(null);
-let saveState = $state<"loading" | "saved" | "dirty" | "saving" | "error">("loading");
-let saveError = $state("");
-let canSave = $derived(saveState === "dirty" || saveState === "error");
-let publishState = $state<"idle" | "publishing" | "error">("idle");
-let publishError = $state("");
-let lifecycleState = $state<"idle" | "working" | "error">("idle");
-let lifecycleError = $state("");
 let fieldErrors = $state<BlogSupportingFieldErrors>({});
-let acknowledgeSlugChange = $state(false);
-let currentJson = $derived(serializeBlogSupportingDraft(normalizedDraft()));
-let lastSavedJson = $state("");
 let publishedDraft = $derived(editorState?.published?.draft);
-let activeRevision = $derived(editorState?.draft ?? editorState?.published ?? null);
 let backHref = $derived(`${baseHref}`);
 let publishedSlug = $derived(publishedDraft?.slug?.trim() || "");
 let draftSlug = $derived(form.slug?.trim() || "");
 let slugChanged = $derived(Boolean(publishedSlug && draftSlug && publishedSlug !== draftSlug));
 let archived = $derived(Boolean(editorState?.archivedAt));
-let publicationBusy = $derived(saveState === "saving" || publishState === "publishing" || lifecycleState === "working");
-let publicationHasChanges = $derived(currentJson !== lastSavedJson || Boolean(editorState?.draft && editorState.draft.revisionId !== editorState.published?.revisionId));
 let bioPlainTextEditable = $derived(
 	form.kind !== "author" || authorBioSupportsPlainTextEditing(form.bio),
 );
@@ -95,23 +85,6 @@ let mediaById = $derived(new Map(
 ));
 let mediaError = $derived(mediaQuery?.error);
 let mediaLoading = $derived(portraitItems.length > 0 && Boolean(mediaQuery?.isLoading));
-
-$effect(() => {
-	if (!activeRevision || initializedRevisionId === activeRevision.revisionId) return;
-	form = copyBlogSupportingDraft(activeRevision.draft, kind);
-	bioText = form.kind === "author" ? authorBioToText(form.bio) : "";
-	initializedBioText = bioText;
-	initializedRevisionId = activeRevision.revisionId;
-	lastSavedJson = serializeBlogSupportingDraft(form);
-	saveState = "saved";
-	fieldErrors = {};
-	acknowledgeSlugChange = false;
-});
-
-$effect(() => {
-	if (saveState === "loading") return;
-	saveState = currentJson === lastSavedJson ? "saved" : "dirty";
-});
 
 function normalizedDraft(): BlogSupportingDraft {
 	if (form.kind === "author") {
@@ -144,125 +117,32 @@ function updateSlugFromTitle() {
 	else form.slug = slugifyBlogTitle(form.title ?? "");
 }
 
-async function saveDraft() {
-	if (!editorState || archived || !canSave) return;
-	const draft = normalizedDraft();
-	saveState = "saving";
-	saveError = "";
-	try {
-		const result = await client.mutation(editorApi.saveDraft, {
-			documentId,
-			expectedDraftRevisionId: editorState.draft?.revisionId,
-			draft,
-		}) as { revisionId: string };
-		lastSavedJson = serializeBlogSupportingDraft(draft);
-		initializedRevisionId = result.revisionId;
-		saveState = "saved";
-	} catch (error) {
-		saveState = "error";
-		saveError = error instanceof Error ? error.message : "Could not save this draft.";
-	}
-}
-
-async function publishDraft() {
-	if (!editorState || archived || publicationBusy) return;
-	const draft = normalizedDraft();
-	fieldErrors = validateBlogSupportingForPublish(draft);
-	if (hasBlogSupportingErrors(fieldErrors)) return;
-	if (slugChanged && !acknowledgeSlugChange) {
-		publishError = "Confirm the public URL change before publishing.";
-		publishState = "error";
-		return;
-	}
-	publishState = "publishing";
-	publishError = "";
-	try {
-		let draftRevisionId = editorState.draft?.revisionId;
-		if (serializeBlogSupportingDraft(draft) !== lastSavedJson || !draftRevisionId) {
-			const saved = await client.mutation(editorApi.saveDraft, {
-				documentId,
-				expectedDraftRevisionId: editorState.draft?.revisionId,
-				draft,
-			}) as { revisionId: string };
-			draftRevisionId = saved.revisionId;
-			lastSavedJson = serializeBlogSupportingDraft(draft);
-		}
-		await client.mutation(editorApi.publish, {
-			documentId,
-			draftRevisionId,
-			...(slugChanged ? { publishedSlugChange: { fromSlug: publishedSlug, toSlug: draftSlug } } : {}),
-		});
-		publishState = "idle";
-		acknowledgeSlugChange = false;
-	} catch (error) {
-		publishState = "error";
-		publishError = error instanceof Error ? error.message : "Could not publish this draft.";
-	}
-}
-
-async function discardDraft() {
-	if (!editorState?.draft || archived) return;
-	saveError = "";
-	try {
-		await client.mutation(editorApi.discardDraft, {
-			documentId,
-			draftRevisionId: editorState.draft.revisionId,
-		});
-		if (editorState.published) {
-			form = copyBlogSupportingDraft(editorState.published.draft, kind);
-			bioText = form.kind === "author" ? authorBioToText(form.bio) : "";
-			initializedBioText = bioText;
-			lastSavedJson = serializeBlogSupportingDraft(form);
-		}
-	} catch (error) {
-		saveState = "error";
-		saveError = error instanceof Error ? error.message : "Could not discard this draft.";
-	}
-}
-
-async function unpublishDocument() {
-	if (!editorState?.published || archived || publicationBusy) return;
-	lifecycleState = "working";
-	lifecycleError = "";
-	try {
-		await client.mutation(editorApi.unpublish, { documentId });
-		lifecycleState = "idle";
-	} catch (error) {
-		lifecycleState = "error";
-		lifecycleError = error instanceof Error ? error.message : "Could not unpublish this document.";
-	}
-}
-
-async function archiveDocument() {
-	if (!editorState || archived) return;
-	if (saveState === "dirty") {
-		lifecycleState = "error";
-		lifecycleError = "Save or discard draft changes before archiving.";
-		return;
-	}
-	lifecycleState = "working";
-	lifecycleError = "";
-	try {
-		await client.mutation(editorApi.archive, { documentId });
-		lifecycleState = "idle";
-	} catch (error) {
-		lifecycleState = "error";
-		lifecycleError = error instanceof Error ? error.message : "Could not archive this document.";
-	}
-}
-
-async function restoreDocument() {
-	if (!editorState?.archivedAt) return;
-	lifecycleState = "working";
-	lifecycleError = "";
-	try {
-		await client.mutation(editorApi.restore, { documentId });
-		lifecycleState = "idle";
-	} catch (error) {
-		lifecycleState = "error";
-		lifecycleError = error instanceof Error ? error.message : "Could not restore this document.";
-	}
-}
+const lifecycle = createBlogDocumentLifecycle<BlogSupportingDraft>({
+	state: () => editorState,
+	draft: () => normalizedDraft(),
+	setDraft: (draft) => {
+		form = draft;
+		bioText = draft.kind === "author" ? authorBioToText(draft.bio) : "";
+		initializedBioText = bioText;
+	},
+	copy: (draft) => copyBlogSupportingDraft(draft, kind),
+	serialize: serializeBlogSupportingDraft,
+	validatePublish: (draft) => {
+		fieldErrors = validateBlogSupportingForPublish(draft);
+		return !hasBlogSupportingErrors(fieldErrors);
+	},
+	slugChange: () => slugChanged ? { fromSlug: publishedSlug, toSlug: draftSlug } : null,
+	onInitialize: () => { fieldErrors = {}; },
+	label: "document",
+	actions: {
+		save: (draft, expectedDraftRevisionId) => client.mutation(editorApi.saveDraft, { documentId, expectedDraftRevisionId, draft }) as Promise<{ revisionId: string }>,
+		publish: (draftRevisionId, slugChange) => client.mutation(editorApi.publish, { documentId, draftRevisionId, ...(slugChange ? { publishedSlugChange: slugChange } : {}) }),
+		discard: (draftRevisionId) => client.mutation(editorApi.discardDraft, { documentId, draftRevisionId }),
+		unpublish: () => client.mutation(editorApi.unpublish, { documentId }),
+		archive: () => client.mutation(editorApi.archive, { documentId }),
+		restore: () => client.mutation(editorApi.restore, { documentId }),
+	},
+});
 </script>
 
 <svelte:head><title>{kind} — {config.siteName}</title></svelte:head>
@@ -280,23 +160,22 @@ async function restoreDocument() {
 	</section>
 {:else}
 	<div class="settings-page">
-		<header class="settings-header">
-			<div>
+		<EditorDocumentHeader variant="blog" saveState={lifecycle.saveState}>
+		{#snippet title()}<div>
 				<a class="back" href={backHref}>← blog</a>
 				<h1>{kind === "author" ? "author" : "category"}</h1>
-			</div>
-			<div class="header-actions">
-				<span class="save-status" data-publication-save-state={saveState}>{saveState === "saved" ? "draft saved" : saveState === "dirty" ? "unsaved changes" : saveState}</span>
-				{#if !archived && (canSave || saveState === "saving")}
-					<button type="button" onclick={() => void saveDraft()} disabled={!canSave || publicationBusy}>save draft</button>
+			</div>{/snippet}
+		{#snippet actions()}
+				{#if !archived && (lifecycle.canSave || lifecycle.saveState === "saving")}
+					<button type="button" onclick={() => void lifecycle.saveDraft()} disabled={!lifecycle.canSave || lifecycle.publicationBusy}>save draft</button>
 				{/if}
-				<PublicationControl published={Boolean(editorState.published)} hasChanges={publicationHasChanges} {archived} item={kind} onpublish={publishDraft} onunpublish={unpublishDocument} busy={publicationBusy} />
-			</div>
-		</header>
+				<PublicationControl published={Boolean(editorState.published)} hasChanges={lifecycle.publicationHasChanges} {archived} item={kind} onpublish={lifecycle.publishDraft} onunpublish={lifecycle.unpublishDocument} busy={lifecycle.publicationBusy} />
+		{/snippet}
+	</EditorDocumentHeader>
 
-		{#if saveError}<p class="error" role="alert">{saveError}</p>{/if}
-		{#if publishError}<p class="error" role="alert">{publishError}</p>{/if}
-		{#if lifecycleError}<p class="error" role="alert">{lifecycleError}</p>{/if}
+		{#if lifecycle.saveError}<p class="error" role="alert">{lifecycle.saveError}</p>{/if}
+		{#if lifecycle.publishError}<p class="error" role="alert">{lifecycle.publishError}</p>{/if}
+		{#if lifecycle.lifecycleError}<p class="error" role="alert">{lifecycle.lifecycleError}</p>{/if}
 		{#if archived}
 			<p class="notice" role="status">This {kind} is archived. Restore it before editing or publishing.</p>
 		{/if}
@@ -323,12 +202,7 @@ async function restoreDocument() {
 						{#if fieldErrors.title}<small class="field-error">{fieldErrors.title}</small>{/if}
 					</label>
 				{/if}
-				<label>
-					URL name
-					<input maxlength="96" bind:value={form.slug} aria-invalid={Boolean(fieldErrors.slug)} />
-					<small>Lowercase words separated by hyphens.</small>
-					{#if fieldErrors.slug}<small class="field-error">{fieldErrors.slug}</small>{/if}
-				</label>
+				<EditorSlugField id="supporting-slug" value={form.slug ?? ""} maxLength={96} onChange={(value) => form.slug = value} error={fieldErrors.slug} />
 			</div>
 		</section>
 
@@ -396,19 +270,7 @@ async function restoreDocument() {
 		{/if}
 
 		{#if slugChanged}
-			<section aria-labelledby="slug-change-heading">
-				<div class="section-heading">
-					<span>{String(3 + supportingSectionOffset)}</span>
-					<div>
-						<h2 id="slug-change-heading">public URL change</h2>
-						<p>Publishing will retain the old URL and point it at the new slug.</p>
-					</div>
-				</div>
-				<label class="check">
-					<input type="checkbox" bind:checked={acknowledgeSlugChange} />
-					<span>I understand this changes the public URL from /{publishedSlug} to /{draftSlug}.</span>
-				</label>
-			</section>
+			<PublishedSlugChange step={String(3 + supportingSectionOffset)} fromSlug={publishedSlug} toSlug={draftSlug} bind:checked={lifecycle.acknowledgeSlugChange} />
 		{/if}
 
 		{#if editorState.draft}
@@ -420,7 +282,7 @@ async function restoreDocument() {
 						<p>Discard the current draft and return to the published version.</p>
 					</div>
 				</div>
-				<button type="button" onclick={() => void discardDraft()} disabled={archived}>discard draft</button>
+				<button type="button" onclick={() => void lifecycle.discardDraft()} disabled={archived}>discard draft</button>
 			</section>
 		{/if}
 
@@ -434,9 +296,9 @@ async function restoreDocument() {
 			</div>
 			<div class="action-row">
 				{#if archived}
-					<button type="button" onclick={() => void restoreDocument()} disabled={lifecycleState === "working"}>restore</button>
+					<button type="button" onclick={() => void lifecycle.restoreDocument()} disabled={lifecycle.lifecycleState === "working"}>restore</button>
 				{:else}
-					<button type="button" class="danger" onclick={() => void archiveDocument()} disabled={lifecycleState === "working"}>archive</button>
+					<button type="button" class="danger" onclick={() => void lifecycle.archiveDocument()} disabled={lifecycle.lifecycleState === "working"}>archive</button>
 				{/if}
 			</div>
 		</section>
@@ -455,19 +317,6 @@ async function restoreDocument() {
 		margin-bottom: 14px;
 		color: var(--admin-text-muted);
 		text-decoration: none;
-	}
-
-	.header-actions {
-		display: flex;
-		align-items: center;
-		gap: 8px;
-		flex-wrap: wrap;
-		justify-content: flex-end;
-	}
-
-	.save-status {
-		color: var(--admin-text-subtle);
-		font-size: 0.74rem;
 	}
 
 	button {
@@ -495,17 +344,6 @@ async function restoreDocument() {
 		opacity: 0.55;
 	}
 
-	.check {
-		display: flex;
-		align-items: flex-start;
-		gap: 10px;
-		color: var(--admin-text);
-	}
-
-	.check input {
-		width: auto;
-		margin-top: 5px;
-	}
 
 	.error,
 	.field-error {

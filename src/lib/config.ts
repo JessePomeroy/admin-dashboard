@@ -196,6 +196,7 @@ export interface AdminAPI {
 		remove?: FnRef;
 	};
 	invoices: {
+		getDashboardSummary?: FnRef;
 		create: FnRef;
 		update: FnRef;
 		remove: FnRef;
@@ -208,6 +209,7 @@ export interface AdminAPI {
 	kanban: {
 		initializeBoard: FnRef;
 		moveCard: FnRef;
+		reorderCards?: FnRef;
 		addColumn: FnRef;
 		renameColumn: FnRef;
 		deleteColumn: FnRef;
@@ -226,6 +228,7 @@ export interface AdminAPI {
 		markSeen: FnRef;
 	};
 	orders: {
+		getStatsForDay?: FnRef;
 		list: FnRef;
 		updateStatus: FnRef;
 		getStats: FnRef;
@@ -248,6 +251,7 @@ export interface AdminAPI {
 		createToken: FnRef;
 	};
 	quotes: {
+		getDashboardSummary?: FnRef;
 		create: FnRef;
 		update: FnRef;
 		remove: FnRef;

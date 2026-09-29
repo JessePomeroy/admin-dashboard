@@ -1,4 +1,5 @@
 <script lang="ts">
+import { onMount } from "svelte";
 import ContentExport from "./dashboard/ContentExport.svelte";
 import { goto } from "$app/navigation";
 import { useQuery } from "convex-svelte";
@@ -76,10 +77,18 @@ interface DailyGrossPayment {
 let { data } = $props();
 
 // Convex subscriptions
-const orderStatsQuery = useQuery(api.orders.getStats, { siteUrl: config.siteUrl });
+let utcDay = $state(new Date().toISOString().slice(0, 10));
+onMount(() => {
+	const refreshDay = () => { utcDay = new Date().toISOString().slice(0, 10); };
+	const timer = setInterval(refreshDay, 60_000);
+	document.addEventListener("visibilitychange", refreshDay);
+	return () => { clearInterval(timer); document.removeEventListener("visibilitychange", refreshDay); };
+});
+const orderStatsQuery = useQuery(api.orders.getStatsForDay ?? api.orders.getStats, () => api.orders.getStatsForDay
+	? { siteUrl: config.siteUrl, day: utcDay } : { siteUrl: config.siteUrl });
 const crmStatsQuery = useQuery(api.crm.getStats, { siteUrl: config.siteUrl });
-const invoicesQuery = useQuery(api.invoices.list, { siteUrl: config.siteUrl });
-const quotesQuery = useQuery(api.quotes.list, { siteUrl: config.siteUrl });
+const invoicesQuery = useQuery(api.invoices.getDashboardSummary ?? api.invoices.list, { siteUrl: config.siteUrl });
+const quotesQuery = useQuery(api.quotes.getDashboardSummary ?? api.quotes.list, { siteUrl: config.siteUrl });
 
 let isLoading = $derived(
 	orderStatsQuery.isLoading || crmStatsQuery.isLoading || invoicesQuery.isLoading || quotesQuery.isLoading,
@@ -121,15 +130,15 @@ const recentOrders = $derived(orderStatsData?.recentOrders ?? []);
 const crmStats = $derived(crmStatsQuery.data ?? { total: 0, leads: 0, booked: 0, inProgress: 0, completed: 0, photography: 0, web: 0 });
 
 // Invoice stats
-const invoices = $derived((invoicesQuery.data ?? []) as Invoice[]);
-const invoiceStats = $derived({
+const invoices = $derived((api.invoices.getDashboardSummary ? invoicesQuery.data?.recent ?? [] : invoicesQuery.data ?? []) as Invoice[]);
+const invoiceStats = $derived(api.invoices.getDashboardSummary ? invoicesQuery.data?.counts ?? { draft: 0, sent: 0, paid: 0, overdue: 0 } : {
 	draft: invoices.filter((i: Invoice) => i.status === "draft").length,
 	sent: invoices.filter((i: Invoice) => i.status === "sent").length,
 	paid: invoices.filter((i: Invoice) => i.status === "paid").length,
 	overdue: invoices.filter((i: Invoice) => i.status === "overdue").length,
 });
 const pendingInvoiceAmount = $derived(
-	invoices
+	api.invoices.getDashboardSummary ? invoicesQuery.data?.pendingAmount ?? null : invoices
 		.filter((i: Invoice) => ["draft", "sent", "overdue", "partial"].includes(i.status))
 		.reduce<number | null>((sum, inv) => {
 			const amounts = tryInvoiceAmounts(inv.items, inv.taxPercent);
@@ -141,8 +150,8 @@ const pendingInvoiceAmount = $derived(
 );
 
 // Quote stats
-const quotes = $derived((quotesQuery.data ?? []) as Quote[]);
-const quoteStats = $derived({
+const quotes = $derived((api.quotes.getDashboardSummary ? quotesQuery.data?.recent ?? [] : quotesQuery.data ?? []) as Quote[]);
+const quoteStats = $derived(api.quotes.getDashboardSummary ? quotesQuery.data?.counts ?? { draft: 0, sent: 0, accepted: 0, declined: 0 } : {
 	draft: quotes.filter((q: Quote) => q.status === "draft").length,
 	sent: quotes.filter((q: Quote) => q.status === "sent").length,
 	accepted: quotes.filter((q: Quote) => q.status === "accepted").length,
@@ -353,6 +362,9 @@ let sparklineArea = $derived(() => {
 	</div>
 
 	<!-- Recent activity feed -->
+	{#if invoicesQuery.data?.isTruncated || quotesQuery.data?.isTruncated}
+		<p class="stats-completeness-note">Invoice and quote summaries cover the most recent 200 documents.</p>
+	{/if}
 	<div class="feed-section">
 		<h2 class="section-label">recent activity</h2>
 		{#if activityFeed().length === 0}

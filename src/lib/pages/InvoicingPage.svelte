@@ -8,10 +8,7 @@ import FilterBar from "../components/FilterBar.svelte";
 import LoadingState from "../components/LoadingState.svelte";
 import PageHeader from "../components/PageHeader.svelte";
 import type { Invoice, InvoiceStatus } from "../types";
-import {
-	isTerminalDocumentEmailRecovery,
-	type DocumentEmailRecovery,
-} from "../documentEmailRecovery";
+import type { DocumentEmailRecovery } from "../documentEmailRecovery";
 import { addToast } from "../toast";
 import { logger } from "../logger";
 import { copyPortalLink, toId } from "../utils";
@@ -22,6 +19,7 @@ import {
 	presentableDocumentEmailRecoveryFromError,
 	statusAfterSuccessfulDocumentEmail,
 } from "./documentEmailRequest";
+import { createDocumentEmailRecoveryState } from "./documentEmailRecoveryState.svelte";
 import InvoiceCreateModal from "./invoicing/InvoiceCreateModal.svelte";
 import InvoiceDetailModal from "./invoicing/InvoiceDetailModal.svelte";
 import InvoiceTable from "./invoicing/InvoiceTable.svelte";
@@ -50,10 +48,6 @@ let showCreateModal = $state(false);
 let selectedInvoice = $state<Invoice | null>(null);
 let shareLinkCopied = $state(false);
 const emailRequests = createDocumentEmailRequestTracker();
-let pageEmailRecovery = $state<{
-	documentId: string;
-	attempt: HydratedDocumentEmailAttempt;
-} | null>(null);
 let hydratedInvoiceId = "";
 
 function invoiceEmailKey(invoiceId: string) {
@@ -64,44 +58,13 @@ function invoiceEmailEndpoint(invoiceId: string) {
 	return `/api/admin/invoicing/${invoiceId}/send`;
 }
 
-function rememberInvoiceRecovery(
-	invoiceId: string,
-	attempt: HydratedDocumentEmailAttempt,
-) {
-	pageEmailRecovery = { documentId: invoiceId, attempt };
-}
-
-function visibleInvoiceRecovery(
-	invoiceId: string,
-): HydratedDocumentEmailAttempt | null {
-	return pageEmailRecovery?.documentId === invoiceId
-		? pageEmailRecovery.attempt
-		: null;
-}
-
-async function hydrateInvoiceRecovery(invoiceId: string) {
-	const key = invoiceEmailKey(invoiceId);
-	const endpoint = invoiceEmailEndpoint(invoiceId);
-	const pending = emailRequests.pending(key, endpoint);
-	if (pending) rememberInvoiceRecovery(invoiceId, { attemptId: pending.attemptId });
-	try {
-		const hydrated = await emailRequests.hydrate(key, endpoint, {
-			type: "invoice",
-			id: invoiceId,
-		});
-		if (selectedInvoice?._id !== invoiceId) return;
-		if (hydrated) rememberInvoiceRecovery(invoiceId, hydrated);
-		else if (
-			pageEmailRecovery?.documentId === invoiceId &&
-			(!pageEmailRecovery.attempt.recovery ||
-				!isTerminalDocumentEmailRecovery(pageEmailRecovery.attempt.recovery))
-		) {
-			pageEmailRecovery = null;
-		}
-	} catch (error) {
-		logger.error("Failed to discover invoice email recovery:", error);
-	}
-}
+const emailRecovery = createDocumentEmailRecoveryState({
+	type: "invoice",
+	endpoint: invoiceEmailEndpoint,
+	selectedId: () => selectedInvoice?._id as string | undefined,
+	tracker: emailRequests,
+	onHydrateError: (error) => logger.error("Failed to discover invoice email recovery:", error),
+});
 
 $effect(() => {
 	const invoiceId = selectedInvoice?._id as string | undefined;
@@ -111,7 +74,7 @@ $effect(() => {
 	}
 	if (hydratedInvoiceId === invoiceId) return;
 	hydratedInvoiceId = invoiceId;
-	void hydrateInvoiceRecovery(invoiceId);
+	void emailRecovery.hydrate(invoiceId);
 });
 
 // Auto-open invoice from ?open= query param (e.g. from activity timeline)
@@ -215,7 +178,7 @@ async function saveAndSendInvoice(body: InvoiceCreateAndSendPayload) {
 			attempt &&
 			(!selectedInvoice || selectedInvoice._id === invoiceId)
 		) {
-			rememberInvoiceRecovery(invoiceId, attempt);
+			emailRecovery.remember(invoiceId, attempt);
 		}
 		logger.error("Invoice saved but its email was not confirmed:", err);
 		addToast(`Invoice saved. ${documentEmailFailureMessage(err)}`);
@@ -276,7 +239,7 @@ async function handleSendEmail(
 	changeNote?: string,
 ) {
 	await sendInvoiceEmailRequest(invoiceId, { templateId, changeNote });
-	if (pageEmailRecovery?.documentId === invoiceId) pageEmailRecovery = null;
+	emailRecovery.clear(invoiceId);
 	if (selectedInvoice?._id === invoiceId) {
 		selectedInvoice = {
 			...selectedInvoice,
@@ -289,27 +252,7 @@ function handleEmailResolved(result: {
 	attemptId: string;
 	recovery: DocumentEmailRecovery;
 }) {
-	const documentId = result.recovery.document.id;
-	emailRequests.clearResolved(
-		invoiceEmailKey(documentId),
-		result.attemptId,
-	);
-	const pending = emailRequests.pending(
-		invoiceEmailKey(documentId),
-		invoiceEmailEndpoint(documentId),
-	);
-	if (
-		(pending && pending.attemptId !== result.attemptId) ||
-		(pageEmailRecovery?.documentId === documentId &&
-			pageEmailRecovery.attempt.attemptId !== result.attemptId)
-	) {
-		return;
-	}
-	if (selectedInvoice && documentId !== selectedInvoice._id) return;
-	rememberInvoiceRecovery(documentId, {
-		attemptId: result.attemptId,
-		recovery: result.recovery,
-	});
+	if (!emailRecovery.resolve(result)) return;
 	if (!selectedInvoice) return;
 	if (result.recovery.status === "sent") {
 		selectedInvoice = {
@@ -323,20 +266,14 @@ function handleEmailRecovery(
 	invoiceId: string,
 	attempt: HydratedDocumentEmailAttempt,
 ) {
-	if (selectedInvoice && selectedInvoice._id !== invoiceId) return;
-	rememberInvoiceRecovery(invoiceId, attempt);
+	emailRecovery.remember(invoiceId, attempt);
 }
 
 function dismissEmailRecovery(result: {
 	attemptId: string;
 	recovery: DocumentEmailRecovery;
 }) {
-	if (
-		pageEmailRecovery?.documentId === result.recovery.document.id &&
-		pageEmailRecovery.attempt.attemptId === result.attemptId
-	) {
-		pageEmailRecovery = null;
-	}
+	emailRecovery.dismiss(result);
 }
 
 async function handleDelete() {
@@ -470,7 +407,7 @@ async function handleShareLink() {
 			onshare={handleShareLink}
 			{shareLinkCopied}
 			onemailresolved={handleEmailResolved}
-			emailRecoveryAttempt={visibleInvoiceRecovery(selectedInvoice._id as string)}
+			emailRecoveryAttempt={emailRecovery.forDocument(selectedInvoice._id as string)}
 			onemailrecovery={handleEmailRecovery}
 			onemailterminal={handleEmailResolved}
 			onemailrecoverydismiss={dismissEmailRecovery}

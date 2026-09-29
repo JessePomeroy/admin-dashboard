@@ -1,47 +1,9 @@
-// Config
-export {
-	setAdminConfig,
-	getAdminConfig,
-	type AdminAPI,
-	type AdminConfig,
-	type AdminEditorConfig,
-	type AdminTheme,
-	type AdminAuthClient,
-	type AdminAuthSession,
-	type SessionStoreValue,
-	type NanostoreAtom,
-	type SiteSettingsDraftPayload,
-	type SiteSettingsEditorState,
-	type SiteSettingsRevisionState,
-	type SiteSettingsSocialLink,
-	type HomepageQuoteDraftPayload,
-	type HomepageQuoteEditorState,
-	type HomepageQuoteRevisionState,
-	type ContactPageDraftPayload,
-	type ContactPageEditorState,
-	type ContactPageRevisionState,
-	type AboutPortraitDraft,
-	type AboutSectionDraft,
-	type AboutHighlightDraft,
-	type AboutPageDraftPayload,
-	type AboutPageEditorState,
-	type AboutPageRevisionState,
-	type ModelingImageDraft,
-	type ModelingGalleryDraft,
-	type ModelingPageDraftPayload,
-	type ModelingPageEditorState,
-	type ModelingPageRevisionState,
-} from "./config";
+// Existing root API remains supported; hosts can import core and screens separately.
+export * from "./core.js";
 
-// Convex client (honors AdminConfig.mutationTransport)
-export { useAdminClient } from "./adminClient";
-
-// Layout & Auth
 export { default as AdminLayout } from "./components/AdminLayout.svelte";
 export { default as AuthGuard } from "./components/AuthGuard.svelte";
 export { default as LoginPage } from "./components/LoginPage.svelte";
-
-// Components
 export { default as AdminModal } from "./components/AdminModal.svelte";
 export { default as NotificationWidget } from "./components/NotificationWidget.svelte";
 export { default as EmailPreview } from "./components/EmailPreview.svelte";
@@ -52,9 +14,6 @@ export { default as LoadingState } from "./components/LoadingState.svelte";
 export { default as PageHeader } from "./components/PageHeader.svelte";
 export { default as StatusDot } from "./components/StatusDot.svelte";
 export { default as UpgradeBanner } from "./components/UpgradeBanner.svelte";
-export { addToast } from "./toast";
-
-// Page components
 export { default as BoardPage } from "./pages/BoardPage.svelte";
 export { default as ContractsPage } from "./pages/ContractsPage.svelte";
 export { default as CrmPage } from "./pages/CrmPage.svelte";
@@ -81,24 +40,3 @@ export { default as ProductsPage } from "./pages/editor/ProductsPage.svelte";
 export { default as ProductPage } from "./pages/editor/ProductPage.svelte";
 export { default as PlatformPage } from "./pages/PlatformPage.svelte";
 export { default as QuotesPage } from "./pages/QuotesPage.svelte";
-
-// Features & types
-export * from "./adminSession";
-export * from "./capabilities";
-export * from "./features";
-export * from "./galleryUploadPolicy";
-export * from "./portfolioEditor";
-export * from "./cmsMediaUpload";
-export * from "./siteSettings";
-export * from "./homepageQuote";
-export * from "./contactPage";
-export * from "./aboutPage";
-export * from "./modelingPage";
-export * from "./blogEditor";
-export * from "./catalogProductEditor";
-export type * from "./types";
-export * from "./utils";
-export * from "./documentEmailRecovery";
-
-// Theme
-export { isDark } from "./theme";

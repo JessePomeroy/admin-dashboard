@@ -1,5 +1,7 @@
 <script lang="ts">
 import PublicationControl from "./PublicationControl.svelte";
+import EditorDocumentHeader from "./EditorDocumentHeader.svelte";
+import EditorSlugField from "./EditorSlugField.svelte";
 import { browser } from "$app/environment";
 import { goto } from "$app/navigation";
 import { onDestroy, onMount, tick } from "svelte";
@@ -439,13 +441,9 @@ function reloadServerDraft() {
 	<p class="loading" role="status">loading gallery…</p>
 {:else}
 	<div class="gallery-page editor-document editor-workbench">
-		<header>
-			<div>
-				<a class="back" href={portfolioBaseHref}>← portfolio</a>
-				<h1>{form.title || "untitled gallery"}</h1>
-			</div>
-			<div class="actions">
-				<span class="status" data-save-state={saveState} aria-live="polite">{saveState === "offline" ? "offline — saved on this device" : saveState === "saved" ? "draft saved" : saveState === "dirty" ? "unsaved changes" : saveState}</span>
+		<EditorDocumentHeader variant="gallery" {saveState}>
+			{#snippet title()}<a class="back" href={portfolioBaseHref}>← portfolio</a><h1>{form.title || "untitled gallery"}</h1>{/snippet}
+			{#snippet actions()}
 				{#if saveState === "conflict"}
 					<button type="button" class="secondary" onclick={reloadServerDraft}>reload server draft</button>
 				{:else if hasPendingWork}
@@ -457,8 +455,8 @@ function reloadServerDraft() {
 				{#if publicLifecycleEnabled}
 					<PublicationControl published={isPublished && isVisible} hasChanges={!publicationCurrent} item="gallery" onpublish={publishingEnabled ? publish : undefined} onunpublish={setPortfolioGalleryVisibility ? unpublish : undefined} publishDisabled={saveState === "saving" || saveState === "syncing" || saveState === "offline" || saveState === "conflict"} unpublishDisabled={saveState === "offline"} busy={publishing || visibilityChanging || removing} />
 				{/if}
-			</div>
-		</header>
+			{/snippet}
+		</EditorDocumentHeader>
 
 		{#if saveError}<p class="alert" role="alert">{saveError}</p>{/if}
 		{#if media.error}<p class="alert" role="alert">Could not load gallery media. Refresh this page to try again.</p>{/if}
@@ -475,12 +473,7 @@ function reloadServerDraft() {
 					<input id="gallery-title" maxlength="120" bind:value={form.title} aria-invalid={reviewRequested && !form.title.trim()} />
 				</div>
 				<div class="field">
-					<div class="field-heading">
-						<label for="gallery-slug">gallery URL path</label>
-						<button type="button" class="generate-url" onclick={generateSlug} disabled={!form.title.trim()}>generate url</button>
-					</div>
-					<input id="gallery-slug" maxlength="80" bind:value={form.slug} spellcheck="false" aria-describedby="gallery-slug-help" aria-invalid={reviewRequested && !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(form.slug)} />
-					<small id="gallery-slug-help">Lowercase words separated by hyphens, not a full URL.</small>
+					<EditorSlugField id="gallery-slug" label="gallery URL path" value={form.slug} maxLength={80} onChange={(value) => form.slug = value} onGenerate={generateSlug} generateDisabled={!form.title.trim()} invalid={reviewRequested && !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(form.slug)} help="Lowercase words separated by hyphens, not a full URL." />
 				</div>
 				<label class="wide">description<textarea rows="3" maxlength="2000" bind:value={form.description}></textarea></label>
 			</div>
@@ -522,11 +515,8 @@ function reloadServerDraft() {
 <style>
 	.loading, .page-alert { margin: 32px; } .loading { padding: 16px 8px; color: var(--admin-text-muted); }
 	.gallery-page { width: 100%; max-width: 1120px; box-sizing: border-box; padding: 22px 24px 72px; }
-	header { display: flex; justify-content: space-between; gap: 28px; align-items: flex-end; margin-bottom: 18px; }
 	.back { color: var(--admin-text-muted); font-size: .74rem; text-decoration: none; }
 	h1 { margin: 6px 0 0; color: var(--admin-heading); font-family: var(--admin-font-display); font-size: clamp(1.28rem, 1.8vw, 1.55rem); font-weight: 500; }
-	.actions { display: flex; align-items: center; justify-content: flex-end; gap: 8px; flex-wrap: wrap; }
-	.actions .status { color: var(--admin-text-subtle); font-size: .7rem; white-space: nowrap; }
 	button { min-height: 36px; border: 1px solid transparent; border-radius: 3px; padding: 8px 11px; background: var(--admin-accent); color: var(--admin-bg); font: inherit; font-size: .72rem; cursor: pointer; }
 	button:disabled { opacity: .45; cursor: default; }
 	button:focus-visible, input:focus-visible, textarea:focus-visible, .back:focus-visible { outline: 2px solid var(--admin-accent); outline-offset: 2px; }
@@ -547,15 +537,10 @@ function reloadServerDraft() {
 	.wide { grid-column: 1 / -1; }
 	label, .field { display: flex; flex-direction: column; gap: 6px; color: var(--admin-text-muted); font-size: .72rem; }
 	.field-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 28px; }
-	.generate-url { min-height: 0; border: 0; padding: 4px 0; background: transparent; color: var(--admin-accent-strong); font-size: .68rem; text-underline-offset: 3px; }
-	.generate-url:hover:not(:disabled) { text-decoration: underline; }
-	.generate-url:active:not(:disabled) { transform: translateY(1px); }
 	input, textarea { width: 100%; box-sizing: border-box; border: 1px solid var(--admin-border-strong); border-radius: 3px; padding: 9px 10px; background: var(--editor-control); color: var(--admin-heading); font: inherit; text-transform: none; }
 	[aria-invalid="true"] { border-color: var(--status-rose); }
 	@media (max-width: 820px) {
 		.gallery-page { padding: 24px 20px 72px; }
-		header { align-items: flex-start; flex-direction: column; }
-		.actions { justify-content: flex-start; }
 		.danger-zone, .delete-confirmation { align-items: stretch; flex-direction: column; }
 		.fields { grid-template-columns: 1fr; }
 		.wide { grid-column: auto; }

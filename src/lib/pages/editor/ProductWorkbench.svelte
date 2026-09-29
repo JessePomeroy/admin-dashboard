@@ -17,9 +17,11 @@ import {
 	type CatalogProductKind,
 } from "../../catalogProductEditor";
 import { getAdminConfig } from "../../config";
+import EditorWorkbenchLayout from "./EditorWorkbenchLayout.svelte";
 import AdminModal from "../../components/AdminModal.svelte";
 import CatalogPrivateCleanup from "./CatalogPrivateCleanup.svelte";
 import EditorListbox from "./EditorListbox.svelte";
+import EditorSlugField from "./EditorSlugField.svelte";
 
 let {
 	selectedProductId,
@@ -136,9 +138,9 @@ function updateTitle(event: Event) {
 	if (!slugEdited) slug = slugifyCatalogProductTitle(title);
 }
 
-function updateSlug(event: Event) {
+function updateSlug(value: string) {
 	slugEdited = true;
-	slug = slugifyCatalogProductTitle((event.currentTarget as HTMLInputElement).value);
+	slug = slugifyCatalogProductTitle(value);
 }
 
 function generateSlug() {
@@ -170,33 +172,6 @@ async function closeCreate() {
 	newProductButton?.focus();
 }
 
-function handleDialogKeydown(event: KeyboardEvent) {
-	if (event.key === "Escape") {
-		event.preventDefault();
-		void closeCreate();
-		return;
-	}
-	if (event.key !== "Tab") return;
-	const focusable = Array.from(createDialog?.querySelectorAll<HTMLElement>(
-		'button:not([disabled]), input:not([disabled]), [href], [tabindex]:not([tabindex="-1"])',
-	) ?? []);
-	const first = focusable[0];
-	const last = focusable.at(-1);
-	if (!first || !last) return;
-	if (!focusable.includes(document.activeElement as HTMLElement)) {
-		event.preventDefault();
-		(event.shiftKey ? last : first).focus();
-		return;
-	}
-	if (event.shiftKey && document.activeElement === first) {
-		event.preventDefault();
-		last.focus();
-	} else if (!event.shiftKey && document.activeElement === last) {
-		event.preventDefault();
-		first.focus();
-	}
-}
-
 async function createProduct() {
 	const normalizedTitle = title.trim();
 	if (!normalizedTitle) {
@@ -204,7 +179,7 @@ async function createProduct() {
 		createError = "Enter a product name first.";
 		return;
 	}
-	createDialog?.querySelector<HTMLButtonElement>(".close")?.focus();
+	createDialog?.closest('[role="dialog"]')?.querySelector<HTMLButtonElement>(".modal-close")?.focus();
 	createState = "saving";
 	createError = "";
 	createdProductHref = "";
@@ -257,17 +232,16 @@ async function createProduct() {
 		<div class="heading-meta"><span>{loading ? "loading…" : `${products.length} ${products.length === 1 ? "product" : "products"}`}</span><small>{supportedKinds.length} {supportedKinds.length === 1 ? "kind" : "kinds"}</small></div>
 	</header>
 
-	<div class="workbench-grid">
-		<aside class="taxonomy-pane" aria-label="Product taxonomy">
+	<EditorWorkbenchLayout variant="product" selected={Boolean(selectedProductId)}>
+		{#snippet taxonomy()}<aside class="taxonomy-pane" aria-label="Product taxonomy">
 			<div class="kind-filters" role="group" aria-label="Filter by product kind">
 				<button type="button" class:active={kindFilter === "all"} aria-pressed={kindFilter === "all"} onclick={() => kindFilter = "all"}><span>all products</span><small>{products.length}</small></button>
 				{#each supportedKinds as kind}
 					<button type="button" class:active={kindFilter === kind} aria-pressed={kindFilter === kind} onclick={() => kindFilter = kind}><span>{pluralKindLabel(kind)}</span><small>{kindCount(kind)}</small></button>
 				{/each}
 			</div>
-		</aside>
-
-		<aside class="collection-pane" aria-label="Product collection">
+		</aside>{/snippet}
+		{#snippet collection()}<aside class="collection-pane" aria-label="Product collection">
 			<div class="collection-heading"><h2>catalog</h2><button bind:this={newProductButton} type="button" class="new-product" onclick={() => void openCreate()}>new</button></div>
 			<label class="search-field"><span>search products</span><input type="search" placeholder="Search name or URL" bind:value={search} /></label>
 			<div class="status-filters" role="group" aria-label="Filter by draft status">
@@ -303,16 +277,14 @@ async function createProduct() {
 					{/each}
 				</div>
 			{/if}
-		</aside>
-
-		<section class="document-pane" aria-label="Product workspace">{@render children()}</section>
-	</div>
+		</aside>{/snippet}
+		{#snippet document()}<section class="document-pane" aria-label="Product workspace">{@render children()}</section>{/snippet}
+	</EditorWorkbenchLayout>
 </div>
 
 {#if creating}
-	<div class="create-backdrop" role="presentation" onclick={(event) => { if (event.currentTarget === event.target) void closeCreate(); }}>
-		<div bind:this={createDialog} class="create-panel" role="dialog" aria-modal="true" aria-labelledby="create-product-heading" tabindex="-1" onkeydown={handleDialogKeydown}>
-			<div class="create-heading"><h2 id="create-product-heading">new product</h2><button type="button" class="close" onclick={() => void closeCreate()} aria-label="Close new product form">×</button></div>
+	<AdminModal title="new product" onclose={() => void closeCreate()}>
+		<div bind:this={createDialog} class="create-panel">
 			<p>Start privately, then finish its media and selling details.{publishesToShop ? " Publish it to your Shop when it is ready." : " Publication remains unavailable until this host exposes it."}</p>
 			<form onsubmit={(event) => { event.preventDefault(); void createProduct(); }}>
 				<EditorListbox
@@ -324,21 +296,14 @@ async function createProduct() {
 					onChange={(kind) => (newProductKind = kind as CatalogProductKind)}
 				/>
 				<label>product name<input bind:this={titleInput} maxlength="160" value={title} oninput={updateTitle} autocomplete="off" /></label>
-				<div class="create-field">
-					<div class="field-heading">
-						<label for="new-product-slug">URL name</label>
-						<button type="button" class="generate-url" onclick={generateSlug} disabled={!title.trim() || createState === "saving"}>generate url</button>
-					</div>
-					<input id="new-product-slug" maxlength="96" value={slug} oninput={updateSlug} autocomplete="off" spellcheck="false" />
-					<small>Lowercase words separated by hyphens.</small>
-				</div>
+				<EditorSlugField id="new-product-slug" value={slug} maxLength={96} onChange={updateSlug} onGenerate={generateSlug} generateDisabled={!title.trim() || createState === "saving"} />
 				{#if fixedPriceCreation}<label>starting price (USD)<span class="money-input"><span aria-hidden="true">$</span><input inputmode="decimal" value={startingPrice} oninput={(event) => (startingPrice = event.currentTarget.value)} autocomplete="off" aria-label="starting price (USD)" /></span><small>The product starts unavailable.</small></label>{/if}
 				<button type="submit" class="primary" disabled={createState === "saving" || Boolean(createdProductHref)}>{createdProductHref ? "draft created" : createState === "saving" ? "creating…" : "create product draft"}</button>
 			</form>
 			{#if createError}<p class="error" role="alert">{createError}</p>{/if}
 			{#if createdProductHref}<p class="success" role="status">Product draft created. <a href={createdProductHref}>Open the product draft.</a></p>{/if}
 		</div>
-	</div>
+	</AdminModal>
 {/if}
 
 {#if cleanupOpen}
@@ -350,11 +315,10 @@ async function createProduct() {
 <style>
 	.product-workbench { min-height: 100%; background: var(--admin-bg); color: var(--admin-text); }
 	.workbench-heading { display: flex; align-items: end; justify-content: space-between; gap: 20px; padding: 13px 20px 12px; border-bottom: 1px solid var(--admin-border); background: var(--editor-canvas); }
-	.workbench-heading h1, .collection-heading h2, .create-heading h2 { margin: 0; color: var(--admin-heading); font-family: var(--admin-font-display); font-weight: 500; letter-spacing: -.025em; text-transform: lowercase; }
+	.workbench-heading h1, .collection-heading h2 { margin: 0; color: var(--admin-heading); font-family: var(--admin-font-display); font-weight: 500; letter-spacing: -.025em; text-transform: lowercase; }
 	.workbench-heading h1 { font-size: clamp(1.18rem, 1.7vw, 1.48rem); }
 	.heading-meta { display: grid; justify-items: end; gap: 4px; color: var(--admin-heading); font-size: .75rem; white-space: nowrap; }
 	.heading-meta small { color: var(--admin-text-subtle); font-size: .63rem; }
-	.workbench-grid { display: grid; grid-template-columns: 128px 232px minmax(0, 1fr); min-height: calc(100vh - var(--editor-header-height, 64px)); }
 	.taxonomy-pane, .collection-pane { border-right: 1px solid var(--admin-border); background: var(--editor-collection); }
 	.taxonomy-pane { padding: 18px 10px; }
 	.kind-filters { display: grid; margin-top: 0; border-left: 1px solid var(--admin-border); }
@@ -365,8 +329,8 @@ async function createProduct() {
 	.kind-filters button.active::before { background: var(--admin-accent-strong); }
 	.kind-filters small { color: var(--admin-text-subtle); }
 	.collection-pane { padding: 18px 14px 32px; }
-	.collection-heading, .create-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; }
-	.collection-heading h2, .create-heading h2 { font-size: 1.08rem; }
+	.collection-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; }
+	.collection-heading h2 { font-size: 1.08rem; }
 	.new-product, .primary { border: 1px solid transparent; border-radius: 6px; padding: 8px 11px; background: var(--admin-accent-strong); color: var(--admin-bg); font-size: .72rem; cursor: pointer; }
 	.search-field { display: grid; gap: 5px; margin-top: 14px; color: var(--admin-text-muted); font-size: .62rem; }
 	.search-field input, .create-panel input { width: 100%; box-sizing: border-box; border: 1px solid var(--admin-border-strong); border-radius: 3px; padding: 8px 9px; background: var(--editor-control); color: var(--admin-heading); font: inherit; }
@@ -396,26 +360,15 @@ async function createProduct() {
 	.product-list em.published { color: var(--status-sage); }
 	.product-list em.discarded { color: var(--admin-text-subtle); }
 	.document-pane { min-width: 0; background: var(--editor-canvas); }
-	.create-backdrop { position: fixed; z-index: 80; inset: 0; display: grid; place-items: center; padding: 24px; background: color-mix(in srgb, var(--admin-bg) 72%, transparent); backdrop-filter: blur(4px); }
-	.create-panel { width: min(520px, 100%); box-sizing: border-box; border: 1px solid var(--admin-border-strong); border-radius: 14px; padding: 24px; background: var(--admin-surface); box-shadow: 0 24px 80px rgb(0 0 0 / .28); }
+	.create-panel { box-sizing: border-box; padding: 0 28px 28px; }
 	.create-panel > p { margin: 10px 0 0; color: var(--admin-text-muted); font-size: .78rem; line-height: 1.55; }
 	.create-panel form { display: grid; gap: 17px; margin-top: 22px; }
-	.create-panel label, .create-field { display: grid; gap: 6px; color: var(--admin-text-muted); font-size: .68rem; }
-	.create-panel label small, .create-field small { color: var(--admin-text-subtle); }
-	.field-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 28px; }
-	.generate-url { border: 0; padding: 4px 0; background: transparent; color: var(--admin-accent-strong); font: inherit; font-size: .68rem; cursor: pointer; text-underline-offset: 3px; }
-	.generate-url:hover:not(:disabled) { text-decoration: underline; }
-	.generate-url:active:not(:disabled) { transform: translateY(1px); }
-	.generate-url:disabled { color: var(--admin-text-subtle); cursor: default; }
-	.close { width: 44px; height: 44px; border: 1px solid var(--admin-border); border-radius: 50%; background: transparent; color: var(--admin-heading); font-size: 1.25rem; cursor: pointer; }
+	.create-panel label { display: grid; gap: 6px; color: var(--admin-text-muted); font-size: .68rem; }
+	.create-panel label small { color: var(--admin-text-subtle); }
 	.create-panel .error, .create-panel .success { margin: 16px 0 0; font-size: .75rem; }
 	.create-panel .success { color: var(--status-sage); } .create-panel .success a { color: inherit; }
 	button:focus-visible, input:focus-visible, a:focus-visible { outline: 2px solid var(--admin-accent-strong); outline-offset: 2px; }
 	@media (min-width: 641px) and (max-width: 1279px) {
-		.workbench-grid { grid-template-columns: 180px minmax(0, 1fr); }
-		.document-pane { display: none; }
-		.product-workbench.has-selection .taxonomy-pane, .product-workbench.has-selection .collection-pane { display: none; }
-		.product-workbench.has-selection .document-pane { display: block; grid-column: 1 / -1; }
 	}
 	@media (max-width: 768px) {
 		.kind-filters button, .new-product, .status-filters button, .primary { min-height: 44px; }
@@ -423,15 +376,10 @@ async function createProduct() {
 	@media (max-width: 640px) {
 		.workbench-heading { align-items: flex-start; flex-direction: column; padding: 18px 20px; }
 		.heading-meta { justify-items: start; }
-		.workbench-grid { display: block; min-height: 0; }
 		.taxonomy-pane { border-right: 0; border-bottom: 1px solid var(--admin-border); padding: 18px 16px; }
 		.kind-filters { display: flex; overflow-x: auto; }
 		.kind-filters button { flex: 0 0 auto; width: auto; }
 		.collection-pane { border-right: 0; padding: 22px 16px 48px; }
-		.document-pane { display: none; }
-		.product-workbench.has-selection .taxonomy-pane, .product-workbench.has-selection .collection-pane { display: none; }
-		.product-workbench.has-selection .document-pane { display: block; }
-		.create-backdrop { align-items: end; padding: 0; }
-		.create-panel { border-radius: 14px 14px 0 0; }
+		.create-panel { padding: 0 20px 24px; }
 	}
 </style>

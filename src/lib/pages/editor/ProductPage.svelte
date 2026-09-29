@@ -1,5 +1,7 @@
 <script lang="ts">
 import PublicationControl from "./PublicationControl.svelte";
+import EditorDocumentHeader from "./EditorDocumentHeader.svelte";
+import EditorSlugField from "./EditorSlugField.svelte";
 import { goto } from "$app/navigation";
 import { onDestroy } from "svelte";
 import { useQuery } from "convex-svelte";
@@ -846,20 +848,17 @@ function removeSetMember(member: CatalogProductDraftForm["setMembers"][number]) 
 	<p class="loading" role="status">Loading product draft…</p>
 {:else}
 		<div class="settings-page product-page editor-document editor-workbench">
-		<header class="settings-header">
-			<div><a class="back" href={baseHref}>← products</a><h1>{canEditGraphProduct || !isGraphV2 ? form.title?.trim() || "Untitled product" : catalogProductEditorTitle(readOnlyRevision)?.trim() || "Product"}</h1></div>
-			{#if hasActiveDraft && (!isGraphV2 || canEditGraphProduct)}
-				<div class="actions">
-					<span class="save-state" data-save-state={saveState} aria-live="polite">{saveState === "saved" ? "draft saved" : saveState === "dirty" ? "unsaved changes" : saveState}</span>
-					{#if dirty || saveState === "saving" || saveState === "error"}
-						<button type="button" class="primary" onclick={() => void saveDraft()} disabled={!canSave}>{saveState === "saving" ? "saving…" : saveState === "error" ? "try save again" : "save draft"}</button>
-					{/if}
-				</div>
-			{/if}
-			{#if publicationCapability}
-				<PublicationControl published={Boolean(editorState.published)} hasChanges={Boolean(editorState.draft && (dirty || editorState.draft.revisionId !== editorState.published?.revisionId))} item="product" onpublish={editorState.draft ? () => runPublication("publish") : undefined} onunpublish={() => runPublication("unpublish")} publishDisabled={!canPublish} unpublishDisabled={!canUnpublish} busy={publicationRequestActive || deletingProduct} />
-			{/if}
-		</header>
+		<EditorDocumentHeader saveState={hasActiveDraft && (!isGraphV2 || canEditGraphProduct) ? saveState : undefined}>
+			{#snippet title()}<a class="back" href={baseHref}>← products</a><h1>{canEditGraphProduct || !isGraphV2 ? form.title?.trim() || "Untitled product" : catalogProductEditorTitle(readOnlyRevision)?.trim() || "Product"}</h1>{/snippet}
+			{#snippet actions()}
+				{#if hasActiveDraft && (!isGraphV2 || canEditGraphProduct) && (dirty || saveState === "saving" || saveState === "error")}
+					<button type="button" class="primary" onclick={() => void saveDraft()} disabled={!canSave}>{saveState === "saving" ? "saving…" : saveState === "error" ? "try save again" : "save draft"}</button>
+				{/if}
+				{#if publicationCapability}
+					<PublicationControl published={Boolean(editorState.published)} hasChanges={Boolean(editorState.draft && (dirty || editorState.draft.revisionId !== editorState.published?.revisionId))} item="product" onpublish={editorState.draft ? () => runPublication("publish") : undefined} onunpublish={() => runPublication("unpublish")} publishDisabled={!canPublish} unpublishDisabled={!canUnpublish} busy={publicationRequestActive || deletingProduct} />
+				{/if}
+			{/snippet}
+		</EditorDocumentHeader>
 		{#if catalogApi.remove && !editorState.published}
 			<button type="button" class="danger quiet-action" disabled={editorLocked} onclick={() => void deleteProduct()}>{deletingProduct ? "deleting…" : "delete product permanently"}</button>
 		{/if}
@@ -909,7 +908,7 @@ function removeSetMember(member: CatalogProductDraftForm["setMembers"][number]) 
 				<div class="section-heading"><span>01</span><div><h2 id="product-identity-heading">product details</h2><p>The working name, URL name, and description stored with this draft.</p></div></div>
 				<div class="fields two-column">
 					<label>product name<input maxlength="160" value={form.title ?? ""} oninput={(event) => updateOptionalField("title", event.currentTarget.value)} onblur={fillSlugIfEmpty} disabled={editorLocked} /></label>
-					<label>URL name<input maxlength="96" value={form.slug ?? ""} oninput={(event) => updateOptionalField("slug", event.currentTarget.value)} spellcheck="false" disabled={editorLocked} /><small>Lowercase words separated by hyphens.</small></label>
+					<EditorSlugField id="product-slug" value={form.slug ?? ""} maxLength={96} onChange={(value) => updateOptionalField("slug", value)} disabled={editorLocked} />
 					<label class="wide">description<textarea rows="5" maxlength="5000" value={form.description ?? ""} oninput={(event) => updateOptionalField("description", event.currentTarget.value)} disabled={editorLocked}></textarea></label>
 				</div>
 			</section>
