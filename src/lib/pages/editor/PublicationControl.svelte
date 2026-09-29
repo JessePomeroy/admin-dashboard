@@ -94,16 +94,5 @@ summary::-webkit-details-marker { display: none; }
 	.publication-actions { width: 100%; gap: 0; }
 	.publication-actions > button { flex: 1; min-width: 0; }
 	summary { border-color: var(--admin-heading); border-left-color: var(--admin-bg); border-bottom-width: 2px; border-radius: 0; background: var(--admin-heading); color: var(--admin-bg); }
-	:global(.settings-header:has(.publication-control)),
-	:global(.gallery-page > header:has(.publication-control)) { align-items: stretch; gap: 12px; }
-	:global(.settings-header:has(.publication-control) .header-actions),
-	:global(.settings-header:has(.publication-control) .actions),
-	:global(.gallery-page > header:has(.publication-control) .actions) { width: 100%; justify-content: flex-start; }
-	:global(.settings-header:has(.publication-control) :is([data-save-state="saved"], [data-publication-save-state="saved"])),
-	:global(.gallery-page > header:has(.publication-control) :is([data-save-state="saved"], [data-publication-save-state="saved"])),
-	:global([data-admin].editor-workspace .settings-header:has(.publication-control) :is([data-save-state="saved"], [data-publication-save-state="saved"])),
-	:global([data-admin].editor-workspace .gallery-page > header:has(.publication-control) :is([data-save-state="saved"], [data-publication-save-state="saved"])) { display: none; }
-	/* Product save actions are a sibling of the publication control. */
-	:global(.settings-header:has(.publication-control) .actions:has(> :is([data-save-state="saved"], [data-publication-save-state="saved"])):not(:has(button, a, .publication-control))) { display: none; }
 }
 </style>

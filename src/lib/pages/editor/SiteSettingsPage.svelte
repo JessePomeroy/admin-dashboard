@@ -1,4 +1,5 @@
 <script lang="ts">
+import EditorDocumentHeader from "./EditorDocumentHeader.svelte";
 import PublicationControl from "./PublicationControl.svelte";
 import { useQuery } from "convex-svelte";
 import { dragHandle, dragHandleZone } from "svelte-dnd-action";
@@ -125,10 +126,9 @@ function finishSocialReorder(event: CustomEvent<{ items: DraggableSocialLink[] }
 <svelte:head><title>Site settings — {config.siteName}</title></svelte:head>
 
 <div class="settings-page editor-document">
-	<header class="settings-header">
-		<h1>site settings</h1>
-		<div class="actions">
-			<span class="save-state" data-publication-save-state={draft.state} aria-live="polite">{draft.state === "offline" ? "offline — saved on this device" : draft.state === "saved" ? "draft saved" : draft.state === "dirty" ? "unsaved changes" : draft.state}</span>
+	<EditorDocumentHeader saveState={draft.state}>
+		{#snippet title()}<h1>site settings</h1>{/snippet}
+		{#snippet actions()}
 			{#if publishingEnabled && siteSettingsConfig.previewHref}
 				<a href={siteSettingsConfig.previewHref} target="_blank" rel="noopener">preview</a>
 			{/if}
@@ -137,8 +137,9 @@ function finishSocialReorder(event: CustomEvent<{ items: DraggableSocialLink[] }
 			{#if publishingEnabled}
 				<PublicationControl published={Boolean(publicationState?.published)} hasChanges={publicationHasChanges} onpublish={publish} publishDisabled={!draft.initialized || draft.state === "saving" || draft.state === "syncing" || draft.state === "offline" || draft.state === "conflict"} />
 			{/if}
-		</div>
-	</header>
+
+		{/snippet}
+	</EditorDocumentHeader>
 
 	{#if draft.error}
 		<div class="alert" role="alert">{draft.error}</div>

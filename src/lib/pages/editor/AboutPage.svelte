@@ -1,4 +1,5 @@
 <script lang="ts">
+import EditorDocumentHeader from "./EditorDocumentHeader.svelte";
 import PublicationControl from "./PublicationControl.svelte";
 import { browser } from "$app/environment";
 import { tick } from "svelte";
@@ -214,18 +215,16 @@ function addUploadedAsset(asset: PortfolioMediaAsset) {
 <svelte:head><title>About — {config.siteName}</title></svelte:head>
 
 <div class="settings-page editor-document">
-	<header class="settings-header">
-		<h1>about</h1>
-		{#if draft.initialized && !setupRequired}
-			<div class="actions">
-				<span class="save-state" data-publication-save-state={draft.state} aria-live="polite">{draft.state === "offline" ? "offline — saved on this device" : draft.state === "saved" ? "draft saved" : draft.state === "dirty" ? "unsaved changes" : draft.state}</span>
+	<EditorDocumentHeader saveState={draft.state} showActions={draft.initialized && !setupRequired}>
+		{#snippet title()}<h1>about</h1>{/snippet}
+		{#snippet actions()}
 				<button type="button" onclick={() => void discard()} disabled={!draft.revisionId && !draft.hasPendingWork}>{draft.state === "conflict" ? "reload server draft" : "discard draft"}</button>
 				{#if draft.hasPendingWork}<button type="button" onclick={() => void draft.saveNow()} disabled={draft.state === "saving" || draft.state === "conflict"}>save draft</button>{/if}
 				{#if previewEndpoint}<button type="button" onclick={() => void preview()} disabled={previewing || draft.state === "saving" || draft.state === "syncing" || draft.state === "offline" || draft.state === "conflict"}>{previewing ? "preparing preview…" : "preview"}</button>{/if}
 				<PublicationControl published={Boolean(publicationState?.published)} hasChanges={publicationHasChanges} onpublish={publish} publishDisabled={publishing || draft.state === "saving" || draft.state === "syncing" || draft.state === "offline" || draft.state === "conflict"} />
-			</div>
-		{/if}
-	</header>
+
+		{/snippet}
+	</EditorDocumentHeader>
 
 	{#if draft.error}<div class="alert" role="alert">{draft.error}</div>{/if}
 	{#if publishMessage}<div class="success" role="status">{publishMessage}</div>{/if}

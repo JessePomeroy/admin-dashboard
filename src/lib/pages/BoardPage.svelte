@@ -120,7 +120,19 @@ async function handleFinalize(
 	if (!col) return;
 	col.cards = e.detail.items;
 
-	// Find the moved card and persist its new position
+	if (api.kanban.reorderCards) {
+		try {
+			await client.mutation(api.kanban.reorderCards, {
+				siteUrl: config.siteUrl, projectType: selectedType, targetColumnId: columnId,
+				clientIds: col.cards.map((card) => toId(card._id)),
+			});
+		} catch (err) {
+			logger.error("Failed to reorder cards:", err);
+			addToast("Failed to move card. Reload to see the saved order.");
+		}
+		return;
+	}
+	// Older hosts can continue using individual moves until their backend is upgraded.
 	for (let i = 0; i < col.cards.length; i++) {
 		const card = col.cards[i];
 		if (card.boardColumnId !== columnId || card.boardPosition !== i) {

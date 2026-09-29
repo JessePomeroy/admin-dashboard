@@ -113,6 +113,18 @@ function postEditorState() {
 	};
 }
 
+function authorEditorState() {
+	return {
+		documentId: "author-1", documentKey: "author-1", kind: "author", slug: "author-one", rank: 0,
+		draft: {
+			revisionId: "author-revision-1", schemaVersion: 1,
+			draft: { kind: "author", name: "Author one", slug: "author-one" },
+			source: "admin", createdAt: 1,
+		},
+		published: null, updatedAt: 1, publishedAt: null, archivedAt: null,
+	};
+}
+
 function mediaAsset(id: string) {
 	return {
 		_id: id,
@@ -427,5 +439,38 @@ describe("Blog query states", () => {
 		expect(document.querySelector(".save-status")?.textContent).toBe("error");
 		expect(document.querySelector('[role="alert"]')?.textContent).toContain("deterministic save failure");
 		expect(button("save draft")?.disabled).toBe(false);
+	});
+
+	it("keeps author save failures visible and guards the retry while pending", async () => {
+		mocks.states.set("blog:getEditorState", { data: authorEditorState() });
+		let finishRetry: ((value: { revisionId: string }) => void) | undefined;
+		mocks.mutation.mockRejectedValueOnce(new Error("author save failed"))
+			.mockImplementationOnce(() => new Promise((resolve) => { finishRetry = resolve; }));
+		components.push(mount(BlogSupportingPage, {
+			target: document.body,
+			props: { documentId: "author-1", kind: "author" },
+		}));
+		await tick();
+		await tick();
+		const name = Array.from(document.querySelectorAll("label"))
+			.find((label) => label.textContent?.includes("author name"))
+			?.querySelector<HTMLInputElement>("input");
+		expect(name).toBeDefined();
+		name!.value = "Author revised";
+		name!.dispatchEvent(new Event("input", { bubbles: true }));
+		await tick();
+		button("save draft")?.click();
+		await tick();
+		await tick();
+		expect(document.querySelector(".save-status")?.textContent).toBe("error");
+		expect(document.querySelector('[role="alert"]')?.textContent).toContain("author save failed");
+		button("save draft")?.click();
+		await tick();
+		expect(document.querySelector(".save-status")?.textContent).toBe("saving");
+		expect(button("save draft")?.disabled).toBe(true);
+		finishRetry?.({ revisionId: "author-revision-2" });
+		await tick();
+		await tick();
+		expect(document.querySelector(".save-status")?.textContent).toBe("draft saved");
 	});
 });

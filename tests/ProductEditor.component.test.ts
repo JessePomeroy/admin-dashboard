@@ -537,9 +537,11 @@ function button(label: string) {
 	) as HTMLButtonElement | undefined;
 }
 function input(label: string) {
-	return Array.from(document.querySelectorAll("label"))
-		.find((item) => item.textContent?.includes(label))
-		?.querySelector("input") as HTMLInputElement | null;
+	const fieldLabel = Array.from(document.querySelectorAll("label"))
+		.find((item) => item.textContent?.includes(label));
+	return (fieldLabel?.htmlFor
+		? document.getElementById(fieldLabel.htmlFor)
+		: fieldLabel?.querySelector("input")) as HTMLInputElement | null;
 }
 function checkbox(label: string) {
 	return Array.from(document.querySelectorAll("label"))
@@ -895,7 +897,7 @@ describe("draft-only product editor", () => {
 		await tick();
 		await tick();
 		const dialog = document.querySelector<HTMLElement>('[role="dialog"][aria-modal="true"]');
-		const close = document.querySelector<HTMLButtonElement>('[aria-label="Close new product form"]');
+		const close = document.querySelector<HTMLButtonElement>('[aria-label="Close dialog"]');
 		const submit = document.querySelector<HTMLButtonElement>(".create-panel .primary");
 		expect(dialog).not.toBeNull();
 		expect((document.querySelector(".product-workbench") as HTMLElement & { inert: boolean }).inert).toBe(true);
@@ -965,7 +967,7 @@ describe("draft-only product editor", () => {
 
 		const dialog = document.querySelector<HTMLElement>('[role="dialog"]');
 		expect(button("draft created")?.disabled).toBe(true);
-		document.querySelector<HTMLButtonElement>('[aria-label="Close new product form"]')?.click();
+		document.querySelector<HTMLButtonElement>('[aria-label="Close dialog"]')?.click();
 		dialog?.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
 		await tick();
 		expect(document.querySelector('[role="dialog"]')).toBe(dialog);

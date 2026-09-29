@@ -4,6 +4,9 @@ import { tick, type Snippet } from "svelte";
 import { dragHandle, dragHandleZone } from "svelte-dnd-action";
 import { useAdminClient } from "../../adminClient";
 import { getAdminConfig } from "../../config";
+import EditorWorkbenchLayout from "./EditorWorkbenchLayout.svelte";
+import AdminModal from "../../components/AdminModal.svelte";
+import EditorSlugField from "./EditorSlugField.svelte";
 import {
 	portfolioGalleryLabel,
 	portfolioGalleryStatus,
@@ -106,9 +109,9 @@ function updateTitle(event: Event) {
 	if (!slugWasEdited) slug = slugifyPortfolioTitle(title);
 }
 
-function updateSlug(event: Event) {
+function updateSlug(value: string) {
 	slugWasEdited = true;
-	slug = slugifyPortfolioTitle((event.currentTarget as HTMLInputElement).value);
+	slug = slugifyPortfolioTitle(value);
 }
 
 function generateSlug() {
@@ -131,37 +134,10 @@ async function closeCreate() {
 	newGalleryButton?.focus();
 }
 
-function handleDialogKeydown(event: KeyboardEvent) {
-	if (event.key === "Escape") {
-		event.preventDefault();
-		void closeCreate();
-		return;
-	}
-	if (event.key !== "Tab") return;
-	const focusable = Array.from(createDialog?.querySelectorAll<HTMLElement>(
-		'button:not([disabled]), input:not([disabled]), [href], [tabindex]:not([tabindex="-1"])',
-	) ?? []);
-	const first = focusable[0];
-	const last = focusable.at(-1);
-	if (!first || !last) return;
-	if (!focusable.includes(document.activeElement as HTMLElement)) {
-		event.preventDefault();
-		(event.shiftKey ? last : first).focus();
-		return;
-	}
-	if (event.shiftKey && document.activeElement === first) {
-		event.preventDefault();
-		last.focus();
-	} else if (!event.shiftKey && document.activeElement === last) {
-		event.preventDefault();
-		first.focus();
-	}
-}
-
 async function createGallery() {
 	errors = validateNewPortfolioGallery(title, slug);
 	if (errors.title || errors.slug) return;
-	createDialog?.querySelector<HTMLButtonElement>(".close")?.focus();
+	createDialog?.closest('[role="dialog"]')?.querySelector<HTMLButtonElement>(".modal-close")?.focus();
 	createState = "saving";
 	createMessage = "";
 	try {
@@ -235,8 +211,8 @@ async function handleGalleryFinalize(event: CustomEvent<{ items: DraggableGaller
 		</div>
 	</header>
 
-	<div class="workbench-grid">
-		<aside class="collection-pane" aria-label="Portfolio galleries">
+	<EditorWorkbenchLayout variant="portfolio" selected={Boolean(selectedGalleryId)}>
+		{#snippet collection()}<aside class="collection-pane" aria-label="Portfolio galleries">
 			<div class="collection-heading">
 				<h2>galleries</h2>
 				<button bind:this={newGalleryButton} type="button" class="new-gallery" onclick={() => void openCreate()}>new</button>
@@ -291,35 +267,26 @@ async function handleGalleryFinalize(event: CustomEvent<{ items: DraggableGaller
 					{/each}
 				</ol>
 			{/if}
-		</aside>
-
-		<section class="document-pane" aria-label="Portfolio gallery">
+		</aside>{/snippet}
+		{#snippet document()}<section class="document-pane" aria-label="Portfolio gallery">
 			{@render children()}
-		</section>
-	</div>
+		</section>{/snippet}
+	</EditorWorkbenchLayout>
 
 </div>
 
 {#if creating}
-	<div class="create-backdrop" role="presentation" onclick={(event) => { if (event.currentTarget === event.target) void closeCreate(); }}>
-		<div bind:this={createDialog} class="create-panel" role="dialog" aria-modal="true" aria-labelledby="create-gallery-heading" tabindex="-1" onkeydown={handleDialogKeydown}>
-			<div class="create-heading"><h2 id="create-gallery-heading">new gallery</h2><button type="button" class="close" onclick={() => void closeCreate()} aria-label="Close new gallery form">×</button></div>
+	<AdminModal title="new gallery" onclose={() => void closeCreate()} size="narrow">
+		<div bind:this={createDialog} class="create-panel">
 			<p>{publicLifecycleEnabled ? "Create an unpublished gallery, then add details and images before publishing." : "Create and arrange a private gallery draft."}</p>
 			<form onsubmit={(event) => { event.preventDefault(); void createGallery(); }}>
 				<label>gallery name<input bind:this={titleInput} value={title} oninput={updateTitle} maxlength="120" autocomplete="off" aria-invalid={Boolean(errors.title)} />{#if errors.title}<small class="field-error">{errors.title}</small>{/if}</label>
-				<div class="create-field">
-					<div class="field-heading">
-						<label for="new-gallery-slug">{publicLifecycleEnabled ? "public URL" : "URL name"}</label>
-						<button type="button" class="generate-url" onclick={generateSlug} disabled={!title.trim() || createState === "saving"}>generate url</button>
-					</div>
-					<div class="slug-field"><span>/</span><input id="new-gallery-slug" value={slug} oninput={updateSlug} maxlength="80" autocomplete="off" spellcheck="false" aria-invalid={Boolean(errors.slug)} /></div>
-					{#if errors.slug}<small class="field-error">{errors.slug}</small>{/if}
-				</div>
+				<EditorSlugField id="new-gallery-slug" label={publicLifecycleEnabled ? "public URL" : "URL name"} value={slug} maxLength={80} onChange={updateSlug} onGenerate={generateSlug} generateDisabled={!title.trim() || createState === "saving"} error={errors.slug} help="" prefix="/" />
 				<button type="submit" class="primary" disabled={createState === "saving"}>{createState === "saving" ? "creating…" : publicLifecycleEnabled ? "create unpublished gallery" : "create gallery draft"}</button>
 			</form>
 			{#if createMessage}<p class:error={createState === "error"} class="create-message" role={createState === "error" ? "alert" : "status"}>{createMessage}</p>{/if}
 		</div>
-	</div>
+	</AdminModal>
 {/if}
 
 <style>
@@ -329,19 +296,13 @@ async function handleGalleryFinalize(event: CustomEvent<{ items: DraggableGaller
 	h1 { font-size: clamp(1.18rem, 1.7vw, 1.48rem); } h2 { font-size: 1rem; }
 	.heading-meta { display: grid; justify-items: end; gap: 5px; color: var(--admin-text-subtle); font-size: .7rem; }
 	.heading-meta .error, .collection-message.error, .create-message.error, .field-error { color: var(--status-rose); }
-	.workbench-grid { display: grid; grid-template-columns: 18rem minmax(520px, 1fr); min-height: calc(100vh - var(--editor-header-height, 64px)); }
 	.collection-pane { min-width: 0; padding: 18px 14px 32px; border-right: 1px solid var(--admin-border); background: var(--editor-collection); }
 	.collection-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
 	.collection-note { margin: -6px 0 13px; color: var(--admin-text-muted); font-size: .66rem; line-height: 1.4; }
 	button, input { font: inherit; }
 	.new-gallery, .primary { border: 1px solid transparent; border-radius: 6px; padding: 8px 11px; background: var(--admin-accent-strong); color: var(--admin-bg); font-size: .72rem; cursor: pointer; }
-	.search-field, .create-panel label, .create-field { display: grid; gap: 7px; color: var(--admin-text-muted); font-size: .7rem; }
+	.search-field, .create-panel label { display: grid; gap: 7px; color: var(--admin-text-muted); font-size: .7rem; }
 	.search-field input, .create-panel input { width: 100%; box-sizing: border-box; border: 1px solid var(--admin-border-strong); border-radius: 3px; padding: 8px 9px; background: var(--editor-control); color: var(--admin-heading); text-transform: none; }
-	.field-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 28px; }
-	.generate-url { border: 0; padding: 4px 0; background: transparent; color: var(--admin-accent-strong); font: inherit; font-size: .68rem; cursor: pointer; text-underline-offset: 3px; }
-	.generate-url:hover:not(:disabled) { text-decoration: underline; }
-	.generate-url:active:not(:disabled) { transform: translateY(1px); }
-	.generate-url:disabled { color: var(--admin-text-subtle); cursor: default; }
 	.filters { display: flex; flex-wrap: wrap; gap: 4px; margin: 9px 0 13px; }
 	.filters button { border: 0; border-radius: 3px; padding: 5px 7px; background: transparent; color: var(--admin-text-subtle); font-size: .66rem; cursor: pointer; }
 	.filters button:hover, .filters button.active { background: var(--admin-active); color: var(--admin-heading); }
@@ -357,7 +318,7 @@ async function handleGalleryFinalize(event: CustomEvent<{ items: DraggableGaller
 	.gallery-list strong { overflow: hidden; font-size: .82rem; font-weight: 500; text-overflow: ellipsis; white-space: nowrap; }
 	.gallery-list span, .gallery-list small { overflow: hidden; color: var(--admin-text-subtle); font-size: .66rem; text-overflow: ellipsis; text-transform: none; white-space: nowrap; }
 	.gallery-list small { color: var(--admin-accent-strong); letter-spacing: .04em; text-transform: uppercase; }
-	.drag-handle, .close { border: 0; background: transparent; color: var(--admin-text-muted); cursor: pointer; }
+	.drag-handle { border: 0; background: transparent; color: var(--admin-text-muted); cursor: pointer; }
 	.drag-handle { display: grid; place-items: center; width: 34px; height: 44px; padding: 0; touch-action: none; }
 	.drag-handle span { width: 12px; height: 18px; background: radial-gradient(circle, currentColor 1.3px, transparent 1.5px) 0 0 / 6px 6px; opacity: .62; }
 	.drag-handle:hover:not(:disabled) { color: var(--admin-heading); }
@@ -372,20 +333,13 @@ async function handleGalleryFinalize(event: CustomEvent<{ items: DraggableGaller
 	:global(#dnd-action-dragged-el > .drag-handle) { display: grid; place-items: center; width: 100%; height: 44px; padding: 0; border: 0; background: transparent; color: inherit; }
 	:global(#dnd-action-dragged-el > .drag-handle > span) { width: 12px; height: 18px; background: radial-gradient(circle, currentColor 1.3px, transparent 1.5px) 0 0 / 6px 6px; opacity: .62; }
 	.document-pane { min-width: 0; background: var(--editor-canvas); }
-	.create-backdrop { position: fixed; inset: 0; z-index: 80; display: grid; place-items: center; padding: 20px; background: color-mix(in srgb, var(--admin-bg) 76%, transparent); backdrop-filter: blur(9px); }
-	.create-panel { width: min(440px, 100%); box-sizing: border-box; border: 1px solid var(--admin-border-strong); border-radius: 12px; padding: 24px; background: var(--admin-surface-raised); box-shadow: 0 24px 70px color-mix(in srgb, #000 35%, transparent); }
-	.create-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; }
+	.create-panel { box-sizing: border-box; padding: 0 28px 28px; }
 	.create-panel > p { margin: 10px 0 0; color: var(--admin-text-muted); font-size: .78rem; line-height: 1.55; }
 	.create-panel form { display: grid; gap: 17px; margin-top: 22px; }
-	.close { width: 44px; height: 44px; font-size: 1.25rem; }
-	.slug-field { display: grid; grid-template-columns: auto 1fr; align-items: center; gap: 7px; color: var(--admin-text-subtle); }
-	.create-message { margin: 16px 0 0; color: var(--status-sage); font-size: .75rem; }
+		.create-message { margin: 16px 0 0; color: var(--status-sage); font-size: .75rem; }
 	[aria-invalid="true"] { border-color: var(--status-rose) !important; }
 	button:focus-visible, input:focus-visible, a:focus-visible { outline: 2px solid var(--admin-accent-strong); outline-offset: 2px; }
 	@media (min-width: 641px) and (max-width: 1179px) {
-		.workbench-grid { display: block; }
-		.portfolio-workbench.has-selection .collection-pane, .portfolio-workbench:not(.has-selection) .document-pane { display: none; }
-		.collection-pane, .document-pane { min-height: calc(100vh - var(--editor-header-height, 64px)); }
 	}
 	@media (max-width: 768px) {
 		.drag-handle { width: 44px; height: 44px; }
@@ -395,11 +349,8 @@ async function handleGalleryFinalize(event: CustomEvent<{ items: DraggableGaller
 	@media (max-width: 640px) {
 		.workbench-heading { align-items: flex-start; padding: 18px 20px; flex-direction: column; }
 		.heading-meta { justify-items: start; }
-		.workbench-grid { display: block; min-height: 0; }
 		.collection-pane { padding: 22px 16px 48px; border-right: 0; }
-		.portfolio-workbench.has-selection .collection-pane, .portfolio-workbench:not(.has-selection) .document-pane { display: none; }
-		.create-backdrop { align-items: end; padding: 0; }
-		.create-panel { border-radius: 14px 14px 0 0; }
+		.create-panel { padding: 0 20px 24px; }
 	}
 	@media (prefers-reduced-motion: no-preference) {
 		.gallery-list li, .filters button { transition: color .16s ease, background-color .16s ease; }

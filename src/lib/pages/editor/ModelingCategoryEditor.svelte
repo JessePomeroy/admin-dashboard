@@ -9,7 +9,8 @@ import {
 	slugifyModelingTitle,
 	type ModelingPublishIssue,
 } from "../../modelingPage";
-import { portfolioMediaUrl, type PortfolioMediaAsset } from "../../portfolioEditor";
+import type { PortfolioMediaAsset } from "../../portfolioEditor";
+import MediaPlacementRow from "./MediaPlacementRow.svelte";
 import PortfolioMediaUploader from "./PortfolioMediaUploader.svelte";
 
 let {
@@ -114,19 +115,22 @@ function finishImageReorder(event: CustomEvent<{ items: DraggableImage[] }>) {
 			{#each visibleImages as image, imageIndex (image.id)}
 				{@const asset = mediaById.get(image.assetId)}
 				{@const issue = publishIssues.find((item) => item.fieldId === `modeling-image-${image.key}-alt`)}
-				<li class:dnd-shadow={image.isDndShadowItem}>
-					<div class="image-summary">
-						{#if asset}<img src={portfolioMediaUrl(mediaBaseUrl, asset.derivatives.thumb.key)} alt="" />{:else}<div class="missing">image unavailable</div>{/if}
-						<div><strong>{asset?.originalFilename ?? `image ${imageIndex + 1}`}</strong><span>position {imageIndex + 1}</span></div>
-					</div>
-					<div class="placement-fields">
-						<label>alt text<input id={`modeling-image-${image.key}-alt`} maxlength="500" value={image.altText ?? ""} oninput={(event) => updateImage(imageIndex, { altText: event.currentTarget.value })} aria-invalid={reviewRequested && Boolean(issue)} />{#if reviewRequested && issue}<small class="field-error">{issue.message}</small>{/if}</label>
-					</div>
-					<div class="image-actions">
-						<button type="button" class="drag-handle" use:dragHandle disabled={images.length < 2 || image.isDndShadowItem} aria-label={`Drag image ${imageIndex + 1} to reorder`}><span aria-hidden="true"></span></button>
-						<button type="button" class="remove" onclick={() => removeImage(imageIndex)} disabled={image.isDndShadowItem}>remove</button>
-					</div>
-				</li>
+				<MediaPlacementRow
+					variant="modeling"
+					{asset}
+					{mediaBaseUrl}
+					position={imageIndex + 1}
+					fallbackName={`image ${imageIndex + 1}`}
+					inputId={`modeling-image-${image.key}-alt`}
+					altText={image.altText ?? ""}
+					error={issue?.message}
+					{reviewRequested}
+					isDndShadowItem={image.isDndShadowItem}
+					dragDisabled={images.length < 2}
+					dragLabel={`Drag image ${imageIndex + 1} to reorder`}
+					onAltTextChange={(altText) => updateImage(imageIndex, { altText })}
+					onRemove={() => removeImage(imageIndex)}
+				/>
 			{/each}
 		</ol>
 	{/if}
@@ -155,16 +159,6 @@ function finishImageReorder(event: CustomEvent<{ items: DraggableImage[] }>) {
 	.images-heading { margin: 24px 0 16px; }
 	.images-heading p { margin: 5px 0 0; color: var(--admin-text-muted); font-size: .76rem; }
 	ol { margin: 12px 0 0; padding: 0; list-style: none; }
-	li { display: grid; grid-template-columns: minmax(180px, .65fr) minmax(260px, 1.35fr) auto; gap: 16px; align-items: start; padding: 18px 0; border-top: 1px solid var(--admin-border); }
-	.image-summary { display: flex; gap: 12px; min-width: 0; align-items: center; }
-	.image-summary img, .missing { width: 78px; height: 78px; flex: 0 0 auto; border-radius: 5px; object-fit: cover; background: var(--admin-bg); }
-	.missing { display: grid; place-items: center; color: var(--admin-text-subtle); font-size: .62rem; text-align: center; }
-	.image-summary strong, .image-summary span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-	.image-summary strong { color: var(--admin-heading); font-size: .76rem; font-weight: 500; }
-	.image-summary span { margin-top: 5px; color: var(--admin-text-subtle); font-size: .68rem; }
-	.placement-fields { display: grid; gap: 12px; }
-	.image-actions { display: grid; gap: 6px; }
-	.image-actions button { min-width: 40px; padding: 7px 9px; }
 	.drag-handle { display: grid; place-items: center; min-width: 52px; padding: 0; border-color: transparent; color: var(--admin-text-muted); touch-action: none; }
 	.drag-handle span { width: 12px; height: 18px; background: radial-gradient(circle, currentColor 1.3px, transparent 1.5px) 0 0 / 6px 6px; opacity: .62; }
 	.drag-handle:hover:not(:disabled) { color: var(--admin-heading); }
@@ -172,12 +166,10 @@ function finishImageReorder(event: CustomEvent<{ items: DraggableImage[] }>) {
 	.empty { display: grid; place-items: center; min-height: 140px; border: 1px dashed var(--admin-border); border-radius: 8px; text-align: center; }
 	.empty strong { color: var(--admin-heading); }
 	.empty p { max-width: 420px; margin: 7px 16px 0; color: var(--admin-text-muted); }
-	.field-error { color: var(--status-rose); line-height: 1.45; }
 	@media (max-width: 820px) {
 		.category { padding: 24px 0 28px; }
 		.category-header, .images-heading { align-items: flex-start; flex-direction: column; }
-		.two-column, li { grid-template-columns: 1fr; }
-		.image-actions { display: flex; flex-wrap: wrap; }
-		button, .image-actions button { min-height: 44px; }
+		.two-column { grid-template-columns: 1fr; }
+		button { min-height: 44px; }
 	}
 </style>

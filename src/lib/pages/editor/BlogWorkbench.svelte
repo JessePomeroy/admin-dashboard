@@ -15,6 +15,7 @@ import {
 	type PostEditorSummary,
 } from "../../blogEditor";
 import { getAdminConfig } from "../../config";
+import EditorWorkbenchLayout from "./EditorWorkbenchLayout.svelte";
 
 let {
 	selectedDocumentId,
@@ -120,8 +121,8 @@ async function createPost() {
 	{#if config.api.contentCleanup}<button type="button" onclick={() => cleanupOpen = true}>manage content history</button>{/if}
 	</header>
 
-	<div class="workbench-grid">
-		<aside class="collection-pane" aria-label="Blog posts">
+	<EditorWorkbenchLayout variant="blog" selected={Boolean(selectedDocumentId)} supportingView={supportingTarget !== null}>
+		{#snippet collection()}<aside class="collection-pane" aria-label="Blog posts">
 			<div class="collection-heading">
 				<h2>posts</h2>
 				<button type="button" class="new-post" onclick={() => void createPost()} disabled={createState === "saving"}>
@@ -169,12 +170,11 @@ async function createPost() {
 					{/each}
 				</div>
 			{/if}
-		</aside>
-
-		<section class="document-pane" id="blog-document-pane" aria-label="Blog document">
+		</aside>{/snippet}
+		{#snippet document()}<section class="document-pane" id="blog-document-pane" aria-label="Blog document">
 			{@render children()}
-		</section>
-	</div>
+		</section>{/snippet}
+	</EditorWorkbenchLayout>
 </div>
 
 <style>
@@ -230,11 +230,6 @@ async function createPost() {
 		box-shadow: inset 0 -2px var(--admin-accent-strong);
 	}
 
-	.workbench-grid {
-		display: grid;
-		grid-template-columns: minmax(220px, 238px) minmax(520px, 1fr);
-		min-height: calc(100vh - var(--editor-header-height, 64px));
-	}
 
 	.collection-pane {
 		min-width: 0;
@@ -405,28 +400,12 @@ async function createPost() {
 	}
 
 	@media (min-width: 641px) and (max-width: 1179px) {
-		.workbench-grid {
-			display: block;
-		}
 
-		.collection-pane,
-		.document-pane {
-			min-height: calc(100vh - var(--editor-header-height, 64px));
-		}
 
 		.collection-pane {
 			border-right: 0;
 		}
 
-		.blog-workbench.has-selection .collection-pane,
-		.blog-workbench:not(.has-selection):not(.supporting-view) .document-pane,
-		.blog-workbench.supporting-view .collection-pane {
-			display: none;
-		}
-
-		.blog-workbench.supporting-view .document-pane {
-			display: block;
-		}
 	}
 
 	@media (max-width: 640px) {
@@ -445,25 +424,12 @@ async function createPost() {
 			text-align: center;
 		}
 
-		.workbench-grid {
-			display: block;
-			min-height: 0;
-		}
 
 		.collection-pane {
 			padding: 22px 16px 48px;
 			border-right: 0;
 		}
 
-		.blog-workbench.has-selection .collection-pane,
-		.blog-workbench:not(.has-selection):not(.supporting-view) .document-pane,
-		.blog-workbench.supporting-view .collection-pane {
-			display: none;
-		}
-
-		.blog-workbench.supporting-view .document-pane {
-			display: block;
-		}
 
 		:global(.blog-workbench .document-pane .settings-header) {
 			top: 56px;

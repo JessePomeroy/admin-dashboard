@@ -276,7 +276,7 @@ describe("Portfolio editor capability modes", () => {
 		expect(buttonLabels()).not.toContain("changed");
 		expect(document.body.textContent).toContain("This deliberate order is saved with the private drafts.");
 		expect(document.body.textContent).not.toContain("The public site follows this deliberate order.");
-		(document.querySelector('[aria-label="Close new gallery form"]') as HTMLButtonElement).click();
+		(document.querySelector('[aria-label="Close dialog"]') as HTMLButtonElement).click();
 		await tick();
 		const draftFilter = Array.from(document.querySelectorAll<HTMLButtonElement>(".filters button"))
 			.find((item) => item.textContent === "draft");
@@ -343,9 +343,9 @@ describe("Portfolio editor capability modes", () => {
 		const dialog = document.querySelector<HTMLElement>('[role="dialog"][aria-modal="true"]');
 		expect(dialog).not.toBeNull();
 		expect((document.querySelector(".portfolio-workbench") as HTMLElement & { inert: boolean }).inert).toBe(true);
-		expect(document.querySelector("#create-gallery-heading")?.textContent).toBe("new gallery");
+		expect(document.querySelector("[role=dialog] .modal-title")?.textContent).toBe("new gallery");
 		expect(document.activeElement).toBe(document.querySelector('input[aria-invalid="false"]'));
-		const close = document.querySelector<HTMLButtonElement>('[aria-label="Close new gallery form"]');
+		const close = document.querySelector<HTMLButtonElement>('[aria-label="Close dialog"]');
 		const submit = document.querySelector<HTMLButtonElement>(".create-panel .primary");
 		close?.focus();
 		dialog?.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", shiftKey: true, bubbles: true }));
@@ -376,7 +376,7 @@ describe("Portfolio editor capability modes", () => {
 		submit?.click();
 		await tick();
 		expect(submit?.disabled).toBe(true);
-		expect(document.activeElement).toBe(document.querySelector('[aria-label="Close new gallery form"]'));
+		expect(document.activeElement).toBe(document.querySelector('[aria-label="Close dialog"]'));
 		resolveCreate?.({ revisionId: "created" });
 		await settle();
 	});

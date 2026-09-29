@@ -6,10 +6,7 @@ import { getAdminConfig } from "../config";
 import FeatureGate from "../components/FeatureGate.svelte";
 import LoadingState from "../components/LoadingState.svelte";
 import type { Contract, ContractStatus } from "../types";
-import {
-	isTerminalDocumentEmailRecovery,
-	type DocumentEmailRecovery,
-} from "../documentEmailRecovery";
+import type { DocumentEmailRecovery } from "../documentEmailRecovery";
 import { addToast } from "../toast";
 import { logger } from "../logger";
 import { copyPortalLink, toId } from "../utils";
@@ -25,6 +22,7 @@ import {
 	presentableDocumentEmailRecoveryFromError,
 	statusAfterSuccessfulDocumentEmail,
 } from "./documentEmailRequest";
+import { createDocumentEmailRecoveryState } from "./documentEmailRecoveryState.svelte";
 
 const config = getAdminConfig();
 const { api } = config;
@@ -55,10 +53,6 @@ let showCreateModal = $state(false);
 let selectedContract = $state<Contract | null>(null);
 let showTemplateCreate = $state(false);
 const emailRequests = createDocumentEmailRequestTracker();
-let pageEmailRecovery = $state<{
-	documentId: string;
-	attempt: HydratedDocumentEmailAttempt;
-} | null>(null);
 let hydratedContractId = "";
 
 function contractEmailKey(contractId: string) {
@@ -69,44 +63,13 @@ function contractEmailEndpoint(contractId: string) {
 	return `/api/admin/contracts/${contractId}/send`;
 }
 
-function rememberContractRecovery(
-	contractId: string,
-	attempt: HydratedDocumentEmailAttempt,
-) {
-	pageEmailRecovery = { documentId: contractId, attempt };
-}
-
-function visibleContractRecovery(
-	contractId: string,
-): HydratedDocumentEmailAttempt | null {
-	return pageEmailRecovery?.documentId === contractId
-		? pageEmailRecovery.attempt
-		: null;
-}
-
-async function hydrateContractRecovery(contractId: string) {
-	const key = contractEmailKey(contractId);
-	const endpoint = contractEmailEndpoint(contractId);
-	const pending = emailRequests.pending(key, endpoint);
-	if (pending) rememberContractRecovery(contractId, { attemptId: pending.attemptId });
-	try {
-		const hydrated = await emailRequests.hydrate(key, endpoint, {
-			type: "contract",
-			id: contractId,
-		});
-		if (selectedContract?._id !== contractId) return;
-		if (hydrated) rememberContractRecovery(contractId, hydrated);
-		else if (
-			pageEmailRecovery?.documentId === contractId &&
-			(!pageEmailRecovery.attempt.recovery ||
-				!isTerminalDocumentEmailRecovery(pageEmailRecovery.attempt.recovery))
-		) {
-			pageEmailRecovery = null;
-		}
-	} catch (error) {
-		logger.error("Failed to discover contract email recovery:", error);
-	}
-}
+const emailRecovery = createDocumentEmailRecoveryState({
+	type: "contract",
+	endpoint: contractEmailEndpoint,
+	selectedId: () => selectedContract?._id as string | undefined,
+	tracker: emailRequests,
+	onHydrateError: (error) => logger.error("Failed to discover contract email recovery:", error),
+});
 
 $effect(() => {
 	const contractId = selectedContract?._id as string | undefined;
@@ -116,7 +79,7 @@ $effect(() => {
 	}
 	if (hydratedContractId === contractId) return;
 	hydratedContractId = contractId;
-	void hydrateContractRecovery(contractId);
+	void emailRecovery.hydrate(contractId);
 });
 
 // Auto-open contract from ?open= query param
@@ -198,7 +161,7 @@ async function saveAndSendContract(payload: ContractCreateAndSendPayload) {
 			attempt &&
 			(!selectedContract || selectedContract._id === contractId)
 		) {
-			rememberContractRecovery(contractId, attempt);
+			emailRecovery.remember(contractId, attempt);
 		}
 		logger.error("Contract saved but its email was not confirmed:", err);
 		addToast(`Contract saved. ${documentEmailFailureMessage(err)}`);
@@ -243,7 +206,7 @@ async function handleSendEmail(id: string, templateId?: string, changeNote?: str
 		{ templateId, changeNote },
 		{ retries: 2 },
 	);
-	if (pageEmailRecovery?.documentId === id) pageEmailRecovery = null;
+	emailRecovery.clear(id);
 	if (selectedContract?._id === id) {
 		selectedContract = {
 			...selectedContract,
@@ -256,27 +219,7 @@ function handleContractEmailResolved(result: {
 	attemptId: string;
 	recovery: DocumentEmailRecovery;
 }) {
-	const documentId = result.recovery.document.id;
-	emailRequests.clearResolved(
-		contractEmailKey(documentId),
-		result.attemptId,
-	);
-	const pending = emailRequests.pending(
-		contractEmailKey(documentId),
-		contractEmailEndpoint(documentId),
-	);
-	if (
-		(pending && pending.attemptId !== result.attemptId) ||
-		(pageEmailRecovery?.documentId === documentId &&
-			pageEmailRecovery.attempt.attemptId !== result.attemptId)
-	) {
-		return;
-	}
-	if (selectedContract && documentId !== selectedContract._id) return;
-	rememberContractRecovery(documentId, {
-		attemptId: result.attemptId,
-		recovery: result.recovery,
-	});
+	if (!emailRecovery.resolve(result)) return;
 	if (!selectedContract) return;
 	if (result.recovery.status === "sent") {
 		selectedContract = {
@@ -290,20 +233,14 @@ function handleContractEmailRecovery(
 	contractId: string,
 	attempt: HydratedDocumentEmailAttempt,
 ) {
-	if (selectedContract && selectedContract._id !== contractId) return;
-	rememberContractRecovery(contractId, attempt);
+	emailRecovery.remember(contractId, attempt);
 }
 
 function dismissContractEmailRecovery(result: {
 	attemptId: string;
 	recovery: DocumentEmailRecovery;
 }) {
-	if (
-		pageEmailRecovery?.documentId === result.recovery.document.id &&
-		pageEmailRecovery.attempt.attemptId === result.attemptId
-	) {
-		pageEmailRecovery = null;
-	}
+	emailRecovery.dismiss(result);
 }
 
 async function handleDeleteContract(id: string) {
@@ -484,7 +421,7 @@ async function handleDeleteTemplate(id: string) {
 			onaction={handleContractAction}
 			onsend={handleSendEmail}
 			onemailresolved={handleContractEmailResolved}
-			emailRecoveryAttempt={visibleContractRecovery(selectedContract._id as string)}
+			emailRecoveryAttempt={emailRecovery.forDocument(selectedContract._id as string)}
 			onemailrecovery={handleContractEmailRecovery}
 			onemailterminal={handleContractEmailResolved}
 			onemailrecoverydismiss={dismissContractEmailRecovery}

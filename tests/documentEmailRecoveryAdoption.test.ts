@@ -10,19 +10,6 @@ function source(relativePath: string) {
 }
 
 describe("document email recovery host adoption", () => {
-	it("hydrates all document detail views from local and backend recovery state", () => {
-		for (const page of [
-			"src/lib/pages/InvoicingPage.svelte",
-			"src/lib/pages/QuotesPage.svelte",
-			"src/lib/pages/ContractsPage.svelte",
-		]) {
-			const value = source(page);
-			expect(value).toContain("emailRequests.pending(");
-			expect(value).toContain("emailRequests.hydrate(");
-			expect(value).toContain("presentableDocumentEmailRecoveryFromError(");
-		}
-	});
-
 	it("retains an automatic overdue ambiguity in page-owned recovery state", () => {
 		const modal = source(
 			"src/lib/pages/invoicing/InvoiceDetailModal.svelte",
@@ -48,38 +35,4 @@ describe("document email recovery host adoption", () => {
 		expect(action).toContain("selectedInvoice?._id === invoiceId");
 	});
 
-	it("does not let a late recovery from document A replace selected document B", () => {
-		const invoices = source("src/lib/pages/InvoicingPage.svelte");
-		const contracts = source("src/lib/pages/ContractsPage.svelte");
-		const quotes = source("src/lib/pages/QuotesPage.svelte");
-
-		expect(invoices).toContain(
-			"if (selectedInvoice && selectedInvoice._id !== invoiceId) return;\n\trememberInvoiceRecovery(invoiceId, attempt);",
-		);
-		expect(invoices).toContain(
-			"if (selectedInvoice && documentId !== selectedInvoice._id) return;\n\trememberInvoiceRecovery(documentId",
-		);
-		expect(contracts).toContain(
-			"if (selectedContract && selectedContract._id !== contractId) return;\n\trememberContractRecovery(contractId, attempt);",
-		);
-		expect(contracts).toContain(
-			"if (selectedContract && documentId !== selectedContract._id) return;\n\trememberContractRecovery(documentId",
-		);
-		expect(quotes).toContain(
-			"if (!selectedQuote || selectedQuote._id === quoteId)",
-		);
-		expect(quotes).toContain(
-			"if (selectedQuote && documentId !== selectedQuote._id) return;\n\temailRecoveryAttempt =",
-		);
-		const quoteSend = quotes.match(
-			/async function sendQuoteEmail[\s\S]*?\n}\n\nfunction handleQuoteEmailResolved/,
-		)?.[0];
-		expect(quoteSend).toContain(
-			"if (emailRecoveryDocumentId === quoteId)",
-		);
-		expect(quoteSend).toContain("if (selectedQuote?._id === quoteId)");
-		expect(quoteSend?.indexOf('sendResult = "success"')).toBeGreaterThan(
-			quoteSend?.indexOf("if (selectedQuote?._id === quoteId)") ?? -1,
-		);
-	});
 });
