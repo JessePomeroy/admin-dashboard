@@ -82,7 +82,7 @@ function finishImageReorder(event: CustomEvent<{ items: DraggableImage[] }>) {
 			<span class="position">category {index + 1} of {count}</span>
 			<h3 id={`modeling-category-${gallery.key}-heading`}>{gallery.title?.trim() || "untitled category"}</h3>
 		</div>
-		<div class="category-controls"><button type="button" class="drag-handle" use:dragHandle disabled={count < 2 || isDndShadowItem} aria-label={`Drag category ${index + 1} to reorder`}><span aria-hidden="true"></span></button><label class="visibility"><input type="checkbox" checked={gallery.isVisible} onchange={(event) => update({ isVisible: event.currentTarget.checked })} disabled={isDndShadowItem} /> visible on the site</label></div>
+		<div class="category-controls"><button type="button" class="drag-handle" use:dragHandle disabled={count < 2 || isDndShadowItem} aria-label={`Drag category ${index + 1} to reorder`}><span aria-hidden="true"></span></button><label class="visibility"><input type="checkbox" checked={gallery.isVisible} onchange={(event) => update({ isVisible: event.currentTarget.checked })} disabled={isDndShadowItem} /> include when publishing</label></div>
 	</header>
 
 	<div class="category-actions">

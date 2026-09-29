@@ -294,7 +294,7 @@ async function createProduct() {
 									<li class:selected={product.productId === selectedProductId}>
 										<a href={`${baseHref}/${product.productId}`} aria-current={product.productId === selectedProductId ? "page" : undefined}>
 											<span><strong>{catalogProductLabel(product)}</strong><small>{product.slug ? `/${product.slug}` : "No URL name"} · {product.draft?.variantCount ?? 0} {product.draft?.variantCount === 1 ? "variant" : "variants"}</small></span>
-										<em class="status" class:published={status === "published"} class:discarded={status === "discarded"}>{status}</em>
+										<em class="status" class:published={status === "published"} class:discarded={status === "discarded"}>{status === "changes" ? "published · draft changes" : status}</em>
 										</a>
 									</li>
 								{/each}

@@ -1,4 +1,5 @@
 <script lang="ts">
+import PublicationControl from "./PublicationControl.svelte";
 import { useQuery } from "convex-svelte";
 import { dragHandle, dragHandleZone } from "svelte-dnd-action";
 import { createSingletonDraft } from "../../singletonDraft.svelte";
@@ -47,6 +48,9 @@ const draft = createSingletonDraft({
 	}) as Promise<{ revisionId: string }>,
 });
 let form = $derived(draft.form);
+let publicationState = $derived(editorQuery.data as SiteSettingsEditorState | null | undefined);
+let publicationHasChanges = $derived(draft.hasPendingWork || Boolean(draft.revisionId && draft.revisionId !== publicationState?.published?.revisionId));
+
 let published = $state<SiteSettingsDraftPayload>(emptySiteSettingsDraft());
 let fieldErrors = $state<SiteSettingsFieldErrors>({});
 type DraggableSocialLink = NonNullable<SiteSettingsDraftPayload["socialLinks"]>[number] & { id: string; isDndShadowItem?: boolean };
@@ -124,14 +128,14 @@ function finishSocialReorder(event: CustomEvent<{ items: DraggableSocialLink[] }
 	<header class="settings-header">
 		<h1>site settings</h1>
 		<div class="actions">
-			<span class="save-state" aria-live="polite">{draft.state === "offline" ? "offline — saved on this device" : draft.state}</span>
+			<span class="save-state" data-publication-save-state={draft.state} aria-live="polite">{draft.state === "offline" ? "offline — saved on this device" : draft.state === "saved" ? "draft saved" : draft.state === "dirty" ? "unsaved changes" : draft.state}</span>
 			{#if publishingEnabled && siteSettingsConfig.previewHref}
 				<a href={siteSettingsConfig.previewHref} target="_blank" rel="noopener">preview</a>
 			{/if}
 			<button type="button" class="secondary" onclick={() => void discard()} disabled={!draft.initialized || (!draft.revisionId && !draft.hasPendingWork)}>{draft.state === "conflict" ? "reload server draft" : "discard draft"}</button>
-			<button type="button" class="secondary" onclick={() => void draft.saveNow()} disabled={!draft.initialized || draft.state === "saving" || draft.state === "conflict"}>save now</button>
+			{#if draft.hasPendingWork}<button type="button" class="secondary" onclick={() => void draft.saveNow()} disabled={!draft.initialized || draft.state === "saving" || draft.state === "conflict"}>save draft</button>{/if}
 			{#if publishingEnabled}
-				<button type="button" class="primary" onclick={() => void publish()} disabled={!draft.initialized || draft.state === "saving" || draft.state === "syncing" || draft.state === "offline" || draft.state === "conflict"}>publish</button>
+				<PublicationControl published={Boolean(publicationState?.published)} hasChanges={publicationHasChanges} onpublish={publish} publishDisabled={!draft.initialized || draft.state === "saving" || draft.state === "syncing" || draft.state === "offline" || draft.state === "conflict"} />
 			{/if}
 		</div>
 	</header>

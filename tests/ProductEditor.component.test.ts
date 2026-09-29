@@ -531,8 +531,7 @@ async function mountDetail() {
 	await tick();
 }
 function button(label: string) {
-	const visibleLabel = label === "publish" ? "publish to Convex CMS"
-		: label === "unpublish" ? "unpublish from Convex CMS" : label;
+	const visibleLabel = label;
 	return Array.from(document.querySelectorAll("button")).find(
 		(item) => item.textContent?.trim() === visibleLabel,
 	) as HTMLButtonElement | undefined;
@@ -1306,29 +1305,29 @@ describe("draft-only product editor", () => {
 		await mountDetail();
 		const status = () => document.querySelector(".publication-status")?.textContent;
 		expect(status()).toBe("unpublished");
-		expect(document.querySelector('[aria-label="Convex CMS actions"]')).not.toBeNull();
+		expect(document.querySelector(".settings-header .publication-control")).not.toBeNull();
 		expect(document.querySelector(".publication-evidence")).toBeNull();
 		expect(document.querySelector(".settings-header .description")).toBeNull();
 		expect(document.querySelector(".authority-note")).toBeNull();
 		expect(document.body.textContent).not.toContain("graph-revision-1");
 		expect(document.body.textContent).not.toContain("1750000000000");
-		expect(button("publish")?.textContent).toBe("publish to Convex CMS");
+		expect(button("publish")?.textContent).toBe("publish");
 
 		await updateDetailQuery(graphDetail(graphRevision, graphRevision, 1_750_000_000_001));
-		expect(status()).toBe("published — current draft");
+		expect(status()).toBe("published");
 		const newerDraft = { ...graphRevision, revisionId: "graph-revision-2", createdAt: 12 };
 		await updateDetailQuery(graphDetail(newerDraft, graphRevision, 1_750_000_000_002));
-		expect(status()).toBe("published — newer draft available");
+		expect(status()).toBe("published · draft changes");
 	});
 
-	it("places compact Shop actions with sale settings without repeating explanatory copy", async () => {
+	it("places compact publication actions in the header without repeating explanatory copy", async () => {
 		enablePublication();
 		mocks.publicShopEnabled = true;
 		mocks.detailData = graphDetail();
 		await mountDetail();
-		expect(document.querySelector('[aria-label="Shop actions"]')).not.toBeNull();
+		expect(document.querySelector(".settings-header .publication-control")).not.toBeNull();
 		expect(Array.from(document.querySelectorAll("button"), (item) => item.textContent?.trim()))
-			.toContain("publish to Shop");
+			.toContain("publish");
 		expect(document.body.textContent).not.toContain("exact product revision read by your public Shop");
 	});
 
@@ -1340,7 +1339,7 @@ describe("draft-only product editor", () => {
 		price.value = "25.001";
 		price.dispatchEvent(new Event("input", { bubbles: true }));
 		await tick();
-		expect(button("publish")).toBeUndefined();
+		expect(button("publish")?.disabled).toBe(true);
 		const refreshedRevision = {
 			...graphRevision,
 			revisionId: "graph-revision-refreshed",
@@ -1369,7 +1368,7 @@ describe("draft-only product editor", () => {
 		multiplier.value = "2.00001";
 		multiplier.dispatchEvent(new Event("input", { bubbles: true }));
 		await tick();
-		expect(button("publish")).toBeUndefined();
+		expect(button("publish")?.disabled).toBe(true);
 	});
 
 	it("resets product-scoped validation when navigation reuses the same variant key and price", async () => {
@@ -1504,7 +1503,7 @@ describe("draft-only product editor", () => {
 		expect(document.querySelector(".publication-status")?.textContent).toBe("unpublished");
 
 		await updateDetailQuery(graphDetail(graphRevision, graphRevision, 11));
-		expect(document.querySelector(".publication-status")?.textContent).toBe("published — current draft");
+		expect(document.querySelector(".publication-status")?.textContent).toBe("published");
 		expect(document.body.textContent).toContain("Published in Convex CMS.");
 		expect(mocks.mutation).toHaveBeenCalledTimes(1);
 	});
@@ -1522,14 +1521,14 @@ describe("draft-only product editor", () => {
 		name.value = "Revised while private";
 		name.dispatchEvent(new Event("input", { bubbles: true }));
 		await tick();
-		expect(button("publish")).toBeUndefined();
+		expect(button("publish")?.disabled).toBe(true);
 		button("save draft")?.click();
 		await tick();
-		expect(button("publish")).toBeUndefined();
+		expect(button("publish")?.disabled).toBe(true);
 		finishSave?.({ revisionId: "graph-revision-2" });
 		await Promise.resolve();
 		await tick();
-		expect(button("publish")).toBeUndefined();
+		expect(button("publish")?.disabled).toBe(true);
 
 		const savedDraft = {
 			...graphRevision,
@@ -1574,7 +1573,7 @@ describe("draft-only product editor", () => {
 		mocks.detailData = graphDetail();
 		mocks.mutation.mockRejectedValueOnce(new Error("Network response was lost"));
 		await mountDetail();
-		button("publish to Shop")?.click();
+		button("publish")?.click();
 		await tick();
 		await Promise.resolve();
 		await vi.advanceTimersByTimeAsync(8_000);
@@ -1597,6 +1596,7 @@ describe("draft-only product editor", () => {
 		button("publish")?.click();
 		await tick();
 		await Promise.resolve();
+		await tick();
 		const alert = document.querySelector(".publication-alert")?.textContent ?? "";
 		expect(alert).toContain(ownerText);
 		expect(alert).not.toContain(serverMessage);
@@ -1621,6 +1621,7 @@ describe("draft-only product editor", () => {
 		button("publish")?.click();
 		await tick();
 		await Promise.resolve();
+		await tick();
 
 		expect(document.querySelector(".publication-alert")?.textContent).toBe(
 			"Convex CMS did not publish this draft. Add the required display media and alternative text, then save the draft and publish to Convex CMS again.",
@@ -1643,7 +1644,7 @@ describe("draft-only product editor", () => {
 			new Error("Catalog publication conflict: reload before retrying"),
 		);
 		await mountDetail();
-		expect(document.querySelector(".publication-status")?.textContent).toBe("published — no active draft");
+		expect(document.querySelector(".publication-status")?.textContent).toBe("published");
 		button("unpublish")?.click();
 		await tick();
 		expect(mocks.mutation).not.toHaveBeenCalled();
@@ -1651,7 +1652,7 @@ describe("draft-only product editor", () => {
 		await tick();
 		await Promise.resolve();
 		expect(confirm).toHaveBeenCalledTimes(2);
-		expect(confirm).toHaveBeenLastCalledWith("Unpublish this product from Convex CMS?");
+		expect(confirm).toHaveBeenLastCalledWith(expect.stringContaining("Unpublish this product? It will be hidden"));
 		expect(mocks.mutation).toHaveBeenCalledWith(mocks.refs.unpublish, {
 			productId: "product-1",
 			expectedDraftRevisionId: null,
