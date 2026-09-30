@@ -37,6 +37,7 @@ const mocks = vi.hoisted(() => {
 		updatedAt: 1,
 	};
 	const state = {
+		isPublished: true,
 		failMutationName: "",
 		queryFailures: new Set<string>(),
 		galleries: [defaultGallery],
@@ -108,7 +109,7 @@ vi.mock("convex-svelte", () => ({
 				data: {
 					galleryId: "gallery-1",
 					slug: "selected-work",
-					isPublished: true,
+					isPublished: mocks.state.isPublished,
 					isVisible: true,
 					draft: revision,
 					published: revision,
@@ -219,6 +220,7 @@ function considerGalleryDrag(galleryId: string) {
 
 describe("Portfolio editor capability modes", () => {
 	beforeEach(() => {
+		mocks.state.isPublished = true;
 		mocks.mutation.mockClear();
 		mocks.goto.mockClear();
 		mocks.state.failMutationName = "";
@@ -440,7 +442,7 @@ describe("Portfolio editor capability modes", () => {
 		expect(document.body.textContent).toContain("forced failure");
 	});
 
-	it("regenerates manually edited gallery URLs from the current gallery name", async () => {
+	it("regenerates unpublished gallery URLs from the current gallery name", async () => {
 		await mountList();
 		(document.querySelector(".new-gallery") as HTMLButtonElement).click();
 		await settle();
@@ -460,6 +462,7 @@ describe("Portfolio editor capability modes", () => {
 
 		for (const component of components.splice(0)) unmount(component);
 		document.body.innerHTML = "";
+		mocks.state.isPublished = false;
 		await mountDetail();
 		const detailTitle = document.querySelector<HTMLInputElement>("#gallery-title")!;
 		const detailSlug = document.querySelector<HTMLInputElement>("#gallery-slug")!;

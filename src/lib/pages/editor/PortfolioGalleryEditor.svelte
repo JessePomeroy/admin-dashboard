@@ -80,6 +80,7 @@ let isVisible = $state(true);
 let savedJson = $state("");
 let lastAttemptedJson = $state("");
 let saveState = $state<SaveState>("loading");
+let saving = $state(false);
 let saveError = $state("");
 let publishMessage = $state("");
 let publishing = $state(false);
@@ -140,7 +141,11 @@ function restoreLocalDraft(serverJson: string) {
 			payload: PortfolioGalleryDraftForm;
 		};
 		if (local.schemaVersion !== 1) return;
+		const publishedSlug = isPublished ? form.slug : undefined;
 		form = copyPortfolioGalleryDraft(local.payload);
+		// Older editors allowed URL edits that the published-gallery API rejects.
+		// Recover the remaining work without carrying that invalid URL forward.
+		if (publishedSlug !== undefined) form.slug = publishedSlug;
 		if ((local.baseRevisionId ?? undefined) !== baseRevisionId) {
 			saveState = "conflict";
 			saveError = "The server changed while this device had unsynchronized work. Reload the server draft or copy your changes before continuing.";
@@ -159,7 +164,7 @@ function loadRevision(state: PortfolioGalleryEditorState, restoreDeviceDraft = f
 	form = copyPortfolioGalleryDraft({
 		title: revision?.title ?? "",
 		description: revision?.description ?? "",
-		slug: revision?.slug ?? state.slug,
+		slug: state.isPublished ? state.slug : revision?.slug ?? state.slug,
 		placements: revision?.placements ?? [],
 	});
 	baseRevisionId = state.draft?.revisionId;
@@ -195,7 +200,7 @@ async function saveNow() {
 		clearTimeout(saveTimer);
 		saveTimer = undefined;
 	}
-	if (!active || !initialized || removing || saveState === "conflict") return false;
+	if (!active || !initialized || saving || publishing || removing || saveState === "conflict") return false;
 	if (currentJson === savedJson) {
 		saveState = "saved";
 		clearLocalDraft();
@@ -209,6 +214,7 @@ async function saveNow() {
 
 	const snapshot = copyPortfolioGalleryDraft(form);
 	const snapshotJson = serializePortfolioGalleryDraft(snapshot);
+	saving = true;
 	saveState = saveState === "offline" ? "syncing" : "saving";
 	saveError = "";
 	try {
@@ -250,17 +256,25 @@ async function saveNow() {
 		lastAttemptedJson = snapshotJson;
 		persistLocalDraft();
 		return false;
+	} finally {
+		if (active) saving = false;
 	}
 }
 
 $effect(() => {
 	const changedJson = currentJson;
-	if (!initialized || removing || changedJson === savedJson || saveState === "conflict") return;
-	if (saveState === "error" && changedJson === lastAttemptedJson) return;
+	if (!initialized || removing || (changedJson === savedJson && !saving) || saveState === "conflict") return;
 	persistLocalDraft();
+	if (saving || (saveState === "error" && changedJson === lastAttemptedJson)) return;
 	saveState = online ? "dirty" : "offline";
-	if (saveTimer) clearTimeout(saveTimer);
-	if (online) saveTimer = setTimeout(() => void saveNow(), 900);
+	if (online && !publishing) {
+		const timer = setTimeout(() => void saveNow(), 900);
+		saveTimer = timer;
+		return () => {
+			clearTimeout(timer);
+			if (saveTimer === timer) saveTimer = undefined;
+		};
+	}
 });
 
 onMount(() => {
@@ -302,6 +316,7 @@ async function publish() {
 		document.getElementById(publishIssues[0].fieldId)?.focus();
 		return;
 	}
+	const slugToPublish = form.slug;
 	if (!(await saveNow()) || !active || !baseRevisionId) return;
 	publishing = true;
 	try {
@@ -313,9 +328,13 @@ async function publish() {
 		publishedRevisionId = result.revisionId;
 		isPublished = true;
 		isVisible = true;
+		// Keep edits made during publication, except the URL fixed by that revision.
+		form.slug = slugToPublish;
+		if (!dirty) saveState = "saved";
 		saveError = "";
 		publishMessage = "Published. This saved revision is now available to the public site.";
-		clearLocalDraft();
+		if (dirty) persistLocalDraft();
+		else clearLocalDraft();
 	} catch (error) {
 		if (!active) return;
 		saveState = "error";
@@ -447,13 +466,13 @@ function reloadServerDraft() {
 				{#if saveState === "conflict"}
 					<button type="button" class="secondary" onclick={reloadServerDraft}>reload server draft</button>
 				{:else if hasPendingWork}
-					<button type="button" class="secondary" onclick={() => void saveNow()} disabled={!dirty || saveState === "saving" || saveState === "syncing"}>save draft</button>
+					<button type="button" class="secondary" onclick={() => void saveNow()} disabled={!dirty || saving || publishing}>save draft</button>
 				{/if}
 				{#if previewEndpoint}
-					<button type="button" class="secondary" onclick={() => void preview()} disabled={previewing || saveState === "saving" || saveState === "syncing" || saveState === "offline" || saveState === "conflict"}>{previewing ? "preparing preview…" : "preview"}</button>
+					<button type="button" class="secondary" onclick={() => void preview()} disabled={previewing || saving || publishing || saveState === "offline" || saveState === "conflict"}>{previewing ? "preparing preview…" : "preview"}</button>
 				{/if}
 				{#if publicLifecycleEnabled}
-					<PublicationControl published={isPublished && isVisible} hasChanges={!publicationCurrent} item="gallery" onpublish={publishingEnabled ? publish : undefined} onunpublish={setPortfolioGalleryVisibility ? unpublish : undefined} publishDisabled={saveState === "saving" || saveState === "syncing" || saveState === "offline" || saveState === "conflict"} unpublishDisabled={saveState === "offline"} busy={publishing || visibilityChanging || removing} />
+					<PublicationControl published={isPublished && isVisible} hasChanges={!publicationCurrent} item="gallery" onpublish={publishingEnabled ? publish : undefined} onunpublish={setPortfolioGalleryVisibility ? unpublish : undefined} publishDisabled={saving || saveState === "offline" || saveState === "conflict"} unpublishDisabled={saveState === "offline"} busy={publishing || visibilityChanging || removing} />
 				{/if}
 			{/snippet}
 		</EditorDocumentHeader>
@@ -473,7 +492,7 @@ function reloadServerDraft() {
 					<input id="gallery-title" maxlength="120" bind:value={form.title} aria-invalid={reviewRequested && !form.title.trim()} />
 				</div>
 				<div class="field">
-					<EditorSlugField id="gallery-slug" label="gallery URL path" value={form.slug} maxLength={80} onChange={(value) => form.slug = value} onGenerate={generateSlug} generateDisabled={!form.title.trim()} invalid={reviewRequested && !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(form.slug)} help="Lowercase words separated by hyphens, not a full URL." />
+					<EditorSlugField id="gallery-slug" label="gallery URL path" value={form.slug} maxLength={80} disabled={isPublished} onChange={(value) => form.slug = value} onGenerate={isPublished ? undefined : generateSlug} generateDisabled={!form.title.trim()} invalid={reviewRequested && !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(form.slug)} help={isPublished ? "The URL stays fixed after the first publication so existing links keep working." : "Lowercase words separated by hyphens, not a full URL."} />
 				</div>
 				<label class="wide">description<textarea rows="3" maxlength="2000" bind:value={form.description}></textarea></label>
 			</div>
