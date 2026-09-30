@@ -294,6 +294,27 @@ describe("portfolio gallery document identity", () => {
 		expect(editor.mutation).toHaveBeenCalledTimes(1);
 	});
 
+	it("retains newer offline edits when publication completes and the gallery is reopened", async () => {
+		await enableActions();
+		const pending = deferred<{ revisionId: string }>();
+		editor.mutation.mockReturnValueOnce(pending.promise);
+		await clickButton("publish");
+		await editTitle("Keep this offline title");
+		vi.spyOn(navigator, "onLine", "get").mockReturnValue(false);
+		window.dispatchEvent(new Event("offline"));
+		await tick();
+		expect(storedDraft("A")).toMatchObject({ payload: { title: "Keep this offline title" } });
+		pending.resolve({ revisionId: "revision-A" });
+		await pending.promise;
+		await vi.advanceTimersByTimeAsync(0);
+		expect(storedDraft("A")).toMatchObject({ payload: { title: "Keep this offline title" } });
+		await navigate("B");
+		await navigate("A");
+		expect(titleInput().value).toBe("Keep this offline title");
+		await vi.advanceTimersByTimeAsync(2000);
+		expect(editor.mutation).toHaveBeenCalledTimes(1);
+	});
+
 	it("retains conflicting recovered edits without autosaving after correcting a published URL", async () => {
 		await navigate("B");
 		editor.data.A.isPublished = true;

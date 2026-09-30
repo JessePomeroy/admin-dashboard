@@ -333,7 +333,8 @@ async function publish() {
 		if (!dirty) saveState = "saved";
 		saveError = "";
 		publishMessage = "Published. This saved revision is now available to the public site.";
-		clearLocalDraft();
+		if (dirty) persistLocalDraft();
+		else clearLocalDraft();
 	} catch (error) {
 		if (!active) return;
 		saveState = "error";
