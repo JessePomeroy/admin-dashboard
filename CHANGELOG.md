@@ -1,5 +1,11 @@
 # @jessepomeroy/admin
 
+## 6.6.1
+
+### Patch Changes
+
+- cb77c23: Stop failed gallery autosaves from repeatedly retrying and prevent overlapping draft saves. Keep published gallery URLs fixed and recover other local edits when an older editor saved an invalid URL change.
+
 ## 6.6.0
 
 ### Minor Changes
