@@ -119,6 +119,8 @@ describe("portfolio gallery document identity", () => {
 	beforeEach(async () => {
 		vi.useFakeTimers();
 		vi.spyOn(navigator, "onLine", "get").mockReturnValue(true);
+		editor.data.A.isPublished = false;
+		editor.data.A.isVisible = true;
 		editor.actionsEnabled = false;
 		editor.goto.mockReset();
 		editor.mutation.mockReset().mockResolvedValue({ revisionId: "saved-revision" });
@@ -156,6 +158,99 @@ describe("portfolio gallery document identity", () => {
 		button.click();
 		await vi.advanceTimersByTimeAsync(0);
 	}
+
+	it.each(["save draft", "reconnect", "edit"])("keeps a failed autosave stable until %s retries it", async (retry) => {
+		const pending = deferred<{ revisionId: string }>();
+		editor.mutation.mockReturnValueOnce(pending.promise);
+		await editTitle("Alpha edited");
+		await vi.advanceTimersByTimeAsync(901);
+		pending.reject(new Error("[request id: test] Server Error"));
+		await pending.promise.catch(() => undefined);
+		await tick();
+		await vi.advanceTimersByTimeAsync(5000);
+		expect(editor.mutation).toHaveBeenCalledTimes(1);
+		expect(document.querySelector('.gallery-page [role="alert"]')?.textContent).toContain("Server Error");
+		expect(storedDraft("A")).toMatchObject({ payload: { title: "Alpha edited" } });
+		if (retry === "save draft") await clickButton("save draft");
+		else if (retry === "reconnect") {
+			window.dispatchEvent(new Event("offline"));
+			await tick();
+			window.dispatchEvent(new Event("online"));
+		} else await editTitle("Alpha corrected");
+		await vi.advanceTimersByTimeAsync(901);
+		expect(editor.mutation).toHaveBeenCalledTimes(2);
+		expect(storedDraft("A")).toBeNull();
+		expect(document.querySelector('.gallery-page [role="alert"]')).toBeNull();
+	});
+
+	it.each(["Alpha newer edit", "Alpha"])("waits for a slow save before saving %s with the returned revision", async (title) => {
+		const pending = deferred<{ revisionId: string }>();
+		editor.mutation.mockReturnValueOnce(pending.promise);
+		await editTitle("Alpha first edit");
+		await vi.advanceTimersByTimeAsync(901);
+		await editTitle(title);
+		window.dispatchEvent(new Event("offline"));
+		await tick();
+		window.dispatchEvent(new Event("online"));
+		await tick();
+		await vi.advanceTimersByTimeAsync(5000);
+		expect(editor.mutation).toHaveBeenCalledTimes(1);
+		expect(document.querySelector<HTMLButtonElement>(".editor-header-actions .secondary")?.disabled).toBe(true);
+		expect(storedDraft("A")).toMatchObject({ payload: { title } });
+		pending.resolve({ revisionId: "revision-A-first-save" });
+		await pending.promise;
+		await tick();
+		await vi.advanceTimersByTimeAsync(901);
+		expect(editor.mutation).toHaveBeenCalledTimes(2);
+		expect(editor.mutation).toHaveBeenLastCalledWith("save", expect.objectContaining({
+			expectedDraftRevisionId: "revision-A-first-save",
+			draft: expect.objectContaining({ title }),
+		}));
+		expect(storedDraft("A")).toBeNull();
+	});
+
+	it.each([true, false])("locks the URL after publication, including visible=%s galleries, and recovers other edits", async (isVisible) => {
+		await navigate("B");
+		editor.data.A.isPublished = true;
+		editor.data.A.isVisible = isVisible;
+		localStorage.setItem(recoveryKey("A"), JSON.stringify({
+			schemaVersion: 1,
+			baseRevisionId: "revision-A",
+			payload: {
+				title: "New title", description: "New description", slug: "new-title",
+				placements: [{ key: "photo", assetId: "asset", altText: "New alt text", caption: "New caption" }],
+			},
+		}));
+		await navigate("A");
+		const slug = document.querySelector<HTMLInputElement>("#gallery-slug");
+		expect(slug?.disabled).toBe(true);
+		expect(slug?.value).toBe("alpha");
+		expect(document.querySelector(".gallery-page .generate-url")).toBeNull();
+		expect(titleInput().value).toBe("New title");
+		await vi.advanceTimersByTimeAsync(901);
+		expect(editor.mutation).toHaveBeenCalledExactlyOnceWith("save", expect.objectContaining({
+			draft: {
+				title: "New title", description: "New description", slug: "alpha",
+				placements: [expect.objectContaining({ altText: "New alt text", caption: "New caption" })],
+			},
+		}));
+	});
+
+	it("retains conflicting recovered edits without autosaving after correcting a published URL", async () => {
+		await navigate("B");
+		editor.data.A.isPublished = true;
+		localStorage.setItem(recoveryKey("A"), JSON.stringify({
+			schemaVersion: 1, baseRevisionId: "older-revision",
+			payload: { title: "Unsynchronized title", description: "Keep this", slug: "invalid-new-path", placements: [] },
+		}));
+		await navigate("A");
+		expect(titleInput().value).toBe("Unsynchronized title");
+		expect(document.querySelector<HTMLInputElement>("#gallery-slug")?.value).toBe("alpha");
+		expect(document.querySelector('[role="alert"]')?.textContent).toContain("server changed");
+		await vi.advanceTimersByTimeAsync(5000);
+		expect(editor.mutation).not.toHaveBeenCalled();
+		expect(storedDraft("A")).toMatchObject({ baseRevisionId: "older-revision", payload: { title: "Unsynchronized title", description: "Keep this" } });
+	});
 
 	it("preserves collection search and filter while switching the selected document", async () => {
 		const search = document.querySelector<HTMLInputElement>('input[type="search"]');
