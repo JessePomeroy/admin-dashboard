@@ -236,6 +236,64 @@ describe("portfolio gallery document identity", () => {
 		}));
 	});
 
+	it.each(["save", "publish"])("keeps the first published URL when edits arrive during %s", async (phase) => {
+		await enableActions();
+		await editTitle("Ready to publish");
+		const pending = deferred<{ revisionId: string }>();
+		if (phase === "publish") editor.mutation.mockResolvedValueOnce({ revisionId: "before-publish" });
+		editor.mutation.mockReturnValueOnce(pending.promise);
+		await clickButton("publish");
+		await editTitle("Title typed during publication");
+		const slug = document.querySelector<HTMLInputElement>("#gallery-slug");
+		const description = document.querySelector<HTMLTextAreaElement>(".gallery-page textarea");
+		if (!slug || !description) throw new Error("Expected gallery fields");
+		slug.value = "typed-during-publication";
+		slug.dispatchEvent(new Event("input", { bubbles: true }));
+		description.value = "Description typed during publication";
+		description.dispatchEvent(new Event("input", { bubbles: true }));
+		await tick();
+		await vi.advanceTimersByTimeAsync(2000);
+		expect(editor.mutation).toHaveBeenCalledTimes(phase === "publish" ? 2 : 1);
+		pending.resolve({ revisionId: "before-publish" });
+		await pending.promise;
+		await vi.advanceTimersByTimeAsync(0);
+		expect(slug.disabled).toBe(true);
+		expect(slug.value).toBe("alpha");
+		expect(titleInput().value).toBe("Title typed during publication");
+		expect(description.value).toBe("Description typed during publication");
+		await vi.advanceTimersByTimeAsync(901);
+		expect(editor.mutation).toHaveBeenLastCalledWith("save", expect.objectContaining({
+			expectedDraftRevisionId: "before-publish",
+			draft: expect.objectContaining({
+				title: "Title typed during publication",
+				description: "Description typed during publication",
+				slug: "alpha",
+			}),
+		}));
+	});
+
+	it("returns to saved when only the URL changes during first publication", async () => {
+		await enableActions();
+		const pending = deferred<{ revisionId: string }>();
+		editor.mutation.mockReturnValueOnce(pending.promise);
+		await clickButton("publish");
+		const slug = document.querySelector<HTMLInputElement>("#gallery-slug");
+		if (!slug) throw new Error("Expected gallery URL field");
+		slug.value = "typed-during-publication";
+		slug.dispatchEvent(new Event("input", { bubbles: true }));
+		await tick();
+		await vi.advanceTimersByTimeAsync(2000);
+		expect(editor.mutation).toHaveBeenCalledTimes(1);
+		pending.resolve({ revisionId: "revision-A" });
+		await pending.promise;
+		await vi.advanceTimersByTimeAsync(1000);
+		expect(slug.disabled).toBe(true);
+		expect(slug.value).toBe("alpha");
+		expect(document.querySelector("[data-save-state]")?.getAttribute("data-save-state")).toBe("saved");
+		expect(storedDraft("A")).toBeNull();
+		expect(editor.mutation).toHaveBeenCalledTimes(1);
+	});
+
 	it("retains conflicting recovered edits without autosaving after correcting a published URL", async () => {
 		await navigate("B");
 		editor.data.A.isPublished = true;

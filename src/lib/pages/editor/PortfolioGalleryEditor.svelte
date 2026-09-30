@@ -200,7 +200,7 @@ async function saveNow() {
 		clearTimeout(saveTimer);
 		saveTimer = undefined;
 	}
-	if (!active || !initialized || saving || removing || saveState === "conflict") return false;
+	if (!active || !initialized || saving || publishing || removing || saveState === "conflict") return false;
 	if (currentJson === savedJson) {
 		saveState = "saved";
 		clearLocalDraft();
@@ -267,7 +267,7 @@ $effect(() => {
 	persistLocalDraft();
 	if (saving || (saveState === "error" && changedJson === lastAttemptedJson)) return;
 	saveState = online ? "dirty" : "offline";
-	if (online) {
+	if (online && !publishing) {
 		const timer = setTimeout(() => void saveNow(), 900);
 		saveTimer = timer;
 		return () => {
@@ -316,6 +316,7 @@ async function publish() {
 		document.getElementById(publishIssues[0].fieldId)?.focus();
 		return;
 	}
+	const slugToPublish = form.slug;
 	if (!(await saveNow()) || !active || !baseRevisionId) return;
 	publishing = true;
 	try {
@@ -327,6 +328,9 @@ async function publish() {
 		publishedRevisionId = result.revisionId;
 		isPublished = true;
 		isVisible = true;
+		// Keep edits made during publication, except the URL fixed by that revision.
+		form.slug = slugToPublish;
+		if (!dirty) saveState = "saved";
 		saveError = "";
 		publishMessage = "Published. This saved revision is now available to the public site.";
 		clearLocalDraft();
@@ -461,10 +465,10 @@ function reloadServerDraft() {
 				{#if saveState === "conflict"}
 					<button type="button" class="secondary" onclick={reloadServerDraft}>reload server draft</button>
 				{:else if hasPendingWork}
-					<button type="button" class="secondary" onclick={() => void saveNow()} disabled={!dirty || saving}>save draft</button>
+					<button type="button" class="secondary" onclick={() => void saveNow()} disabled={!dirty || saving || publishing}>save draft</button>
 				{/if}
 				{#if previewEndpoint}
-					<button type="button" class="secondary" onclick={() => void preview()} disabled={previewing || saving || saveState === "offline" || saveState === "conflict"}>{previewing ? "preparing preview…" : "preview"}</button>
+					<button type="button" class="secondary" onclick={() => void preview()} disabled={previewing || saving || publishing || saveState === "offline" || saveState === "conflict"}>{previewing ? "preparing preview…" : "preview"}</button>
 				{/if}
 				{#if publicLifecycleEnabled}
 					<PublicationControl published={isPublished && isVisible} hasChanges={!publicationCurrent} item="gallery" onpublish={publishingEnabled ? publish : undefined} onunpublish={setPortfolioGalleryVisibility ? unpublish : undefined} publishDisabled={saving || saveState === "offline" || saveState === "conflict"} unpublishDisabled={saveState === "offline"} busy={publishing || visibilityChanging || removing} />
