@@ -1,5 +1,11 @@
 # @jessepomeroy/admin
 
+## 6.6.2
+
+### Patch Changes
+
+- 6635435: Update the development toolchain to Undici 7.29.1 and Vitest 4.1.11 to include their security fixes.
+
 ## 6.6.1
 
 ### Patch Changes
