@@ -5,6 +5,7 @@ type QueryArgs = {
 	siteUrl?: string;
 	documentId?: string;
 	kind?: string;
+	status?: string;
 	paginationOpts?: { numItems: number; maximumRowsRead?: number; cursor: string | null; id?: number };
 	ids?: string[];
 };
