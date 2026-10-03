@@ -2,11 +2,12 @@
 import { CLIENT_STATUSES } from "../../constants";
 import type { Client, ClientCategory } from "../../types";
 import { formatStatus } from "../../utils";
+import type { ClientEditPayload } from "./clientFormPayloads";
 
 interface Props {
 	client: Client;
 	saving: boolean;
-	onsave: (data: Record<string, string | undefined>) => void;
+	onsave: (data: ClientEditPayload) => void;
 	oncancel: () => void;
 }
 
@@ -20,7 +21,7 @@ let formType = $state("");
 let formClientWebsite = $state("");
 let formSource = $state("");
 let formNotes = $state("");
-let formStatus = $state("lead");
+let formStatus = $state<Client["status"]>("lead");
 let loadedClientId = $state<string | null>(null);
 
 $effect(() => {
@@ -53,7 +54,7 @@ function formatType(type: string) {
 
 function handleSave() {
 	if (!formName || !formCategory) return;
-	const body: Record<string, string | undefined> = {
+	const body: ClientEditPayload = {
 		name: formName,
 		category: formCategory,
 		email: formEmail || undefined,

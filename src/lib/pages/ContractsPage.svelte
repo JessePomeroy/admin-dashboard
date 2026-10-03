@@ -14,7 +14,7 @@ import ContractCreateModal from "./contracts/ContractCreateModal.svelte";
 import ContractDetailModal from "./contracts/ContractDetailModal.svelte";
 import ContractTable from "./contracts/ContractTable.svelte";
 import TemplateManager from "./contracts/TemplateManager.svelte";
-import type { ContractCreatePayload, ContractCreateAndSendPayload, ContractUpdatePayload } from "./documentFormPayloads";
+import type { ContractCreatePayload, ContractCreateAndSendPayload, ContractUpdatePayload, ContractTemplateSavePayload } from "./documentFormPayloads";
 import {
 	type HydratedDocumentEmailAttempt,
 	createDocumentEmailRequestTracker,
@@ -263,22 +263,22 @@ async function handleShareLink(id: string, clientId: string) {
 // Template CRUD callbacks
 async function handleSaveTemplate(
 	id: string | null,
-	payload: Record<string, unknown>,
+	payload: ContractTemplateSavePayload,
 ) {
 	if (id) {
 		await client.mutation(api.contracts.updateTemplate, {
 			templateId: toId(id),
 			siteUrl: config.siteUrl,
-			name: payload.name as string | undefined,
-			body: payload.body as string | undefined,
-			variables: payload.variables as string[] | undefined,
+			name: payload.name,
+			body: payload.body,
+			variables: payload.variables,
 		});
 	} else {
 		await client.mutation(api.contracts.createTemplate, {
 			siteUrl: config.siteUrl,
-			name: payload.name as string,
-			body: payload.body as string,
-			variables: payload.variables as string[] | undefined,
+			name: payload.name,
+			body: payload.body,
+			variables: payload.variables,
 		});
 	}
 }

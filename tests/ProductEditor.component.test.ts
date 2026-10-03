@@ -27,7 +27,7 @@ const mocks = vi.hoisted(() => ({
 				},
 	),
 	goto: vi.fn(async () => {}),
-	listData: [] as unknown[],
+	listData: [] as unknown[] | undefined,
 	listError: undefined as Error | undefined,
 	detailData: undefined as unknown,
 	detailError: undefined as Error | undefined,
@@ -849,7 +849,7 @@ describe("draft-only product editor", () => {
 	});
 
 	it("distinguishes collection loading from empty and failure states", async () => {
-		mocks.listData = undefined as unknown as unknown[];
+		mocks.listData = undefined;
 		await mountList();
 		expect(document.querySelector('[role="status"]')?.textContent).toContain("loading product drafts");
 		for (const component of components.splice(0)) unmount(component);

@@ -1,4 +1,4 @@
-import type { Contract, Invoice } from "../types";
+import type { Contract, ContractTemplate, Invoice } from "../types";
 
 export type InvoiceCreatePayload = Pick<Invoice,
 	| "invoiceType" | "items" | "taxPercent" | "notes" | "dueDate"
@@ -22,6 +22,12 @@ export type InvoiceUpdatePayload = Partial<Pick<Invoice,
 export type ContractUpdatePayload = Partial<Pick<Contract,
 	"title" | "body" | "eventDate" | "eventLocation" | "totalPrice" | "depositAmount" | "status"
 >>;
+
+export type ContractTemplateSavePayload = Pick<ContractTemplate,
+	"name" | "body" | "variables"
+> & {
+	_type: "template";
+};
 
 interface CustomDocumentEmail {
 	emailSubject?: string;
