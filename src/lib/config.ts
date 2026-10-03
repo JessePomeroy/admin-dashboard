@@ -192,6 +192,8 @@ export interface AdminAPI {
 		listBySite: FnRef;
 	};
 	inquiries: {
+		/** Opt into reactive, server-filtered inbox pages after deploying the matching backend. */
+		listPaginated?: FnRef;
 		updateStatus: FnRef;
 		remove?: FnRef;
 	};
