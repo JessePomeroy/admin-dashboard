@@ -128,7 +128,7 @@ function logFailure(code:
 	}));
 }
 
-function exactKeys(value: Record<string, unknown>, expected: readonly string[]) {
+function exactKeys(value: object, expected: readonly string[]) {
 	const keys = Object.keys(value);
 	return keys.length === expected.length && keys.every((key) => expected.includes(key));
 }
@@ -204,7 +204,7 @@ function requireUploadConfig(): CatalogPrivateEditorUploadConfig | null {
 	const upload = config.catalogPrivateEditorUpload;
 	if (
 		!upload
-		|| !exactKeys(upload as unknown as Record<string, unknown>, [
+		|| !exactKeys(upload, [
 			"convexJournalOrigin",
 			"hostJournalSecret",
 			"workerOrigin",
