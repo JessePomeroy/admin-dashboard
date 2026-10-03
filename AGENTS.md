@@ -69,6 +69,7 @@ or server handlers.
 ## Checks
 
 ```bash
+pnpm lint
 pnpm check
 pnpm test
 pnpm build
