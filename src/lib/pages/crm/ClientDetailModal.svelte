@@ -15,6 +15,7 @@ import {
 } from "../../utils";
 import ActivityTimeline from "./ActivityTimeline.svelte";
 import ClientEditForm from "./ClientEditForm.svelte";
+import type { ClientEditPayload } from "./clientFormPayloads";
 
 interface Props {
 	client: Client;
@@ -26,7 +27,7 @@ interface Props {
 	detailError?: boolean;
 	saving: boolean;
 	onclose: () => void;
-	onsave: (data: Record<string, string | undefined>) => void;
+	onsave: (data: ClientEditPayload) => void;
 	ondelete: () => void;
 	onstatuschange: (status: string) => void;
 	ontagassign: (tagId: string) => void;
@@ -76,7 +77,7 @@ let unassignedTags = $derived(
 	availableTags.filter((t) => !clientTags.some((ct) => ct._id === t._id)),
 );
 
-function handleSave(data: Record<string, string | undefined>) {
+function handleSave(data: ClientEditPayload) {
 	onsave(data);
 	editMode = false;
 }

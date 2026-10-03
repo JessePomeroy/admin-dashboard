@@ -26,9 +26,11 @@ const lightStrongAccentMix = alpha(/--admin-accent-strong:\s*color-mix\(in srgb,
 	/ 100;
 
 function blend(foreground: Rgb, background: Rgb, opacity: number): Rgb {
-	return foreground.map((channel, index) => (
-		channel * opacity + background[index] * (1 - opacity)
-	)) as unknown as Rgb;
+	return [
+		foreground[0] * opacity + background[0] * (1 - opacity),
+		foreground[1] * opacity + background[1] * (1 - opacity),
+		foreground[2] * opacity + background[2] * (1 - opacity),
+	];
 }
 
 function relativeLuminance([red, green, blue]: Rgb) {

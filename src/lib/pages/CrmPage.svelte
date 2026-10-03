@@ -16,6 +16,7 @@ import { addToast } from "../toast";
 import { logger } from "../logger";
 import { toId } from "../utils";
 import ClientCreateModal from "./crm/ClientCreateModal.svelte";
+import type { ClientCreatePayload, ClientEditPayload } from "./crm/clientFormPayloads";
 import ClientDetailModal from "./crm/ClientDetailModal.svelte";
 import ClientTable from "./crm/ClientTable.svelte";
 import TagManager from "./crm/TagManager.svelte";
@@ -117,15 +118,15 @@ function closeDetailModal() {
 	selectedClient = null;
 }
 
-async function saveNewClient(body: Record<string, string | undefined>) {
+async function saveNewClient(body: ClientCreatePayload) {
 	saving = true;
 	try {
 		await client.mutation(api.crm.createClient, {
 			siteUrl: config.siteUrl,
-			name: body.name!,
+			name: body.name,
 			email: body.email || undefined,
 			phone: body.phone || undefined,
-			category: body.category as "photography" | "web",
+			category: body.category,
 			type: body.type || undefined,
 			source: body.source || undefined,
 			notes: body.notes || undefined,
@@ -141,7 +142,7 @@ async function saveNewClient(body: Record<string, string | undefined>) {
 	}
 }
 
-async function saveEdit(body: Record<string, string | undefined>) {
+async function saveEdit(body: ClientEditPayload) {
 	const target = selectedClient;
 	if (!target) return;
 	saving = true;
@@ -152,14 +153,14 @@ async function saveEdit(body: Record<string, string | undefined>) {
 			name: body.name,
 			email: body.email,
 			phone: body.phone,
-			category: body.category as "photography" | "web" | undefined,
+			category: body.category,
 			type: body.type,
 			status: body.status,
 			source: body.source,
 			notes: body.notes,
 			siteUrl_client: body.siteUrl_client,
 		});
-		if (selectedClient?._id === target._id) selectedClient = { ...selectedClient, ...body } as Client;
+		if (selectedClient?._id === target._id) selectedClient = { ...selectedClient, ...body };
 		refreshClients();
 	} catch (err) {
 		logger.error("Failed to update client:", err);

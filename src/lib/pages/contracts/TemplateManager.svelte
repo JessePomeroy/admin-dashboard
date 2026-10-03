@@ -1,13 +1,14 @@
 <script lang="ts">
 import AdminModal from "../../components/AdminModal.svelte";
 import type { ContractTemplate } from "../../types";
+import type { ContractTemplateSavePayload } from "../documentFormPayloads";
 
 interface Props {
 	templates: ContractTemplate[];
 	showCreateModal: boolean;
 	onsave: (
 		id: string | null,
-		payload: Record<string, unknown>,
+		payload: ContractTemplateSavePayload,
 	) => Promise<void>;
 	ondelete: (id: string) => Promise<void>;
 	onclosecreate: () => void;
@@ -62,7 +63,7 @@ async function handleSave() {
 			.split(",")
 			.map((v) => v.trim())
 			.filter(Boolean);
-		const payload: Record<string, unknown> = {
+		const payload: ContractTemplateSavePayload = {
 			_type: "template",
 			name: tplName,
 			body: tplBody,

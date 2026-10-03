@@ -1,10 +1,11 @@
 <script lang="ts">
 import AdminModal from "../../components/AdminModal.svelte";
 import type { ClientCategory } from "../../types";
+import type { ClientCreatePayload } from "./clientFormPayloads";
 
 interface Props {
 	saving: boolean;
-	onsave: (data: Record<string, string | undefined>) => void;
+	onsave: (data: ClientCreatePayload) => void;
 	onclose: () => void;
 }
 
@@ -35,7 +36,7 @@ function formatType(type: string) {
 
 function handleSubmit() {
 	if (!formName || !formCategory) return;
-	const body: Record<string, string | undefined> = {
+	const body: ClientCreatePayload = {
 		name: formName,
 		category: formCategory,
 		email: formEmail || undefined,
