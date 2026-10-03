@@ -1,5 +1,12 @@
 # @jessepomeroy/admin
 
+## 6.7.1
+
+### Patch Changes
+
+- 11987c0: Preserve CRM client and contract template form payload types through their page callbacks.
+- 8caa24e: Preserve the private editor upload configuration type during exact-key validation without changing upload authorization or accepted configuration.
+
 ## 6.7.0
 
 ### Minor Changes
