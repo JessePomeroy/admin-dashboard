@@ -46,6 +46,7 @@ jobs:
             corepack pnpm changeset status --since=origin/main --output=/tmp/changeset-status.json
             node -e "const s=require('/tmp/changeset-status.json'); if (!s.releases.some(r => r.name === '@jessepomeroy/admin')) process.exit(1)"
           fi
+      - run: corepack pnpm lint
       - run: corepack pnpm check
       - run: corepack pnpm test
       - run: corepack pnpm build

@@ -36,6 +36,7 @@ jobs:
       - run: corepack pnpm install --frozen-lockfile --ignore-scripts
         env:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - run: corepack pnpm lint
       - run: corepack pnpm check
       - run: corepack pnpm exec playwright install --with-deps chromium
       - run: corepack pnpm test
