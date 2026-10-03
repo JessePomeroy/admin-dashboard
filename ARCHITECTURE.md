@@ -320,5 +320,6 @@ Changing the status resets to the first page. Loading, failure, and empty result
 remain distinct; incomplete split pages require an explicit retry at the same
 cursor. Pending status edits are separate from query results, so a rejected
 mutation reveals the latest server data. Mutation completion retains the
-initiating inquiry ID. Hosts without the reference retain their supplied
+initiating inquiry ID. Successful mutations refresh the current page because
+HTTP acknowledgement can precede the query connection's update. Hosts without the reference retain their supplied
 `data.inquiries` behavior.

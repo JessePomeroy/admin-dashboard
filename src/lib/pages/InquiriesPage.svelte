@@ -91,6 +91,13 @@ function previousPage() {
 
 function retryPage() {
 	if (loading) return;
+	refreshPage();
+}
+
+function refreshPage() {
+	if (!inquiryQuery) return;
+	// HTTP mutations can finish before the separate query connection catches up.
+	// Read after acknowledgement so clearing an edit cannot reveal the old page.
 	switchingPage = true;
 	requestId += 1;
 }
@@ -105,6 +112,7 @@ async function deleteInquiry(id: string) {
 		await convexClient.mutation(api.inquiries.remove, { id: toId(id) });
 		if (!inquiryQuery) legacyInquiries = legacyInquiries.filter((inquiry) => inquiry._id !== id);
 		if (selection?._id === id) selection = null;
+		refreshPage();
 		addToast("Inquiry deleted.");
 	} catch { addToast("Could not delete the inquiry. Refresh and try again."); }
 	finally { deletingInquiry = false; inquiryBusy = false; }
@@ -125,6 +133,7 @@ async function updateStatus(id: string, newStatus: InquiryStatus) {
 		if (!inquiryQuery) legacyInquiries = legacyInquiries.map((inquiry) => inquiry._id === id ? { ...inquiry, status: newStatus } : inquiry);
 		// Keep the open detail usable when its new status removes it from this filter.
 		if (selection?._id === id) selection = { ...selection, status: newStatus };
+		refreshPage();
 	} catch (err) {
 		logger.error("Failed to update inquiry status:", err);
 		addToast("Failed to update inquiry status.");

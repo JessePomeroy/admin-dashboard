@@ -4,11 +4,12 @@ import Harness from "./InquiriesHarness.svelte";
 import { queryClient } from "./controlledQueryClient";
 import type { InquiryStatus, InquiryUI } from "../src/lib/types";
 
-const fixture = vi.hoisted(() => ({ legacy: false, toast: vi.fn() }));
+const fixture = vi.hoisted(() => ({ legacy: false, http: false, toast: vi.fn() }));
 vi.mock("../src/lib/config", async () => {
 	const { inquiryFixtureConfig } = await import("./fixtures/inquiries/config");
 	return { getAdminConfig: () => ({
 		...inquiryFixtureConfig,
+		mutationTransport: fixture.http ? "http" : "websocket",
 		api: { inquiries: {
 			...inquiryFixtureConfig.api.inquiries,
 			listPaginated: fixture.legacy ? undefined : inquiryFixtureConfig.api.inquiries.listPaginated,
@@ -63,7 +64,7 @@ async function render(onMutation?: Parameters<typeof queryClient>[0], inquiries?
 	await tick();
 	return queries;
 }
-beforeEach(() => { fixture.legacy = false; fixture.toast.mockClear(); });
+beforeEach(() => { fixture.legacy = false; fixture.http = false; fixture.toast.mockClear(); });
 afterEach(async () => {
 	if (component) await unmount(component);
 	component = undefined;
@@ -154,6 +155,7 @@ describe("reactive inquiry pages", () => {
 		pending.resolve(null); await tick(); await tick();
 		expect(document.querySelector('[role="dialog"]')?.textContent).toContain("read");
 		await closeModal();
+		queries.emit(queries.latest(queryName), page([])); await tick();
 		expect(document.body.textContent).toContain("0 inquiries on this page");
 		await filter("read");
 		expect(queries.latest(queryName).args.status).toBe("read");
@@ -172,6 +174,46 @@ describe("reactive inquiry pages", () => {
 		pending.reject(new Error("denied")); await tick(); await tick();
 		expect(row("alpha").textContent).toContain("replied");
 		expect(fixture.toast).toHaveBeenCalledWith("Could not delete the inquiry. Refresh and try again.");
+	});
+
+	it("does not restore stale status when HTTP succeeds before the live query updates", async () => {
+		fixture.http = true;
+		const response = deferred();
+		const request = vi.fn(() => response.promise);
+		vi.stubGlobal("fetch", request);
+		const queries = await render();
+		queries.emit(queries.latest(queryName), page([inquiry("alpha")])); await tick();
+		button("view", row("alpha")).click(); await tick();
+		button("mark read").click(); await tick();
+		expect(request).toHaveBeenCalledWith("/api/admin/mutation", expect.objectContaining({
+			body: JSON.stringify({ name: "inquiries:updateStatus", args: { id: "alpha", status: "read" } }),
+		}));
+		response.resolve(new Response(JSON.stringify({ result: null })));
+		await vi.waitFor(() => expect(queries.latest(queryName).args.paginationOpts?.id).toBe(1));
+		expect(document.querySelectorAll("tbody tr")).toHaveLength(0);
+		expect(document.querySelector('[role="dialog"] .status-label')?.textContent).toBe("read");
+		expect(queries.subscriptions.filter((entry) => entry.active)).toHaveLength(1);
+		queries.emit(queries.latest(queryName), page([inquiry("alpha", "replied")])); await tick();
+		expect(row("alpha").textContent).toContain("replied");
+		expect(document.querySelector('[role="dialog"] .status-label')?.textContent).toBe("replied");
+	});
+
+	it("refreshes after deleting an earlier selection without closing the current inquiry", async () => {
+		vi.stubGlobal("confirm", () => true);
+		const pending = deferred();
+		const queries = await render(() => pending.promise);
+		queries.emit(queries.latest(queryName), page([inquiry("alpha"), inquiry("beta")])); await tick();
+		button("view", row("alpha")).click(); await tick();
+		button("delete inquiry").click(); await tick();
+		await closeModal();
+		button("view", row("beta")).click(); await tick();
+		pending.resolve(null);
+		await vi.waitFor(() => expect(queries.latest(queryName).args.paginationOpts?.id).toBe(1));
+		expect(document.querySelector('[role="dialog"]')?.textContent).toContain("Message from beta");
+		expect(document.querySelectorAll("tbody tr")).toHaveLength(0);
+		queries.emit(queries.latest(queryName), page([inquiry("beta")])); await tick();
+		expect(document.querySelectorAll("tbody tr")).toHaveLength(1);
+		expect(row("beta")).toBeDefined();
 	});
 
 	it("keeps the legacy supplied-data path usable without the optional query", async () => {
