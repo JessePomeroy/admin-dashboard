@@ -1,5 +1,15 @@
 # @jessepomeroy/admin
 
+## 6.7.0
+
+### Minor Changes
+
+- 43e6aab: Add an optional inquiry pagination reference for reactive, server-filtered inbox pages. Hosts can enable it after deploying the matching backend; existing hosts retain their supplied inquiry data. Pending status edits no longer overwrite newer server results on failure.
+
+### Patch Changes
+
+- 2458221: Add the baseline anti-slop lint warning profile to local, CI, and release checks so assertion and type-widening findings remain visible during migration.
+
 ## 6.6.2
 
 ### Patch Changes
