@@ -23,8 +23,9 @@ import "../styles/editor-workbench.css";
 
 const config = getAdminConfig();
 const { api } = config;
-const listGoogleAccounts = config.authClient?.listAccounts?.bind(config.authClient);
-const linkGoogleAccount = config.authClient?.linkSocial?.bind(config.authClient);
+// Better Auth methods are path proxies; reading .bind would create an API route.
+const listGoogleAccounts = config.authClient?.listAccounts;
+const linkGoogleAccount = config.authClient?.linkSocial;
 
 let { data, children } = $props();
 

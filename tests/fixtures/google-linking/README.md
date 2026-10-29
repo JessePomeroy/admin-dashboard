@@ -26,3 +26,5 @@ under `.local/google-linking/`. The verifier covers standard sidebar sizing,
 keyboard order, connected/unknown/legacy states, error recovery, compact editor
 placement, and the authenticated link contract with a stubbed Google destination.
 It cannot establish a real owner's Google consent or account linkage.
+The `real-client` scenario uses the installed Better Auth client against intercepted
+account-list and link endpoints, protecting its proxy-method integration.

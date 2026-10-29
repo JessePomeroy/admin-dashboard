@@ -16,9 +16,11 @@ try {
 		const page = await context.newPage();
 		const errors = [];
 		page.on("pageerror", error => errors.push(error.message));
+		await page.route("**/api/auth/list-accounts", route => route.fulfill({ json: [{ id: "fixture", providerId: "credential" }] }));
+		await page.route("**/api/auth/link-social", route => route.fulfill({ json: { url: "https://accounts.google.com/o/oauth2/v2/auth?client_id=fixture", redirect: false } }));
 		await page.route("**/*", route => {
 			const url = new URL(route.request().url());
-			if (url.origin === base) return route.continue();
+			if (url.origin === base) return route.fallback();
 			if (url.hostname === "accounts.google.com") return route.fulfill({ contentType: "text/html", body: "<h1>Local Google redirect fixture</h1>" });
 			return route.abort();
 		});
@@ -70,6 +72,13 @@ try {
 		const calls = await page.evaluate(() => window.googleLinkFixture.requests);
 		// A fresh load may replace the fixture recorder; the contract is also covered in component tests.
 		if (calls.length) expect(calls[0]).toEqual({ provider: "google", callbackURL: `${base}/admin`, errorCallbackURL: `${base}/admin?google_link=error`, disableRedirect: true });
+
+		await open("?state=real-client");
+		await expect(connect).toBeVisible();
+		const linkRequest = page.waitForRequest(`${base}/api/auth/link-social`);
+		await connect.click();
+		expect((await linkRequest).postDataJSON()).toEqual({ provider: "google", callbackURL: `${base}/admin`, errorCallbackURL: `${base}/admin?google_link=error`, disableRedirect: true });
+		await expect(page.getByRole("heading", { name: "Local Google redirect fixture" })).toBeVisible();
 		expect(errors).toEqual([]);
 		report.push({ viewport, passed: true, metrics, pageErrors: errors });
 		await context.close();

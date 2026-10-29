@@ -1,4 +1,5 @@
 import { writable } from "svelte/store";
+import { createAuthClient } from "better-auth/svelte";
 import type { AdminAuthClient, SessionStoreValue } from "../../../src/lib/config";
 
 export const scenario = new URL(window.location.href).searchParams.get("state") ?? "unlinked";
@@ -20,6 +21,11 @@ const authClient: AdminAuthClient = {
 		return { error: { message: "Synthetic response; no Google request was sent." } };
 	},
 };
+if (scenario === "real-client") {
+	const client = createAuthClient({ baseURL: window.location.origin });
+	authClient.listAccounts = client.listAccounts;
+	authClient.linkSocial = client.linkSocial;
+}
 if (new URL(window.location.href).searchParams.has("legacy")) {
 	delete authClient.listAccounts;
 	delete authClient.linkSocial;
