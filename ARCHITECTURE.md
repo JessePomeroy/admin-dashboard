@@ -164,8 +164,12 @@ This boundary spans three repositories and must be verified end-to-end:
 The additive catalog private-editor server factories are deliberately narrower
 than the general CMS media bridge. Hosts may opt into their own canonical HTTPS
 origin after that exact tenant/origin is registered in Convex and the CMS Worker.
-The origin must be the tenant domain or its `www` hostname; arbitrary preview
-origins, ports, and cross-tenant origins remain rejected. The browser host authenticates an exact same-origin request and
+The host's configured canonical origin may use a custom domain independent of
+the immutable tenant key. It must be an exact HTTPS domain origin without ports,
+paths, credentials, queries, or fragments. The tenant key and purpose credentials
+continue to scope authorization and storage; configuring a browser origin does
+not register it with the backend. The browser host authenticates an exact
+same-origin request against its one configured origin and
 holds two purpose-specific server bearers: one for the Convex durable journal
 and one for the Worker's storage-completion route. Convex owns Worker prepare,
 the control credential, immutable declaration binding, raw continuations,
@@ -263,7 +267,7 @@ after mutations. Mutation completions retain their initiating client identity.
 
 
 Private editor tenant activation uses `CATALOG_PRIVATE_EDITOR_TENANT_ORIGINS`
-in Convex and the CMS Worker (JSON tenant domain → canonical HTTPS origin).
+in Convex and the CMS Worker (JSON immutable tenant key → canonical HTTPS origin).
 An absent registry retains the existing Angels Rest origin only; a present invalid
 or empty registry admits nobody. The host supplies only its own browser origin,
 host-journal credential, and distinct storage-caller credential. Changing/removing

@@ -39,6 +39,7 @@ const OPERATION_ID_PATTERN = /^[0-9a-f]{40}$/;
 const SHA256_PATTERN = /^[0-9a-f]{64}$/;
 const LEASE_PATTERN = /^[0-9a-f]{40}$/;
 const TOKEN_PATTERN = /^cms-editor-upload-v1\.[A-Za-z0-9_-]{2768}$/;
+const DOMAIN_NAME_PATTERN = /^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/;
 const CONTROL_CHARACTER_PATTERN = /[\u0000-\u001f\u007f]/;
 const SAFE_HEADERS = {
 	"Cache-Control": "no-store",
@@ -199,6 +200,7 @@ function validSecret(value: unknown) {
 		&& value === value.trim();
 }
 
+// A configured custom origin does not change the tenant key or upstream credentials.
 function requireUploadConfig(): CatalogPrivateEditorUploadConfig | null {
 	const config = getServerConfig();
 	const upload = config.catalogPrivateEditorUpload;
@@ -218,8 +220,8 @@ function requireUploadConfig(): CatalogPrivateEditorUploadConfig | null {
 		|| !validSecret(upload.storageCallerSecret)
 		|| upload.hostJournalSecret === upload.storageCallerSecret
 		|| !parseOrigin(upload.browserOrigin)
-		|| !/^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(config.siteUrl)
-		|| ![config.siteUrl, `www.${config.siteUrl}`].includes(new URL(upload.browserOrigin).hostname)
+		|| !DOMAIN_NAME_PATTERN.test(config.siteUrl)
+		|| !DOMAIN_NAME_PATTERN.test(new URL(upload.browserOrigin).hostname)
 		|| Boolean(new URL(upload.browserOrigin).port)
 	) return null;
 	return upload;

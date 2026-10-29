@@ -46,15 +46,17 @@ function configure(
 }
 
 function browserRequest(body: unknown, options: {
+	origin?: string;
 	path?: string;
 	headers?: Record<string, string>;
 	method?: string;
 	rawBody?: string;
 } = {}) {
-	return new Request(`${BROWSER_ORIGIN}${options.path ?? "/api/admin/catalog/upload"}`, {
+	const origin = options.origin ?? BROWSER_ORIGIN;
+	return new Request(`${origin}${options.path ?? "/api/admin/catalog/upload"}`, {
 		method: options.method ?? "POST",
 		headers: {
-			Origin: BROWSER_ORIGIN,
+			Origin: origin,
 			"Sec-Fetch-Site": "same-origin",
 			"Sec-Fetch-Mode": "cors",
 			"Sec-Fetch-Dest": "empty",
@@ -320,7 +322,7 @@ describe("catalog private editor upload prepare handler", () => {
 	});
 
 	it.each([
-		["wrong site", { siteUrl: "other.example" }],
+		["malformed site", { siteUrl: "https://other.example" }],
 		["pathful journal", { catalogPrivateEditorUpload: {
 			convexJournalOrigin: `${JOURNAL_ORIGIN}/path`, hostJournalSecret: HOST_SECRET,
 			workerOrigin: WORKER_ORIGIN, storageCallerSecret: STORAGE_SECRET,
@@ -336,10 +338,10 @@ describe("catalog private editor upload prepare handler", () => {
 			workerOrigin: "http://worker.example", storageCallerSecret: STORAGE_SECRET,
 			browserOrigin: BROWSER_ORIGIN,
 		} }],
-		["wrong browser", { catalogPrivateEditorUpload: {
+		["HTTP browser", { catalogPrivateEditorUpload: {
 			convexJournalOrigin: JOURNAL_ORIGIN, hostJournalSecret: HOST_SECRET,
 			workerOrigin: WORKER_ORIGIN, storageCallerSecret: STORAGE_SECRET,
-			browserOrigin: "https://unregistered.example",
+			browserOrigin: "http://unregistered.example",
 		} }],
 		["short journal secret", { catalogPrivateEditorUpload: {
 			convexJournalOrigin: JOURNAL_ORIGIN, hostJournalSecret: "short",
@@ -919,17 +921,136 @@ describe("catalog private editor upload complete handler", () => {
 
 
 describe("tenant catalog upload host", () => {
- it("admits a configured tenant origin while retaining host membership and purpose credentials", async () => {
-  const origin = "https://queenworm.example";
-  const verify = configure(vi.fn(async () => true), { siteUrl: "queenworm.example", isCreator: false, catalogPrivateEditorUpload: { convexJournalOrigin:JOURNAL_ORIGIN, hostJournalSecret:HOST_SECRET, workerOrigin:WORKER_ORIGIN, storageCallerSecret:STORAGE_SECRET, browserOrigin:origin } });
-  const upstream = vi.fn().mockResolvedValueOnce(response(prepareProjection())); vi.stubGlobal("fetch", upstream);
-  const request = new Request(`${origin}/api/admin/catalog/upload`, { method:"POST", headers:{ Origin:origin, "Sec-Fetch-Site":"same-origin", "Sec-Fetch-Mode":"cors", "Sec-Fetch-Dest":"empty", "Content-Type":"application/json" }, body:JSON.stringify(printInput()) });
-  const result = await createCatalogPrivateEditorUploadPrepareHandler()({ request });
-  expect(result.status).toBe(200);
-  expect(verify).toHaveBeenCalled();
-  expect(upstream).toHaveBeenCalledTimes(1);
-  const headers = new Headers(upstream.mock.calls[0][1].headers);
-  expect(headers.get("Authorization")).toBe(`Bearer ${HOST_SECRET}`);
-  expect(JSON.stringify(await result.json())).not.toContain(STORAGE_SECRET);
- });
+	const stableSite = "queenworm.angelsrest.online";
+	const customOrigin = "https://queenworm.com";
+	function tenantUploadConfig(browserOrigin = customOrigin) {
+		return {
+			convexJournalOrigin: JOURNAL_ORIGIN,
+			hostJournalSecret: HOST_SECRET,
+			workerOrigin: WORKER_ORIGIN,
+			storageCallerSecret: STORAGE_SECRET,
+			browserOrigin,
+		} satisfies NonNullable<AdminServerConfig["catalogPrivateEditorUpload"]>;
+	}
+
+	it.each([
+		[stableSite, customOrigin],
+		["queenworm.example", "https://queenworm.example"],
+	])("prepares and completes uploads for stable tenant %s at %s", async (siteUrl, origin) => {
+		const verify = configure(vi.fn(async function (this: AdminServerConfig) {
+			expect(this.siteUrl).toBe(siteUrl);
+			return true;
+		}), {
+			siteUrl,
+			isCreator: false,
+			catalogPrivateEditorUpload: tenantUploadConfig(origin),
+		});
+		const upstream = vi.fn()
+			.mockResolvedValueOnce(response(prepareProjection()))
+			.mockResolvedValueOnce(response(journalStatus("storage_pending")))
+			.mockResolvedValueOnce(response({
+				storageContinuation: CONTINUATION,
+				leaseExpiresAt: new Date(Date.now() + 60_000).toISOString(),
+				lease: LEASE,
+			}))
+			.mockResolvedValueOnce(response({ status: "pending_inspection", replayed: false }))
+			.mockResolvedValueOnce(response({ status: "acknowledged" }))
+			.mockResolvedValueOnce(response(journalStatus("verified", { asset: safePrintAsset() })));
+		vi.stubGlobal("fetch", upstream);
+
+		const prepareRequest = browserRequest(printInput(), { origin });
+		const prepared = await callPrepare(prepareRequest);
+		expect(prepared.status).toBe(200);
+		expect(await prepared.json()).toEqual({
+			status: "upload_required",
+			uploadHandle: HANDLE,
+			uploadUrl: `${WORKER_ORIGIN}/v1/catalog-assets/editor-uploads/source`,
+			uploadToken: TOKEN,
+			uploadExpiresAt: EXPIRES,
+		});
+		const completeRequest = browserRequest({ uploadHandle: HANDLE }, { origin });
+		const completed = await callComplete(completeRequest);
+		expect(completed.status).toBe(200);
+		expect(await completed.json()).toEqual({ status: "verified", asset: safePrintAsset() });
+		expect(verify).toHaveBeenCalledTimes(2);
+		expect(verify).toHaveBeenNthCalledWith(1, prepareRequest);
+		expect(verify).toHaveBeenNthCalledWith(2, completeRequest);
+		expect(upstream.mock.calls.map(([url]) => String(url))).toEqual([
+			`${JOURNAL_ORIGIN}/cms-media/catalog-private-assets/editor-upload/journal/begin`,
+			`${JOURNAL_ORIGIN}/cms-media/catalog-private-assets/editor-upload/journal/status`,
+			`${JOURNAL_ORIGIN}/cms-media/catalog-private-assets/editor-upload/journal/claim-storage`,
+			`${WORKER_ORIGIN}/v1/catalog-assets/editor-uploads/storage`,
+			`${JOURNAL_ORIGIN}/cms-media/catalog-private-assets/editor-upload/journal/ack-storage`,
+			`${JOURNAL_ORIGIN}/cms-media/catalog-private-assets/editor-upload/journal/status`,
+		]);
+		for (const [index, [, init]] of upstream.mock.calls.entries()) {
+			expect(init.headers).toEqual({
+				Authorization: `Bearer ${index === 3 ? STORAGE_SECRET : HOST_SECRET}`,
+				"Content-Type": "application/json",
+			});
+		}
+		expect(JSON.parse(upstream.mock.calls[0][1].body)).toEqual(printInput());
+		expect(JSON.parse(upstream.mock.calls[3][1].body)).toEqual({ storageContinuation: CONTINUATION });
+		expect(JSON.stringify(upstream.mock.calls)).not.toContain("session=private");
+	});
+
+	it.each([
+		["old tenant origin", `https://${stableSite}`, `https://${stableSite}`],
+		["unconfigured www origin", "https://www.queenworm.com", "https://www.queenworm.com"],
+		["lookalike origin", "https://queenworm.com.evil.example", "https://queenworm.com.evil.example"],
+		["foreign Origin header", customOrigin, "https://other.example"],
+		["foreign request host", "https://other.example", customOrigin],
+	])("rejects %s before body, membership, or upstream work", async (_name, requestOrigin, headerOrigin) => {
+		const verify = configure(vi.fn(async () => true), {
+			siteUrl: stableSite,
+			catalogPrivateEditorUpload: tenantUploadConfig(),
+		});
+		const upstream = vi.fn();
+		vi.stubGlobal("fetch", upstream);
+		for (const [call, body] of [
+			[callPrepare, printInput()],
+			[callComplete, { uploadHandle: HANDLE }],
+		] as const) {
+			const request = browserRequest(body, { origin: requestOrigin, headers: { Origin: headerOrigin } });
+			const result = await call(request);
+			expect(result.status).toBe(400);
+			expect(await result.json()).toEqual({ status: "invalid_request" });
+			expect(request.bodyUsed).toBe(false);
+		}
+		expect(verify).not.toHaveBeenCalled();
+		expect(upstream).not.toHaveBeenCalled();
+	});
+
+	it.each([
+		"http://queenworm.com",
+		"https://queenworm.com/",
+		"https://queenworm.com/path",
+		"https://queenworm.com?tenant=other",
+		"https://queenworm.com#fragment",
+		"https://user:password@queenworm.com",
+		"https://queenworm.com:8443",
+		"https://queenworm.com:443",
+		"https://*.queenworm.com",
+		"https://localhost",
+		"https://QueenWorm.com",
+	])("rejects noncanonical browser origin configuration %s before effects", async (browserOrigin) => {
+		const verify = configure(vi.fn(async () => true), {
+			siteUrl: stableSite,
+			catalogPrivateEditorUpload: tenantUploadConfig(browserOrigin),
+		});
+		const upstream = vi.fn();
+		vi.stubGlobal("fetch", upstream);
+		for (const [call, body] of [
+			[callPrepare, printInput()],
+			[callComplete, { uploadHandle: HANDLE }],
+		] as const) {
+			const request = browserRequest(body, { origin: customOrigin });
+			const result = await call(request);
+			expect(result.status).toBe(503);
+			expect(await result.json()).toEqual({ status: "service_unavailable" });
+			expect(request.bodyUsed).toBe(false);
+		}
+		expect(verify).not.toHaveBeenCalled();
+		expect(upstream).not.toHaveBeenCalled();
+	});
 });
