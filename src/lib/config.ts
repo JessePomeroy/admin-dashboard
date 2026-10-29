@@ -625,6 +625,20 @@ export interface AdminAuthClient {
 		newPassword: string;
 	}) => Promise<{ error?: { message?: string } | null }>;
 	useSession: () => SessionStore;
+	/** Optional Better Auth methods for explicitly linking the current account to Google. */
+	listAccounts?: () => Promise<{
+		data?: { providerId: string }[] | null;
+		error?: { message?: string; code?: string } | null;
+	}>;
+	linkSocial?: (opts: {
+		provider: "google";
+		callbackURL: string;
+		errorCallbackURL: string;
+		disableRedirect: true;
+	}) => Promise<{
+		data?: { url?: string; redirect?: boolean } | null;
+		error?: { message?: string; code?: string } | null;
+	}>;
 }
 
 export interface AdminConfig {
