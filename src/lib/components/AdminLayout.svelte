@@ -13,6 +13,7 @@ import NotificationWidget from "./NotificationWidget.svelte";
 import Toast from "./Toast.svelte";
 import AdminNavIcon from "./AdminNavIcon.svelte";
 import ChangePasswordForm from "./ChangePasswordForm.svelte";
+import GoogleAccountLink from "./GoogleAccountLink.svelte";
 import EditorNavigation from "./EditorNavigation.svelte";
 import { getAdminNavItems, hrefToNotificationKey, isAdminRouteActive } from "./adminNavigation";
 import "../theme.css";
@@ -22,6 +23,9 @@ import "../styles/editor-workbench.css";
 
 const config = getAdminConfig();
 const { api } = config;
+// Better Auth methods are path proxies; reading .bind would create an API route.
+const listGoogleAccounts = config.authClient?.listAccounts;
+const linkGoogleAccount = config.authClient?.linkSocial;
 
 let { data, children } = $props();
 
@@ -280,6 +284,15 @@ function closeMobileMenu() {
 							onSuccess={() => (showPasswordForm = false)}
 						/>
 					{/if}
+					{#if listGoogleAccounts && linkGoogleAccount}
+						{#key authUserEmail}
+							<GoogleAccountLink
+								listAccounts={listGoogleAccounts}
+								linkSocial={linkGoogleAccount}
+								callbackURL={config.authCallbackURL ?? "/admin"}
+							/>
+						{/key}
+					{/if}
 					<button class="theme-toggle" onclick={() => config.authClient?.signOut()} aria-label="sign out" title={editorActive ? "sign out" : undefined}>
 						<svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
 							<path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>
@@ -531,6 +544,7 @@ function closeMobileMenu() {
 
 	.nav-item > span:not(.nav-dot),
 	.theme-toggle > span,
+	:where(.sidebar-footer) :global(.google-link > span),
 	.back-link > span {
 		min-width: 0;
 		max-width: 150px;
@@ -552,7 +566,8 @@ function closeMobileMenu() {
 		box-shadow: inset 2px 0 var(--admin-heading);
 	}
 
-	.nav-icon {
+	.nav-icon,
+	:where(.sidebar-footer) :global(.google-link .nav-icon) {
 		width: 17px;
 		height: 17px;
 		flex-shrink: 0;
@@ -619,7 +634,8 @@ function closeMobileMenu() {
 		display: block;
 	}
 
-	.theme-toggle {
+	.theme-toggle,
+	:where(.sidebar-footer) :global(.google-link) {
 		display: flex;
 		align-items: center;
 		gap: 10px;
@@ -637,7 +653,8 @@ function closeMobileMenu() {
 		text-align: left;
 	}
 
-	.theme-toggle:hover {
+	.theme-toggle:hover,
+	:where(.sidebar-footer) :global(.google-link:hover) {
 		color: var(--admin-text);
 	}
 

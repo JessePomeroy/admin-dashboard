@@ -71,6 +71,16 @@ shared email, portal, and gallery side-effect factory therefore depends on the
 required verifier (directly or through an authorized scoped upload grant)
 rather than treating route mounting as authorization.
 
+Hosts exposing Better Auth's optional `listAccounts` and `linkSocial` methods get
+a matching sidebar control between password change and sign-out. The control
+appears only after a successful account read confirms that Google is not linked;
+unknown states offer a status retry instead. The authenticated linking endpoint
+owns identity, email matching, OAuth state and provider verification. The package
+does not change email-verification flags, membership, or account-linking policy.
+Google cancellation/errors return to the host's auth callback route, and only a
+fresh account-list response establishes the connected state. Legacy auth clients
+without both methods retain their existing controls.
+
 ## Document email delivery boundary
 
 Invoice, quote, and contract sends cross two external boundaries: the host's
