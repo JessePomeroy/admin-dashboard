@@ -6,6 +6,7 @@ export {
 	type CatalogPrivateEditorUploadConfig,
 } from "./config.js";
 export { sendEmail, getResend, replaceTemplateVariables } from "./server/email.js";
+export { sendGalleryProofNotification, type GalleryProofNotification, type GalleryProofNotificationResult } from "./server/galleryProofNotification.js";
 export { getConvex, getAuthenticatedConvex } from "./server/convexClient.js";
 export { trimString, validateFilename } from "./server/validation.js";
 export { createInvoiceSendHandler } from "./server/handlers/sendInvoice.js";
