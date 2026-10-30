@@ -1,5 +1,12 @@
 # @jessepomeroy/admin
 
+## 6.8.1
+
+### Patch Changes
+
+- 2819d2f: Align product and supporting Blog identity fields, and place product image metadata and bounded upload controls on the document's shared content column. Keep the stacked mobile layout.
+- 2819d2f: Keep delivery-gallery files manageable when storage deletion fails. Confirm storage cleanup before removing metadata, prevent duplicate deletion requests, and show a retryable error on failure.
+
 ## 6.8.0
 
 ### Minor Changes
