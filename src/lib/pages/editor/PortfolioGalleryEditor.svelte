@@ -460,8 +460,9 @@ function reloadServerDraft() {
 	<p class="loading" role="status">loading gallery…</p>
 {:else}
 	<div class="gallery-page editor-document editor-workbench">
+		<a class="back" href={portfolioBaseHref}>← portfolio</a>
 		<EditorDocumentHeader variant="gallery" {saveState}>
-			{#snippet title()}<a class="back" href={portfolioBaseHref}>← portfolio</a><h1>{form.title || "untitled gallery"}</h1>{/snippet}
+			{#snippet title()}<h1>{form.title || "untitled gallery"}</h1>{/snippet}
 			{#snippet actions()}
 				{#if saveState === "conflict"}
 					<button type="button" class="secondary" onclick={reloadServerDraft}>reload server draft</button>

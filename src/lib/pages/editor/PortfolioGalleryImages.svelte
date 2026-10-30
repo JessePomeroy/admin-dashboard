@@ -68,20 +68,22 @@ function handleFinalize(event: CustomEvent<{ items: DraggablePlacement[] }>) {
 }
 </script>
 
-<section class="portfolio-images" aria-labelledby="gallery-images-heading">
+<section class="portfolio-images document-section editor-media-section" class:has-images={placements.length > 0} aria-labelledby="gallery-images-heading">
 	<div class="section-heading">
 		<div><h2 id="gallery-images-heading" tabindex="-1">images</h2><p>{placements.length} {placements.length === 1 ? "image" : "images"} in this draft. Drag images to set their {publishingEnabled ? "public" : "saved"} order.</p></div>
 		<button type="button" class="secondary" onclick={onChooseMedia}>choose from media</button>
 	</div>
 	{#if uploadEndpoint}
-		<PortfolioMediaUploader endpoint={uploadEndpoint} onReady={onUploadReady} />
+		<div class="editor-upload-controls">
+			<PortfolioMediaUploader endpoint={uploadEndpoint} onReady={onUploadReady} />
+		</div>
 	{/if}
 
 	{#if placements.length === 0}
 		<div class="empty"><strong>No images yet.</strong><p>{uploadEndpoint ? "Upload above or choose from media." : "Choose an image from the shared media library."}</p></div>
 	{:else}
 		<ol
-			class="image-list"
+			class="image-list editor-media-list"
 			aria-label="Reorder gallery images"
 			use:dragHandleZone={{
 				items: visiblePlacements,

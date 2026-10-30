@@ -118,13 +118,12 @@ async function createPost() {
 			<a href={`${baseHref}#categories`} aria-current={selectedKind === "category" || (!selectedKind && supportingTarget === "categories") ? "page" : undefined} onclick={() => supportingTarget = "categories"}>categories</a>
 			{/if}
 		</nav>
-	{#if config.api.contentCleanup}<button type="button" onclick={() => cleanupOpen = true}>manage content history</button>{/if}
 	</header>
 
 	<EditorWorkbenchLayout variant="blog" selected={Boolean(selectedDocumentId)} supportingView={supportingTarget !== null}>
 		{#snippet collection()}<aside class="collection-pane" aria-label="Blog posts">
 			<div class="collection-heading">
-				<h2>posts</h2>
+				<div><h2>posts</h2><p class="collection-count">{postsLoading ? "loading…" : `${posts.length} ${posts.length === 1 ? "post" : "posts"}`}</p></div>
 				<button type="button" class="new-post" onclick={() => void createPost()} disabled={createState === "saving"}>
 					{createState === "saving" ? "creating…" : "new post"}
 				</button>
@@ -170,6 +169,7 @@ async function createPost() {
 					{/each}
 				</div>
 			{/if}
+			{#if config.api.contentCleanup}<div class="collection-tools"><button type="button" onclick={() => cleanupOpen = true}>content cleanup</button></div>{/if}
 		</aside>{/snippet}
 		{#snippet document()}<section class="document-pane" id="blog-document-pane" aria-label="Blog document">
 			{@render children()}
@@ -187,7 +187,7 @@ async function createPost() {
 	.workbench-heading {
 		display: flex;
 		align-items: end;
-		justify-content: space-between;
+		justify-content: flex-start;
 		gap: 20px;
 		padding: 13px 20px 12px;
 		border-bottom: 1px solid var(--admin-border);
@@ -214,6 +214,9 @@ async function createPost() {
 		display: flex;
 		gap: 4px;
 	}
+	.collection-tools { margin-top: 20px; padding-top: 12px; border-top: 1px solid var(--admin-border); }
+	.collection-count { margin: 5px 0 0; color: var(--admin-text-subtle); font-size: .66rem; }
+	.collection-tools button { min-height: 44px; border: 0; padding: 0; background: transparent; color: var(--admin-text-muted); font: inherit; font-size: .7rem; text-decoration: underline; text-underline-offset: .2em; cursor: pointer; }
 
 	.workbench-heading nav a {
 		padding: 6px 9px;

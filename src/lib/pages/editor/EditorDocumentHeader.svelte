@@ -24,7 +24,7 @@ const saveLabel = (state: string) => state === "offline"
 			: state;
 </script>
 
-<header class:settings-header={variant !== "gallery"} class:gallery-header={variant === "gallery"}>
+<header class="editor-document-header" class:settings-header={variant !== "gallery"} class:gallery-header={variant === "gallery"}>
 	<div class="editor-header-title">{@render title()}</div>
 	{#if showActions}<div class="editor-header-actions" class:actions={variant !== "blog"} class:header-actions={variant === "blog"}>
 		{#if saveState}
