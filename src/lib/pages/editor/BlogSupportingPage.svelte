@@ -159,7 +159,7 @@ const lifecycle = createBlogDocumentLifecycle<BlogSupportingDraft>({
 		<p class="description">This document is a {editorState.kind}, not a {kind}.</p>
 	</section>
 {:else}
-	<div class="settings-page">
+	<div class="settings-page editor-document">
 		<EditorDocumentHeader variant="blog" saveState={lifecycle.saveState}>
 		{#snippet title()}<div>
 				<a class="back" href={backHref}>← blog</a>
@@ -191,13 +191,13 @@ const lifecycle = createBlogDocumentLifecycle<BlogSupportingDraft>({
 			<div class="fields">
 				{#if form.kind === "author"}
 					<label>
-						author name
+						<span class="field-heading">author name</span>
 						<input maxlength="120" bind:value={form.name} aria-invalid={Boolean(fieldErrors.name)} onblur={updateSlugFromTitle} />
 						{#if fieldErrors.name}<small class="field-error">{fieldErrors.name}</small>{/if}
 					</label>
 				{:else}
 					<label>
-						category title
+						<span class="field-heading">category title</span>
 						<input maxlength="120" bind:value={form.title} aria-invalid={Boolean(fieldErrors.title)} onblur={updateSlugFromTitle} />
 						{#if fieldErrors.title}<small class="field-error">{fieldErrors.title}</small>{/if}
 					</label>

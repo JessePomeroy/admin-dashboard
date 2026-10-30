@@ -42,7 +42,7 @@ let {
 </div>
 
 <style>
-.editor-slug-field { display: grid; gap: 6px; min-width: 0; color: var(--admin-text-muted); font-size: .7rem; }
+.editor-slug-field { display: grid; align-content: start; gap: 6px; min-width: 0; color: var(--admin-text-muted); font-size: .7rem; }
 .field-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 28px; }
 label { color: var(--admin-text-muted); }
 .slug-input { display: flex; align-items: center; min-width: 0; gap: 7px; }

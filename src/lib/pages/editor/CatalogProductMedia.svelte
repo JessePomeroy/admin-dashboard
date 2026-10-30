@@ -180,17 +180,18 @@ function handleGalleryFinalize(event: CustomEvent<{ items: DraggablePlacement[] 
 	</li>
 {/snippet}
 
-<section class="product-media" aria-labelledby="catalog-product-media-heading">
+<section class="product-media document-section" aria-labelledby="catalog-product-media-heading">
 	<div class="section-heading">
 		<div>
 			<h2 id="catalog-product-media-heading">product images</h2>
 			<p>{visiblePlacements.length} {visiblePlacements.length === 1 ? "image" : "images"}</p>
 		</div>
-		{#if hasImageCapacity}
-			<button type="button" class="quiet" onclick={onChooseMedia} {disabled}>choose existing image</button>
-		{/if}
 	</div>
 
+	<div class="editor-upload-controls">
+	{#if hasImageCapacity}
+		<button type="button" class="quiet" onclick={onChooseMedia} {disabled}>choose existing image</button>
+	{/if}
 	{#if usesArtworkUpload && onUploadArtwork && artworkCapacity > 0}
 		<CatalogProductArtworkUploader
 			multiple={productKind === "print_set"}
@@ -211,6 +212,7 @@ function handleGalleryFinalize(event: CustomEvent<{ items: DraggablePlacement[] 
 			onReady={onUploadReady}
 		/>
 	{/if}
+	</div>
 
 	{#if usesArtworkUpload && uploadEndpoint && placements.length < CATALOG_PRODUCT_WEB_MEDIA_LIMIT}
 		<details class="gallery-upload">
@@ -295,7 +297,6 @@ function handleGalleryFinalize(event: CustomEvent<{ items: DraggablePlacement[] 
 	@media (max-width: 820px) {
 		section { padding: 18px 0 22px; }
 		.section-heading { flex-direction: column; }
-		.section-heading button { width: 100%; }
 		li { grid-template-columns: 72px minmax(0, 1fr) auto; }
 		img, .missing { width: 72px; height: 64px; }
 		label { grid-column: 1 / -1; }

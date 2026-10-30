@@ -274,6 +274,8 @@
 }
 
 [data-admin].editor-workspace .editor-document .field-heading {
+	display: flex;
+	align-items: center;
 	min-height: 32px;
 }
 
