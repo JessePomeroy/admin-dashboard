@@ -79,3 +79,20 @@ it("keeps the existing host contract usable without the pagination capability", 
 	expect(document.body.textContent).toContain("archived-example");
 	expect(document.body.textContent).not.toContain("published-example");
 });
+
+
+it("reaches older galleries through the submitted-selections query and resets paging when leaving it", async () => {
+ const queries = await render();
+ queries.emit(queries.latest(queryName), page([gallery("newest")], "older")); await tick();
+ button("submitted selections").click(); await tick();
+ expect(queries.latest("galleries:listSubmittedProofs").args).toEqual({ siteUrl: "example.test", paginationOpts: { numItems: 25, cursor: null, id: 0 } });
+ expect(document.body.textContent).not.toContain("newest");
+ const submitted = { ...gallery("old-gallery-with-new-selection"), proofSubmissionId: "proof-1" };
+ queries.emit(queries.latest("galleries:listSubmittedProofs"), page([submitted], "more-submitted")); await tick();
+ expect(document.body.textContent).toContain("selection submitted");
+ button("next").click(); await tick();
+ expect(queries.latest("galleries:listSubmittedProofs").args.paginationOpts?.cursor).toBe("more-submitted");
+ button("all").click(); await tick();
+ expect(queries.latest(queryName).args.paginationOpts?.cursor).toBeNull();
+ expect(queries.subscriptions.filter((entry) => entry.active)).toHaveLength(1);
+});

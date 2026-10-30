@@ -935,3 +935,10 @@ describe("catalog product editor helpers", () => {
 		expect(() => parseCatalogBasisPoints(1.5)).toThrow(/whole number/i);
 	});
 });
+
+
+it("creates zines as fixed-price merchant-fulfilled catalog graphs", () => {
+	const draft = newCatalogProductGraphDraft("zine", { title: "Night walks", slug: "night-walks", retailPriceCents: 2400 });
+	expect(draft).toMatchObject({ productKind: "zine", fulfillmentMode: "merchant_fulfilled", variants: [{ retailPriceCents: 2400 }] });
+	expect(draft).not.toHaveProperty("printSources");
+});

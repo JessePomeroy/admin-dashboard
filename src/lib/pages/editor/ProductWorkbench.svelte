@@ -3,7 +3,7 @@ import { goto } from "$app/navigation";
 import { useQuery } from "convex-svelte";
 import { tick, type Snippet } from "svelte";
 import { useAdminClient } from "../../adminClient";
-import { getCatalogProductEditorCapability } from "../../catalogProductCapability";
+import { CATALOG_PRODUCT_KINDS, getCatalogProductEditorCapability } from "../../catalogProductCapability";
 import {
 	catalogProductKindLabel,
 	catalogProductLabel,
@@ -45,7 +45,7 @@ const {
 } = capability;
 const baseHref = productsConfig.baseHref ?? "/admin/editor/products";
 const client = useAdminClient();
-const catalogKinds = ["print", "print_set", "postcard", "merchandise", "tapestry", "digital_download"] as const satisfies readonly CatalogProductKind[];
+const catalogKinds = CATALOG_PRODUCT_KINDS;
 const supportedKinds = catalogKinds.filter((kind) => enabledKinds.includes(kind));
 
 function queryArgs(kind: CatalogProductKind) {
@@ -56,6 +56,7 @@ function queryArgs(kind: CatalogProductKind) {
 
 const printQuery = useQuery(catalogApi.listForEditor, () => queryArgs("print"));
 const printSetQuery = useQuery(catalogApi.listForEditor, () => queryArgs("print_set"));
+const zineQuery = useQuery(catalogApi.listForEditor, () => queryArgs("zine"));
 const postcardQuery = useQuery(catalogApi.listForEditor, () => queryArgs("postcard"));
 const merchandiseQuery = useQuery(catalogApi.listForEditor, () => queryArgs("merchandise"));
 const tapestryQuery = useQuery(catalogApi.listForEditor, () => queryArgs("tapestry"));
@@ -63,6 +64,7 @@ const digitalQuery = useQuery(catalogApi.listForEditor, () => queryArgs("digital
 const productQueries = [
 	{ kind: "print", query: printQuery },
 	{ kind: "print_set", query: printSetQuery },
+	{ kind: "zine", query: zineQuery },
 	{ kind: "postcard", query: postcardQuery },
 	{ kind: "merchandise", query: merchandiseQuery },
 	{ kind: "tapestry", query: tapestryQuery },
@@ -124,7 +126,7 @@ async function closeCleanup() {
 let createDialog = $state<HTMLDivElement>();
 let titleInput = $state<HTMLInputElement>();
 let fixedPriceCreation = $derived(
-	newProductKind === "postcard"
+	newProductKind === "zine" || newProductKind === "postcard"
 		|| newProductKind === "merchandise"
 		|| newProductKind === "tapestry"
 		|| newProductKind === "digital_download",

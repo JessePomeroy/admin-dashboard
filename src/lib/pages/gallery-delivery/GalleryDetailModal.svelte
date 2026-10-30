@@ -8,6 +8,7 @@ import AdminModal from "../../components/AdminModal.svelte";
 import FeatureGate from "../../components/FeatureGate.svelte";
 import type { TenantAdminServerSession } from "../../adminSession";
 import type { Gallery, GalleryImage } from "../../types";
+import GalleryProofs from "./GalleryProofs.svelte";
 import GalleryUploader from "./GalleryUploader.svelte";
 import GalleryImageGrid from "./GalleryImageGrid.svelte";
 import type { GalleryUploadController, GalleryUploadSnapshot } from "./galleryUploadController";
@@ -57,7 +58,7 @@ const galleryQuery = useQuery(galleryApi.get, () => ({ id: gallery._id }));
 let images = $derived((imagesQuery.data ?? []) as GalleryImage[]);
 let liveGallery = $derived(galleryQuery.data ?? gallery);
 
-let tab = $state<"images" | "settings">("images");
+let tab = $state<"images" | "settings" | "proofs">(untrack(() => gallery.proofSubmissionId && galleryApi.listProofs && galleryApi.getProofImages && galleryApi.reopenProof ? "proofs" : "images"));
 let saving = $state(false);
 let deleting = $state(false);
 let copyText = $state("copy link");
@@ -242,6 +243,7 @@ async function handleShare() {
 		</div>
 
 		<div class="tabs" role="tablist">
+			{#if galleryApi.listProofs && galleryApi.getProofImages && galleryApi.reopenProof}<button class="tab" class:active={tab === "proofs"} role="tab" aria-selected={tab === "proofs"} onclick={() => tab = "proofs"}>selections{liveGallery.proofSubmissionId ? " · submitted" : ""}</button>{/if}
 			<button class="tab" class:active={tab === "images"} role="tab" aria-selected={tab === "images"} onclick={() => (tab = "images")}>files</button>
 			<button class="tab" class:active={tab === "settings"} role="tab" aria-selected={tab === "settings"} onclick={() => (tab = "settings")}>settings</button>
 		</div>
@@ -261,6 +263,8 @@ async function handleShare() {
 					onchange={() => {}}
 				/>
 			</div>
+		{:else if tab === "proofs"}
+			<div role="tabpanel">{#key gallery._id}<GalleryProofs galleryId={gallery._id} currentSubmissionId={liveGallery.proofSubmissionId} />{/key}</div>
 		{:else}
 			<div role="tabpanel">
 				<form onsubmit={(e) => { e.preventDefault(); handleSaveSettings(); }} class="settings-form">

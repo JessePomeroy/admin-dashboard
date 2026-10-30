@@ -146,6 +146,7 @@ export interface AdminAPI {
 		registerReadyWebAsset?: FnRef;
 	};
 	crm: {
+		getClient?: FnRef;
 		createClient: FnRef;
 		updateClient: FnRef;
 		deleteClient: FnRef;
@@ -188,6 +189,10 @@ export interface AdminAPI {
 		removeImage: FnRef;
 		reorderImages: FnRef;
 		getImages: FnRef;
+		listSubmittedProofs?: FnRef;
+		listProofs?: FnRef;
+		getProofImages?: FnRef;
+		reopenProof?: FnRef;
 		listImageStorageKeys?: FnRef;
 		listBySite: FnRef;
 		/** Deploy the matching shared backend before opting into filtered cursor pages. */
@@ -196,6 +201,12 @@ export interface AdminAPI {
 	inquiries: {
 		/** Opt into reactive, server-filtered inbox pages after deploying the matching backend. */
 		listPaginated?: FnRef;
+		getWorkflow?: FnRef;
+		clientOptions?: FnRef;
+		linkClient?: FnRef;
+		unlinkClient?: FnRef;
+		updateFollowUp?: FnRef;
+		listForClient?: FnRef;
 		updateStatus: FnRef;
 		remove?: FnRef;
 	};
@@ -450,6 +461,8 @@ export interface AdminEditorConfig {
 	siteSettings?: {
 		/** Public URL used by the optional Preview action. */
 		previewHref?: string;
+		/** Same-origin endpoint for an authenticated real-site draft preview. */
+		previewEndpoint?: string;
 	};
 	/** Enables a site-specific Quote slot without exposing the Homepage editor. */
 	homepageQuote?: {
@@ -517,6 +530,8 @@ export interface AdminEditorConfig {
 	};
 	/** Enables private product-draft authoring and catalog read-back. */
 	products?: {
+		/** Same-origin endpoint for an authenticated real-product draft preview. */
+		previewEndpoint?: string;
 		/** Shared workspace route; defaults to `/admin/editor/products`. */
 		baseHref?: string;
 		/** Public origin for immutable CMS image derivatives, without a trailing slash. */
@@ -541,6 +556,7 @@ export interface AdminEditorConfig {
 		enabledKinds?: readonly (
 			| "print"
 			| "print_set"
+			| "zine"
 			| "postcard"
 			| "merchandise"
 			| "tapestry"

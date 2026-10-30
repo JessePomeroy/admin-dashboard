@@ -64,6 +64,7 @@ export function getAdminNavItems({ editorEnabled = false } = {}): AdminNavItem[]
 export const adminNavItems = getAdminNavItems();
 
 export const hrefToNotificationKey: Record<string, string> = {
+	"/admin/galleries": "galleries",
 	"/admin/orders": "orders",
 	"/admin/inquiries": "inquiries",
 	"/admin/messages": "messages",

@@ -19,7 +19,7 @@ type Subscription = {
 };
 
 /** Keep useQuery real; control only the external client's cache and responses. */
-export function queryClient(onMutation?: (name: string, args: Record<string, unknown>) => unknown) {
+export function queryClient(onMutation?: (name: string, args: Record<string, unknown>) => unknown, onQuery?: (name: string, args: Record<string, unknown>) => unknown) {
 	const cache = new Map<string, unknown>();
 	const subscriptions: Subscription[] = [];
 	const key = (name: string, args: unknown) => JSON.stringify([name, args]);
@@ -34,6 +34,10 @@ export function queryClient(onMutation?: (name: string, args: Record<string, unk
 			const subscription = { name: getFunctionName(ref), args, result, error, active: true };
 			subscriptions.push(subscription);
 			return () => { subscription.active = false; };
+		},
+		async query(ref: FunctionReference<"query">, args: Record<string, unknown>) {
+			if (!onQuery) throw new Error("Unexpected fixture query");
+			return onQuery(getFunctionName(ref), args);
 		},
 		async mutation(ref: FunctionReference<"mutation">, args: Record<string, unknown>) {
 			if (!onMutation) throw new Error("Unexpected fixture mutation");

@@ -74,3 +74,4 @@ export { createCatalogPrivateDeleteHandler } from "./server/handlers/catalogPriv
 export { createPublicSiteGate } from "./server/publicSiteGate.js";
 
 export { createContentExportHandler } from "./server/handlers/contentExport.js";
+export { DRAFT_PREVIEW_QUERY, createDraftPreviewHandler, issueDraftPreview, readDraftPreview, type DraftPreviewInput, type DraftPreviewKind, type DraftPreviewTarget } from "./server/draftPreview.js";

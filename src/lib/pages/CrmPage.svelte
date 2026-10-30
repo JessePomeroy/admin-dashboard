@@ -3,6 +3,7 @@ let nextPageRequestId = 0;
 </script>
 
 <script lang="ts">
+import { page } from "$app/stores";
 import { goto } from "$app/navigation";
 import { useQuery } from "convex-svelte";
 import type { PaginationResult } from "convex/server";
@@ -76,6 +77,16 @@ let isLoading = $derived(statsQuery.isLoading || tagsQuery.isLoading);
 // Modal state
 let showAddModal = $state(false);
 let selectedClient = $state<Client | null>(null);
+$effect(() => {
+	const clientId = $page.url.searchParams.get("client");
+	if (!clientId || !api.crm.getClient) return;
+	let active = true;
+	void client.query(api.crm.getClient, { clientId }).then((result) => {
+		if (result?.siteUrl !== config.siteUrl) throw new Error("Client is not in this site");
+		if (active) selectedClient = result;
+	}).catch(() => { if (active) addToast("Could not open the linked client."); });
+	return () => { active = false; };
+});
 let showTagManager = $state(false);
 let saving = $state(false);
 
@@ -370,6 +381,7 @@ function formatStatus(status: string) {
 		ontagremove={removeTagFromClient}
 		onactivityclick={(docType, docId) => {
 			const routes: Record<string, string> = {
+				inquiry: "/admin/inquiries",
 				invoice: "/admin/invoicing",
 				quote: "/admin/quotes",
 				contract: "/admin/contracts",

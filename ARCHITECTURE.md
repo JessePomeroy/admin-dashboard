@@ -354,3 +354,32 @@ mutation reveals the latest server data. Mutation completion retains the
 initiating inquiry ID. Successful mutations refresh the current page because
 HTTP acknowledgement can precede the query connection's update. Hosts without the reference retain their supplied
 `data.inquiries` behavior.
+
+## Connected client workflows
+
+After deploying the matching shared backend, hosts may bind
+`inquiries.{getWorkflow,clientOptions,linkClient,unlinkClient,updateFollowUp,listForClient}`
+and `crm.getClient`. Full-tier inboxes can create or link a client, correct a link,
+save private follow-up notes and browse due work. CRM retains paginated links to
+the original requests. Deep links validate the returned record's configured site;
+backend operations independently enforce stored membership and Full access.
+
+Delivery hosts may bind `galleryDelivery.{listSubmittedProofs,listProofs,getProofImages,reopenProof}`
+to filter galleries with submitted selections, review immutable submissions and reopen a selection while preserving history.
+The shared notification widget recognizes the backend's Galleries flag. Recipient
+proofing controls and email delivery remain host responsibilities.
+
+`createDraftPreviewHandler`, `issueDraftPreview` and `readDraftPreview` are
+server-only adapters for real public-page previews. The issuer requires current
+site membership and a host-resolved current draft. The five-minute HMAC grant
+binds the site, session, path, kind, resource and revision; session refresh can
+invalidate it. Every preview load must reauthorize stored membership and read
+the exact draft through an authenticated client. Hosts must keep responses
+private, uncached and unindexed, and disable purchases/contact submission in
+preview mode. No new shared secret or browser-exposed session token is required.
+
+Site Settings and Products gain optional `previewEndpoint` controls. Existing
+About, Contact and Portfolio preview endpoints use the same host boundary. Zines
+use the existing fixed-price, merchant-fulfilled graph editor and require explicit
+tenant product-kind permission. Omitting the new options preserves existing host
+behavior; adoption does not activate payments.

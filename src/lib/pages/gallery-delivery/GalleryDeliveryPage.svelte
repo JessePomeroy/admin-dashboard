@@ -30,10 +30,14 @@ let requestId = $state(0);
 let switchingPage = $state(false);
 const paginated = Boolean(galleryApi.listBySitePaginated);
 const cursor = $derived(cursors[cursors.length - 1]);
-const galleriesQuery = useQuery(galleryApi.listBySitePaginated ?? galleryApi.listBySite, () => paginated ? {
+const regularQuery = useQuery(galleryApi.listBySitePaginated ?? galleryApi.listBySite, () => statusFilter === "submitted" ? "skip" : paginated ? {
 	siteUrl: config.siteUrl, ...(statusFilter === "all" ? {} : { status: statusFilter }),
 	paginationOpts: { numItems: 25, cursor, id: requestId },
 } : { siteUrl: config.siteUrl }, { keepPreviousData: false });
+const submittedQuery = galleryApi.listSubmittedProofs && paginated ? useQuery(galleryApi.listSubmittedProofs, () => statusFilter === "submitted" ? {
+ siteUrl: config.siteUrl, paginationOpts: { numItems: 25, cursor, id: requestId },
+} : "skip", { keepPreviousData: false }) : null;
+const galleriesQuery = $derived(statusFilter === "submitted" && submittedQuery ? submittedQuery : regularQuery);
 const result = $derived(galleriesQuery.data as PaginationResult<GalleryWithClient> | GalleryWithClient[] | undefined);
 const page = $derived(result && !Array.isArray(result) ? result : undefined);
 const splitError = new Error("This gallery page changed. Retry to reload it.");
@@ -140,14 +144,14 @@ const statusLabels: Record<string, string> = {
 	</PageHeader>
 
 	<div class="filter-row">
-		{#each ["all", "draft", "uploading", "published", "archived"] as s}
+		{#each ["all", "draft", "uploading", "published", "archived", ...(submittedQuery ? ["submitted"] : [])] as s}
 			<button
 				class="filter-chip"
 				class:active={statusFilter === s}
 				aria-pressed={statusFilter === s}
 				onclick={() => changeFilter(s)}
 			>
-				{s}
+				{s === "submitted" ? "submitted selections" : s}
 			</button>
 		{/each}
 	</div>
@@ -178,7 +182,9 @@ const statusLabels: Record<string, string> = {
 		<LoadingState />
 	{:else if filteredGalleries.length === 0}
 		<div class="empty-state">
-			{#if statusFilter !== "all"}
+			{#if statusFilter === "submitted"}
+				no submitted selections
+			{:else if statusFilter !== "all"}
 				no {statusFilter} galleries
 			{:else}
 				no client galleries yet — create one to start delivering files
@@ -194,6 +200,7 @@ const statusLabels: Record<string, string> = {
 							<span class="gallery-client">{gallery.clientName}</span>
 						</div>
 						<div class="gallery-meta">
+							{#if gallery.proofSubmissionId}<span class="status-badge">selection submitted</span>{/if}
 							<span class="meta-item">{gallery.imageCount} file{gallery.imageCount !== 1 ? "s" : ""}</span>
 							<span class="meta-item">{formatBytes(gallery.totalSizeBytes)}</span>
 							<span class="status-badge status-{gallery.status}">{statusLabels[gallery.status]}</span>
