@@ -1,91 +1,46 @@
 <script lang="ts">
-import { useQuery } from "convex-svelte";
-import { useAdminClient } from "../../adminClient";
-import { getAdminConfig } from "../../config";
-import { toId } from "../../utils";
+import { onDestroy, untrack } from "svelte";
 import FeatureGate from "../../components/FeatureGate.svelte";
 import { logger } from "../../logger";
 import type { TenantAdminServerSession } from "../../adminSession";
 import { GALLERY_UPLOAD_ACCEPT, type GalleryUploadPolicy } from "../../galleryUploadPolicy";
-import { createGalleryStoragePort } from "./galleryStoragePort";
 import {
-	createGalleryUploadController,
+	type GalleryUploadController,
 	type GalleryUploadBatchSummary,
 	type GalleryUploadSnapshot,
 } from "./galleryUploadController";
+import { useGalleryUploadFactory } from "./galleryUploadFactory.svelte";
 
-let { galleryId, adminSession, onupload, onbatchchange = () => {} }: {
-	galleryId: string;
+type Props = {
 	adminSession: TenantAdminServerSession;
-	onupload: () => void;
 	onbatchchange?: (summary: GalleryUploadBatchSummary) => void;
-} = $props();
+	uploadPolicy?: GalleryUploadPolicy;
+} & ({ uploadController: GalleryUploadController; galleryId?: string; onupload?: () => void }
+	| { uploadController?: undefined; galleryId: string; onupload: () => void });
+let { uploadController: providedController, uploadPolicy: providedPolicy, galleryId = "", onupload = () => {}, adminSession, onbatchchange = () => {} }: Props = $props();
 
-const config = getAdminConfig();
-const { api } = config;
-const galleryApi = api.galleryDelivery!;
-const uploadPolicyQuery = galleryApi.getUploadPolicy
-	? useQuery(galleryApi.getUploadPolicy, () => ({ siteUrl: config.siteUrl }))
-	: undefined;
-let uploadPolicy: GalleryUploadPolicy = $derived(uploadPolicyQuery?.data === "all-files" ? "all-files" : "media");
-let uploadAccept = $derived(uploadPolicy === "all-files" ? undefined : GALLERY_UPLOAD_ACCEPT);
-const client = useAdminClient();
-const storage = createGalleryStoragePort({
-	fetch,
-	galleryWorkerUrl: config.galleryWorkerUrl,
+const source = untrack(() => {
+	if (providedController) return { controller: providedController, factory: null };
+	const factory = useGalleryUploadFactory();
+	return { controller: factory.create(galleryId, { onupload: () => onupload() }), factory };
 });
+let localController = $state.raw(source.controller);
+let localGalleryId = untrack(() => galleryId);
+$effect(() => {
+	if (!source.factory || providedController || galleryId === localGalleryId) return;
+	void localController.dispose();
+	localGalleryId = galleryId;
+	localController = source.factory.create(galleryId, { onupload: () => onupload() });
+});
+const uploadController = $derived(providedController ?? localController);
+const uploadPolicy = $derived(providedPolicy ?? source.factory?.policy ?? "media");
+onDestroy(() => { if (source.factory) void localController.dispose(); });
+
+let uploadAccept = $derived(uploadPolicy === "all-files" ? undefined : GALLERY_UPLOAD_ACCEPT);
 
 let dragging = $state(false);
-let uploadState = $state<GalleryUploadSnapshot>({
-	files: [],
-	selectedFileIds: [],
-	deletingSelected: false,
-	paused: false,
-	visibleCompletedCount: 0,
-	totalCount: 0,
-	completedCount: 0,
-	totalSizeBytes: 0,
-	hasErrors: false,
-	sourceFileCount: 0,
-	sourceSizeBytes: 0,
-	acceptedFileCount: 0,
-	acceptedSizeBytes: 0,
-	rejectedFileCount: 0,
-	rejectedSizeBytes: 0,
-	retryableErrorCount: 0,
-	selectableCount: 0,
-	selectedCount: 0,
-	allSelectableSelected: false,
-});
-
-const uploadController = createGalleryUploadController({
-	storage,
-	siteUrl: config.siteUrl,
-	galleryId: () => galleryId,
-	uploadPolicy: () => uploadPolicy,
-	addImage: async (input) => {
-		const imageId = await client.mutation(galleryApi.addImage, {
-			siteUrl: input.siteUrl,
-			galleryId: toId(input.galleryId),
-			r2Key: input.r2Key,
-			filename: input.filename,
-			sizeBytes: input.sizeBytes,
-			width: input.width,
-			height: input.height,
-		});
-		return imageId as string;
-	},
-	removeImage: async (id) => {
-		await client.mutation(galleryApi.removeImage, { id: toId(id) });
-	},
-	getImageDimensions,
-	onupload: () => onupload(),
-	onchange: (snapshot) => {
-		uploadState = snapshot;
-	},
-	logger,
-});
-uploadState = uploadController.getSnapshot();
+let uploadState = $state<GalleryUploadSnapshot>(untrack(() => uploadController.getSnapshot()));
+$effect(() => uploadController.subscribe((snapshot) => { uploadState = snapshot; }));
 
 interface DroppedFileSystemEntry {
 	isFile: boolean;
@@ -172,22 +127,6 @@ function handleFileInput(e: Event) {
 	const input = e.target as HTMLInputElement;
 	if (input.files) uploadController.addFiles(input.files);
 	input.value = "";
-}
-
-function getImageDimensions(file: File): Promise<{ width: number; height: number }> {
-	return new Promise((resolve) => {
-		const url = URL.createObjectURL(file);
-		const img = new Image();
-		img.onload = () => {
-			resolve({ width: img.naturalWidth, height: img.naturalHeight });
-			URL.revokeObjectURL(url);
-		};
-		img.onerror = () => {
-			resolve({ width: 0, height: 0 });
-			URL.revokeObjectURL(url);
-		};
-		img.src = url;
-	});
 }
 
 let files = $derived(uploadState.files);

@@ -190,6 +190,8 @@ export interface AdminAPI {
 		getImages: FnRef;
 		listImageStorageKeys?: FnRef;
 		listBySite: FnRef;
+		/** Deploy the matching shared backend before opting into filtered cursor pages. */
+		listBySitePaginated?: FnRef;
 	};
 	inquiries: {
 		/** Opt into reactive, server-filtered inbox pages after deploying the matching backend. */
