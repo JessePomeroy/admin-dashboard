@@ -160,11 +160,9 @@ const lifecycle = createBlogDocumentLifecycle<BlogSupportingDraft>({
 	</section>
 {:else}
 	<div class="settings-page editor-document">
+		<a class="back" href={backHref}>← blog</a>
 		<EditorDocumentHeader variant="blog" saveState={lifecycle.saveState}>
-		{#snippet title()}<div>
-				<a class="back" href={backHref}>← blog</a>
-				<h1>{kind === "author" ? "author" : "category"}</h1>
-			</div>{/snippet}
+		{#snippet title()}<h1>{kind === "author" ? "author" : "category"}</h1>{/snippet}
 		{#snippet actions()}
 				{#if !archived && (lifecycle.canSave || lifecycle.saveState === "saving")}
 					<button type="button" onclick={() => void lifecycle.saveDraft()} disabled={!lifecycle.canSave || lifecycle.publicationBusy}>save draft</button>

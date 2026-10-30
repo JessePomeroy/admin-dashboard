@@ -205,16 +205,12 @@ async function handleGalleryFinalize(event: CustomEvent<{ items: DraggableGaller
 		<div>
 			<h1>portfolio</h1>
 		</div>
-		<div class="heading-meta">
-			<span>{galleries?.length ?? 0} {(galleries?.length ?? 0) === 1 ? "gallery" : "galleries"}</span>
-			{#if reorderMessage}<span class:error={reorderState === "error"} role={reorderState === "error" ? "alert" : "status"}>{reorderMessage}</span>{/if}
-		</div>
 	</header>
 
 	<EditorWorkbenchLayout variant="portfolio" selected={Boolean(selectedGalleryId)}>
 		{#snippet collection()}<aside class="collection-pane" aria-label="Portfolio galleries">
 			<div class="collection-heading">
-				<h2>galleries</h2>
+				<div><h2>galleries</h2><p class="collection-count">{galleries?.length ?? 0} {(galleries?.length ?? 0) === 1 ? "gallery" : "galleries"}</p></div>
 				<button bind:this={newGalleryButton} type="button" class="new-gallery" onclick={() => void openCreate()}>new</button>
 			</div>
 			<p class="collection-note">{publicLifecycleEnabled
@@ -228,6 +224,7 @@ async function handleGalleryFinalize(event: CustomEvent<{ items: DraggableGaller
 				{/each}
 			</div>
 			{#if orderingDisabled}<p class="ordering-note">Clear search and choose all to change {publicLifecycleEnabled ? "public" : "saved"} order.</p>{/if}
+			{#if reorderMessage}<p class="collection-message" class:error={reorderState === "error"} role={reorderState === "error" ? "alert" : "status"}>{reorderMessage}</p>{/if}
 
 			{#if galleriesQuery.isLoading}
 				<p class="collection-message" role="status">loading galleries…</p>
@@ -294,10 +291,10 @@ async function handleGalleryFinalize(event: CustomEvent<{ items: DraggableGaller
 	.workbench-heading { display: flex; align-items: end; justify-content: space-between; gap: 20px; padding: 13px 20px 12px; border-bottom: 1px solid var(--admin-border); background: var(--editor-canvas); }
 	h1, h2 { margin: 0; color: var(--admin-heading); font-family: var(--admin-font-display); font-weight: 500; }
 	h1 { font-size: clamp(1.18rem, 1.7vw, 1.48rem); } h2 { font-size: 1rem; }
-	.heading-meta { display: grid; justify-items: end; gap: 5px; color: var(--admin-text-subtle); font-size: .7rem; }
-	.heading-meta .error, .collection-message.error, .create-message.error, .field-error { color: var(--status-rose); }
+	.collection-count { margin: 5px 0 0; color: var(--admin-text-subtle); font-size: .66rem; }
+	.collection-message.error, .create-message.error, .field-error { color: var(--status-rose); }
 	.collection-pane { min-width: 0; padding: 18px 14px 32px; border-right: 1px solid var(--admin-border); background: var(--editor-collection); }
-	.collection-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
+	.collection-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
 	.collection-note { margin: -6px 0 13px; color: var(--admin-text-muted); font-size: .66rem; line-height: 1.4; }
 	button, input { font: inherit; }
 	.new-gallery, .primary { border: 1px solid transparent; border-radius: 6px; padding: 8px 11px; background: var(--admin-accent-strong); color: var(--admin-bg); font-size: .72rem; cursor: pointer; }
@@ -348,7 +345,6 @@ async function handleGalleryFinalize(event: CustomEvent<{ items: DraggableGaller
 	}
 	@media (max-width: 640px) {
 		.workbench-heading { align-items: flex-start; padding: 18px 20px; flex-direction: column; }
-		.heading-meta { justify-items: start; }
 		.collection-pane { padding: 22px 16px 48px; border-right: 0; }
 		.create-panel { padding: 0 20px 24px; }
 	}

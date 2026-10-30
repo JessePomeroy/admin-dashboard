@@ -67,7 +67,7 @@ function handleFinalize(event: CustomEvent<{ items: DraggablePortrait[] }>) {
 }
 </script>
 
-<section aria-labelledby="about-portraits-heading">
+<section class="document-section editor-media-section" class:has-images={portraits.length > 0} aria-labelledby="about-portraits-heading">
 	<div class="section-heading">
 		<div>
 			<h2 id="about-portraits-heading" tabindex="-1">portraits</h2>
@@ -76,13 +76,16 @@ function handleFinalize(event: CustomEvent<{ items: DraggablePortrait[] }>) {
 		<button type="button" class="secondary" onclick={onChooseMedia} disabled={portraits.length >= ABOUT_PORTRAIT_MAX}>choose from media</button>
 	</div>
 	{#if uploadEndpoint && portraits.length < ABOUT_PORTRAIT_MAX}
-		<PortfolioMediaUploader endpoint={uploadEndpoint} contextLabel="About page" onReady={onUploadReady} />
+		<div class="editor-upload-controls">
+			<PortfolioMediaUploader endpoint={uploadEndpoint} contextLabel="About page" onReady={onUploadReady} />
+		</div>
 	{/if}
 
 	{#if portraits.length === 0}
 		<div class="empty"><strong>No portraits selected.</strong><p>Upload here or choose a ready image from the shared site media library.</p></div>
 	{:else}
 		<ol
+			class="editor-media-list"
 			aria-label="Reorder About portraits"
 			use:dragHandleZone={{
 				items: visiblePortraits,

@@ -180,18 +180,18 @@ function handleGalleryFinalize(event: CustomEvent<{ items: DraggablePlacement[] 
 	</li>
 {/snippet}
 
-<section class="product-media document-section" aria-labelledby="catalog-product-media-heading">
+<section class="product-media document-section editor-media-section" class:has-images={visiblePlacements.length > 0} aria-labelledby="catalog-product-media-heading">
 	<div class="section-heading">
 		<div>
 			<h2 id="catalog-product-media-heading">product images</h2>
 			<p>{visiblePlacements.length} {visiblePlacements.length === 1 ? "image" : "images"}</p>
 		</div>
+		{#if hasImageCapacity}
+			<button type="button" class="quiet" onclick={onChooseMedia} {disabled}>choose existing image</button>
+		{/if}
 	</div>
 
 	<div class="editor-upload-controls">
-	{#if hasImageCapacity}
-		<button type="button" class="quiet" onclick={onChooseMedia} {disabled}>choose existing image</button>
-	{/if}
 	{#if usesArtworkUpload && onUploadArtwork && artworkCapacity > 0}
 		<CatalogProductArtworkUploader
 			multiple={productKind === "print_set"}
