@@ -1,5 +1,13 @@
 # @jessepomeroy/admin
 
+## 6.13.0
+
+### Minor Changes
+
+- 6f1c701: Add the standard client API factory and server feature-route mapping. Honor tier
+  permissions in navigation, dashboards and direct routes. Share private checkout
+  binding and signed buyer confirmation helpers for hub and spoke hosts.
+
 ## 6.12.0
 
 ### Minor Changes
