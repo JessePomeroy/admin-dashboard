@@ -1,5 +1,11 @@
 # @jessepomeroy/admin
 
+## 6.11.0
+
+### Minor Changes
+
+- ded7db1: Expose granular server auth and draft-preview entrypoints so public preview loaders can use the existing helpers without tracing unrelated email handlers and their SDK into public server functions. The existing server barrel remains compatible.
+
 ## 6.10.0
 
 ### Minor Changes
