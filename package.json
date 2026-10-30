@@ -31,6 +31,10 @@
       "types": "./dist/server/draftPreview.d.ts",
       "default": "./dist/server/draftPreview.js"
     },
+    "./server/gallery-proof": {
+      "types": "./dist/server/galleryProofNotification.d.ts",
+      "default": "./dist/server/galleryProofNotification.js"
+    },
     "./content-export": {
       "types": "./dist/server/contentExportCore.d.ts",
       "default": "./dist/server/contentExportCore.js"

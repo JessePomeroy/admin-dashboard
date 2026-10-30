@@ -374,6 +374,20 @@ to filter galleries with submitted selections, review immutable submissions and 
 The shared notification widget recognizes the backend's Galleries flag. Recipient
 proofing controls and email delivery remain host responsibilities.
 
+`sendGalleryProofNotification` is available from the server-only
+`@jessepomeroy/admin/server/gallery-proof` entrypoint. The host must first authorize
+the gallery capability and any password grant, submit the proof, and read the
+persisted submission. Pass only those stored facts and server-configured tenant,
+sender, recipient and admin origin. The helper rejects foreign proof facts and
+uses the immutable submission for its message and provider idempotency key.
+Gallery names and current image selections must not be substituted on retry.
+Replays stop 23 hours after submission, before
+[Resend's 24-hour key expiry](https://resend.com/changelog/idempotency-keys).
+Provider acceptance, unconfirmed notification and an expired retry window are
+distinct results; none changes or discards the saved proof. The helper uses a
+fixed Resend HTTP endpoint and a finite timeout without loading the email SDK.
+Provider acceptance is an acknowledgement, not proof of mailbox delivery.
+
 `createDraftPreviewHandler`, `issueDraftPreview` and `readDraftPreview` are
 server-only adapters for real public-page previews. The issuer requires current
 site membership and a host-resolved current draft. The five-minute HMAC grant
