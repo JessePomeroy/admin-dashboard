@@ -9,10 +9,11 @@ import {
 
 interface Props {
 	inquiries: InquiryUI[];
+	followUpEnabled?: boolean;
 	onview: (inquiry: InquiryUI) => void;
 }
 
-let { inquiries, onview }: Props = $props();
+let { inquiries, onview, followUpEnabled = false }: Props = $props();
 
 function truncate(text: string, len = 60): string {
 	if (!text) return "\u2014";
@@ -30,6 +31,7 @@ function truncate(text: string, len = 60): string {
 				<th scope="col">subject</th>
 				<th scope="col">preview</th>
 				<th scope="col">status</th>
+				{#if followUpEnabled}<th scope="col">follow-up</th>{/if}
 				<th scope="col"></th>
 			</tr>
 		</thead>
@@ -44,6 +46,7 @@ function truncate(text: string, len = 60): string {
 					<td>
 						<StatusDot color={getStatusColor(INQUIRY_STATUS_COLORS, inq.status)} label={inq.status || "new"} />
 					</td>
+					{#if followUpEnabled}<td>{inq.followUpDate || (inq.followUpCompletedAt ? "completed" : "—")}</td>{/if}
 					<td>
 						<button class="view-btn" onclick={() => onview(inq)}>view</button>
 					</td>

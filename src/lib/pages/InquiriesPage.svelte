@@ -1,4 +1,6 @@
 <script lang="ts">
+import type { TenantAdminServerSession } from "../adminSession";
+import { page as routePage } from "$app/stores";
 import { useQuery } from "convex-svelte";
 import type { PaginationResult } from "convex/server";
 import { useAdminClient } from "../adminClient";
@@ -10,24 +12,39 @@ import { toId } from "../utils";
 import InquiryDetailModal from "./inquiries/InquiryDetailModal.svelte";
 import InquiryTable from "./inquiries/InquiryTable.svelte";
 
-let { data }: { data: { inquiries: InquiryUI[] } } = $props();
+let { data }: { data: { inquiries: InquiryUI[]; adminSession?: TenantAdminServerSession } } = $props();
 
 const config = getAdminConfig();
 const { api } = config;
+const workflowEnabled = $derived(data.adminSession?.status === "authorized" && data.adminSession.tier === "full" && Boolean(api.inquiries.getWorkflow && api.inquiries.clientOptions && api.inquiries.linkClient && api.inquiries.updateFollowUp));
 const convexClient = useAdminClient();
 
 // svelte-ignore state_referenced_locally
 let legacyInquiries = $state<InquiryUI[]>(data.inquiries);
 let selection = $state<InquiryUI | null>(null);
-let statusFilter = $state<"all" | InquiryStatus>("all");
+$effect(() => {
+	const id = $routePage.url.searchParams.get("open");
+	if (!id || !workflowEnabled || !api.inquiries.getWorkflow) return;
+	let active = true;
+	void convexClient.query(api.inquiries.getWorkflow, { id }).then(({ inquiry }) => {
+		if (inquiry.siteUrl !== config.siteUrl) throw new Error("Inquiry is not in this site");
+		if (active) selection = { ...inquiry, subject: inquiry.subject ?? null, submittedAt: new Date(inquiry._creationTime).toISOString() };
+	}).catch(() => { if (active) addToast("Could not open the linked inquiry."); });
+	return () => { active = false; };
+});
+let statusFilter = $state<"all" | "due" | InquiryStatus>("all");
 let cursors = $state<(string | null)[]>([null]);
 let requestId = $state(0);
 let switchingPage = $state(false);
 let pendingStatuses = $state<Record<string, InquiryStatus>>({});
 const cursor = $derived(cursors[cursors.length - 1]);
+function today() {
+	const date = new Date();
+	return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+}
 const inquiryQuery = api.inquiries.listPaginated ? useQuery(api.inquiries.listPaginated, () => ({
 	siteUrl: config.siteUrl,
-	...(statusFilter === "all" ? {} : { status: statusFilter }),
+	...(statusFilter === "due" ? { followUpBefore: today() } : statusFilter === "all" ? {} : { status: statusFilter }),
 	// Leave headroom under the backend's read ceiling for reactive changes.
 	paginationOpts: { numItems: 25, cursor, id: requestId },
 }), { keepPreviousData: false }) : null;
@@ -57,10 +74,10 @@ const selectedInquiry = $derived(selection
 	? withPendingStatus(inquiries.find((inquiry) => inquiry._id === selection?._id) ?? selection)
 	: null);
 
-const statusOptions: (InquiryStatus | "all")[] = ["all", "new", "read", "replied"];
+const statusOptions = $derived<(InquiryStatus | "all" | "due")[]>(["all", "new", "read", "replied", ...(workflowEnabled ? ["due" as const] : [])]);
 
 const filteredInquiries = $derived(
-	inquiries.map(withPendingStatus).filter((inquiry) => statusFilter === "all" || inquiry.status === statusFilter),
+	inquiries.map(withPendingStatus).filter((inquiry) => statusFilter === "all" || statusFilter === "due" || inquiry.status === statusFilter),
 );
 
 function openInquiry(inq: InquiryUI) {
@@ -155,7 +172,7 @@ async function updateStatus(id: string, newStatus: InquiryStatus) {
 		<select class="filter-select" bind:value={statusFilter} onchange={resetPages} aria-label="Filter by status">
 			{#each statusOptions as status}
 				<option value={status}>
-					{status === "all" ? "all statuses" : status}
+					{status === "all" ? "all statuses" : status === "due" ? "follow-up due" : status}
 				</option>
 			{/each}
 		</select>
@@ -174,7 +191,7 @@ async function updateStatus(id: string, newStatus: InquiryStatus) {
 	{:else if filteredInquiries.length === 0}
 		<div class="empty-state">no inquiries found</div>
 	{:else}
-		<InquiryTable inquiries={filteredInquiries} onview={openInquiry} />
+		<InquiryTable inquiries={filteredInquiries} onview={openInquiry} followUpEnabled={workflowEnabled} />
 	{/if}
 	{#if inquiryQuery}
 		<nav class="pagination" aria-label="Inquiry pages">
@@ -188,11 +205,17 @@ async function updateStatus(id: string, newStatus: InquiryStatus) {
 {#if selectedInquiry}
 	<InquiryDetailModal
 		inquiry={selectedInquiry}
+		{workflowEnabled}
 		onclose={closeModal}
 		onupdatestatus={updateStatus}
 		ondelete={api.inquiries.remove ? deleteInquiry : undefined}
 		deleting={deletingInquiry}
 		busy={inquiryBusy}
+		onworkflowchange={(inquiry) => {
+			const updated = { ...inquiry, subject: inquiry.subject ?? null, submittedAt: new Date(inquiry._creationTime).toISOString() };
+			if (selection?._id === inquiry._id) selection = updated;
+			legacyInquiries = legacyInquiries.map((item) => item._id === inquiry._id ? updated : item);
+		}}
 	/>
 {/if}
 

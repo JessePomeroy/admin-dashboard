@@ -1,4 +1,7 @@
 <script lang="ts">
+import { getAdminConfig } from "../../config";
+import InquiryWorkflow from "./InquiryWorkflow.svelte";
+import type { Inquiry } from "../../types";
 import AdminModal from "../../components/AdminModal.svelte";
 import StatusDot from "../../components/StatusDot.svelte";
 import type { InquiryStatus, InquiryUI } from "../../types";
@@ -14,10 +17,14 @@ interface Props {
 	ondelete?: (id: string) => Promise<void>;
 	deleting?: boolean;
 	busy?: boolean;
+	workflowEnabled?: boolean;
+	onworkflowchange?: (inquiry: Inquiry) => void;
 	onupdatestatus: (id: string, status: InquiryStatus) => void;
 }
 
-let { inquiry, onclose, onupdatestatus, ondelete, deleting = false, busy = false }: Props = $props();
+let { inquiry, onclose, onupdatestatus, ondelete, deleting = false, busy = false, workflowEnabled = false, onworkflowchange = () => {} }: Props = $props();
+
+const workflow = getAdminConfig().api.inquiries;
 
 function replyViaEmail(email: string, subject: string) {
 	const mailtoSubject = subject ? `Re: ${subject}` : "";
@@ -78,6 +85,9 @@ function replyViaEmail(email: string, subject: string) {
 				</button>
 			{/if}
 		</div>
+		{#if workflowEnabled && workflow.getWorkflow && workflow.clientOptions && workflow.linkClient && workflow.updateFollowUp}
+			{#key inquiry._id}<InquiryWorkflow id={inquiry._id} onchange={onworkflowchange} />{/key}
+		{/if}
 	</div>
 </AdminModal>
 

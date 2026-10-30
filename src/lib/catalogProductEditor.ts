@@ -1,6 +1,7 @@
 export type CatalogProductKind =
 	| "print"
 	| "print_set"
+	| "zine"
 	| "postcard"
 	| "merchandise"
 	| "tapestry"
@@ -319,6 +320,7 @@ export const CATALOG_PRODUCT_WEB_MEDIA_LIMIT = 50;
 export const CATALOG_EDITABLE_GRAPH_PRODUCT_KINDS = [
 	"print",
 	"print_set",
+	"zine",
 	"postcard",
 	"merchandise",
 	"tapestry",
@@ -392,7 +394,7 @@ function buildNewCatalogProductGraphDraft(
 	},
 	requireStartingPrice: boolean,
 ): CatalogProductGraphV2Draft {
-	const fixedPrice = productKind === "postcard"
+	const fixedPrice = productKind === "zine" || productKind === "postcard"
 		|| productKind === "merchandise"
 		|| productKind === "tapestry"
 		|| productKind === "digital_download";
@@ -1323,6 +1325,8 @@ export function catalogProductKindLabel(kind: CatalogProductKind) {
 			return "print";
 		case "print_set":
 			return "print set";
+		case "zine":
+			return "zine";
 		case "postcard":
 			return "postcard";
 		case "merchandise":

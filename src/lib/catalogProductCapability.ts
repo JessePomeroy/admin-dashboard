@@ -5,6 +5,7 @@ import { isRootedQuerylessEndpoint } from "./catalogPrivateEditorUpload";
 export const CATALOG_PRODUCT_KINDS = [
 	"print",
 	"print_set",
+	"zine",
 	"postcard",
 	"merchandise",
 	"tapestry",

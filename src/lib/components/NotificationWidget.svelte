@@ -10,6 +10,7 @@ let {
 
 const items: { key: string; label: string; href: string }[] = [
 	{ key: "orders", label: "new orders", href: "/admin/orders" },
+	{ key: "galleries", label: "gallery selections submitted", href: "/admin/galleries" },
 	{ key: "inquiries", label: "new inquiries", href: "/admin/inquiries" },
 	{ key: "messages", label: "unread messages", href: "/admin/messages" },
 	{ key: "crm", label: "new clients", href: "/admin/crm" },

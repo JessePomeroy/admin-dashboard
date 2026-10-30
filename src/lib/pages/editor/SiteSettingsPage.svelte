@@ -1,4 +1,5 @@
 <script lang="ts">
+import { openSavedDraftPreview } from "../../draftPreview";
 import EditorDocumentHeader from "./EditorDocumentHeader.svelte";
 import PublicationControl from "./PublicationControl.svelte";
 import { useQuery } from "convex-svelte";
@@ -70,6 +71,18 @@ $effect(() => {
 	draft.initialize(payload, state?.draft?.revisionId);
 });
 
+let previewing = $state(false);
+async function preview() {
+	if (!siteSettingsConfig.previewEndpoint || previewing) return;
+	previewing = true;
+	try { await openSavedDraftPreview(siteSettingsConfig.previewEndpoint, async () => {
+		if (!(await draft.saveNow()) || !draft.revisionId) return null;
+		return { draftRevisionId: draft.revisionId };
+	}, "site-settings-preview"); }
+	catch (cause) { draft.error = cause instanceof Error ? cause.message : "Could not open preview."; }
+	finally { previewing = false; }
+}
+
 async function publish() {
 	if (!publishSiteSettings) {
 		await draft.saveNow();
@@ -129,7 +142,9 @@ function finishSocialReorder(event: CustomEvent<{ items: DraggableSocialLink[] }
 	<EditorDocumentHeader saveState={draft.state}>
 		{#snippet title()}<h1>site settings</h1>{/snippet}
 		{#snippet actions()}
-			{#if publishingEnabled && siteSettingsConfig.previewHref}
+			{#if publishingEnabled && siteSettingsConfig.previewEndpoint}
+				<button type="button" disabled={!draft.initialized || previewing} onclick={() => void preview()}>{previewing ? "opening…" : "preview site"}</button>
+			{:else if publishingEnabled && siteSettingsConfig.previewHref}
 				<a href={siteSettingsConfig.previewHref} target="_blank" rel="noopener">preview</a>
 			{/if}
 			<button type="button" class="secondary" onclick={() => void discard()} disabled={!draft.initialized || (!draft.revisionId && !draft.hasPendingWork)}>{draft.state === "conflict" ? "reload server draft" : "discard draft"}</button>

@@ -14,6 +14,8 @@ import {
 	getStatusColor,
 } from "../../utils";
 import ActivityTimeline from "./ActivityTimeline.svelte";
+import ClientInquiries from "./ClientInquiries.svelte";
+import { getAdminConfig } from "../../config";
 import ClientEditForm from "./ClientEditForm.svelte";
 import type { ClientEditPayload } from "./clientFormPayloads";
 
@@ -54,6 +56,7 @@ let {
 }: Props = $props();
 
 let editMode = $state(false);
+const inquiryApi = getAdminConfig().api.inquiries;
 let confirmDelete = $state(false);
 let showTagPicker = $state(false);
 
@@ -194,6 +197,7 @@ function handleSave(data: ClientEditPayload) {
 				</div>
 			</div>
 
+			{#if inquiryApi?.listForClient}{#key client._id}<ClientInquiries clientId={client._id} />{/key}{/if}
 			<ActivityTimeline entries={clientActivity} loading={loadingActivity} onitemclick={onactivityclick} />
 
 			<div class="modal-actions detail-actions">

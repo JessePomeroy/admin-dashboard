@@ -1,0 +1,51 @@
+import assert from "node:assert/strict";
+import { mkdir } from "node:fs/promises";
+import { resolve } from "node:path";
+import { chromium } from "playwright";
+const output = resolve(process.argv[2] ?? ".local/connected-workflows");
+await mkdir(output, { recursive: true });
+const inquiryMessage = "I would like to plan an evening portrait session. Could we discuss locations and available dates?";
+const browser = await chromium.launch({ headless: true });
+try {
+	for (const viewport of [{ width: 1280, height: 1000 }, { width: 390, height: 844 }]) {
+		const context = await browser.newContext({ viewport, reducedMotion: "reduce" });
+		const page = await context.newPage();
+		const errors = [];
+		page.on("pageerror", (cause) => errors.push(cause.message));
+		await page.goto("http://127.0.0.1:5243");
+		await page.getByRole("status").waitFor();
+		await page.evaluate(() => window.workflowFixture.respond());
+		await page.getByRole("button", { name: "view", exact: true }).click();
+		await page.getByRole("button", { name: "create lead from inquiry", exact: true }).waitFor();
+		await page.getByLabel("date", { exact: true }).fill("2026-11-03");
+		await page.getByLabel("private notes", { exact: true }).fill("Send an estimate after discussing locations.");
+		await page.getByRole("button", { name: "save follow-up", exact: true }).click();
+		await page.getByRole("button", { name: "mark follow-up complete", exact: true }).waitFor();
+		await page.screenshot({ path: resolve(output, `inquiry-${viewport.width}.png`), fullPage: true });
+		await page.getByRole("button", { name: "create lead from inquiry", exact: true }).click();
+		await page.getByRole("link", { name: "open Example visitor in crm", exact: true }).waitFor();
+		await page.getByRole("button", { name: "Close dialog", exact: true }).click();
+		await page.getByRole("button", { name: "gallery selections", exact: true }).click();
+		await page.getByRole("region", { name: "Submitted gallery selections", exact: true }).waitFor();
+		await page.evaluate(() => window.workflowFixture.respond());
+		await page.getByRole("combobox", { name: "submission", exact: true }).waitFor();
+		await page.evaluate(() => window.workflowFixture.respond());
+		await page.getByText("Keep the grain and the pink light.", { exact: true }).waitFor();
+		await page.screenshot({ path: resolve(output, `proofs-${viewport.width}.png`), fullPage: true });
+		page.once("dialog", (dialog) => dialog.accept());
+		await page.getByRole("button", { name: "reopen selection", exact: true }).click();
+		await page.getByRole("button", { name: "reopen selection", exact: true }).waitFor({ state: "detached" });
+		assert.equal(await page.getByText("Keep the grain and the pink light.", { exact: true }).count(), 1);
+		assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+		await page.getByRole("button", { name: "client requests", exact: true }).click();
+		await page.getByRole("region", { name: "Linked inquiries", exact: true }).waitFor();
+		await page.evaluate(() => window.workflowFixture.respond());
+		await page.locator("summary").click();
+		await page.getByRole("link", { name: "open inquiry", exact: true }).waitFor();
+		assert.equal(await page.getByText(inquiryMessage, { exact: true }).count(), 1);
+		await page.screenshot({ path: resolve(output, `client-${viewport.width}.png`), fullPage: true });
+		assert.deepEqual(errors, []);
+		await context.close();
+		console.log(`PASS ${viewport.width}px: follow-up, lead creation, retained proof notes and reopening`);
+	}
+} finally { await browser.close(); }

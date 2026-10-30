@@ -294,6 +294,10 @@ export interface Inquiry extends ConvexDocument<"inquiries"> {
 	subject?: string;
 	message: string;
 	status: InquiryStatus;
+	clientId?: string;
+	followUpDate?: string;
+	followUpCompletedAt?: number;
+	internalNotes?: string;
 }
 export type InquiryStatus = "new" | "read" | "replied";
 
@@ -311,6 +315,10 @@ export interface InquiryUI {
 	subject: string | null;
 	message: string | null;
 	status: InquiryStatus;
+	clientId?: string;
+	followUpDate?: string;
+	followUpCompletedAt?: number;
+	internalNotes?: string;
 	submittedAt: string;
 }
 
@@ -339,6 +347,9 @@ export interface Gallery extends ConvexDocument<"galleries"> {
 	expiresAt?: number;
 	downloadEnabled: boolean;
 	favoritesEnabled: boolean;
+	proofSubmissionId?: string;
+	proofRound?: number;
+	proofSubmittedAt?: number;
 }
 export type GalleryId = GenericId<"galleries">;
 export type GalleryStatus = "draft" | "uploading" | "published" | "archived";
@@ -353,6 +364,7 @@ export interface GalleryImage extends ConvexDocument<"galleryImages"> {
 	height: number;
 	order: number;
 	isFavorite: boolean;
+	editingNotes?: string;
 	downloadCount: number;
 }
 export type GalleryImageId = GenericId<"galleryImages">;

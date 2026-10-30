@@ -1,4 +1,5 @@
 <script lang="ts">
+import { openSavedDraftPreview } from "../../draftPreview";
 import PublicationControl from "./PublicationControl.svelte";
 import EditorDocumentHeader from "./EditorDocumentHeader.svelte";
 import EditorSlugField from "./EditorSlugField.svelte";
@@ -163,7 +164,7 @@ let privateAssetRows = $derived.by(() => {
 	return [{ asset: privateAssetById.get(form.paidFile.assetId) }];
 });
 let usesSinglePrice = $derived(
-	form.productKind === "postcard"
+	form.productKind === "zine" || form.productKind === "postcard"
 		|| form.productKind === "merchandise"
 		|| form.productKind === "tapestry"
 		|| form.productKind === "digital_download",
@@ -654,6 +655,19 @@ function beginDraftMutation(state: "saving" | "discarding") {
 	return () => activeDraftOperation === operation && productId === operationProductId;
 }
 
+let previewing = $state(false);
+async function previewProduct() {
+	if (!productsConfig.previewEndpoint || previewing) return;
+	previewing = true;
+	try { await openSavedDraftPreview(productsConfig.previewEndpoint, async () => {
+		if (dirty) await saveDraft();
+		if (dirty || !baseRevisionId || saveState === "error" || saveState === "conflict") return null;
+		return { productId, draftRevisionId: baseRevisionId };
+	}, "product-site-preview"); }
+	catch (cause) { saveError = cause instanceof Error ? cause.message : "Could not open preview."; }
+	finally { previewing = false; }
+}
+
 async function saveDraft() {
 	if (!canSave) return;
 	if (!editorState) return;
@@ -854,6 +868,7 @@ function removeSetMember(member: CatalogProductDraftForm["setMembers"][number]) 
 				{#if hasActiveDraft && (!isGraphV2 || canEditGraphProduct) && (dirty || saveState === "saving" || saveState === "error")}
 					<button type="button" class="primary" onclick={() => void saveDraft()} disabled={!canSave}>{saveState === "saving" ? "saving…" : saveState === "error" ? "try save again" : "save draft"}</button>
 				{/if}
+				{#if isGraphV2 && productsConfig.previewEndpoint && hasActiveDraft}<button type="button" disabled={editorLocked || previewing} onclick={() => void previewProduct()}>{previewing ? "opening…" : "preview in shop"}</button>{/if}
 				{#if publicationCapability}
 					<PublicationControl published={Boolean(editorState.published)} hasChanges={Boolean(editorState.draft && (dirty || editorState.draft.revisionId !== editorState.published?.revisionId))} item="product" onpublish={editorState.draft ? () => runPublication("publish") : undefined} onunpublish={() => runPublication("unpublish")} publishDisabled={!canPublish} unpublishDisabled={!canUnpublish} busy={publicationRequestActive || deletingProduct} />
 				{/if}
