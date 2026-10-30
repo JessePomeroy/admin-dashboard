@@ -50,3 +50,4 @@ jobs:
       - run: corepack pnpm check
       - run: corepack pnpm test
       - run: corepack pnpm build
+      - run: corepack pnpm check:server-entrypoints

@@ -504,3 +504,12 @@ and app assets bypass this gate; hosts explicitly preserve any existing recipien
 delivery or order-service routes. Each preserved route still requires its normal
 authorization. Mount the hook after deploying the availability contract; do not cache
 its callback or assume it revokes files served directly by an external CDN.
+
+### Granular auth and draft-preview server imports
+
+Public-page loaders can import the existing authentication helpers from
+`@jessepomeroy/admin/server/auth` and saved-draft preview helpers from
+`@jessepomeroy/admin/server/draft-preview`. These entrypoints expose the same
+functions as the server barrel and retain their authorization requirements.
+They avoid loading unrelated email handlers and the email SDK into public
+server bundles. Existing `@jessepomeroy/admin/server` imports remain supported.
