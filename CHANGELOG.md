@@ -1,5 +1,11 @@
 # @jessepomeroy/admin
 
+## 6.9.1
+
+### Patch Changes
+
+- 707def9: Keep closed mobile navigation out of the keyboard sequence, restore drawer focus and Escape handling, release scroll locks on wider screens, and retain usable navigation in short viewports.
+
 ## 6.9.0
 
 ### Minor Changes
