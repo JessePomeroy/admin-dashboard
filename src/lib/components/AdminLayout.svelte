@@ -9,6 +9,7 @@ import { getAdminCapabilitiesForLayout } from "../capabilities";
 import { isDark } from "../theme";
 import { getAdminConfig } from "../config";
 import { logger } from "../logger";
+import { modalLifecycle } from "../modalLifecycle";
 import NotificationWidget from "./NotificationWidget.svelte";
 import Toast from "./Toast.svelte";
 import AdminNavIcon from "./AdminNavIcon.svelte";
@@ -57,16 +58,6 @@ function toggleTheme() {
 	}
 }
 
-// Lock body scroll when mobile sidebar is open
-$effect(() => {
-	if (!browser || !(mobileMenuOpen || editorMenuOpen)) return;
-	const previousOverflow = document.body.style.overflow;
-	document.body.style.overflow = "hidden";
-	return () => {
-		document.body.style.overflow = previousOverflow;
-	};
-});
-
 let capabilities = $derived(
 	getAdminCapabilitiesForLayout(data, {
 		boardProjectTypes: config.boardProjectTypes,
@@ -113,9 +104,29 @@ let editorActive = $derived(
 let navItems = $derived(getAdminNavItems({ editorEnabled }));
 let mobileMenuOpen = $state(false);
 let editorMenuOpen = $state(false);
+let mobileNavigation = $state(false);
+let sidebar = $state<HTMLElement>();
 
 $effect(() => {
-	if (!editorActive) editorMenuOpen = false;
+	if (!browser || !window.matchMedia) return;
+	const viewport = window.matchMedia(editorActive ? "(max-width: 640px)" : "(max-width: 768px)");
+	function syncViewport() {
+		mobileNavigation = viewport.matches;
+		if (!viewport.matches) closeMobileMenu();
+	}
+	syncViewport();
+	viewport.addEventListener("change", syncViewport);
+	return () => viewport.removeEventListener("change", syncViewport);
+});
+
+$effect(() => {
+	$page.url.pathname;
+	closeMobileMenu();
+});
+
+$effect(() => {
+	if (!mobileNavigation || !mobileMenuOpen || editorActive || !sidebar) return;
+	return modalLifecycle(sidebar, closeMobileMenu).destroy;
 });
 
 // Auth session state (subscribe to nanostore)
@@ -213,7 +224,13 @@ function closeMobileMenu() {
 				</svg>
 			</button>
 		{:else}
-			<button class="hamburger" onclick={() => (mobileMenuOpen = !mobileMenuOpen)} aria-label="Toggle menu">
+			<button
+				class="hamburger"
+				onclick={() => (mobileMenuOpen = !mobileMenuOpen)}
+				aria-label="Toggle menu"
+				aria-controls="admin-mobile-navigation"
+				aria-expanded={mobileMenuOpen}
+			>
 				<span class="hamburger-line" class:open={mobileMenuOpen}></span>
 				<span class="hamburger-line" class:open={mobileMenuOpen}></span>
 				<span class="hamburger-line" class:open={mobileMenuOpen}></span>
@@ -224,14 +241,27 @@ function closeMobileMenu() {
 
 	<!-- Mobile overlay -->
 	{#if mobileMenuOpen || editorMenuOpen}
-		<button class="mobile-overlay" onclick={closeMobileMenu} aria-label="Close menu"></button>
+		<button class="mobile-overlay" tabindex="-1" onclick={closeMobileMenu} aria-label="Close menu"></button>
 	{/if}
 
 	<!-- Sidebar -->
-	<aside class="sidebar" class:sidebar-open={mobileMenuOpen && !editorActive} class:editor-compact={editorActive} aria-label="Admin navigation">
+	<aside
+		bind:this={sidebar}
+		id="admin-mobile-navigation"
+		class="sidebar"
+		class:sidebar-open={mobileMenuOpen && !editorActive}
+		class:editor-compact={editorActive}
+		aria-label="Admin navigation"
+		role={mobileNavigation && mobileMenuOpen ? "dialog" : undefined}
+		aria-modal={mobileNavigation && mobileMenuOpen ? "true" : undefined}
+		inert={mobileNavigation && (!mobileMenuOpen || editorActive)}
+	>
 		<div class="sidebar-brand">
 			<span class="brand-text">{config.siteName}</span>
 			<span class="brand-mark" aria-hidden="true">{config.siteName.slice(0, 1)}</span>
+			{#if mobileNavigation && !editorActive}
+				<button class="drawer-close" type="button" onclick={closeMobileMenu} aria-label="close admin navigation">×</button>
+			{/if}
 		</div>
 
 		<nav class="sidebar-nav" aria-label="Main navigation">
@@ -344,7 +374,7 @@ function closeMobileMenu() {
 	{/if}
 
 	<!-- Main content -->
-	<main class="admin-main" class:editor-active={editorActive}>
+	<main class="admin-main" class:editor-active={editorActive} inert={mobileNavigation && (mobileMenuOpen || editorMenuOpen)}>
 		{@render children()}
 	</main>
 
@@ -442,6 +472,19 @@ function closeMobileMenu() {
 		transition: transform 0.2s, opacity 0.2s;
 	}
 
+	.drawer-close {
+		position: absolute;
+		top: 10px;
+		right: 8px;
+		width: 44px;
+		height: 44px;
+		border: 0;
+		background: transparent;
+		color: var(--admin-text);
+		font-size: 1.5rem;
+		cursor: pointer;
+	}
+
 	.hamburger-line.open:nth-child(1) {
 		transform: translateY(6.5px) rotate(45deg);
 	}
@@ -460,7 +503,7 @@ function closeMobileMenu() {
 		inset: 0;
 		background: rgba(0, 0, 0, 0.4);
 		backdrop-filter: blur(4px);
-		z-index: 45;
+		z-index: 80;
 	}
 
 	/* Sidebar */
@@ -721,10 +764,20 @@ function closeMobileMenu() {
 
 		.sidebar {
 			transform: translateX(-100%);
+			visibility: hidden;
+			overflow-y: auto;
+			overscroll-behavior: contain;
+			z-index: 90;
+		}
+
+		.sidebar-nav {
+			flex: 0 0 auto;
+			overflow-y: visible;
 		}
 
 		.sidebar-open {
 			transform: translateX(0);
+			visibility: visible;
 		}
 
 		.admin-main {

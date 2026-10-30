@@ -169,6 +169,7 @@
 
 	[data-admin].editor-workspace .sidebar.editor-compact {
 		transform: none;
+		visibility: visible;
 	}
 
 	[data-admin].editor-workspace .admin-main.editor-active {

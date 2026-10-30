@@ -1,4 +1,5 @@
 <script lang="ts">
+import { modalLifecycle } from "../modalLifecycle";
 import { isAdminRouteActive } from "./adminNavigation";
 
 let {
@@ -48,15 +49,25 @@ function isCurrent(href: string) {
 		? pathname === href
 		: isAdminRouteActive(href, pathname);
 }
+
+let panel = $state<HTMLElement>();
+$effect(() => {
+	if (!mobile || !open || !panel) return;
+	return modalLifecycle(panel, () => onDismiss?.()).destroy;
+});
 </script>
 
 <aside
+	bind:this={panel}
 	class="editor-navigation"
 	class:mobile
 	class:open
 	id={mobile ? "editor-mobile-navigation" : undefined}
 	aria-label="Site editor navigation"
 	aria-hidden={mobile && !open ? "true" : undefined}
+	role={mobile && open ? "dialog" : undefined}
+	aria-modal={mobile && open ? "true" : undefined}
+	inert={mobile && !open}
 >
 	<div class="editor-heading">
 		<strong>editor</strong>
@@ -204,7 +215,9 @@ function isCurrent(href: string) {
 			transform: translateX(-100%);
 			visibility: hidden;
 			pointer-events: none;
-			z-index: 49;
+			z-index: 90;
+			overflow-y: auto;
+			overscroll-behavior: contain;
 		}
 
 		.mobile.open {
@@ -215,8 +228,17 @@ function isCurrent(href: string) {
 		}
 
 		.mobile .editor-heading {
+			flex-shrink: 0;
 			padding-bottom: 26px;
 		}
+
+		.mobile .editor-heading button {
+			width: 44px;
+			height: 44px;
+		}
+
+		.mobile nav { flex-shrink: 0; }
+		.mobile a { min-height: 44px; box-sizing: border-box; }
 	}
 
 	@media (prefers-reduced-motion: no-preference) {
