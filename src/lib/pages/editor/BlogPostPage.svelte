@@ -260,11 +260,9 @@ const lifecycle = createBlogDocumentLifecycle<PostDraft>({
 	<p class="loading" role="status">loading post…</p>
 {:else}
 	<div class="settings-page editor-document">
+		<a class="back" href={baseHref}>← blog</a>
 		<EditorDocumentHeader variant="blog" saveState={lifecycle.saveState}>
-		{#snippet title()}<div>
-				<a class="back" href={baseHref}>← blog</a>
-				<h1>{form.title?.trim() || "untitled post"}</h1>
-			</div>{/snippet}
+		{#snippet title()}<h1>{form.title?.trim() || "untitled post"}</h1>{/snippet}
 		{#snippet actions()}
 				{#if !archived && (lifecycle.canSave || lifecycle.saveState === "saving")}
 					<button type="button" onclick={() => void lifecycle.saveDraft()} disabled={!lifecycle.canSave || lifecycle.publicationBusy}>save draft</button>

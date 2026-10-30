@@ -9,16 +9,17 @@
 	padding: 24px 32px 72px;
 }
 
-[data-admin].editor-workspace .editor-document > :is(header, .settings-header) {
+[data-admin].editor-workspace .editor-document > :is(header, .settings-header),
+[data-admin].editor-workspace .settings-page > .editor-document-header {
 	display: flex;
 	flex-direction: row;
-	align-items: flex-end;
+	align-items: center;
 	justify-content: space-between;
 	gap: 16px 28px;
 	flex-wrap: wrap;
 	min-height: 0;
 	margin: 0;
-	padding: 0 0 24px;
+	padding: 0 0 20px;
 	border: 0;
 }
 
@@ -125,6 +126,40 @@
 [data-admin].editor-workspace .editor-document .gallery-upload {
 	width: 100%;
 	max-width: 36rem;
+}
+
+[data-admin].editor-workspace .editor-document-header .editor-header-actions > :is(button, a):not(.primary) {
+	min-height: 44px;
+	border: 0;
+	padding-inline: 8px;
+	background: transparent;
+	box-shadow: none;
+	color: var(--admin-text-muted);
+	text-decoration: underline;
+	text-underline-offset: .2em;
+}
+
+[data-admin].editor-workspace .editor-document .editor-media-section .section-heading > button {
+	min-height: 44px;
+	margin: 0;
+	border: 0;
+	padding: 0;
+	background: transparent;
+	box-shadow: none;
+	color: var(--admin-text-muted);
+	text-decoration: underline;
+	text-underline-offset: .2em;
+}
+
+[data-admin].editor-workspace .editor-document .editor-media-section.has-images .editor-upload-controls {
+	max-width: 30rem;
+}
+
+[data-admin].editor-workspace .editor-document .editor-media-section.has-images .uploader {
+	min-height: 88px;
+	margin-bottom: 0;
+	gap: 4px;
+	padding: 14px;
 }
 
 [data-admin].editor-workspace .editor-document .fields:is(.two-column, .two),
@@ -347,6 +382,10 @@
 		grid-column: 1 / -1;
 	}
 
+	[data-admin].editor-workspace .editor-document .editor-media-section > .editor-media-list {
+		grid-column: 1 / -1;
+	}
+
 	[data-admin].editor-workspace .editor-document .product-media.document-section .media-lists li {
 		grid-template-columns: var(--editor-section-columns);
 		column-gap: var(--editor-section-column-gap);
@@ -355,11 +394,17 @@
 	[data-admin].editor-workspace .editor-document .product-media.document-section .identity {
 		grid-column: 2;
 		grid-row: 1;
+		padding-inline-end: 96px;
+	}
+
+	[data-admin].editor-workspace .editor-document .product-media.document-section li:has(.drag-handle) .identity {
+		padding-inline-end: 176px;
 	}
 
 	[data-admin].editor-workspace .editor-document .product-media.document-section .row-actions {
 		grid-column: 2;
-		grid-row: 3;
+		grid-row: 1;
+		display: flex;
 		justify-self: end;
 	}
 }
@@ -371,9 +416,28 @@
 }
 
 @container editor-document (max-width: 34rem) {
+	[data-admin].editor-workspace .editor-document > header {
+		align-items: stretch;
+	}
+
+	[data-admin].editor-workspace .editor-document .editor-header-actions {
+		width: 100%;
+		justify-content: flex-start;
+	}
+
 	[data-admin].editor-workspace .editor-document .fields:is(.two-column, .two),
 	[data-admin].editor-workspace .editor-document.gallery-page .fields {
 		grid-template-columns: 1fr;
+	}
+}
+
+@media (max-width: 640px) {
+	[data-admin].editor-workspace .settings-page > .editor-document-header {
+		align-items: stretch;
+	}
+	[data-admin].editor-workspace .editor-document-header .editor-header-actions {
+		width: 100%;
+		justify-content: flex-start;
 	}
 }
 

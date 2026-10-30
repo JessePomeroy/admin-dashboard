@@ -116,6 +116,13 @@ let createError = $state("");
 let pendingProductKey = $state("");
 let createdProductHref = $state("");
 let newProductButton = $state<HTMLButtonElement>();
+let cleanupButton = $state<HTMLButtonElement>();
+
+async function closeCleanup() {
+	cleanupOpen = false;
+	await tick();
+	cleanupButton?.focus();
+}
 let createDialog = $state<HTMLDivElement>();
 let titleInput = $state<HTMLInputElement>();
 let fixedPriceCreation = $derived(
@@ -230,8 +237,6 @@ async function createProduct() {
 <div class="product-workbench" class:has-selection={Boolean(selectedProductId)} inert={creating || cleanupOpen}>
 	<header class="workbench-heading editor-workbench-header">
 		<h1>products</h1>
-		{#if productsConfig.privateAssetDeleteEndpoint || productsConfig.mediaDeleteEndpoint}<button type="button" class="new-product" onclick={() => cleanupOpen = true}>manage uploads</button>{/if}
-		<div class="heading-meta"><span>{loading ? "loading…" : `${products.length} ${products.length === 1 ? "product" : "products"}`}</span><small>{supportedKinds.length} {supportedKinds.length === 1 ? "kind" : "kinds"}</small></div>
 	</header>
 
 	<EditorWorkbenchLayout variant="product" selected={Boolean(selectedProductId)}>
@@ -244,7 +249,7 @@ async function createProduct() {
 			</div>
 		</aside>{/snippet}
 		{#snippet collection()}<aside class="collection-pane" aria-label="Product collection">
-			<div class="collection-heading"><h2>catalog</h2><button bind:this={newProductButton} type="button" class="new-product" onclick={() => void openCreate()}>new</button></div>
+			<div class="collection-heading"><div><h2>catalog</h2><p class="collection-count">{loading ? "loading…" : `${products.length} ${products.length === 1 ? "product" : "products"}`}</p></div><button bind:this={newProductButton} type="button" class="new-product" onclick={() => void openCreate()}>new</button></div>
 			<label class="search-field"><span>search products</span><input type="search" placeholder="Search name or URL" bind:value={search} /></label>
 			<div class="status-filters" role="group" aria-label="Filter by draft status">
 				{#each ["all", "unpublished", "published"] as status}
@@ -279,6 +284,9 @@ async function createProduct() {
 					{/each}
 				</div>
 			{/if}
+			{#if productsConfig.privateAssetDeleteEndpoint || productsConfig.mediaDeleteEndpoint}
+				<div class="collection-tools"><button bind:this={cleanupButton} type="button" onclick={() => cleanupOpen = true}>upload cleanup</button></div>
+			{/if}
 		</aside>{/snippet}
 		{#snippet document()}<section class="document-pane" aria-label="Product workspace">{@render children()}</section>{/snippet}
 	</EditorWorkbenchLayout>
@@ -309,7 +317,7 @@ async function createProduct() {
 {/if}
 
 {#if cleanupOpen}
-	<AdminModal title="upload cleanup" onclose={() => cleanupOpen = false}>
+	<AdminModal title="upload cleanup" onclose={closeCleanup}>
 		<CatalogPrivateCleanup />
 	</AdminModal>
 {/if}
@@ -319,8 +327,9 @@ async function createProduct() {
 	.workbench-heading { display: flex; align-items: end; justify-content: space-between; gap: 20px; padding: 13px 20px 12px; border-bottom: 1px solid var(--admin-border); background: var(--editor-canvas); }
 	.workbench-heading h1, .collection-heading h2 { margin: 0; color: var(--admin-heading); font-family: var(--admin-font-display); font-weight: 500; letter-spacing: -.025em; text-transform: lowercase; }
 	.workbench-heading h1 { font-size: clamp(1.18rem, 1.7vw, 1.48rem); }
-	.heading-meta { display: grid; justify-items: end; gap: 4px; color: var(--admin-heading); font-size: .75rem; white-space: nowrap; }
-	.heading-meta small { color: var(--admin-text-subtle); font-size: .63rem; }
+	.collection-count { margin: 5px 0 0; color: var(--admin-text-subtle); font-size: .66rem; }
+	.collection-tools { margin-top: 20px; padding-top: 12px; border-top: 1px solid var(--admin-border); }
+	.collection-tools button { min-height: 44px; border: 0; padding: 0; background: transparent; color: var(--admin-text-muted); font: inherit; font-size: .7rem; text-decoration: underline; text-underline-offset: .2em; cursor: pointer; }
 	.taxonomy-pane, .collection-pane { border-right: 1px solid var(--admin-border); background: var(--editor-collection); }
 	.taxonomy-pane { padding: 18px 10px; }
 	.kind-filters { display: grid; margin-top: 0; border-left: 1px solid var(--admin-border); }
@@ -377,7 +386,6 @@ async function createProduct() {
 	}
 	@media (max-width: 640px) {
 		.workbench-heading { align-items: flex-start; flex-direction: column; padding: 18px 20px; }
-		.heading-meta { justify-items: start; }
 		.taxonomy-pane { border-right: 0; border-bottom: 1px solid var(--admin-border); padding: 18px 16px; }
 		.kind-filters { display: flex; overflow-x: auto; }
 		.kind-filters button { flex: 0 0 auto; width: auto; }

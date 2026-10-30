@@ -862,8 +862,9 @@ function removeSetMember(member: CatalogProductDraftForm["setMembers"][number]) 
 	<p class="loading" role="status">Loading product draft…</p>
 {:else}
 		<div class="settings-page product-page editor-document editor-workbench">
+		<a class="back" href={baseHref}>← products</a>
 		<EditorDocumentHeader saveState={hasActiveDraft && (!isGraphV2 || canEditGraphProduct) ? saveState : undefined}>
-			{#snippet title()}<a class="back" href={baseHref}>← products</a><h1>{canEditGraphProduct || !isGraphV2 ? form.title?.trim() || "Untitled product" : catalogProductEditorTitle(readOnlyRevision)?.trim() || "Product"}</h1>{/snippet}
+			{#snippet title()}<h1>{canEditGraphProduct || !isGraphV2 ? form.title?.trim() || "Untitled product" : catalogProductEditorTitle(readOnlyRevision)?.trim() || "Product"}</h1>{/snippet}
 			{#snippet actions()}
 				{#if hasActiveDraft && (!isGraphV2 || canEditGraphProduct) && (dirty || saveState === "saving" || saveState === "error")}
 					<button type="button" class="primary" onclick={() => void saveDraft()} disabled={!canSave}>{saveState === "saving" ? "saving…" : saveState === "error" ? "try save again" : "save draft"}</button>
@@ -874,9 +875,6 @@ function removeSetMember(member: CatalogProductDraftForm["setMembers"][number]) 
 				{/if}
 			{/snippet}
 		</EditorDocumentHeader>
-		{#if catalogApi.remove && !editorState.published}
-			<button type="button" class="danger quiet-action" disabled={editorLocked} onclick={() => void deleteProduct()}>{deletingProduct ? "deleting…" : "delete product permanently"}</button>
-		{/if}
 		{#if saveError}<p class="alert" role="alert">{saveError}</p>{/if}
 		{#if publicationError}<div class="alert publication-alert" role="alert"><span>{publicationError}</span>{#if publicationOperation?.phase === "reload-required"}<button type="button" onclick={() => globalThis.location.reload()}>reload product</button>{/if}</div>{/if}
 		{#if mediaActionError}<p class="alert" role="alert">{mediaActionError}</p>{/if}
@@ -987,6 +985,12 @@ function removeSetMember(member: CatalogProductDraftForm["setMembers"][number]) 
 					<button type="button" class="danger" onclick={() => void discardDraft()} disabled={saveState === "saving" || saveState === "discarding"}>{saveState === "discarding" ? "discarding…" : "discard draft"}</button>
 				</section>
 			{/if}
+		{/if}
+		{#if catalogApi.remove && !editorState.published}
+			<section class="document-section" aria-labelledby="product-actions-heading">
+				<div class="section-heading"><div><h2 id="product-actions-heading">product actions</h2><p>Permanently remove this unpublished product from the catalog.</p></div></div>
+				<div><button type="button" class="danger quiet-action" disabled={editorLocked} onclick={() => void deleteProduct()}>{deletingProduct ? "deleting…" : "delete product permanently"}</button></div>
+			</section>
 		{/if}
 	</div>
 {/if}
