@@ -140,7 +140,7 @@
 }
 
 [data-admin].editor-workspace .editor-document .editor-media-section .section-heading > button {
-	min-height: 32px;
+	min-height: 44px;
 	margin: 0;
 	border: 0;
 	padding: 0;
@@ -423,10 +423,6 @@
 	[data-admin].editor-workspace .editor-document .editor-header-actions {
 		width: 100%;
 		justify-content: flex-start;
-	}
-
-	[data-admin].editor-workspace .editor-document .editor-media-section .section-heading > button {
-		min-height: 44px;
 	}
 
 	[data-admin].editor-workspace .editor-document .fields:is(.two-column, .two),
