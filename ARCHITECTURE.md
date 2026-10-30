@@ -48,7 +48,12 @@ authorized issuance, but the package still requires verifier configuration
 before accepting that grant or contacting the Worker.
 
 Import server factories from `@jessepomeroy/admin/server` so browser bundles do
-not traverse server dependencies.
+not traverse server dependencies. Public loaders that only need authentication
+or saved-draft previews should use `@jessepomeroy/admin/server/auth` or
+`@jessepomeroy/admin/server/draft-preview`. These granular entrypoints expose
+the same helpers without evaluating unrelated email adapters. The post-build
+`check:server-entrypoints` smoke test loads the actual distribution while denying
+email-SDK imports.
 
 ## Auth model
 

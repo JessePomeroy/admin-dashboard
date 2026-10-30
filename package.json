@@ -23,6 +23,14 @@
       "types": "./dist/server.d.ts",
       "default": "./dist/server.js"
     },
+    "./server/auth": {
+      "types": "./dist/server/adminAuth.d.ts",
+      "default": "./dist/server/adminAuth.js"
+    },
+    "./server/draft-preview": {
+      "types": "./dist/server/draftPreview.d.ts",
+      "default": "./dist/server/draftPreview.js"
+    },
     "./content-export": {
       "types": "./dist/server/contentExportCore.d.ts",
       "default": "./dist/server/contentExportCore.js"
@@ -56,7 +64,8 @@
     "test:watch": "vitest",
     "check": "svelte-check --tsconfig ./tsconfig.json",
     "lint:anti-slop": "oxlint .",
-    "lint": "pnpm lint:anti-slop"
+    "lint": "pnpm lint:anti-slop",
+    "check:server-entrypoints": "node scripts/check-server-entrypoints.mjs"
   },
   "peerDependencies": {
     "@sveltejs/kit": "^2.0.0",
