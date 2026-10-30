@@ -66,7 +66,7 @@ function renderDetail(doc = invoice) {
 
 describe("fractional invoice amounts", () => {
 	it("includes rounded lines and tax in the dashboard pending amount", async () => {
-		components.push(mount(DashboardPage, { target: document.body, props: { data: { newInquiryCount: 0 } } }));
+		components.push(mount(DashboardPage, { target: document.body, props: { data: { newInquiryCount: 0, adminSession: { status: "authorized", tier: "full", isCreator: false, email: "owner@example.test" } } } }));
 		await tick();
 		const summary = Array.from(document.querySelectorAll(".summary-line")).find((entry) => entry.textContent?.includes("invoices outstanding"));
 		expect(summary?.textContent).toMatch(/\$21\.25\s+pending/);
@@ -150,7 +150,7 @@ describe("invoice payment balances",()=>{
    {...invoice,_id:toId<"invoices">("invoice-2"),status:"overdue"},
    {...invoice,_id:toId<"invoices">("invoice-3"),status:"paid",paidAmount:2125},
   ];
-  components.push(mount(DashboardPage,{target:document.body,props:{data:{newInquiryCount:0}}}));
+  components.push(mount(DashboardPage,{target:document.body,props:{data:{newInquiryCount:0, adminSession:{status:"authorized",tier:"full",isCreator:false,email:"owner@example.test"}}}}));
   await tick();
   const summary=Array.from(document.querySelectorAll(".summary-line")).find(entry=>entry.textContent?.includes("invoices outstanding"));
   expect(summary?.textContent).toMatch(/\$32\.50\s+pending/);

@@ -22,6 +22,7 @@ let capability = $derived(getAdminSessionCapabilityInput(adminSession));
 let unlocked = $derived(
 	hasFeature(capability.tier, feature, {
 		isCreator: capability.isCreator,
+		enabledFeatures: capability.enabledFeatures,
 	}),
 );
 </script>

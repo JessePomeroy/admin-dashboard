@@ -14,6 +14,7 @@ const mocks = vi.hoisted(() => {
 			ref === refs.saveContactPageDraft ? { revisionId: "saved-revision" } : null,
 		),
 		publishingEnabled: true,
+		publicationAllowed: true,
 		editorState: "draft" as "draft" | "missing",
 		refs,
 	};
@@ -68,6 +69,7 @@ vi.mock("../src/lib/config", () => ({
 		},
 		editor: {
 			contactPage: {
+				publicationEnabled: mocks.publicationAllowed,
 				initialPayload: {
 					heading: "Prepared contact copy",
 					intro: "Prepared introduction.",
@@ -118,6 +120,7 @@ describe("Contact page editor capability modes", () => {
 	beforeEach(() => {
 		mocks.mutation.mockClear();
 		mocks.publishingEnabled = true;
+		mocks.publicationAllowed = true;
 		mocks.editorState = "draft";
 		localStorage.clear();
 	});
@@ -234,4 +237,11 @@ describe("Contact page editor capability modes", () => {
 			"Review or reload before publishing.",
 		);
 	});
+
+it("keeps explicitly draft-only hosts private even with the standard publish API bound", async () => {
+ mocks.publicationAllowed = false;
+ await renderPage();
+ expect(Array.from(document.querySelectorAll("button")).some(button => button.textContent?.toLowerCase().includes("publish changes"))).toBe(false);
+});
+
 });

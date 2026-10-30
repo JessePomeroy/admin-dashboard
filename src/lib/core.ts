@@ -60,3 +60,5 @@ export * from "./documentEmailRecovery.js";
 
 // Theme
 export { isDark } from "./theme.js";
+
+export { createStandardAdminAPI, adminFeatureForPath, type StandardAdminApiSource } from "./clientIntegration.js";

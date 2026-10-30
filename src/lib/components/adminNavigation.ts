@@ -28,7 +28,7 @@ const baseAdminNavItems: AdminNavItem[] = [
 	{ href: "/admin", label: "dashboard", icon: "grid", feature: "dashboard" },
 	{ href: "/admin/inquiries", label: "inquiries", icon: "mail", feature: "inquiries" },
 	{ href: "/admin/orders", label: "orders", icon: "package", feature: "orders" },
-	{ href: "/admin/galleries", label: "client galleries", icon: "image", feature: "galleries" },
+	{ href: "/admin/galleries", label: "client galleries", icon: "image", feature: "galleryDelivery" },
 	{ href: "/admin/crm", label: "clients", icon: "clients", feature: "crm", separator: true },
 	{ href: "/admin/board", label: "board", icon: "board", feature: "board" },
 	{ href: "/admin/quotes", label: "quotes", icon: "quotes", feature: "quotes" },

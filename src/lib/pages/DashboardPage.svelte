@@ -1,4 +1,5 @@
 <script lang="ts">
+import { getAdminCapabilitiesForLayout } from "../capabilities";
 import { onMount } from "svelte";
 import ContentExport from "./dashboard/ContentExport.svelte";
 import { goto } from "$app/navigation";
@@ -76,6 +77,8 @@ interface DailyGrossPayment {
 
 let { data } = $props();
 
+let capabilities = $derived(getAdminCapabilitiesForLayout(data));
+
 // Convex subscriptions
 let utcDay = $state(new Date().toISOString().slice(0, 10));
 onMount(() => {
@@ -84,11 +87,11 @@ onMount(() => {
 	document.addEventListener("visibilitychange", refreshDay);
 	return () => { clearInterval(timer); document.removeEventListener("visibilitychange", refreshDay); };
 });
-const orderStatsQuery = useQuery(api.orders.getStatsForDay ?? api.orders.getStats, () => api.orders.getStatsForDay
+const orderStatsQuery = useQuery(api.orders.getStatsForDay ?? api.orders.getStats, () => !capabilities.hasFeature("orders") ? "skip" : api.orders.getStatsForDay
 	? { siteUrl: config.siteUrl, day: utcDay } : { siteUrl: config.siteUrl });
-const crmStatsQuery = useQuery(api.crm.getStats, { siteUrl: config.siteUrl });
-const invoicesQuery = useQuery(api.invoices.getDashboardSummary ?? api.invoices.list, { siteUrl: config.siteUrl });
-const quotesQuery = useQuery(api.quotes.getDashboardSummary ?? api.quotes.list, { siteUrl: config.siteUrl });
+const crmStatsQuery = useQuery(api.crm.getStats, () => capabilities.hasFeature("crm") ? { siteUrl: config.siteUrl } : "skip");
+const invoicesQuery = useQuery(api.invoices.getDashboardSummary ?? api.invoices.list, () => capabilities.hasFeature("invoicing") ? { siteUrl: config.siteUrl } : "skip");
+const quotesQuery = useQuery(api.quotes.getDashboardSummary ?? api.quotes.list, () => capabilities.hasFeature("quotes") ? { siteUrl: config.siteUrl } : "skip");
 
 let isLoading = $derived(
 	orderStatsQuery.isLoading || crmStatsQuery.isLoading || invoicesQuery.isLoading || quotesQuery.isLoading,
@@ -250,6 +253,7 @@ let sparklineArea = $derived(() => {
 		<h1>dashboard</h1>
 	</header>
 
+	{#if capabilities.hasFeature("orders")}
 	<!-- Currency groups remain separate; the layout only changes their hierarchy. -->
 	<div
 		class="stats-line"
@@ -334,9 +338,12 @@ let sparklineArea = $derived(() => {
 		{/if}
 	</div>
 
+	{/if}
+
 	<!-- Activity summary -->
 	<div class="activity-summary">
 		<h2 class="section-label">activity</h2>
+		{#if capabilities.hasFeature("crm")}
 		<p class="summary-line">
 			<span class="summary-value">{crmStats.total}</span> clients
 			<span class="summary-sep">&middot;</span>
@@ -346,14 +353,19 @@ let sparklineArea = $derived(() => {
 			<span class="summary-sep">&middot;</span>
 			<span class="summary-value">{crmStats.inProgress}</span> in progress
 		</p>
+		{/if}
+		{#if capabilities.hasFeature("invoicing")}
 		<p class="summary-line">
 			<span class="summary-value">{invoiceStats.draft + invoiceStats.sent}</span> invoices outstanding
 			<span class="summary-sep">&middot;</span>
 			<span class="summary-value">{pendingInvoiceAmount === null ? "invalid amount" : formatCents(pendingInvoiceAmount)}</span> pending
 		</p>
+		{/if}
+		{#if capabilities.hasFeature("quotes")}
 		<p class="summary-line">
 			<span class="summary-value">{quoteStats.sent}</span> quotes awaiting response
 		</p>
+		{/if}
 		{#if newInquiryCount > 0}
 			<p class="summary-line inquiry-highlight">
 				<span class="summary-value">{newInquiryCount}</span> new {newInquiryCount === 1 ? 'inquiry' : 'inquiries'}
@@ -394,6 +406,7 @@ let sparklineArea = $derived(() => {
 		{/if}
 	</div>
 
+	{#if capabilities.hasFeature("orders")}
 	<!-- Recent orders -->
 	<div class="orders-section">
 		<h2 class="section-label">recent orders</h2>
@@ -443,6 +456,7 @@ let sparklineArea = $derived(() => {
 			</div>
 		{/if}
 	</div>
+	{/if}
 	{#if config.contentExportEndpoint}
 		<ContentExport endpoint={config.contentExportEndpoint} />
 	{/if}

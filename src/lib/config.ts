@@ -257,6 +257,7 @@ export interface AdminAPI {
 	};
 	contentCleanup?: { list: FnRef; listRevisions: FnRef; purgeArchived: FnRef; pruneRevision: FnRef };
 	platform: {
+		getFeatureAccess?: FnRef;
 		createClient: FnRef;
 		updateClient: FnRef;
 		updateSubscription: FnRef;
@@ -475,6 +476,8 @@ export interface AdminEditorConfig {
 	};
 	/** Enables the client-managed Contact & Booking content surface. */
 	contactPage?: {
+		/** Keep draft-only hosts explicit while binding the complete standard API. */
+		publicationEnabled?: boolean;
 		/** Current host-owned content used to initialize the first unpublished draft. */
 		initialPayload: ContactPageDraftPayload;
 		/** Shared workspace route; defaults to `/admin/editor/pages/contact`. */

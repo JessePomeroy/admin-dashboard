@@ -21,6 +21,7 @@ export type Feature = keyof typeof FEATURES;
 export type Tier = "basic" | "full";
 export type FeatureContext = {
 	isCreator?: boolean;
+	enabledFeatures?: readonly Feature[];
 };
 
 const TIER_RANK: Record<Tier, number> = {
@@ -39,6 +40,7 @@ export function hasFeature(
 	feature: Feature,
 	context: FeatureContext = {},
 ): boolean {
+	if (context.enabledFeatures && !context.enabledFeatures.includes(feature)) return false;
 	const required = FEATURES[feature];
 	const tierAllowsFeature = TIER_RANK[tier] >= TIER_RANK[required];
 	if (!tierAllowsFeature) return false;
