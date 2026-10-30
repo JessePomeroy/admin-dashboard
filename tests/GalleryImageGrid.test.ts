@@ -84,7 +84,7 @@ describe("GalleryImageGrid", () => {
 		expect(deleteButton().disabled).toBe(true);
 		resolveCleanup(new Response("{}"));
 		await vi.waitFor(() => expect(onchange).toHaveBeenCalledTimes(1));
-		expect(fixture.mutation).toHaveBeenCalledWith({ name: "galleryDelivery:removeImage" }, { id: "image-1" });
+		expect(fixture.mutation).toHaveBeenCalledWith({ name: "galleryDelivery:removeImage" }, { id: "image-1", siteUrl: "site.example" });
 		await unmount(component);
 	});
 

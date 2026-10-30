@@ -134,6 +134,23 @@ handlers validate request shape, site/key scope, and authentication before
 forwarding to the Worker. The Worker owns upload tokens, R2 operations, portal
 token validation, downloads, and prepared archives.
 
+The delivery page owns one upload controller per opened gallery for that page
+visit. Closing its modal or changing tabs detaches a view; uploads continue and
+remain accessible from the page's queue summary. Leaving the page warns while
+work is unfinished and cancels it on teardown. Files are not persisted across
+reloads. Cleanup failures retain their target and selection for retry while the
+page remains open; browser shutdown cleanup is best effort.
+
+Retries reuse acknowledged original uploads, processed variants and registration
+inputs. Registration replays require the backend's idempotent `addImage` contract;
+deletion replays pass the configured `siteUrl` to `removeImage`. Deploy those
+additive backend contracts before host adoption. Storage deletion precedes
+metadata deletion, and a partial batch keeps only failed cleanup targets.
+
+Hosts may supply `galleryDelivery.listBySitePaginated` to filter and browse
+delivery galleries by server cursor. Older hosts retain `listBySite` behavior
+until they explicitly bind that capability.
+
 Storage keys are parsed from the right as
 `<siteUrl>/<galleryId>/<kind>/<filename>`. The host adapter compares the parsed
 site exactly with its configured site (apart from trailing-slash

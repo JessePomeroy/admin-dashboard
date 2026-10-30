@@ -2,9 +2,13 @@
 import { mount, tick, unmount } from "svelte";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import GalleryUploader from "../src/lib/pages/gallery-delivery/GalleryUploader.svelte";
+import type { ComponentProps } from "svelte";
+import { createGalleryUploadController } from "../src/lib/pages/gallery-delivery/galleryUploadController";
+import { createGalleryStoragePort } from "../src/lib/pages/gallery-delivery/galleryStoragePort";
+import { readGalleryImageDimensions } from "../src/lib/pages/gallery-delivery/galleryImageDimensions";
 
 const mocks = vi.hoisted(() => {
-	const mutation = vi.fn(async () => "image-id");
+	const mutation = vi.fn(async (_reference: unknown, _args: unknown) => "image-id");
 	return { mutation, uploadPolicy: "media", hasPolicyReference: false };
 });
 
@@ -110,6 +114,25 @@ function setInputFiles(input: HTMLInputElement, files: File[]): void {
 	input.dispatchEvent(new Event("change", { bubbles: true }));
 }
 
+function mountUploader(options: {
+	target: Element;
+	props: Pick<ComponentProps<typeof GalleryUploader>, "adminSession" | "onbatchchange"> & { galleryId: string; onupload: () => void };
+}) {
+	const uploadPolicy = mocks.hasPolicyReference && mocks.uploadPolicy === "all-files" ? "all-files" : "media";
+	const uploadController = createGalleryUploadController({
+		storage: createGalleryStoragePort({ fetch: controlledFetch, galleryWorkerUrl: "https://gallery-worker.example" }),
+		siteUrl: "site", galleryId: options.props.galleryId, uploadPolicy: () => uploadPolicy,
+		getImageDimensions: readGalleryImageDimensions,
+		addImage: (input) => mocks.mutation({ name: "galleryDelivery:addImage" }, input),
+		removeImage: async (id) => { await mocks.mutation({ name: "galleryDelivery:removeImage" }, { id, siteUrl: "site" }); },
+		onupload: options.props.onupload,
+	});
+	return mount(GalleryUploader, { target: options.target, props: {
+		uploadController, uploadPolicy, adminSession: options.props.adminSession,
+		onbatchchange: options.props.onbatchchange,
+	} });
+}
+
 describe("GalleryUploader", () => {
 	beforeEach(() => {
 		mocks.mutation.mockClear();
@@ -144,10 +167,21 @@ describe("GalleryUploader", () => {
 		document.body.innerHTML = "";
 	});
 
+	it("preserves the standalone galleryId and onupload entry point", async () => {
+		const onupload = vi.fn();
+		const component = mount(GalleryUploader, { target: document.body, props: {
+			galleryId: "gallery", onupload,
+			adminSession: { status: "authorized", email: "owner@example.invalid", tier: "full", isCreator: true },
+		} });
+		setInputFiles(document.querySelector<HTMLInputElement>('input[type="file"]')!, [new File(["fictional"], "photo.jpg", { type: "image/jpeg" })]);
+		await vi.waitFor(() => expect(onupload).toHaveBeenCalledTimes(1));
+		await unmount(component);
+	});
+
 	it.each(["media", "all-files"])("uses the resolved %s policy for file picking and upload intake", async (policy) => {
 		mocks.uploadPolicy = policy;
 		mocks.hasPolicyReference = true;
-		const component = mount(GalleryUploader, {
+		const component = mountUploader({
 			target: document.body,
 			props: {
 				galleryId: "gallery",
@@ -184,7 +218,7 @@ describe("GalleryUploader", () => {
 			rejectedSizeBytes: number;
 		}> = [];
 		const onupload = vi.fn();
-		const component = mount(GalleryUploader, {
+		const component = mountUploader({
 			target: document.body,
 			props: {
 				galleryId: "gallery",
@@ -252,7 +286,7 @@ describe("GalleryUploader", () => {
 	});
 
 	it("shows selected, uploadable, and skipped batch diagnostics", async () => {
-		const component = mount(GalleryUploader, {
+		const component = mountUploader({
 			target: document.body,
 			props: {
 				galleryId: "gallery",
@@ -282,7 +316,7 @@ describe("GalleryUploader", () => {
 	});
 
 	it("traverses dropped browser folder entries before queueing uploads", async () => {
-		const component = mount(GalleryUploader, {
+		const component = mountUploader({
 			target: document.body,
 			props: {
 				galleryId: "gallery",
@@ -337,7 +371,7 @@ describe("GalleryUploader", () => {
 	it("wires retry all through to retryable upload failures only", async () => {
 		presignFailuresRemaining = 1;
 
-		const component = mount(GalleryUploader, {
+		const component = mountUploader({
 			target: document.body,
 			props: {
 				galleryId: "gallery",
@@ -376,7 +410,7 @@ describe("GalleryUploader", () => {
 	it("wires select all and delete selected through to in-flight storage cleanup", async () => {
 		holdDirectUploads = true;
 
-		const component = mount(GalleryUploader, {
+		const component = mountUploader({
 			target: document.body,
 			props: {
 				galleryId: "gallery",

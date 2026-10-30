@@ -1,5 +1,6 @@
 <script lang="ts">
 import { useQuery } from "convex-svelte";
+import { onDestroy, untrack } from "svelte";
 import { useAdminClient } from "../../adminClient";
 import { getAdminConfig } from "../../config";
 import { formatBytes, toId } from "../../utils";
@@ -9,13 +10,9 @@ import type { TenantAdminServerSession } from "../../adminSession";
 import type { Gallery, GalleryImage } from "../../types";
 import GalleryUploader from "./GalleryUploader.svelte";
 import GalleryImageGrid from "./GalleryImageGrid.svelte";
-
-interface UploadBatchSummary {
-	totalCount: number;
-	completedCount: number;
-	totalSizeBytes: number;
-	hasErrors: boolean;
-}
+import type { GalleryUploadController, GalleryUploadSnapshot } from "./galleryUploadController";
+import type { GalleryUploadPolicy } from "../../galleryUploadPolicy";
+import { useGalleryUploadFactory } from "./galleryUploadFactory.svelte";
 
 interface GalleryStorageKeyPage {
 	keys: string[];
@@ -25,11 +22,30 @@ interface GalleryStorageKeyPage {
 
 const CLEANUP_KEY_PAGE_SIZE = 500;
 
-let { gallery, adminSession, onclose }: {
+let { gallery, adminSession, onclose, uploadController: providedController, uploadPolicy: providedPolicy }: {
 	gallery: Gallery & { clientName: string };
 	adminSession: TenantAdminServerSession;
 	onclose: () => void;
+	uploadController?: GalleryUploadController;
+	uploadPolicy?: GalleryUploadPolicy;
 } = $props();
+
+const uploadSource = untrack(() => {
+	if (providedController) return { controller: providedController, factory: null };
+	const factory = useGalleryUploadFactory();
+	return { controller: factory.create(gallery._id), factory };
+});
+let localController = $state.raw(uploadSource.controller);
+let localGalleryId = untrack(() => gallery._id);
+$effect(() => {
+	if (!uploadSource.factory || providedController || gallery._id === localGalleryId) return;
+	void localController.dispose();
+	localGalleryId = gallery._id;
+	localController = uploadSource.factory.create(gallery._id);
+});
+const uploadController = $derived(providedController ?? localController);
+const uploadPolicy = $derived(providedPolicy ?? uploadSource.factory?.policy ?? "media");
+onDestroy(() => { if (uploadSource.factory) void localController.dispose(); });
 
 const config = getAdminConfig();
 const { api } = config;
@@ -45,7 +61,8 @@ let tab = $state<"images" | "settings">("images");
 let saving = $state(false);
 let deleting = $state(false);
 let copyText = $state("copy link");
-let uploadBatch = $state<UploadBatchSummary | null>(null);
+let uploadBatch = $state<GalleryUploadSnapshot>(untrack(() => uploadController.getSnapshot()));
+$effect(() => uploadController.subscribe((snapshot) => { uploadBatch = snapshot; }));
 let headerStats = $derived(
 	uploadBatch && uploadBatch.totalCount > 0
 		? `${uploadBatch.completedCount}/${uploadBatch.totalCount} uploaded — ${formatBytes(uploadBatch.totalSizeBytes)}`
@@ -70,10 +87,6 @@ $effect(() => {
 	editPassword = "";
 	removePasswordProtection = false;
 });
-
-function handleUploadBatchChange(summary: UploadBatchSummary) {
-	uploadBatch = summary.totalCount > 0 ? summary : null;
-}
 
 async function readResponseError(response: Response, fallback: string): Promise<string> {
 	const detail = await response.text().catch(() => "");
@@ -236,10 +249,9 @@ async function handleShare() {
 		{#if tab === "images"}
 			<div class="images-section" role="tabpanel">
 				<GalleryUploader
-					galleryId={gallery._id as string}
+					{uploadController}
+					{uploadPolicy}
 					{adminSession}
-					onupload={() => {}}
-					onbatchchange={handleUploadBatchChange}
 				/>
 				<GalleryImageGrid
 					{images}

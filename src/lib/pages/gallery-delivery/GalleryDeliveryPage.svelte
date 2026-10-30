@@ -1,5 +1,8 @@
 <script lang="ts">
 import { useQuery } from "convex-svelte";
+import type { PaginationResult } from "convex/server";
+import { beforeNavigate } from "$app/navigation";
+import { onDestroy, onMount } from "svelte";
 import { useAdminClient } from "../../adminClient";
 import { getAdminConfig } from "../../config";
 import { formatBytes, formatTimestampDate, toId } from "../../utils";
@@ -10,6 +13,9 @@ import type { TenantAdminServerSession } from "../../adminSession";
 import type { Gallery } from "../../types";
 import GalleryCreateModal from "./GalleryCreateModal.svelte";
 import GalleryDetailModal from "./GalleryDetailModal.svelte";
+import type { GalleryUploadController, GalleryUploadSnapshot } from "./galleryUploadController";
+import { useGalleryUploadFactory } from "./galleryUploadFactory.svelte";
+import { logger } from "../../logger";
 
 let { adminSession }: { adminSession: TenantAdminServerSession } = $props();
 
@@ -17,10 +23,89 @@ const config = getAdminConfig();
 const { api } = config;
 const galleryApi = api.galleryDelivery!;
 const client = useAdminClient();
-const galleriesQuery = useQuery(galleryApi.listBySite, { siteUrl: config.siteUrl });
+type GalleryWithClient = Gallery & { clientName: string };
+let statusFilter = $state("all");
+let cursors = $state<(string | null)[]>([null]);
+let requestId = $state(0);
+let switchingPage = $state(false);
+const paginated = Boolean(galleryApi.listBySitePaginated);
+const cursor = $derived(cursors[cursors.length - 1]);
+const galleriesQuery = useQuery(galleryApi.listBySitePaginated ?? galleryApi.listBySite, () => paginated ? {
+	siteUrl: config.siteUrl, ...(statusFilter === "all" ? {} : { status: statusFilter }),
+	paginationOpts: { numItems: 25, cursor, id: requestId },
+} : { siteUrl: config.siteUrl }, { keepPreviousData: false });
+const result = $derived(galleriesQuery.data as PaginationResult<GalleryWithClient> | GalleryWithClient[] | undefined);
+const page = $derived(result && !Array.isArray(result) ? result : undefined);
+const splitError = new Error("This gallery page changed. Retry to reload it.");
+const pageError = $derived(page?.pageStatus === "SplitRequired" ? splitError : galleriesQuery.error);
+const hasNext = $derived(Boolean(page && !page.isDone && page.continueCursor && page.continueCursor !== cursor));
+$effect(() => { if (result || galleriesQuery.error) switchingPage = false; });
+const uploadFactory = useGalleryUploadFactory();
+const uploadPolicy = $derived(uploadFactory.policy);
 
-let galleries = $derived(galleriesQuery.data ?? []);
-let isLoading = $derived(galleriesQuery.isLoading);
+type UploadQueue = { gallery: GalleryWithClient; controller: GalleryUploadController; snapshot: GalleryUploadSnapshot };
+let uploadQueues = $state.raw<UploadQueue[]>([]);
+let disposed = false;
+const visibleQueues = $derived(uploadQueues.filter((queue) => queue.snapshot.files.length > 0));
+const hasUnfinishedUploads = $derived(uploadQueues.some((queue) => queue.snapshot.deletingSelected || queue.snapshot.files.some((file) =>
+	["pending", "uploading", "processing"].includes(file.status) || (file.status === "error" && Boolean(file.r2Key)),
+)));
+
+function openGallery(gallery: GalleryWithClient) {
+	if (!uploadQueues.some((queue) => queue.gallery._id === gallery._id)) {
+		// Own each queue for this page visit, independently of modal and tab lifetimes.
+		const controller = uploadFactory.create(gallery._id, {
+			onchange: (snapshot) => {
+				if (!disposed) uploadQueues = uploadQueues.map((queue) => queue.gallery._id === gallery._id ? { ...queue, snapshot } : queue);
+			},
+		});
+		uploadQueues = [...uploadQueues, { gallery, controller, snapshot: controller.getSnapshot() }];
+	}
+	selectedGallery = gallery;
+}
+
+beforeNavigate((navigation) => {
+	if (navigation.willUnload) return;
+	if (hasUnfinishedUploads && !globalThis.confirm("Uploads are unfinished. Leave this page and cancel them?")) navigation.cancel();
+});
+onMount(() => {
+	const warnBeforeUnload = (event: BeforeUnloadEvent) => {
+		if (!hasUnfinishedUploads) return;
+		event.preventDefault();
+		event.returnValue = "";
+	};
+	window.addEventListener("beforeunload", warnBeforeUnload);
+	return () => window.removeEventListener("beforeunload", warnBeforeUnload);
+});
+onDestroy(() => {
+	disposed = true;
+	for (const queue of uploadQueues) void queue.controller.dispose().catch((error) => logger.warn("Could not cancel unfinished uploads:", error));
+});
+
+const galleries = $derived(pageError ? [] : Array.isArray(result) ? result : page?.page ?? []);
+const isLoading = $derived(switchingPage || galleriesQuery.isLoading || (!result && !pageError));
+
+function changeFilter(status: string) {
+	if (statusFilter === status) return;
+	statusFilter = status;
+	cursors = [null];
+	if (paginated) switchingPage = true;
+}
+function nextPage() {
+	if (isLoading || !hasNext || !page) return;
+	switchingPage = true;
+	cursors = [...cursors, page.continueCursor];
+}
+function previousPage() {
+	if (isLoading || cursors.length === 1) return;
+	switchingPage = true;
+	cursors = cursors.slice(0, -1);
+}
+function retryPage() {
+	if (!paginated) { window.location.reload(); return; }
+	switchingPage = true;
+	requestId += 1;
+}
 
 async function handleQuickAction(e: Event, galleryId: string, status: string) {
 	e.stopPropagation();
@@ -29,11 +114,11 @@ async function handleQuickAction(e: Event, galleryId: string, status: string) {
 
 let showCreateModal = $state(false);
 let selectedGallery = $state<(Gallery & { clientName: string }) | null>(null);
-let statusFilter = $state("all");
+const selectedQueue = $derived(uploadQueues.find((queue) => queue.gallery._id === selectedGallery?._id));
 
 let filteredGalleries = $derived(
 	galleries.filter((g: Gallery & { clientName: string }) => {
-		if (statusFilter !== "all" && g.status !== statusFilter) return false;
+		if (!paginated && statusFilter !== "all" && g.status !== statusFilter) return false;
 		return true;
 	}),
 );
@@ -55,19 +140,41 @@ const statusLabels: Record<string, string> = {
 	</PageHeader>
 
 	<div class="filter-row">
-		{#each ["all", "draft", "published", "archived"] as s}
+		{#each ["all", "draft", "uploading", "published", "archived"] as s}
 			<button
 				class="filter-chip"
 				class:active={statusFilter === s}
 				aria-pressed={statusFilter === s}
-				onclick={() => (statusFilter = s)}
+				onclick={() => changeFilter(s)}
 			>
 				{s}
 			</button>
 		{/each}
 	</div>
 
-	{#if isLoading}
+	{#if visibleQueues.length > 0}
+		<aside class="upload-queues" aria-label="gallery upload queues">
+			<p>uploads continue while this page is open</p>
+			{#each visibleQueues as queue (queue.gallery._id)}
+				<div class="queue-row">
+					<span>{queue.gallery.name} · {queue.snapshot.completedCount}/{queue.snapshot.totalCount} uploaded{queue.snapshot.hasErrors ? " · needs attention" : queue.snapshot.paused ? " · paused" : ""}</span>
+					<button class="action-btn" onclick={() => openGallery(queue.gallery)}>view uploads</button>
+					{#if queue.snapshot.files.some((file) => file.status !== "done")}
+						<button class="action-btn" disabled={queue.snapshot.deletingSelected} onclick={() => {
+							if (globalThis.confirm(`Cancel unfinished uploads for ${queue.gallery.name}? Completed files stay in the gallery.`)) void queue.controller.cancelPendingUploads();
+						}}>cancel unfinished</button>
+					{/if}
+				</div>
+			{/each}
+		</aside>
+	{/if}
+
+	{#if pageError}
+		<div class="empty-state" role="alert">
+			<p>could not load this gallery page</p>
+			<button class="action-btn page-button" onclick={retryPage}>{paginated ? "retry" : "reload"}</button>
+		</div>
+	{:else if isLoading}
 		<LoadingState />
 	{:else if filteredGalleries.length === 0}
 		<div class="empty-state">
@@ -81,7 +188,7 @@ const statusLabels: Record<string, string> = {
 		<div class="gallery-list">
 			{#each filteredGalleries as gallery (gallery._id)}
 				<div class="gallery-row">
-					<button class="row-main" onclick={() => (selectedGallery = gallery)}>
+					<button class="row-main" onclick={() => openGallery(gallery)}>
 						<div class="gallery-info">
 							<span class="gallery-name">{gallery.name}</span>
 							<span class="gallery-client">{gallery.clientName}</span>
@@ -106,22 +213,43 @@ const statusLabels: Record<string, string> = {
 			{/each}
 		</div>
 	{/if}
+	{#if paginated}
+		<nav class="pagination" aria-label="gallery pages">
+			<button class="page-button" disabled={isLoading || cursors.length === 1} onclick={previousPage}>previous</button>
+			<span>page {cursors.length}{!isLoading && !pageError ? ` · ${filteredGalleries.length} galleries on this page` : ""}</span>
+			<button class="page-button" disabled={isLoading || Boolean(pageError) || !hasNext} onclick={nextPage}>next</button>
+		</nav>
+	{/if}
 </div>
 
 {#if showCreateModal}
 	<GalleryCreateModal onclose={() => (showCreateModal = false)} />
 {/if}
 
-{#if selectedGallery}
+{#if selectedGallery && selectedQueue}
+	{#key selectedGallery._id}
 	<GalleryDetailModal
 		gallery={selectedGallery}
 		{adminSession}
+		uploadController={selectedQueue.controller}
+		{uploadPolicy}
 		onclose={() => (selectedGallery = null)}
 	/>
+	{/key}
 {/if}
 </FeatureGate>
 
 <style>
+	.pagination { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 12px; margin-top: 24px; }
+	.pagination span { color: var(--admin-text-muted); font-size: 0.8rem; text-align: center; }
+	.page-button { min-height: 44px; padding: 8px 16px; border: 1px solid var(--admin-border); background: var(--admin-surface); color: var(--admin-text); cursor: pointer; }
+	.page-button:disabled { opacity: 0.5; cursor: default; }
+	.upload-queues { margin-bottom: 24px; border: 1px solid var(--admin-border); padding: 16px; }
+	.upload-queues > p { margin: 0 0 12px; color: var(--admin-text-muted); font-size: 0.8rem; }
+	.queue-row { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px 16px; font-size: 0.85rem; }
+	.queue-row + .queue-row { margin-top: 12px; }
+	.queue-row > span { flex: 1 1 220px; min-width: 0; overflow-wrap: anywhere; }
+	.queue-row .action-btn { min-height: 44px; padding: 8px 12px; }
 	.delivery-page {
 		padding: 48px 40px;
 		max-width: 1000px;

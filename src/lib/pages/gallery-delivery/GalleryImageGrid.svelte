@@ -87,7 +87,7 @@ async function handleDelete(image: GalleryImage) {
 		if (!response.ok) throw new Error("Gallery storage cleanup failed");
 		// Retain the management record until storage confirms cleanup, so a
 		// failed request can be retried against the same idempotent target.
-		await client.mutation(galleryApi.removeImage, { id: toId(image._id) });
+		await client.mutation(galleryApi.removeImage, { id: toId(image._id), siteUrl: config.siteUrl });
 		onchange();
 	} catch (err) {
 		logger.warn("Failed to delete gallery file:", err);
