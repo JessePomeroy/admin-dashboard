@@ -1,6 +1,6 @@
 import { createRawSnippet, mount, tick, unmount } from "svelte";
 import { writable } from "svelte/store";
-import { afterEach, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import AdminLayout from "../src/lib/components/AdminLayout.svelte";
 import Harness from "./ModalLifecycleHarness.svelte";
 
@@ -12,6 +12,11 @@ vi.mock("../src/lib/config", () => ({
 }));
 vi.mock("../src/lib/adminClient", () => ({ useAdminClient: () => ({ mutation: vi.fn() }) }));
 vi.mock("convex-svelte", () => ({ useQuery: vi.fn() }));
+beforeEach(() => {
+ vi.stubGlobal("matchMedia", vi.fn((query: string) => ({
+  matches: query.includes("max-width") || query === "(prefers-reduced-motion: reduce)", addEventListener() {}, removeEventListener() {},
+ })));
+});
 let layout: ReturnType<typeof mount> | undefined;
 let harness: ReturnType<typeof mount<typeof Harness>> | undefined;
 afterEach(async () => {
@@ -21,6 +26,7 @@ afterEach(async () => {
 	layout = undefined;
 	document.body.replaceChildren();
 	document.body.style.overflow = "";
+ vi.unstubAllGlobals();
 });
 
 for (const editor of [false, true]) {
