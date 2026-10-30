@@ -23,6 +23,10 @@
       "types": "./dist/server.d.ts",
       "default": "./dist/server.js"
     },
+    "./server/customer-services": {
+      "types": "./dist/server/customerServices.d.ts",
+      "default": "./dist/server/customerServices.js"
+    },
     "./server/auth": {
       "types": "./dist/server/adminAuth.d.ts",
       "default": "./dist/server/adminAuth.js"
@@ -38,6 +42,10 @@
     "./content-export": {
       "types": "./dist/server/contentExportCore.d.ts",
       "default": "./dist/server/contentExportCore.js"
+    },
+    "./client-integration": {
+      "types": "./dist/clientIntegration.d.ts",
+      "default": "./dist/clientIntegration.js"
     },
     "./core": {
       "types": "./dist/core.d.ts",

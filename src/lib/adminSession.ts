@@ -1,5 +1,5 @@
 import type { AdminAuthSession } from "./config";
-import type { Tier } from "./features";
+import type { Feature, Tier } from "./features";
 
 export type TenantAdminSessionState =
 	| { status: "auth-disabled" }
@@ -47,7 +47,7 @@ export function canRenderTenantAdmin(session: TenantAdminSessionState): boolean 
 export type TenantAdminServerSession =
 	| { status: "unauthenticated" }
 	| { status: "unauthorized"; email: string }
-	| { status: "authorized"; email: string | null; tier: Tier; isCreator: boolean };
+	| { status: "authorized"; email: string | null; tier: Tier; isCreator: boolean; enabledFeatures?: Feature[] };
 
 export function isTenantAdminServerAuthorized(
 	session: TenantAdminServerSession | undefined,

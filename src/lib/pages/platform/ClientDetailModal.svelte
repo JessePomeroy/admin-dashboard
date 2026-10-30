@@ -179,6 +179,7 @@
 						<button
 							class="status-btn"
 							class:active={client.tier === "basic"}
+							disabled={saving || client.tier === "basic"}
 							style={client.tier === "basic" ? "color: var(--admin-text); border-color: var(--admin-text-muted)" : ""}
 							onclick={ontiertoggle}
 						>
@@ -187,6 +188,7 @@
 						<button
 							class="status-btn"
 							class:active={client.tier === "full"}
+							disabled={saving || client.tier === "full"}
 							style={client.tier === "full" ? "color: var(--admin-accent-hover); border-color: var(--admin-accent)" : ""}
 							onclick={ontiertoggle}
 						>

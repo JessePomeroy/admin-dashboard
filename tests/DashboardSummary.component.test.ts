@@ -23,7 +23,7 @@ afterEach(async () => { if (component) await unmount(component); component = und
 
 test("dashboard consumes compact summaries without invoice line items", async () => {
 	queries.modern = true;
-	component = mount(Dashboard, { target: document.body, props: { data: { newInquiryCount: 0 } } });
+	component = mount(Dashboard, { target: document.body, props: { data: { newInquiryCount: 0, adminSession: { status: "authorized", tier: "full", isCreator: false, email: "owner@example.test" } } } });
 	await tick();
 	expect(queries.calls).toEqual(["orders", "crm", "invoice-summary", "quote-summary"]);
 	expect(document.body.textContent).toContain("$17.00");
@@ -33,7 +33,7 @@ test("dashboard consumes compact summaries without invoice line items", async ()
 
 test("older hosts retain their existing list APIs until backend adoption", async () => {
 	queries.modern = false;
-	component = mount(Dashboard, { target: document.body, props: { data: { newInquiryCount: 0 } } });
+	component = mount(Dashboard, { target: document.body, props: { data: { newInquiryCount: 0, adminSession: { status: "authorized", tier: "full", isCreator: false, email: "owner@example.test" } } } });
 	await tick();
 	expect(queries.calls).toEqual(["orders", "crm", "invoice-list", "quote-list"]);
 	expect(document.body.textContent).toContain("$17.00");

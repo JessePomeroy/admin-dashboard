@@ -513,3 +513,21 @@ Public-page loaders can import the existing authentication helpers from
 functions as the server barrel and retain their authorization requirements.
 They avoid loading unrelated email handlers and the email SDK into public
 server bundles. Existing `@jessepomeroy/admin/server` imports remain supported.
+
+### Standard client feature integration
+
+Use `createStandardAdminAPI(api)` from `@jessepomeroy/admin/client-integration`
+for the standard generated backend bindings. Keep creator-only extensions in the
+hub. Admin server loads must validate stored membership and pass the tier and derived
+`enabledFeatures` in the authorized `adminSession`.
+
+Basic includes CMS, inquiries and shop checkout, LumaPrints fulfillment and digital
+products. Full adds CRM and gallery delivery with proofing. These capabilities are
+included automatically; Basic/Full are the only feature controls. Service connections,
+supported product types and commercial activation are still required. Customer
+tokens already issued retain their normal checks after a tier downgrade.
+
+Publish/deploy the additive backend APIs before adopting this package candidate.
+The shared `server/customer-services` entrypoint supplies private buyer binding and
+tenant-signed confirmation reads; customer URL parameters alone are not payment
+proof. Host routes and integration readiness checks remain required.

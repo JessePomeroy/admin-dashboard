@@ -13,6 +13,7 @@ export const DEFAULT_CREATOR_BOARD_PROJECT_TYPE_GROUPS: BoardProjectTypeGroup[] 
 export interface AdminCapabilityInput {
 	tier: Tier;
 	isCreator: boolean;
+	enabledFeatures?: readonly Feature[];
 	boardProjectTypes?: BoardProjectTypeGroup[];
 }
 
@@ -44,7 +45,7 @@ export function getAdminCapabilities(
 		isCreator: input.isCreator,
 		boardProjectTypeGroups,
 		hasFeature: (feature) =>
-			hasFeature(input.tier, feature, { isCreator: input.isCreator }),
+			hasFeature(input.tier, feature, { isCreator: input.isCreator, enabledFeatures: input.enabledFeatures }),
 		canInitializeBoardType: (projectType) => boardProjectTypes.has(projectType),
 	};
 }
@@ -60,10 +61,11 @@ export function getAdminCapabilitiesForSession(
 		boardProjectTypes?: BoardProjectTypeGroup[];
 	} = {},
 ): AdminCapabilities {
-	if (session.status === "authorized") {
+	if (session?.status === "authorized") {
 		return getAdminCapabilities({
 			tier: session.tier,
 			isCreator: session.isCreator,
+			enabledFeatures: session.enabledFeatures,
 			boardProjectTypes: input.boardProjectTypes,
 		});
 	}
@@ -77,10 +79,11 @@ export function getAdminCapabilitiesForSession(
 export function getAdminSessionCapabilityInput(
 	session: TenantAdminServerSession,
 ): AdminCapabilityInput {
-	if (session.status === "authorized") {
+	if (session?.status === "authorized") {
 		return {
 			tier: session.tier,
 			isCreator: session.isCreator,
+			enabledFeatures: session.enabledFeatures,
 		};
 	}
 

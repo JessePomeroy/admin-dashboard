@@ -2,12 +2,16 @@
 import { onDestroy, onMount } from "svelte";
 import { browser } from "$app/environment";
 import { page } from "$app/stores";
+import { invalidateAll } from "$app/navigation";
 import { useQuery } from "convex-svelte";
 import { useAdminClient } from "../adminClient";
 import { getCatalogProductEditorCapability } from "../catalogProductCapability";
 import { getAdminCapabilitiesForLayout } from "../capabilities";
 import { isDark } from "../theme";
 import { getAdminConfig } from "../config";
+import { adminFeatureForPath } from "../clientIntegration";
+import type { Tier } from "../features";
+import UpgradeBanner from "./UpgradeBanner.svelte";
 import { logger } from "../logger";
 import { modalLifecycle } from "../modalLifecycle";
 import NotificationWidget from "./NotificationWidget.svelte";
@@ -63,6 +67,20 @@ let capabilities = $derived(
 		boardProjectTypes: config.boardProjectTypes,
 	}),
 );
+let currentRouteFeature = $derived(adminFeatureForPath($page.url.pathname));
+const policyQuery = api.platform?.getFeatureAccess ? useQuery(api.platform.getFeatureAccess, { siteUrl: config.siteUrl }) : null;
+let requestedTier = $state<Tier | null>(null);
+$effect(() => {
+	const policy = policyQuery?.data as { tier: Tier } | null | undefined;
+	if (!browser || !policy || data.adminSession.status !== "authorized") return;
+	if (policy.tier === data.adminSession.tier) {
+		requestedTier = null;
+		return;
+	}
+	if (policy.tier === requestedTier) return;
+	requestedTier = policy.tier;
+	void invalidateAll().catch((cause) => logger.warn("Tier access could not refresh", cause));
+});
 let siteSettingsEditorEnabled = $derived(
 	Boolean(config.editor?.siteSettings && api.siteEditor),
 );
@@ -85,18 +103,19 @@ let pagesEditorEnabled = $derived(
 		|| modelingPageEditorEnabled,
 );
 let portfolioEditorEnabled = $derived(
-	Boolean(config.editor?.portfolio && api.portfolioEditor),
+	Boolean(config.editor?.portfolio && api.portfolioEditor) && capabilities.hasFeature("galleries"),
 );
 let blogEditorEnabled = $derived(
 	Boolean(config.editor?.blog && api.blogContent && api.postContent),
 );
 let productsEditorEnabled = $derived(Boolean(getCatalogProductEditorCapability(config)));
-let editorEnabled = $derived(
+let editorEnabled = $derived(capabilities.hasFeature("editor") && (
 	siteSettingsEditorEnabled
 		|| pagesEditorEnabled
 		|| portfolioEditorEnabled
 		|| productsEditorEnabled
-		|| blogEditorEnabled,
+		|| blogEditorEnabled
+)
 );
 let editorActive = $derived(
 	editorEnabled && isAdminRouteActive("/admin/editor", $page.url.pathname),
@@ -153,6 +172,12 @@ let unreadFlags = $state<Record<string, boolean>>({
 	contracts: false,
 });
 let notificationsReady = $state(false);
+const visibleUnreadFlags = $derived(Object.fromEntries(
+	Object.entries(unreadFlags).map(([key, value]) => {
+		const feature = adminFeatureForPath(`/admin/${key}`);
+		return [key, value && Boolean(feature && capabilities.hasFeature(feature))];
+	}),
+));
 
 // Subscribe to notifications
 const notificationsRef = api.notifications?.getUnreadFlags;
@@ -171,7 +196,7 @@ const notificationPageKey = $derived(hrefToNotificationKey[$page.url.pathname]);
 $effect(() => {
 	const pageKey = notificationPageKey;
 	const markSeen = api.notifications?.markSeen;
-	if (!pageKey || !markSeen || !notificationsReady) return;
+	if (!pageKey || !markSeen || !notificationsReady || (currentRouteFeature && !capabilities.hasFeature(currentRouteFeature))) return;
 	let active = true;
 	let retryDelay = 1_000;
 	let retryTimer: ReturnType<typeof setTimeout> | undefined;
@@ -375,12 +400,16 @@ function closeMobileMenu() {
 
 	<!-- Main content -->
 	<main class="admin-main" class:editor-active={editorActive} inert={mobileNavigation && (mobileMenuOpen || editorMenuOpen)}>
-		{@render children()}
+		{#if currentRouteFeature && !capabilities.hasFeature(currentRouteFeature)}
+			<UpgradeBanner feature={currentRouteFeature} />
+		{:else}
+			{@render children()}
+		{/if}
 	</main>
 
 	<Toast />
 	{#if notificationsReady}
-		<NotificationWidget {unreadFlags} />
+		<NotificationWidget unreadFlags={visibleUnreadFlags} />
 	{/if}
 </div>
 

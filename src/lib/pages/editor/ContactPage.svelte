@@ -29,7 +29,7 @@ if (!config.api.siteEditor || !config.editor?.contactPage) {
 const editorApi = config.api.siteEditor;
 const contactConfig = config.editor.contactPage;
 const publishContactPage = editorApi.publishContactPage;
-const publishingEnabled = Boolean(publishContactPage);
+const publishingEnabled = Boolean(publishContactPage) && config.editor?.contactPage?.publicationEnabled !== false;
 const previewEndpoint = publishingEnabled ? contactConfig.previewEndpoint : undefined;
 const client = useAdminClient();
 const editorQuery = useQuery(editorApi.getContactPageEditorState, { siteUrl: config.siteUrl });
@@ -103,7 +103,7 @@ function beginBlank() {
 }
 
 async function publish() {
-	if (!publishContactPage) {
+	if (!publishContactPage || !publishingEnabled) {
 		await draft.saveNow();
 		return;
 	}
