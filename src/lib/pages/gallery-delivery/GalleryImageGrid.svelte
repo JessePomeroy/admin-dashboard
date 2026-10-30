@@ -3,6 +3,7 @@ import { useAdminClient } from "../../adminClient";
 import { getAdminConfig } from "../../config";
 import { toId } from "../../utils";
 import { logger } from "../../logger";
+import { addToast } from "../../toast";
 import { dndzone } from "svelte-dnd-action";
 import type { GalleryImage } from "../../types";
 import {
@@ -25,6 +26,7 @@ const client = useAdminClient();
 
 // Local copy for drag-and-drop reordering
 let items = $state<(GalleryImage & { id: string })[]>([]);
+let deletingId = $state<string | null>(null);
 
 // Sync from props whenever images change
 $effect(() => {
@@ -74,19 +76,25 @@ async function handleSetCover(image: GalleryImage) {
 }
 
 async function handleDelete(image: GalleryImage) {
-	await client.mutation(galleryApi.removeImage, { id: toId(image._id) });
-
+	if (deletingId !== null) return;
+	deletingId = image._id;
 	try {
-		await fetch("/api/admin/galleries/delete", {
+		const response = await fetch("/api/admin/galleries/delete", {
 			method: "POST",
 			headers: { "Content-Type": "application/json" },
 			body: JSON.stringify({ r2Key: image.r2Key }),
 		});
+		if (!response.ok) throw new Error("Gallery storage cleanup failed");
+		// Retain the management record until storage confirms cleanup, so a
+		// failed request can be retried against the same idempotent target.
+		await client.mutation(galleryApi.removeImage, { id: toId(image._id) });
+		onchange();
 	} catch (err) {
-		logger.warn("Failed to delete R2 image:", image.r2Key, err);
+		logger.warn("Failed to delete gallery file:", err);
+		addToast("Could not delete this file. Try again.");
+	} finally {
+		deletingId = null;
 	}
-
-	onchange();
 }
 </script>
 
@@ -121,7 +129,7 @@ async function handleDelete(image: GalleryImage) {
 						{#if !isCover(image) && canPreview(image)}
 							<button onclick={() => handleSetCover(image)}>set cover</button>
 						{/if}
-						<button class="delete-btn" onclick={() => handleDelete(image)}>delete</button>
+						<button class="delete-btn" disabled={deletingId !== null} onclick={() => handleDelete(image)}>{deletingId === image._id ? "deleting..." : "delete"}</button>
 					</div>
 				</div>
 			</div>

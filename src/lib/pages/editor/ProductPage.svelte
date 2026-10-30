@@ -907,7 +907,7 @@ function removeSetMember(member: CatalogProductDraftForm["setMembers"][number]) 
 			<section class="document-section" aria-labelledby="product-identity-heading">
 				<div class="section-heading"><span>01</span><div><h2 id="product-identity-heading">product details</h2><p>The working name, URL name, and description stored with this draft.</p></div></div>
 				<div class="fields two-column">
-					<label>product name<input maxlength="160" value={form.title ?? ""} oninput={(event) => updateOptionalField("title", event.currentTarget.value)} onblur={fillSlugIfEmpty} disabled={editorLocked} /></label>
+					<label><span class="field-heading">product name</span><input maxlength="160" value={form.title ?? ""} oninput={(event) => updateOptionalField("title", event.currentTarget.value)} onblur={fillSlugIfEmpty} disabled={editorLocked} /></label>
 					<EditorSlugField id="product-slug" value={form.slug ?? ""} maxLength={96} onChange={(value) => updateOptionalField("slug", value)} disabled={editorLocked} />
 					<label class="wide">description<textarea rows="5" maxlength="5000" value={form.description ?? ""} oninput={(event) => updateOptionalField("description", event.currentTarget.value)} disabled={editorLocked}></textarea></label>
 				</div>
@@ -945,10 +945,10 @@ function removeSetMember(member: CatalogProductDraftForm["setMembers"][number]) 
 				}} onRemove={removeSetMember} disabled={editorLocked} />
 			{/if}
 			{#if form.productKind === "digital_download"}
-				<section class="download-file" aria-labelledby="catalog-download-file-heading">
+				<section class="download-file document-section" aria-labelledby="catalog-download-file-heading">
 					<div class="section-heading"><span>03</span><div><h2 id="catalog-download-file-heading">customer download</h2></div></div>
 					{#if privateAssetCapability && privateAssetUpload}
-						<label class="private-file-dropzone" class:disabled={uploads.downloadBusy || dirty || editorLocked} aria-disabled={uploads.downloadBusy || dirty || editorLocked} ondragover={(event) => event.preventDefault()} ondrop={dropDigitalDownloadFile}>
+						<label class="private-file-dropzone editor-upload-controls" class:disabled={uploads.downloadBusy || dirty || editorLocked} aria-disabled={uploads.downloadBusy || dirty || editorLocked} ondragover={(event) => event.preventDefault()} ondrop={dropDigitalDownloadFile}>
 							<strong>{uploads.selectedFile?.name ?? "drop a ZIP here or click to choose"}</strong>
 							<small>ZIP · 16 MB max</small>
 							<input aria-label="choose customer download ZIP" type="file" accept="application/zip,application/x-zip-compressed,.zip" onchange={(event) => { chooseDigitalDownloadFile(event.currentTarget.files?.[0] ?? null); event.currentTarget.value = ""; }} disabled={uploads.downloadBusy || dirty || editorLocked} />

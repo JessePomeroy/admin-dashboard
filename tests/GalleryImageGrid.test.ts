@@ -1,7 +1,9 @@
 // @vitest-environment jsdom
 import { mount, tick, unmount } from "svelte";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import GalleryImageGrid from "../src/lib/pages/gallery-delivery/GalleryImageGrid.svelte";
+
+const fixture = vi.hoisted(() => ({ mutation: vi.fn(), toast: vi.fn() }));
 
 vi.mock("svelte-dnd-action", () => ({
 	dndzone: vi.fn(),
@@ -9,7 +11,7 @@ vi.mock("svelte-dnd-action", () => ({
 
 vi.mock("../src/lib/adminClient", () => ({
 	useAdminClient: () => ({
-		mutation: vi.fn(),
+		mutation: fixture.mutation,
 	}),
 }));
 
@@ -32,6 +34,21 @@ vi.mock("../src/lib/logger", () => ({
 		warn: vi.fn(),
 	},
 }));
+vi.mock("../src/lib/toast", () => ({ addToast: fixture.toast }));
+
+function image() {
+	return {
+		_id: "image-1", _creationTime: 1, siteUrl: "site.example", galleryId: "gallery-1",
+		r2Key: "site.example/gallery-1/original/photo.jpg", filename: "photo.jpg",
+		sizeBytes: 100, width: 100, height: 100, order: 0, isFavorite: false, downloadCount: 0,
+	};
+}
+
+function deleteButton() {
+	const button = document.querySelector<HTMLButtonElement>(".delete-btn");
+	if (!button) throw new Error("Missing delete button");
+	return button;
+}
 
 function mountGrid(props: Partial<Parameters<typeof GalleryImageGrid>[0]["props"]> = {}) {
 	return mount(GalleryImageGrid, {
@@ -46,8 +63,51 @@ function mountGrid(props: Partial<Parameters<typeof GalleryImageGrid>[0]["props"
 }
 
 describe("GalleryImageGrid", () => {
+	beforeEach(() => { vi.clearAllMocks(); fixture.mutation.mockResolvedValue(undefined); });
 	afterEach(() => {
 		document.body.innerHTML = "";
+		vi.unstubAllGlobals();
+	});
+
+	it("keeps the record until storage cleanup succeeds and prevents duplicate deletes", async () => {
+		let resolveCleanup!: (response: Response) => void;
+		const cleanup = new Promise<Response>((resolve) => { resolveCleanup = resolve; });
+		const fetchMock = vi.fn(() => cleanup);
+		vi.stubGlobal("fetch", fetchMock);
+		const onchange = vi.fn();
+		const component = mountGrid({ images: [image()], onchange });
+		await tick();
+		deleteButton().click(); deleteButton().click();
+		await tick();
+		expect(fetchMock).toHaveBeenCalledTimes(1);
+		expect(fixture.mutation).not.toHaveBeenCalled();
+		expect(deleteButton().disabled).toBe(true);
+		resolveCleanup(new Response("{}"));
+		await vi.waitFor(() => expect(onchange).toHaveBeenCalledTimes(1));
+		expect(fixture.mutation).toHaveBeenCalledWith({ name: "galleryDelivery:removeImage" }, { id: "image-1" });
+		await unmount(component);
+	});
+
+	it.each(["http", "network", "metadata"])("preserves retry after a %s deletion failure", async (failure) => {
+		const fetchMock = vi.fn(async () => {
+			if (failure === "network") throw new Error("Offline");
+			return new Response("{}", { status: failure === "http" ? 503 : 200 });
+		});
+		vi.stubGlobal("fetch", fetchMock);
+		if (failure === "metadata") fixture.mutation.mockRejectedValueOnce(new Error("Unavailable"));
+		const onchange = vi.fn();
+		const component = mountGrid({ images: [image()], onchange });
+		await tick();
+		deleteButton().click();
+		await vi.waitFor(() => expect(fixture.toast).toHaveBeenCalledWith("Could not delete this file. Try again."));
+		if (failure !== "metadata") expect(fixture.mutation).not.toHaveBeenCalled();
+		expect(onchange).not.toHaveBeenCalled();
+		expect(document.querySelector("img")).not.toBeNull();
+		expect(deleteButton().disabled).toBe(false);
+		fetchMock.mockResolvedValue(new Response("{}"));
+		deleteButton().click();
+		await vi.waitFor(() => expect(onchange).toHaveBeenCalledOnce());
+		await unmount(component);
 	});
 
 	it("shows the true empty state when the gallery has no known images", () => {
