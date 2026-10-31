@@ -1,8 +1,8 @@
 import {
+	type GalleryUploadPolicy,
 	galleryFileContentType,
 	isAllowedGalleryFile,
 	isBrowserPreviewableGalleryFile,
-	type GalleryUploadPolicy,
 } from "../../galleryUploadPolicy";
 import { isValidGalleryUploadSize } from "../../galleryUploadSize";
 import type { GalleryStoragePort, GalleryUploadSession } from "./galleryStoragePort";
@@ -41,6 +41,7 @@ export interface GalleryUploadFile {
 	dimensions?: { width: number; height: number };
 	deleteRequested?: boolean;
 	registrationStarted?: boolean;
+	checkpointId?: string;
 }
 
 export interface GalleryUploadSnapshot extends GalleryUploadBatchSummary {
@@ -56,6 +57,17 @@ export interface GalleryUploadSnapshot extends GalleryUploadBatchSummary {
 }
 
 interface GalleryUploadControllerOptions {
+	checkpoint?: {
+		begin(input: {
+			r2Key: string;
+			filename: string;
+			sizeBytes: number;
+			width: number;
+			height: number;
+		}): Promise<string>;
+		markDeleting(id: string): Promise<string | null>;
+		finishDelete(id: string): Promise<void>;
+	};
 	storage: GalleryStoragePort;
 	siteUrl: string;
 	galleryId: string | (() => string);
@@ -81,6 +93,7 @@ interface GalleryUploadControllerOptions {
 }
 
 export interface GalleryUploadController {
+	readonly galleryId: string;
 	getSnapshot(): GalleryUploadSnapshot;
 	subscribe(listener: (snapshot: GalleryUploadSnapshot) => void): () => void;
 	addFiles(fileList: Iterable<File> | ArrayLike<File>): void;
@@ -127,8 +140,8 @@ export function createGalleryUploadController(
 	let disposal: Promise<void> | undefined;
 
 	const maxConcurrent = options.maxConcurrent ?? DEFAULT_MAX_CONCURRENT;
-	const uploadSessionRefreshBufferMs = options.uploadSessionRefreshBufferMs
-		?? DEFAULT_UPLOAD_SESSION_REFRESH_BUFFER_MS;
+	const uploadSessionRefreshBufferMs =
+		options.uploadSessionRefreshBufferMs ?? DEFAULT_UPLOAD_SESSION_REFRESH_BUFFER_MS;
 	const now = options.now ?? Date.now;
 	const logger = options.logger ?? console;
 	const randomId = options.randomId ?? (() => crypto.randomUUID());
@@ -148,7 +161,7 @@ export function createGalleryUploadController(
 		).length;
 		const selectableCount = files.filter(canSelectForDelete).length;
 		const selectedCount = selectedFileIds.filter((id) =>
-			files.some((file) => file.id === id && canSelectForDelete(file))
+			files.some((file) => file.id === id && canSelectForDelete(file)),
 		).length;
 
 		return {
@@ -186,12 +199,14 @@ export function createGalleryUploadController(
 		}
 
 		if (!uploadSessionPromise) {
-			uploadSessionPromise = options.storage.startUploadSession({
-				siteUrl: options.siteUrl,
-				galleryId: getGalleryId(),
-			}).finally(() => {
-				uploadSessionPromise = null;
-			});
+			uploadSessionPromise = options.storage
+				.startUploadSession({
+					siteUrl: options.siteUrl,
+					galleryId: getGalleryId(),
+				})
+				.finally(() => {
+					uploadSessionPromise = null;
+				});
 		}
 
 		uploadSession = await uploadSessionPromise;
@@ -239,9 +254,7 @@ export function createGalleryUploadController(
 					intakeStatus: "rejected",
 					status: "error",
 					progress: 0,
-					error: file.size <= 0
-						? "File is empty"
-						: "File size is not supported by this browser",
+					error: file.size <= 0 ? "File is empty" : "File size is not supported by this browser",
 					retryable: false,
 				});
 				batchRejectedFileCount += 1;
@@ -270,9 +283,13 @@ export function createGalleryUploadController(
 		if (!file.r2Key || !file.dimensions) throw new Error("Uploaded file identity is missing");
 		file.registrationStarted = true;
 		return await options.addImage({
-			siteUrl: options.siteUrl, galleryId: getGalleryId(), r2Key: file.r2Key,
-			filename: file.file.name, sizeBytes: file.file.size,
-			width: file.dimensions.width, height: file.dimensions.height,
+			siteUrl: options.siteUrl,
+			galleryId: getGalleryId(),
+			r2Key: file.r2Key,
+			filename: file.file.name,
+			sizeBytes: file.file.size,
+			width: file.dimensions.width,
+			height: file.dimensions.height,
 		});
 	}
 
@@ -288,7 +305,7 @@ export function createGalleryUploadController(
 				// An upload's response may fail after bytes reached storage. Retain
 				// that exact target until cleanup succeeds before issuing a new key.
 				if (next.r2Key) {
-					await deleteR2File(next.r2Key);
+					await deleteCheckpointFile(next);
 					next.r2Key = undefined;
 				}
 				const uploadSessionToken = await ensureUploadSession();
@@ -306,6 +323,19 @@ export function createGalleryUploadController(
 				next.r2Key = r2Key;
 				next.progress = 30;
 				emitChange();
+
+				if (options.checkpoint) {
+					next.dimensions ??= isBrowserPreviewableGalleryFile(next.file.name)
+						? await options.getImageDimensions(next.file)
+						: { width: 0, height: 0 };
+					next.checkpointId = await options.checkpoint.begin({
+						r2Key,
+						filename: next.file.name,
+						sizeBytes: next.file.size,
+						...next.dimensions,
+					});
+					throwIfCanceled(signal);
+				}
 
 				await options.storage.uploadFile({
 					file: next.file,
@@ -351,7 +381,7 @@ export function createGalleryUploadController(
 			const message = err instanceof Error ? err.message : "Upload failed";
 			if (message === "Request canceled" && next.pauseRequested && !next.deleting) {
 				try {
-					if (next.r2Key && !next.originalUploaded) {
+					if (next.r2Key && !next.originalUploaded && !options.checkpoint) {
 						await deleteR2File(next.r2Key);
 						next.r2Key = undefined;
 					}
@@ -418,7 +448,13 @@ export function createGalleryUploadController(
 	function retryUpload(id: string): void {
 		if (disposed) return;
 		const target = files.find((file) => file.id === id);
-		if (!target || target.status !== "error" || target.retryable === false || target.deleteRequested) return;
+		if (
+			!target ||
+			target.status !== "error" ||
+			target.retryable === false ||
+			target.deleteRequested
+		)
+			return;
 		target.status = "pending";
 		target.error = undefined;
 		target.progress = 0;
@@ -472,10 +508,26 @@ export function createGalleryUploadController(
 		await options.storage.delete({ r2Key, uploadSessionToken: await ensureUploadSession() });
 	}
 
+	async function deleteCheckpointFile(file: GalleryUploadFile) {
+		if (file.checkpointId && options.checkpoint) {
+			const imageId = await options.checkpoint.markDeleting(file.checkpointId);
+			if (imageId) file.imageId = imageId;
+		}
+		if (file.r2Key) await deleteR2File(file.r2Key);
+		if (file.imageId) await options.removeImage(file.imageId);
+		if (file.checkpointId && options.checkpoint)
+			await options.checkpoint.finishDelete(file.checkpointId);
+		file.checkpointId = undefined;
+	}
+
 	async function deleteSelectedFiles(): Promise<void> {
 		if (deletion) return deletion;
 		deletion = deleteSelection();
-		try { await deletion; } finally { deletion = undefined; }
+		try {
+			await deletion;
+		} finally {
+			deletion = undefined;
+		}
 	}
 
 	async function deleteSelection(): Promise<void> {
@@ -498,9 +550,9 @@ export function createGalleryUploadController(
 					await inFlight.get(file.id);
 					// Recover the same id after an ambiguous registration response
 					// before deleting bytes that might already have a metadata row.
-					if (file.registrationStarted && !file.imageId) file.imageId = await registerFile(file);
-					if (file.r2Key) await deleteR2File(file.r2Key);
-					if (file.imageId) await options.removeImage(file.imageId);
+					if (!options.checkpoint && file.registrationStarted && !file.imageId)
+						file.imageId = await registerFile(file);
+					await deleteCheckpointFile(file);
 				} catch (error) {
 					logger.warn("Failed to delete gallery file:", error);
 					file.deleting = false;
@@ -533,7 +585,9 @@ export function createGalleryUploadController(
 	}
 
 	function clearCompleted(): void {
-		const visibleCompletedCount = files.filter((file) => file.status === "done" && !file.deleting).length;
+		const visibleCompletedCount = files.filter(
+			(file) => file.status === "done" && !file.deleting,
+		).length;
 		clearedCompletedCount += visibleCompletedCount;
 		files = files.filter((file) => file.status !== "done" || file.deleting);
 		selectedFileIds = selectedFileIds.filter((id) => files.some((file) => file.id === id));
@@ -555,11 +609,16 @@ export function createGalleryUploadController(
 	}
 
 	return {
+		get galleryId() {
+			return getGalleryId();
+		},
 		getSnapshot,
 		subscribe(listener) {
 			listeners.add(listener);
 			listener(getSnapshot());
-			return () => { listeners.delete(listener); };
+			return () => {
+				listeners.delete(listener);
+			};
 		},
 		addFiles,
 		retryUpload,
@@ -577,7 +636,10 @@ export function createGalleryUploadController(
 			if (!disposal) {
 				disposed = true;
 				listeners.clear();
-				disposal = cancelPendingUploads();
+				if (options.checkpoint) {
+					pauseUploads();
+					disposal = Promise.all([...inFlight.values()]).then(() => {});
+				} else disposal = cancelPendingUploads();
 			}
 			return disposal;
 		},

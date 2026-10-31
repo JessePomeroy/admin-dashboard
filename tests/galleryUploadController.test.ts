@@ -1,9 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
+import type { GalleryStoragePort } from "../src/lib/pages/gallery-delivery/galleryStoragePort";
 import {
 	createGalleryUploadController,
 	type GalleryUploadSnapshot,
 } from "../src/lib/pages/gallery-delivery/galleryUploadController";
-import type { GalleryStoragePort } from "../src/lib/pages/gallery-delivery/galleryStoragePort";
 
 function deferred<T>() {
 	let resolve!: (value: T | PromiseLike<T>) => void;
@@ -21,7 +21,10 @@ function file(name: string, size = 4, type = "image/jpeg"): File {
 
 function createStorage(overrides: Partial<GalleryStoragePort> = {}): GalleryStoragePort {
 	return {
-		startUploadSession: vi.fn(async () => ({ token: "session-token", expiresAt: Date.now() + 600_000 })),
+		startUploadSession: vi.fn(async () => ({
+			token: "session-token",
+			expiresAt: Date.now() + 600_000,
+		})),
 		presign: vi.fn(async (input) => ({
 			r2Key: `site/gallery/original/${input.filename}`,
 			uploadUrl: `/upload/${input.filename}`,
@@ -33,24 +36,30 @@ function createStorage(overrides: Partial<GalleryStoragePort> = {}): GalleryStor
 	};
 }
 
-function createController(options: {
-	storage?: GalleryStoragePort;
-	maxConcurrent?: number;
-	randomId?: () => string;
-	addImage?: ReturnType<typeof vi.fn>;
-	removeImage?: ReturnType<typeof vi.fn>;
-	getImageDimensions?: ReturnType<typeof vi.fn>;
-	onupload?: ReturnType<typeof vi.fn>;
-	onchange?: (snapshot: GalleryUploadSnapshot) => void;
-	uploadPolicy?: () => "media" | "all-files";
-} = {}) {
+function createController(
+	options: {
+		checkpoint?: Parameters<typeof createGalleryUploadController>[0]["checkpoint"];
+		storage?: GalleryStoragePort;
+		maxConcurrent?: number;
+		randomId?: () => string;
+		addImage?: ReturnType<typeof vi.fn>;
+		removeImage?: ReturnType<typeof vi.fn>;
+		getImageDimensions?: ReturnType<typeof vi.fn>;
+		onupload?: ReturnType<typeof vi.fn>;
+		onchange?: (snapshot: GalleryUploadSnapshot) => void;
+		uploadPolicy?: () => "media" | "all-files";
+	} = {},
+) {
 	const storage = options.storage ?? createStorage();
-	const addImage = options.addImage ?? vi.fn(async ({ filename }: { filename: string }) => `image-${filename}`);
+	const addImage =
+		options.addImage ?? vi.fn(async ({ filename }: { filename: string }) => `image-${filename}`);
 	const removeImage = options.removeImage ?? vi.fn(async () => {});
-	const getImageDimensions = options.getImageDimensions ?? vi.fn(async () => ({ width: 100, height: 80 }));
+	const getImageDimensions =
+		options.getImageDimensions ?? vi.fn(async () => ({ width: 100, height: 80 }));
 	const onupload = options.onupload ?? vi.fn();
 	const controller = createGalleryUploadController({
 		storage,
+		checkpoint: options.checkpoint,
 		siteUrl: "site",
 		galleryId: "gallery",
 		uploadPolicy: options.uploadPolicy,
@@ -80,8 +89,12 @@ describe("createGalleryUploadController", () => {
 		expect(controller.getSnapshot().completedCount).toBe(3);
 		expect(getImageDimensions).not.toHaveBeenCalled();
 		for (const filename of ["archive.zip", "page.html", "README"]) {
-			expect(storage.presign).toHaveBeenCalledWith(expect.objectContaining({ filename, contentType: "application/octet-stream" }));
-			expect(addImage).toHaveBeenCalledWith(expect.objectContaining({ filename, width: 0, height: 0 }));
+			expect(storage.presign).toHaveBeenCalledWith(
+				expect.objectContaining({ filename, contentType: "application/octet-stream" }),
+			);
+			expect(addImage).toHaveBeenCalledWith(
+				expect.objectContaining({ filename, width: 0, height: 0 }),
+			);
 		}
 	});
 
@@ -162,12 +175,16 @@ describe("createGalleryUploadController", () => {
 		await vi.waitFor(() => {
 			expect(storage.uploadFile).toHaveBeenCalledTimes(1);
 		});
-		expect(storage.presign).toHaveBeenCalledWith(expect.objectContaining({
-			sizeBytes: 7,
-		}));
-		expect(storage.uploadFile).toHaveBeenCalledWith(expect.objectContaining({
-			uploadToken: "worker-upload-token",
-		}));
+		expect(storage.presign).toHaveBeenCalledWith(
+			expect.objectContaining({
+				sizeBytes: 7,
+			}),
+		);
+		expect(storage.uploadFile).toHaveBeenCalledWith(
+			expect.objectContaining({
+				uploadToken: "worker-upload-token",
+			}),
+		);
 	});
 
 	it("runs no more than the configured number of uploads at once", async () => {
@@ -178,22 +195,22 @@ describe("createGalleryUploadController", () => {
 			presign: vi.fn(async (input) => {
 				const pending = presigns.shift();
 				if (pending) return pending.promise;
-				return { r2Key: `site/gallery/original/${input.filename}`, uploadUrl: `/upload/${input.filename}` };
+				return {
+					r2Key: `site/gallery/original/${input.filename}`,
+					uploadUrl: `/upload/${input.filename}`,
+				};
 			}),
 		});
 		const { controller } = createController({ storage, maxConcurrent: 2 });
 
-		controller.addFiles([
-			file("one.jpg"),
-			file("two.jpg"),
-			file("three.jpg"),
-			file("four.jpg"),
-		]);
+		controller.addFiles([file("one.jpg"), file("two.jpg"), file("three.jpg"), file("four.jpg")]);
 
 		await vi.waitFor(() => {
 			expect(storage.presign).toHaveBeenCalledTimes(2);
 		});
-		expect(controller.getSnapshot().files.filter((upload) => upload.status === "uploading")).toHaveLength(2);
+		expect(
+			controller.getSnapshot().files.filter((upload) => upload.status === "uploading"),
+		).toHaveLength(2);
 
 		firstPresign.resolve({ r2Key: "site/gallery/original/one.jpg", uploadUrl: "/upload/one.jpg" });
 
@@ -204,9 +221,13 @@ describe("createGalleryUploadController", () => {
 
 	it("retries all retryable failures without retrying validation failures", async () => {
 		const storage = createStorage({
-			presign: vi.fn()
+			presign: vi
+				.fn()
 				.mockRejectedValueOnce(new Error("temporary presign failure"))
-				.mockResolvedValueOnce({ r2Key: "site/gallery/original/photo.jpg", uploadUrl: "/upload/photo.jpg" }),
+				.mockResolvedValueOnce({
+					r2Key: "site/gallery/original/photo.jpg",
+					uploadUrl: "/upload/photo.jpg",
+				}),
 		});
 		const { controller, addImage } = createController({ storage });
 
@@ -225,7 +246,9 @@ describe("createGalleryUploadController", () => {
 		const snapshot = controller.getSnapshot();
 		expect(storage.presign).toHaveBeenCalledTimes(2);
 		expect(snapshot.completedCount).toBe(1);
-		expect(snapshot.files.find((upload) => upload.file.name === "notes.txt")?.retryable).toBe(false);
+		expect(snapshot.files.find((upload) => upload.file.name === "notes.txt")?.retryable).toBe(
+			false,
+		);
 	});
 
 	it("clears completed rows while preserving the original batch totals", async () => {
@@ -286,21 +309,39 @@ describe("createGalleryUploadController", () => {
 		expect(controller.getSnapshot().files).toHaveLength(1);
 		cleanup.reject(new Error("storage unavailable"));
 		await deletion;
-		expect(controller.getSnapshot()).toMatchObject({ totalCount: 1, selectedCount: 1, hasErrors: true, completedCount: 0 });
+		expect(controller.getSnapshot()).toMatchObject({
+			totalCount: 1,
+			selectedCount: 1,
+			hasErrors: true,
+			completedCount: 0,
+		});
 	});
 
 	it("retries an unacknowledged metadata deletion without losing batch counters", async () => {
-		const removeImage = vi.fn().mockRejectedValueOnce(new Error("response lost")).mockResolvedValue(undefined);
+		const removeImage = vi
+			.fn()
+			.mockRejectedValueOnce(new Error("response lost"))
+			.mockResolvedValue(undefined);
 		const { controller, storage } = createController({ removeImage });
 		controller.addFiles([file("photo.jpg")]);
 		await vi.waitFor(() => expect(controller.getSnapshot().completedCount).toBe(1));
 		controller.toggleSelectAll();
 		await controller.deleteSelectedFiles();
-		expect(controller.getSnapshot()).toMatchObject({ totalCount: 1, selectedCount: 1, hasErrors: true });
+		expect(controller.getSnapshot()).toMatchObject({
+			totalCount: 1,
+			selectedCount: 1,
+			hasErrors: true,
+		});
 		await controller.deleteSelectedFiles();
 		expect(storage.delete).toHaveBeenCalledTimes(2);
 		expect(removeImage).toHaveBeenNthCalledWith(2, "image-photo.jpg");
-		expect(controller.getSnapshot()).toMatchObject({ totalCount: 0, sourceFileCount: 0, acceptedFileCount: 0, completedCount: 0, selectedCount: 0 });
+		expect(controller.getSnapshot()).toMatchObject({
+			totalCount: 0,
+			sourceFileCount: 0,
+			acceptedFileCount: 0,
+			completedCount: 0,
+			selectedCount: 0,
+		});
 	});
 
 	it("cancels unfinished files while retaining completed gallery files", async () => {
@@ -311,14 +352,23 @@ describe("createGalleryUploadController", () => {
 		controller.pauseUploads();
 		controller.addFiles([file("pending.jpg")]);
 		await controller.cancelPendingUploads();
-		expect(controller.getSnapshot()).toMatchObject({ totalCount: 1, completedCount: 1, paused: false });
-		expect(controller.getSnapshot().files.map(entry => entry.file.name)).toEqual(["done.jpg"]);
+		expect(controller.getSnapshot()).toMatchObject({
+			totalCount: 1,
+			completedCount: 1,
+			paused: false,
+		});
+		expect(controller.getSnapshot().files.map((entry) => entry.file.name)).toEqual(["done.jpg"]);
 		expect(storage.delete).not.toHaveBeenCalled();
 		expect(removeImage).not.toHaveBeenCalled();
 	});
 
 	it("retains a failed storage deletion and retries it before removing metadata", async () => {
-		const storage = createStorage({ delete: vi.fn().mockRejectedValueOnce(new Error("storage unavailable")).mockResolvedValue(undefined) });
+		const storage = createStorage({
+			delete: vi
+				.fn()
+				.mockRejectedValueOnce(new Error("storage unavailable"))
+				.mockResolvedValue(undefined),
+		});
 		const { controller, removeImage, addImage } = createController({ storage });
 		controller.addFiles([file("photo.jpg")]);
 		await vi.waitFor(() => expect(addImage).toHaveBeenCalledTimes(1));
@@ -326,7 +376,12 @@ describe("createGalleryUploadController", () => {
 		controller.toggleSelected(id);
 		await controller.deleteSelectedFiles();
 		expect(removeImage).not.toHaveBeenCalled();
-		expect(controller.getSnapshot().files[0]).toMatchObject({ id, imageId: "image-photo.jpg", status: "error", retryable: false });
+		expect(controller.getSnapshot().files[0]).toMatchObject({
+			id,
+			imageId: "image-photo.jpg",
+			status: "error",
+			retryable: false,
+		});
 		expect(controller.getSnapshot().selectedFileIds).toEqual([id]);
 		await controller.deleteSelectedFiles();
 		expect(removeImage).toHaveBeenCalledTimes(1);
@@ -335,9 +390,18 @@ describe("createGalleryUploadController", () => {
 
 	it("recovers an ambiguous registration before deleting its original", async () => {
 		const calls: string[] = [];
-		const addImage = vi.fn().mockRejectedValueOnce(new Error("response lost")).mockResolvedValue("replayed-id");
-		const storage = createStorage({ delete: vi.fn(async () => { calls.push("storage"); }) });
-		const removeImage = vi.fn(async () => { calls.push("metadata"); });
+		const addImage = vi
+			.fn()
+			.mockRejectedValueOnce(new Error("response lost"))
+			.mockResolvedValue("replayed-id");
+		const storage = createStorage({
+			delete: vi.fn(async () => {
+				calls.push("storage");
+			}),
+		});
+		const removeImage = vi.fn(async () => {
+			calls.push("metadata");
+		});
 		const { controller } = createController({ storage, addImage, removeImage });
 		controller.addFiles([file("photo.jpg")]);
 		await vi.waitFor(() => expect(controller.getSnapshot().hasErrors).toBe(true));
@@ -351,13 +415,23 @@ describe("createGalleryUploadController", () => {
 	});
 
 	it("retains only failed members of a partially deleted batch", async () => {
-		const storage = createStorage({ delete: vi.fn().mockResolvedValueOnce(undefined).mockRejectedValueOnce(new Error("storage unavailable")).mockResolvedValue(undefined) });
+		const storage = createStorage({
+			delete: vi
+				.fn()
+				.mockResolvedValueOnce(undefined)
+				.mockRejectedValueOnce(new Error("storage unavailable"))
+				.mockResolvedValue(undefined),
+		});
 		const { controller, addImage, removeImage } = createController({ storage });
 		controller.addFiles([file("one.jpg"), file("two.jpg")]);
 		await vi.waitFor(() => expect(addImage).toHaveBeenCalledTimes(2));
 		controller.toggleSelectAll();
 		await controller.deleteSelectedFiles();
-		expect(controller.getSnapshot()).toMatchObject({ totalCount: 1, sourceFileCount: 1, acceptedSizeBytes: 4 });
+		expect(controller.getSnapshot()).toMatchObject({
+			totalCount: 1,
+			sourceFileCount: 1,
+			acceptedSizeBytes: 4,
+		});
 		expect(controller.getSnapshot().files.map((upload) => upload.file.name)).toEqual(["two.jpg"]);
 		expect(removeImage).toHaveBeenCalledTimes(1);
 		await controller.deleteSelectedFiles();
@@ -381,8 +455,16 @@ describe("createGalleryUploadController", () => {
 	});
 
 	it("resumes processing and registration without uploading another original", async () => {
-		const storage = createStorage({ process: vi.fn().mockRejectedValueOnce(new Error("processor unavailable")).mockResolvedValue(undefined) });
-		const addImage = vi.fn().mockRejectedValueOnce(new Error("response lost")).mockResolvedValue("image-1");
+		const storage = createStorage({
+			process: vi
+				.fn()
+				.mockRejectedValueOnce(new Error("processor unavailable"))
+				.mockResolvedValue(undefined),
+		});
+		const addImage = vi
+			.fn()
+			.mockRejectedValueOnce(new Error("response lost"))
+			.mockResolvedValue("image-1");
 		const { controller } = createController({ storage, addImage });
 		controller.addFiles([file("photo.jpg")]);
 		await vi.waitFor(() => expect(controller.getSnapshot().hasErrors).toBe(true));
@@ -400,15 +482,23 @@ describe("createGalleryUploadController", () => {
 
 	it("keeps an uncertain original key until cleanup succeeds before restarting its upload", async () => {
 		const storage = createStorage({
-			uploadFile: vi.fn().mockRejectedValueOnce(new Error("upload response lost")).mockResolvedValue(undefined),
-			delete: vi.fn().mockRejectedValueOnce(new Error("cleanup unavailable")).mockResolvedValue(undefined),
+			uploadFile: vi
+				.fn()
+				.mockRejectedValueOnce(new Error("upload response lost"))
+				.mockResolvedValue(undefined),
+			delete: vi
+				.fn()
+				.mockRejectedValueOnce(new Error("cleanup unavailable"))
+				.mockResolvedValue(undefined),
 		});
 		const { controller, addImage } = createController({ storage });
 		controller.addFiles([file("photo.jpg")]);
 		await vi.waitFor(() => expect(controller.getSnapshot().hasErrors).toBe(true));
 		const id = controller.getSnapshot().files[0].id;
 		controller.retryUpload(id);
-		await vi.waitFor(() => expect(controller.getSnapshot().files[0].error).toBe("cleanup unavailable"));
+		await vi.waitFor(() =>
+			expect(controller.getSnapshot().files[0].error).toBe("cleanup unavailable"),
+		);
 		expect(controller.getSnapshot().files[0].r2Key).toBe("site/gallery/original/photo.jpg");
 		expect(storage.presign).toHaveBeenCalledTimes(1);
 		controller.retryUpload(id);
@@ -534,7 +624,9 @@ describe("createGalleryUploadController", () => {
 				if (!firstAttempt) return;
 				firstAttempt = false;
 				await new Promise<void>((_, reject) => {
-					signal.addEventListener("abort", () => reject(new Error("Request canceled")), { once: true });
+					signal.addEventListener("abort", () => reject(new Error("Request canceled")), {
+						once: true,
+					});
 				});
 			}),
 		});
@@ -559,5 +651,67 @@ describe("createGalleryUploadController", () => {
 		expect(controller.getSnapshot().paused).toBe(false);
 		expect(controller.getSnapshot().completedCount).toBe(2);
 		expect(storage.uploadFile).toHaveBeenCalledTimes(3);
+	});
+});
+
+describe("durable upload checkpoints", () => {
+	const checkpoint = () => ({
+		begin: vi.fn(async () => "checkpoint-1"),
+		markDeleting: vi.fn(async (): Promise<string | null> => null),
+		finishDelete: vi.fn(async () => {}),
+	});
+	it("persists identity and dimensions before transferring original bytes", async () => {
+		const pending = deferred<string>();
+		const journal = checkpoint();
+		journal.begin.mockReturnValue(pending.promise);
+		const { controller, storage } = createController({ checkpoint: journal });
+		controller.addFiles([file("photo.jpg")]);
+		await vi.waitFor(() =>
+			expect(journal.begin).toHaveBeenCalledWith({
+				r2Key: "site/gallery/original/photo.jpg",
+				filename: "photo.jpg",
+				sizeBytes: 4,
+				width: 100,
+				height: 80,
+			}),
+		);
+		expect(storage.uploadFile).not.toHaveBeenCalled();
+		pending.resolve("checkpoint-1");
+		await vi.waitFor(() => expect(controller.getSnapshot().completedCount).toBe(1));
+	});
+	it("pauses on disposal and keeps a checkpoint for reload recovery", async () => {
+		const transfer = deferred<void>();
+		const journal = checkpoint();
+		const storage = createStorage({ uploadFile: vi.fn(() => transfer.promise) });
+		const { controller, addImage } = createController({ checkpoint: journal, storage });
+		controller.addFiles([file("photo.jpg")]);
+		await vi.waitFor(() => expect(storage.uploadFile).toHaveBeenCalled());
+		const disposal = controller.dispose();
+		transfer.resolve();
+		await disposal;
+		expect(storage.delete).not.toHaveBeenCalled();
+		expect(journal.finishDelete).not.toHaveBeenCalled();
+		expect(addImage).not.toHaveBeenCalled();
+	});
+	it("uses durable deletion state to clean an ambiguous registration", async () => {
+		const journal = checkpoint();
+		journal.markDeleting.mockResolvedValue("registered-image");
+		const addImage = vi.fn(async () => {
+			throw new Error("ack lost");
+		});
+		const { controller, storage, removeImage } = createController({
+			checkpoint: journal,
+			addImage,
+		});
+		controller.addFiles([file("photo.jpg")]);
+		await vi.waitFor(() => expect(controller.getSnapshot().hasErrors).toBe(true));
+		controller.toggleSelectAll();
+		await controller.deleteSelectedFiles();
+		expect(journal.markDeleting).toHaveBeenCalledWith("checkpoint-1");
+		expect(removeImage).toHaveBeenCalledWith("registered-image");
+		expect(journal.finishDelete).toHaveBeenCalledWith("checkpoint-1");
+		expect(journal.markDeleting.mock.invocationCallOrder[0]).toBeLessThan(
+			vi.mocked(storage.delete).mock.invocationCallOrder[0],
+		);
 	});
 });

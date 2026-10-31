@@ -85,7 +85,8 @@ const mocks = vi.hoisted(() => ({
 	},
 }));
 
-vi.mock("$app/navigation", () => ({ goto: mocks.goto }));
+vi.mock("$app/navigation", () => ({
+	beforeNavigate: vi.fn(), goto: mocks.goto }));
 vi.mock("../src/lib/cmsMediaUpload", () => ({
 	uploadCmsMediaFile: mocks.upload,
 }));

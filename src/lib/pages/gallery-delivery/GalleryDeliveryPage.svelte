@@ -70,7 +70,7 @@ function openGallery(gallery: GalleryWithClient) {
 
 beforeNavigate((navigation) => {
 	if (navigation.willUnload) return;
-	if (hasUnfinishedUploads && !globalThis.confirm("Uploads are unfinished. Leave this page and cancel them?")) navigation.cancel();
+	if (hasUnfinishedUploads && !globalThis.confirm(uploadFactory.recoverable ? "Uploads are unfinished. Leave and pause them? Stored files can be recovered when you reopen the gallery; unfinished transfers need reselection." : "Uploads are unfinished. Leave this page and cancel them?")) navigation.cancel();
 });
 onMount(() => {
 	const warnBeforeUnload = (event: BeforeUnloadEvent) => {

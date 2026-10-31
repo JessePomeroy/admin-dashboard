@@ -26,6 +26,8 @@ import "../../styles/editorial-page.css";
 import BlogMediaReview from "./BlogMediaReview.svelte";
 import BlogWorkbench from "./BlogWorkbench.svelte";
 import { createBlogDocumentLifecycle } from "./blogDocumentLifecycle.svelte";
+import { parseSupportingRecovery } from "./blogDraftRecovery";
+import DraftRecoveryNotice from "./DraftRecoveryNotice.svelte";
 
 let {
 	documentId,
@@ -118,7 +120,13 @@ function updateSlugFromTitle() {
 }
 
 const lifecycle = createBlogDocumentLifecycle<BlogSupportingDraft>({
-	state: () => editorState,
+	key: () => `${config.siteUrl}:${kind}:${documentId}`,
+	emptyDraft: () => copyBlogSupportingDraft(undefined,kind),
+	parseRecovery: (value) => {
+		const draft = parseSupportingRecovery(value);
+		return draft?.kind === kind ? draft : null;
+	},
+	state: () => editorState?.documentId === documentId ? editorState : undefined,
 	draft: () => normalizedDraft(),
 	setDraft: (draft) => {
 		form = draft;
@@ -167,9 +175,10 @@ const lifecycle = createBlogDocumentLifecycle<BlogSupportingDraft>({
 				{#if !archived && (lifecycle.canSave || lifecycle.saveState === "saving")}
 					<button type="button" onclick={() => void lifecycle.saveDraft()} disabled={!lifecycle.canSave || lifecycle.publicationBusy}>save draft</button>
 				{/if}
-				<PublicationControl published={Boolean(editorState.published)} hasChanges={lifecycle.publicationHasChanges} {archived} item={kind} onpublish={lifecycle.publishDraft} onunpublish={lifecycle.unpublishDocument} busy={lifecycle.publicationBusy} />
+				<PublicationControl published={Boolean(editorState.published)} hasChanges={lifecycle.publicationHasChanges} {archived} item={kind} onpublish={lifecycle.publishDraft} onunpublish={lifecycle.unpublishDocument} busy={lifecycle.publicationBusy} publishDisabled={lifecycle.conflict} unpublishDisabled={lifecycle.conflict} />
 		{/snippet}
 	</EditorDocumentHeader>
+		<DraftRecoveryNotice conflict={lifecycle.conflict} recovered={lifecycle.recovered} error={lifecycle.storageError} onreload={lifecycle.reloadServerDraft} ondownload={lifecycle.downloadDraft} />
 
 		{#if lifecycle.saveError}<p class="error" role="alert">{lifecycle.saveError}</p>{/if}
 		{#if lifecycle.publishError}<p class="error" role="alert">{lifecycle.publishError}</p>{/if}

@@ -506,9 +506,10 @@ export function createGalleryProcessHandler() {
 	return async ({ request }: { request: Request }) => {
 		const config = requireWorkerConfig();
 
-		const data = await request.json() as { r2Key?: unknown; uploadSessionToken?: unknown };
+		const data = await request.json() as { r2Key?: unknown; uploadSessionToken?: unknown; expectedSizeBytes?: unknown };
 		const r2Key = requireGalleryKeyForConfiguredSite(data?.r2Key, config.siteUrl);
 		const uploadSessionToken = optionalUploadSessionToken(data?.uploadSessionToken);
+		const expectedSizeBytes = optionalGalleryUploadSize(data?.expectedSizeBytes);
 		await requireGalleryUploadAccess(request, {
 			r2Key,
 			uploadSessionToken,
@@ -519,7 +520,7 @@ export function createGalleryProcessHandler() {
 			const res = await fetch(`${config.galleryWorkerUrl}/upload/process`, {
 				method: "POST",
 				headers: workerHeaders(config.galleryAdminSecret!),
-				body: JSON.stringify({ r2Key }),
+				body: JSON.stringify({ r2Key, ...(expectedSizeBytes === undefined ? {} : { expectedSizeBytes }) }),
 			});
 
 			if (!res.ok) throw error(res.status, await res.text());

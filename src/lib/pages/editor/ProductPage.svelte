@@ -49,6 +49,7 @@ import EditorSegmentedChoice from "./EditorSegmentedChoice.svelte";
 import PortfolioMediaPicker from "./PortfolioMediaPicker.svelte";
 import ProductWorkbench from "./ProductWorkbench.svelte";
 import { publicationCompletenessMessage } from "./publicationCompleteness";
+import { protectDraftNavigation } from "./draftNavigation";
 
 let { productId }: { productId: string } = $props();
 const config = getAdminConfig();
@@ -177,6 +178,7 @@ let effectiveSaleAvailability = $derived(
 		: form.saleAvailability,
 );
 let dirty = $derived(initialized && hasActiveDraft && currentJson !== savedJson);
+protectDraftNavigation(() => dirty || saveState === "saving" || saveState === "discarding" || uploads.downloadBusy || uploads.artworkBusy);
 let publicationRequestActive = $derived(publicationOperation !== null);
 let deletingProduct = $state(false);
 let editorLocked = $derived(

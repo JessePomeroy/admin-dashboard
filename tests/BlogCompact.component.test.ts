@@ -11,6 +11,7 @@ vi.mock("../src/lib/config", async () => import("./fixtures/blog-media/config"))
 let component: ReturnType<typeof mount> | undefined;
 
 beforeEach(() => {
+	sessionStorage.clear();
 	blogFixtureConfig.editor!.blog!.mode = "compact";
 	history.replaceState(null, "", "/");
 	const rect = new DOMRect(0, 0, 1, 1);

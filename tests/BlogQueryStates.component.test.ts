@@ -29,7 +29,8 @@ function stateKey(ref: { name?: string }, args?: unknown) {
 	return ref.name ?? "unknown";
 }
 
-vi.mock("$app/navigation", () => ({ goto: vi.fn(async () => {}) }));
+vi.mock("$app/navigation", () => ({
+	beforeNavigate: vi.fn(), goto: vi.fn(async () => {}) }));
 vi.mock("convex-svelte", () => ({
 	useQuery: (ref: { name?: string }, args?: unknown) => {
 		const resolvedArgs = typeof args === "function" ? (args as () => unknown)() : args;
@@ -153,6 +154,7 @@ function postTitleInput() {
 
 describe("Blog query states", () => {
 	beforeEach(() => {
+	sessionStorage.clear();
 		mocks.states.clear();
 		mocks.mediaEnabled = false;
 		mocks.mutation.mockReset().mockResolvedValue({ documentId: "created" });

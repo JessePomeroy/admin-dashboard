@@ -1,4 +1,6 @@
 <script lang="ts">
+import { createBusinessRecords, downloadRecordsCsv } from "./businessRecords.svelte";
+import RecordPagination from "./RecordPagination.svelte";
 /**
  * Admin Orders Dashboard
  *
@@ -30,11 +32,20 @@ let { data } = $props();
 const config = getAdminConfig();
 const { api } = config;
 const convexClient = useAdminClient();
-const ordersQuery = useQuery(api.orders.list, { siteUrl: config.siteUrl });
+let statusFilter = $state("all");
+let searchQuery = $state("");
+let yearFilter = $state("all");
+let periodFilter = $state("all");
+const records = createBusinessRecords<Order>({ kind: "orders", filters: () => {
+ const period = getDateRange(periodFilter);
+ const year = yearFilter === "all" ? null : Number(yearFilter);
+ const from = Math.max(period?.start.getTime() ?? 0, year === null ? 0 : new Date(year,0,1).getTime());
+ const to = Math.min(period?.end.getTime() ?? Infinity, year === null ? Infinity : new Date(year+1,0,1).getTime());
+ return { ...(statusFilter === "all" ? {} : { status: statusFilter }), ...(searchQuery.trim() ? { search: searchQuery.trim() } : {}), ...(from ? { from } : {}), ...(Number.isFinite(to) ? { to } : {}) };
+} });
+const ordersQuery = records;
 
-// Map Convex format to match what the orders page expects
-let orders = $derived(
-	((ordersQuery.data ?? []) as Order[]).map((order: Order): AdminOrder => ({
+function toAdminOrder(order: Order): AdminOrder { return {
 		_id: order._id,
 		orderNumber: order.orderNumber,
 		createdAt: new Date(order._creationTime).toISOString(),
@@ -58,14 +69,14 @@ let orders = $derived(
 		items: order.items,
 		shippingAddress: order.shippingAddress || null,
 		notes: order.notes || "",
-	})),
-);
+	}; }
+let orders = $derived(((ordersQuery.data ?? []) as Order[]).map(toAdminOrder));
 
 // Filter state - these control what's shown in the table
-let statusFilter = $state("all");
-let searchQuery = $state("");
-let yearFilter = $state("all");
-let periodFilter = $state("all"); // all, today, week, month
+
+
+
+ // all, today, week, month
 
 // Modal state - for the order details popup
 let selectedOrder = $state<AdminOrder | null>(null);
@@ -75,7 +86,7 @@ let notesSaving = $state(false);
 // Auto-open order from ?open= query param
 let openHandled = false;
 $effect(() => {
-	if (openHandled || orders.length === 0) return;
+	if (records.enabled || openHandled || orders.length === 0) return;
 	const openId = $page.url.searchParams.get("open");
 	if (openId) {
 		const match = orders.find((o: AdminOrder) => o._id === openId);
@@ -98,7 +109,7 @@ const statuses = [
 ];
 
 let availableYears = $derived(
-	(
+	records.enabled ? Array.from({length:new Date().getFullYear()-1999},(_,index)=>new Date().getFullYear()-index) : (
 		[
 			...new Set(
 				orders.map((o: AdminOrder) => new Date(o.createdAt).getFullYear()),
@@ -139,7 +150,7 @@ function getDateRange(period: string): { start: Date; end: Date } | null {
 
 // Filter orders
 let filteredOrders = $derived(
-	orders.filter((order: AdminOrder) => {
+	records.enabled ? orders : orders.filter((order: AdminOrder) => {
 		const orderDate = new Date(order.createdAt);
 
 		// Period filter (today/week/month)
@@ -231,9 +242,27 @@ function exportCSV() {
 	link.click();
 	URL.revokeObjectURL(url);
 }
+
+const deepLinkedRecordId = $derived($page.url.searchParams.get("open"));
+let openedRecordId = "";
+$effect(() => {
+ const id = deepLinkedRecordId;
+ if (!id) { openedRecordId = ""; return; }
+ if (!records.enabled || !id || openedRecordId === id) return;
+ openedRecordId = id;
+ let active = true;
+ void records.open(id).then((row) => { if (active && row && deepLinkedRecordId === id && !selectedOrder) { openOrderDetails(toAdminOrder(row)); } });
+ return () => {active = false;};
+});
+async function exportRecords() {
+ if (!records.enabled) { exportCSV(); return; }
+ const rows = await records.all();
+ if (!rows) return;
+ try { downloadRecordsCsv(rows, "orders.csv"); } catch (error) { addToast(error instanceof Error ? error.message : "Export failed."); }
+}
 </script>
 
-{#if ordersQuery.isLoading}
+{#if !records.enabled && ordersQuery.isLoading}
 	<LoadingState />
 {:else}
 <div class="orders-page admin-page">
@@ -246,22 +275,24 @@ function exportCSV() {
 		{#each filteredGrossPayments.groups as gross, index}
 			{#if index > 0}<span class="stat-sep">&middot;</span>{/if}
 			<span class="stat-item">
-				<span class="stat-label">filtered gross</span>
+				<span class="stat-label">{records.enabled ? "matching page gross" : "filtered gross"}</span>
 				<span class="stat-value">{formatStripeMinorUnits(gross.totalMinorUnits, gross.currency)}</span>
 				<span class="stat-sub">{gross.orderCount} orders</span>
 			</span>
 		{/each}
-		{#if filteredGrossPayments.groups.length > 0 && allGrossPayments.groups.length > 0}
+		{#if !records.enabled && filteredGrossPayments.groups.length > 0 && allGrossPayments.groups.length > 0}
 			<span class="stat-sep">&middot;</span>
 		{/if}
+		{#if !records.enabled}
 		{#each allGrossPayments.groups as gross, index}
 			{#if index > 0}<span class="stat-sep">&middot;</span>{/if}
 			<span class="stat-item">
-				<span class="stat-label">all-time gross</span>
+				<span class="stat-label">{records.enabled ? "page gross" : "loaded gross"}</span>
 				<span class="stat-value">{formatStripeMinorUnits(gross.totalMinorUnits, gross.currency)}</span>
 				<span class="stat-sub">{gross.orderCount} orders</span>
 			</span>
 		{/each}
+		{/if}
 		{#if filteredGrossPayments.groups.length === 0 && allGrossPayments.groups.length === 0}
 			<span class="stat-item"><span class="stat-label">gross payments unavailable</span></span>
 		{/if}
@@ -306,12 +337,13 @@ function exportCSV() {
 				</option>
 			{/each}
 		</select>
-		<button class="btn-export" onclick={exportCSV}>
+		{#if !records.enabled}<button class="btn-export" onclick={() => void exportRecords()}>
 			export csv
-		</button>
+		</button>{/if}
 	</div>
 
 	<!-- Orders table -->
+	<RecordPagination {records} onexport={() => void exportRecords()} />
 	<OrderTable
 		orders={filteredOrders}
 		onorderclick={openOrderDetails}

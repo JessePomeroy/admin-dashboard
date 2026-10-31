@@ -34,6 +34,8 @@ import "../../styles/editorial-page.css";
 import BlogMediaReview from "./BlogMediaReview.svelte";
 import BlogWorkbench from "./BlogWorkbench.svelte";
 import { createBlogDocumentLifecycle } from "./blogDocumentLifecycle.svelte";
+import { parsePostRecovery } from "./blogDraftRecovery";
+import DraftRecoveryNotice from "./DraftRecoveryNotice.svelte";
 
 let { documentId }: { documentId: string } = $props();
 type RichBodyEditorComponent = typeof import("./RichBodyEditor.svelte").default;
@@ -227,7 +229,10 @@ function toggleCategory(categoryId: string, checked: boolean) {
 }
 
 const lifecycle = createBlogDocumentLifecycle<PostDraft>({
-	state: () => editorState,
+	key: () => `${config.siteUrl}:post:${documentId}`,
+	parseRecovery: parsePostRecovery,
+	emptyDraft: () => copyPostDraft(undefined),
+	state: () => editorState?.documentId === documentId ? editorState : undefined,
 	draft: (publishing) => normalizedDraft(publishing),
 	setDraft: (draft) => { form = draft; },
 	copy: (draft) => copyPostDraft(draft),
@@ -267,9 +272,10 @@ const lifecycle = createBlogDocumentLifecycle<PostDraft>({
 				{#if !archived && (lifecycle.canSave || lifecycle.saveState === "saving")}
 					<button type="button" onclick={() => void lifecycle.saveDraft()} disabled={!lifecycle.canSave || lifecycle.publicationBusy}>save draft</button>
 				{/if}
-				<PublicationControl published={Boolean(editorState.published)} hasChanges={lifecycle.publicationHasChanges} {archived} item={"post"} onpublish={lifecycle.publishDraft} onunpublish={lifecycle.unpublishDocument} busy={lifecycle.publicationBusy} />
+				<PublicationControl published={Boolean(editorState.published)} hasChanges={lifecycle.publicationHasChanges} {archived} item={"post"} onpublish={lifecycle.publishDraft} onunpublish={lifecycle.unpublishDocument} busy={lifecycle.publicationBusy} publishDisabled={lifecycle.conflict} unpublishDisabled={lifecycle.conflict} />
 		{/snippet}
 	</EditorDocumentHeader>
+		<DraftRecoveryNotice conflict={lifecycle.conflict} recovered={lifecycle.recovered} error={lifecycle.storageError} onreload={lifecycle.reloadServerDraft} ondownload={lifecycle.downloadDraft} />
 
 		{#if lifecycle.saveError}<p class="error" role="alert">{lifecycle.saveError}</p>{/if}
 		{#if lifecycle.publishError}<p class="error" role="alert">{lifecycle.publishError}</p>{/if}

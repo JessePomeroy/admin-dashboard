@@ -1,4 +1,6 @@
 <script lang="ts">
+import RecurringInvoiceSchedule from "./RecurringInvoiceSchedule.svelte";
+import { getAdminConfig } from "../../config";
 import AdminModal from "../../components/AdminModal.svelte";
 import StatusDot from "../../components/StatusDot.svelte";
 import type {
@@ -78,6 +80,7 @@ let {
 	onclose,
 }: Props = $props();
 
+const config = getAdminConfig();
 let editMode = $state(false);
 let confirmDelete = $state(false);
 let confirmResend = $state(false);
@@ -396,6 +399,9 @@ async function handleDelete() {
 				{/if}
 			</div>
 
+			{#if invoice.invoiceType === "recurring" && config.api.recurringInvoices}
+				{#key invoice._id}<RecurringInvoiceSchedule {invoice} />{/key}
+			{/if}
 			{#if invoice.invoiceType === "recurring" && invoice.recurring}
 				<div class="type-info">
 					<span class="type-info-item"

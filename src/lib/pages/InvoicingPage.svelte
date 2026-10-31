@@ -1,4 +1,6 @@
 <script lang="ts">
+import { createBusinessRecords, downloadRecordsCsv } from "./businessRecords.svelte";
+import RecordPagination from "./RecordPagination.svelte";
 import { page } from "$app/stores";
 import { useQuery } from "convex-svelte";
 import { useAdminClient } from "../adminClient";
@@ -31,7 +33,10 @@ const { api } = config;
 let { data } = $props();
 
 const client = useAdminClient();
-const invoicesQuery = useQuery(api.invoices.list, { siteUrl: config.siteUrl });
+let statusFilter = $state("all");
+let searchQuery = $state("");
+const records = createBusinessRecords<Invoice>({ kind: "invoices", filters: () => ({ ...(statusFilter === "all" ? {} : { status: statusFilter }), ...(searchQuery.trim() ? { search: searchQuery.trim() } : {}) }) });
+const invoicesQuery = records;
 const clientsQuery = useQuery(api.crm.listClients, { siteUrl: config.siteUrl });
 const numberPreviewQuery = useQuery(api.invoices.getNextNumber, { siteUrl: config.siteUrl });
 const templatesQuery = useQuery(api.emailTemplates.list, { siteUrl: config.siteUrl });
@@ -40,10 +45,10 @@ let invoices = $derived(invoicesQuery.data ?? []);
 let clients = $derived(clientsQuery.data ?? []);
 let numberPreview = $derived(numberPreviewQuery.data ?? "INV-001");
 let emailTemplates = $derived(templatesQuery.data ?? []);
-let isLoading = $derived(invoicesQuery.isLoading || clientsQuery.isLoading || numberPreviewQuery.isLoading);
+let isLoading = $derived((!records.enabled && invoicesQuery.isLoading) || clientsQuery.isLoading || numberPreviewQuery.isLoading);
 
-let statusFilter = $state("all");
-let searchQuery = $state("");
+
+
 let showCreateModal = $state(false);
 let selectedInvoice = $state<Invoice | null>(null);
 let shareLinkCopied = $state(false);
@@ -80,7 +85,7 @@ $effect(() => {
 // Auto-open invoice from ?open= query param (e.g. from activity timeline)
 let openHandled = false;
 $effect(() => {
-	if (openHandled || invoices.length === 0) return;
+	if (records.enabled || openHandled || invoices.length === 0) return;
 	const openId = $page.url.searchParams.get("open");
 	if (openId) {
 		const match = invoices.find((inv: Invoice) => inv._id === openId);
@@ -101,7 +106,7 @@ const allStatuses: InvoiceStatus[] = [
 ];
 
 let filteredInvoices = $derived(
-	invoices.filter((inv: Invoice) => {
+	records.enabled ? invoices : invoices.filter((inv: Invoice) => {
 		if (statusFilter !== "all" && inv.status !== statusFilter) return false;
 		if (searchQuery) {
 			const q = searchQuery.toLowerCase();
@@ -297,6 +302,24 @@ async function handleShareLink() {
 		addToast("Failed to create share link.");
 	}
 }
+
+const deepLinkedRecordId = $derived($page.url.searchParams.get("open"));
+let openedRecordId = "";
+$effect(() => {
+ const id = deepLinkedRecordId;
+ if (!id) { openedRecordId = ""; return; }
+ if (!records.enabled || !id || openedRecordId === id) return;
+ openedRecordId = id;
+ let active = true;
+ void records.open(id).then((row) => { if (active && row && deepLinkedRecordId === id && !selectedInvoice) { selectedInvoice = row; } });
+ return () => {active = false;};
+});
+async function exportRecords() {
+ if (!records.enabled) { return; }
+ const rows = await records.all();
+ if (!rows) return;
+ try { downloadRecordsCsv(rows, "invoices.csv"); } catch (error) { addToast(error instanceof Error ? error.message : "Export failed."); }
+}
 </script>
 
 <FeatureGate feature="invoicing" adminSession={data.adminSession}>
@@ -334,6 +357,7 @@ async function handleShareLink() {
 		</PageHeader>
 
 		<div class="stats-line">
+			{#if records.enabled}<span>on this page</span><span class="stat-sep">&middot;</span>{/if}
 			<span>{stats.total} total</span>
 			<span class="stat-sep">&middot;</span>
 			<span>{stats.draft} draft</span>
@@ -374,6 +398,7 @@ async function handleShareLink() {
 			}}
 		/>
 
+	<RecordPagination {records} onexport={() => void exportRecords()} />
 		<InvoiceTable
 			invoices={filteredInvoices}
 			onselect={(inv) => {
