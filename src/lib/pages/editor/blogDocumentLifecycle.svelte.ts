@@ -63,11 +63,11 @@ export function createBlogDocumentLifecycle<Draft>(options: {
 		if (
 			!activeKey ||
 			!initializedRevisionId ||
-			unreadableRecovery ||
-			typeof sessionStorage === "undefined"
+			unreadableRecovery
 		)
 			return;
 		try {
+			if (typeof sessionStorage === "undefined") return;
 			if (currentJson === lastSavedJson && saveState !== "conflict")
 				sessionStorage.removeItem(storageKey());
 			else
@@ -97,8 +97,9 @@ export function createBlogDocumentLifecycle<Draft>(options: {
 		storageError = "";
 		acknowledgeSlugChange = false;
 		options.onInitialize();
-		if (!restore || typeof sessionStorage === "undefined") return;
+		if (!restore) return;
 		try {
+			if (typeof sessionStorage === "undefined") return;
 			const raw = sessionStorage.getItem(storageKey());
 			if (!raw) return;
 			rawRecovery = raw;
@@ -127,8 +128,9 @@ export function createBlogDocumentLifecycle<Draft>(options: {
 		} catch {
 			unreadableRecovery = Boolean(rawRecovery);
 			if (unreadableRecovery) saveState = "conflict";
-			storageError =
-				"The saved recovery copy could not be read. Download it before choosing the server draft.";
+			storageError = unreadableRecovery
+				? "The saved recovery copy could not be read. Download it before choosing the server draft."
+				: "This tab could not access recovery storage. Keep the editor open or download your draft.";
 		}
 	}
 	onMount(() => () => {

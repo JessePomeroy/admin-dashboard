@@ -151,3 +151,23 @@ it("keeps an unreadable recovery copy until the user explicitly chooses the serv
 	expect(sessionStorage.getItem(key)).toBeNull();
 	confirm.mockRestore();
 });
+
+
+it("keeps the editor usable and reports recovery limits when storage access is denied", async () => {
+ const descriptor = Object.getOwnPropertyDescriptor(globalThis, "sessionStorage");
+ Object.defineProperty(globalThis, "sessionStorage", {configurable:true, get() {throw new DOMException("Storage denied", "SecurityError");}});
+ try {
+  const {mutation} = await render();
+  await type(field("post title"), "Draft with unavailable recovery storage");
+  expect(field("post title").value).toBe("Draft with unavailable recovery storage");
+  expect(button("save draft").disabled).toBe(false);
+  expect(button("download my draft").disabled).toBe(false);
+  expect(document.body.textContent).toContain("Keep the editor open or download your draft");
+  expect(mutation).not.toHaveBeenCalled();
+  await unmount(component!);
+  component = undefined;
+ } finally {
+  if (descriptor) Object.defineProperty(globalThis, "sessionStorage", descriptor);
+  else Reflect.deleteProperty(globalThis, "sessionStorage");
+ }
+});
