@@ -1,4 +1,6 @@
 <script lang="ts">
+import { createBusinessRecords, downloadRecordsCsv } from "./businessRecords.svelte";
+import RecordPagination from "./RecordPagination.svelte";
 import { page } from "$app/stores";
 import { useQuery } from "convex-svelte";
 import { useAdminClient } from "../adminClient";
@@ -30,7 +32,10 @@ const { api } = config;
 let { data } = $props();
 
 const client = useAdminClient();
-const contractsQuery = useQuery(api.contracts.list, { siteUrl: config.siteUrl });
+let statusFilter = $state("all");
+let searchQuery = $state("");
+const records = createBusinessRecords<Contract>({ kind: "contracts", filters: () => ({ ...(statusFilter === "all" ? {} : { status: statusFilter }), ...(searchQuery.trim() ? { search: searchQuery.trim() } : {}) }) });
+const contractsQuery = records;
 const clientsQuery = useQuery(api.crm.listClients, { siteUrl: config.siteUrl });
 const templatesQuery = useQuery(api.contracts.listTemplates, { siteUrl: config.siteUrl });
 const emailTemplatesQuery = useQuery(api.emailTemplates.list, { siteUrl: config.siteUrl });
@@ -39,14 +44,14 @@ let contracts = $derived(contractsQuery.data ?? []);
 let clients = $derived(clientsQuery.data ?? []);
 let templates = $derived(templatesQuery.data ?? []);
 let emailTemplates = $derived(emailTemplatesQuery.data ?? []);
-let isLoading = $derived(contractsQuery.isLoading || clientsQuery.isLoading || templatesQuery.isLoading);
+let isLoading = $derived((!records.enabled && contractsQuery.isLoading) || clientsQuery.isLoading || templatesQuery.isLoading);
 
 // Tab state
 let activeTab = $state<"contracts" | "templates">("contracts");
 
 // Filter state
-let statusFilter = $state("all");
-let searchQuery = $state("");
+
+
 
 // Modal state
 let showCreateModal = $state(false);
@@ -85,7 +90,7 @@ $effect(() => {
 // Auto-open contract from ?open= query param
 let openHandled = false;
 $effect(() => {
-	if (openHandled || contracts.length === 0) return;
+	if (records.enabled || openHandled || contracts.length === 0) return;
 	const openId = $page.url.searchParams.get("open");
 	if (openId) {
 		const match = contracts.find((c: Contract) => c._id === openId);
@@ -99,7 +104,7 @@ $effect(() => {
 const allStatuses: ContractStatus[] = ["draft", "sent", "signed", "expired"];
 
 let filteredContracts = $derived(
-	contracts.filter((c: Contract) => {
+	records.enabled ? contracts : contracts.filter((c: Contract) => {
 		if (statusFilter !== "all" && c.status !== statusFilter) return false;
 		if (searchQuery) {
 			const q = searchQuery.toLowerCase();
@@ -289,6 +294,24 @@ async function handleDeleteTemplate(id: string) {
 		siteUrl: config.siteUrl,
 	});
 }
+
+const deepLinkedRecordId = $derived($page.url.searchParams.get("open"));
+let openedRecordId = "";
+$effect(() => {
+ const id = deepLinkedRecordId;
+ if (!id) { openedRecordId = ""; return; }
+ if (!records.enabled || !id || openedRecordId === id) return;
+ openedRecordId = id;
+ let active = true;
+ void records.open(id).then((row) => { if (active && row && deepLinkedRecordId === id && !selectedContract) { selectedContract = row; } });
+ return () => {active = false;};
+});
+async function exportRecords() {
+ if (!records.enabled) { return; }
+ const rows = await records.all();
+ if (!rows) return;
+ try { downloadRecordsCsv(rows, "contracts.csv"); } catch (error) { addToast(error instanceof Error ? error.message : "Export failed."); }
+}
 </script>
 
 <FeatureGate feature="contracts" adminSession={data.adminSession}>
@@ -328,6 +351,7 @@ async function handleDeleteTemplate(id: string) {
 		</header>
 
 		<div class="stats-line">
+			{#if records.enabled}<span>on this page</span><span class="stat-sep">&middot;</span>{/if}
 			<span>{stats.total} total</span>
 			<span class="stat-sep">&middot;</span>
 			<span>{stats.draft} draft</span>
@@ -378,7 +402,8 @@ async function handleDeleteTemplate(id: string) {
 				/>
 			</div>
 
-			<ContractTable
+		<RecordPagination {records} onexport={() => void exportRecords()} />
+		<ContractTable
 				contracts={filteredContracts}
 				onselect={(c) => {
 					selectedContract = { ...c };

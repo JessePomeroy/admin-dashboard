@@ -1,4 +1,5 @@
 <script lang="ts">
+import { protectDraftNavigation } from "./draftNavigation";
 import PublicationControl from "./PublicationControl.svelte";
 import EditorDocumentHeader from "./EditorDocumentHeader.svelte";
 import EditorSlugField from "./EditorSlugField.svelte";
@@ -112,6 +113,8 @@ let publicationCurrent = $derived(
 let hasPendingWork = $derived(
 	["dirty", "saving", "offline", "syncing", "error", "conflict"].includes(saveState),
 );
+
+protectDraftNavigation(() => hasPendingWork || publishing || removing);
 
 function persistLocalDraft() {
 	if (!active || !browser) return;

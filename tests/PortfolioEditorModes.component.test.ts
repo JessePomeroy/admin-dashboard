@@ -125,7 +125,7 @@ vi.mock("convex-svelte", () => ({
 	useConvexClient: () => ({ mutation: mocks.mutation }),
 }));
 
-vi.mock("$app/navigation", () => ({ goto: mocks.goto }));
+vi.mock("$app/navigation", () => ({ beforeNavigate: vi.fn(), goto: mocks.goto }));
 
 vi.mock("../src/lib/adminClient", () => ({
 	useAdminClient: () => ({ mutation: mocks.mutation }),

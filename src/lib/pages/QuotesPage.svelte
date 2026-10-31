@@ -1,4 +1,6 @@
 <script lang="ts">
+import { createBusinessRecords, downloadRecordsCsv } from "./businessRecords.svelte";
+import RecordPagination from "./RecordPagination.svelte";
 import { page } from "$app/stores";
 import { useQuery } from "convex-svelte";
 import { useAdminClient } from "../adminClient";
@@ -35,7 +37,10 @@ const { api } = config;
 let { data } = $props();
 
 const client = useAdminClient();
-const quotesQuery = useQuery(api.quotes.list, { siteUrl: config.siteUrl });
+let statusFilter = $state("all");
+let searchQuery = $state("");
+const records = createBusinessRecords<Quote>({ kind: "quotes", filters: () => ({ ...(statusFilter === "all" ? {} : { status: statusFilter }), ...(searchQuery.trim() ? { search: searchQuery.trim() } : {}) }) });
+const quotesQuery = records;
 const clientsQuery = useQuery(api.crm.listClients, { siteUrl: config.siteUrl });
 const numberPreviewQuery = useQuery(api.quotes.getNextNumber, { siteUrl: config.siteUrl });
 const presetsQuery = useQuery(api.quotes.listPresets, { siteUrl: config.siteUrl });
@@ -48,14 +53,14 @@ let numberPreview = $derived(numberPreviewQuery.data ?? "QT-001");
 let presets = $derived(presetsQuery.data ?? []);
 let invoiceNumberPreview = $derived(invoiceNumberPreviewQuery.data ?? "INV-001");
 let emailTemplates = $derived(emailTemplatesQuery.data ?? []);
-let isLoading = $derived(quotesQuery.isLoading || clientsQuery.isLoading || numberPreviewQuery.isLoading || presetsQuery.isLoading || invoiceNumberPreviewQuery.isLoading);
+let isLoading = $derived((!records.enabled && quotesQuery.isLoading) || clientsQuery.isLoading || numberPreviewQuery.isLoading || presetsQuery.isLoading || invoiceNumberPreviewQuery.isLoading);
 
 // Tab state
 let activeTab = $state<"quotes" | "presets">("quotes");
 
 // Filter state
-let statusFilter = $state("all");
-let searchQuery = $state("");
+
+
 
 // Modal state
 let showCreateModal = $state(false);
@@ -66,7 +71,7 @@ let saving = $state(false);
 // Auto-open quote from ?open= query param
 let openHandled = false;
 $effect(() => {
-	if (openHandled || quotes.length === 0) return;
+	if (records.enabled || openHandled || quotes.length === 0) return;
 	const openId = $page.url.searchParams.get("open");
 	if (openId) {
 		const match = quotes.find((q: Quote) => q._id === openId);
@@ -99,7 +104,7 @@ let selectedPreset = $state<QuotePreset | null>(null);
 const allStatuses = ["draft", "sent", "accepted", "declined", "expired"];
 
 let filteredQuotes = $derived(
-	quotes.filter((q: Quote) => {
+	records.enabled ? quotes : quotes.filter((q: Quote) => {
 		if (statusFilter !== "all" && q.status !== statusFilter) return false;
 		if (searchQuery) {
 			const s = searchQuery.toLowerCase();
@@ -532,6 +537,24 @@ function closePresetModal() {
 	showPresetModal = false;
 	selectedPreset = null;
 }
+
+const deepLinkedRecordId = $derived($page.url.searchParams.get("open"));
+let openedRecordId = "";
+$effect(() => {
+ const id = deepLinkedRecordId;
+ if (!id) { openedRecordId = ""; return; }
+ if (!records.enabled || !id || openedRecordId === id) return;
+ openedRecordId = id;
+ let active = true;
+ void records.open(id).then((row) => { if (active && row && deepLinkedRecordId === id && !selectedQuote) { openDetailModal(row); } });
+ return () => {active = false;};
+});
+async function exportRecords() {
+ if (!records.enabled) { return; }
+ const rows = await records.all();
+ if (!rows) return;
+ try { downloadRecordsCsv(rows, "quotes.csv"); } catch (error) { addToast(error instanceof Error ? error.message : "Export failed."); }
+}
 </script>
 
 <FeatureGate feature="quotes" adminSession={data.adminSession}>
@@ -550,6 +573,7 @@ function closePresetModal() {
 	</header>
 
 	<div class="stats-line">
+			{#if records.enabled}<span>on this page</span><span class="stat-sep">&middot;</span>{/if}
 		<span>{stats.total} total</span>
 		<span class="stat-sep">&middot;</span>
 		<span>{stats.draft} draft</span>
@@ -581,6 +605,7 @@ function closePresetModal() {
 			<input class="filter-search" type="text" placeholder="search by quote # or client..." bind:value={searchQuery} />
 		</div>
 
+	<RecordPagination {records} onexport={() => void exportRecords()} />
 		<QuoteTable quotes={filteredQuotes} onselect={openDetailModal} />
 	{:else}
 		<PresetManager

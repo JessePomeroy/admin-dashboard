@@ -36,7 +36,7 @@ const editor = vi.hoisted(() => ({
 
 // Keep the public editor and its recovery/autosave logic real. Only external
 // transport and unrelated media presentation are replaced.
-vi.mock("$app/navigation", () => ({ goto: editor.goto }));
+vi.mock("$app/navigation", () => ({ beforeNavigate: vi.fn(), goto: editor.goto }));
 vi.mock("../src/lib/config", () => ({
 	getAdminConfig: () => ({
 		siteUrl: "angelsrest.test",

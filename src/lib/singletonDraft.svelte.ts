@@ -1,3 +1,4 @@
+import { protectDraftNavigation } from "./pages/editor/draftNavigation";
 import { browser } from "$app/environment";
 import { onMount, untrack } from "svelte";
 
@@ -165,6 +166,8 @@ export function createSingletonDraft<T>(options: {
 			window.removeEventListener("beforeunload", warnBeforeUnload);
 		};
 	});
+
+	protectDraftNavigation(pending);
 
 	return {
 		get form() { return form; },

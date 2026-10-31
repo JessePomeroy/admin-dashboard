@@ -178,13 +178,19 @@ async function handleDelete() {
 	if (!confirm("Delete this gallery and all its files? This cannot be undone.")) return;
 	deleting = true;
 	try {
-		const r2Keys = await loadGalleryFileKeys();
+		await uploadController.cancelPendingUploads();
+  if (config.api.deliveryUploads) {
+   const open=await client.query(config.api.deliveryUploads.list,{siteUrl:config.siteUrl,galleryId:gallery._id,paginationOpts:{numItems:25,cursor:null}});
+   if(open.page.length || !open.isDone) throw new Error("Resume or remove interrupted uploads before deleting this gallery.");
+  }
+  const r2Keys = await loadGalleryFileKeys();
 		await deleteGalleryFiles(r2Keys);
 
 		// Hard delete gallery + images + downloads from Convex
 		await client.mutation(galleryApi.remove, { id: toId(gallery._id) });
 		onclose();
-	} catch {
+	} catch (cause) {
+		settingsError = cause instanceof Error ? cause.message : "Could not delete the gallery.";
 		deleting = false;
 	}
 }

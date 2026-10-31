@@ -30,6 +30,9 @@ export interface NanostoreAtom<T> {
 export interface AdminAPI {
 	/** Current tenant-owned content and media export projection. */
 	contentExport?: { page: FnRef };
+	deliveryUploads?: { begin: FnRef; list: FnRef; markDeleting: FnRef; finishDelete: FnRef };
+	recurringInvoices?: { get: FnRef; activate: FnRef; changeState: FnRef };
+	inquiryNotifications?: { status: FnRef; retry: FnRef };
 	activityLog: {
 		getClientActivity: FnRef;
 	};
@@ -138,7 +141,11 @@ export interface AdminAPI {
 		publishDraft?: FnRef;
 		unpublish?: FnRef;
 	};
-	catalogPrivateAssets?: { listForCleanup: FnRef; listExpiredUploadsForCleanup?: FnRef; requestDeletion: FnRef };
+	catalogPrivateAssets?: {
+		listForCleanup: FnRef;
+		listExpiredUploadsForCleanup?: FnRef;
+		requestDeletion: FnRef;
+	};
 	/** Tenant-scoped CMS media reads shared by editor modules. */
 	mediaAssets?: {
 		listForEditor?: FnRef;
@@ -221,6 +228,8 @@ export interface AdminAPI {
 		markPaid: FnRef;
 		getNextNumber: FnRef;
 	};
+	/** Full-history pages, indexed search and exact-ID reads. Enable after the additive backend and search backfill. */
+	businessRecords?: { list: FnRef; get: FnRef };
 	kanban: {
 		initializeBoard: FnRef;
 		moveCard: FnRef;
@@ -255,7 +264,12 @@ export interface AdminAPI {
 		restoreAccess: FnRef;
 		eraseRecords: FnRef;
 	};
-	contentCleanup?: { list: FnRef; listRevisions: FnRef; purgeArchived: FnRef; pruneRevision: FnRef };
+	contentCleanup?: {
+		list: FnRef;
+		listRevisions: FnRef;
+		purgeArchived: FnRef;
+		pruneRevision: FnRef;
+	};
 	platform: {
 		getFeatureAccess?: FnRef;
 		createClient: FnRef;
@@ -800,8 +814,6 @@ export function setServerConfig(config: AdminServerConfig) {
 /** Get admin config in server-side code */
 export function getServerConfig(): AdminServerConfig {
 	if (!_serverConfig)
-		throw new Error(
-			"Admin server config not initialized. Call setServerConfig() first.",
-		);
+		throw new Error("Admin server config not initialized. Call setServerConfig() first.");
 	return _serverConfig;
 }

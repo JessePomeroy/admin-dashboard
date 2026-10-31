@@ -1,4 +1,6 @@
 <script lang="ts">
+import GalleryUploadRecovery from "./GalleryUploadRecovery.svelte";
+import { getAdminConfig } from "../../config";
 import { onDestroy, untrack } from "svelte";
 import FeatureGate from "../../components/FeatureGate.svelte";
 import { logger } from "../../logger";
@@ -19,6 +21,7 @@ type Props = {
 	| { uploadController?: undefined; galleryId: string; onupload: () => void });
 let { uploadController: providedController, uploadPolicy: providedPolicy, galleryId = "", onupload = () => {}, adminSession, onbatchchange = () => {} }: Props = $props();
 
+const config = getAdminConfig();
 const source = untrack(() => {
 	if (providedController) return { controller: providedController, factory: null };
 	const factory = useGalleryUploadFactory();
@@ -173,6 +176,9 @@ function formatFileSize(bytes: number): string {
 </script>
 
 <FeatureGate feature="galleryDelivery" {adminSession}>
+ {#if config.api.deliveryUploads}
+  {#key galleryId || uploadController.galleryId}<GalleryUploadRecovery galleryId={galleryId || uploadController.galleryId} activeKeys={files.map(file=>file.r2Key).filter((key):key is string=>Boolean(key))} />{/key}
+ {/if}
 <div
 	class="uploader"
 	class:dragging

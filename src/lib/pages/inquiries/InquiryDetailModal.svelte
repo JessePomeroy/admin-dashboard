@@ -1,5 +1,6 @@
 <script lang="ts">
 import { getAdminConfig } from "../../config";
+import InquiryNotification from "./InquiryNotification.svelte";
 import InquiryWorkflow from "./InquiryWorkflow.svelte";
 import type { Inquiry } from "../../types";
 import AdminModal from "../../components/AdminModal.svelte";
@@ -24,7 +25,8 @@ interface Props {
 
 let { inquiry, onclose, onupdatestatus, ondelete, deleting = false, busy = false, workflowEnabled = false, onworkflowchange = () => {} }: Props = $props();
 
-const workflow = getAdminConfig().api.inquiries;
+const config = getAdminConfig();
+const workflow = config.api.inquiries;
 
 function replyViaEmail(email: string, subject: string) {
 	const mailtoSubject = subject ? `Re: ${subject}` : "";
@@ -58,6 +60,10 @@ function replyViaEmail(email: string, subject: string) {
 				<StatusDot color={getStatusColor(INQUIRY_STATUS_COLORS, inquiry.status)} label={inquiry.status || "new"} />
 			</div>
 		</div>
+
+		{#if config.api.inquiryNotifications}
+			{#key inquiry._id}<InquiryNotification id={inquiry._id} />{/key}
+		{/if}
 
 		<div class="message-body">
 			<h3>message</h3>

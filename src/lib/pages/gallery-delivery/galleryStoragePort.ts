@@ -43,6 +43,7 @@ export interface GalleryStoragePort {
 		signal?: AbortSignal;
 	}): Promise<void>;
 	process(input: {
+	expectedSizeBytes?: number;
 		r2Key: string;
 		uploadSessionToken: string;
 		signal?: AbortSignal;
@@ -310,19 +311,23 @@ export function createGalleryStoragePort(
 			if (!response.ok) throw await parseErrorResponse(response, "Upload failed");
 		},
 
-		async process({ r2Key, uploadSessionToken, signal }) {
+		async process({ r2Key, uploadSessionToken, signal, expectedSizeBytes }) {
 			const res = await fetchWithTimeout(
 				fetcher,
 				"/api/admin/galleries/process",
 				{
 					method: "POST",
 					headers: { "Content-Type": "application/json" },
-					body: JSON.stringify({ r2Key, uploadSessionToken }),
+					body: JSON.stringify({ r2Key, uploadSessionToken, ...(expectedSizeBytes === undefined ? {} : { expectedSizeBytes }) }),
 				},
 				PROCESS_TIMEOUT_MS,
 				signal,
 			);
 			if (!res.ok) throw await parseErrorResponse(res, "Processing failed");
+   if (expectedSizeBytes !== undefined) {
+    const result=await parseJsonObject(res,"Could not verify stored original");
+    if(result.sizeBytes !== expectedSizeBytes) throw new Error("Stored original could not be verified. Deploy the matching gallery Worker before recovery.");
+   }
 		},
 
 		async delete({ r2Key, uploadSessionToken, signal }) {

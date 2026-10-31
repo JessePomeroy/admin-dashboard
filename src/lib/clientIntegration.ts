@@ -2,13 +2,17 @@ import type { AdminAPI } from "./config";
 
 /** New standard APIs must be adopted here; omission cannot silently opt a host out. */
 type StandardClientAPI = {
- [Key in Exclude<keyof AdminAPI, "documentEmailAttempts" | "blogContent" | "postContent" | "catalogProducts" | "platformOffboarding" | "contentCleanup">]-?: Required<NonNullable<AdminAPI[Key]>>;
+ [Key in Exclude<keyof AdminAPI, "businessRecords" | "inquiryNotifications" | "recurringInvoices" | "deliveryUploads" | "documentEmailAttempts" | "blogContent" | "postContent" | "catalogProducts" | "platformOffboarding" | "contentCleanup">]-?: Required<NonNullable<AdminAPI[Key]>>;
 };
 
 // Generated API references are opaque at this package boundary.
 type AdminFunction = NonNullable<AdminAPI["adminAuth"]>["checkAdminAccess"];
 
 export interface StandardAdminApiSource {
+ businessRecords?: NonNullable<AdminAPI["businessRecords"]>;
+ inquiryNotifications?: NonNullable<AdminAPI["inquiryNotifications"]>;
+ recurringInvoices?: NonNullable<AdminAPI["recurringInvoices"]>;
+ deliveryUploads?: NonNullable<AdminAPI["deliveryUploads"]>;
 	activityLog: Record<"getClientActivity", AdminFunction>;
 	adminAuth: Record<"checkAdminAccess", AdminFunction>;
 	catalogPrivateAssets: Record<"listExpiredUploadsForCleanup" | "listForCleanup" | "requestDeletion", AdminFunction>;
@@ -38,6 +42,10 @@ export interface StandardAdminApiSource {
 /** Complete standard bindings; tenant tiers control access separately. */
 export function createStandardAdminAPI(api: StandardAdminApiSource) {
 	const bindings = {
+ ...(api.businessRecords ? {businessRecords:api.businessRecords} : {}),
+ ...(api.inquiryNotifications ? {inquiryNotifications:api.inquiryNotifications} : {}),
+ ...(api.recurringInvoices ? {recurringInvoices:api.recurringInvoices} : {}),
+ ...(api.deliveryUploads ? {deliveryUploads:api.deliveryUploads} : {}),
 	contentExport: { page: api.contentExport.page },
 	activityLog: { getClientActivity: api.activityLog.getClientActivity },
 	adminAuth: { checkAdminAccess: api.adminAuth.checkAdminAccess },
