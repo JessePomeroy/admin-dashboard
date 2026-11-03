@@ -71,6 +71,7 @@ async function selectFile(event: Event) {
 	uploading = true; error = "";
 	try {
 		if (file.size > detail.policy.fileBytes || !["image/jpeg", "image/png", "image/webp", "application/pdf"].includes(file.type)) throw new Error("Choose a JPEG, PNG, WebP or PDF up to 3 MiB.");
+		if (!retryFile && files.reduce((total, selected) => total + selected.size, file.size) > detail.policy.messageFileBytes) throw new Error("Attachments exceed 6 MiB per reply.");
 		const hash = [...new Uint8Array(await crypto.subtle.digest("SHA-256", await file.arrayBuffer()))].map(b => b.toString(16).padStart(2, "0")).join("");
 		let attachmentId: string;
 		if (retryFile) {
