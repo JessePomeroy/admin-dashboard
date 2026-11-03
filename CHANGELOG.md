@@ -1,5 +1,11 @@
 # @jessepomeroy/admin
 
+## 6.15.1
+
+### Patch Changes
+
+- b9a3585: Show a specific attachment-limit warning before reserving a file that would exceed a reply's 6 MiB total. Preserve the exact-limit upload and retry behavior for already-reserved files.
+
 ## 6.15.0
 
 ### Minor Changes
