@@ -1,5 +1,11 @@
 # @jessepomeroy/admin
 
+## 6.15.0
+
+### Minor Changes
+
+- 8887439: Add optional record-bound Gmail conversations with saved drafts, private photo/PDF attachments, and separate Google sign-in/mailbox consent. Add reviewed existing-thread linking, the correspondence queue and follow-up controls, reversible plain-text folding, private previews, export/deletion controls, and explicit recovery evidence. Hosts opt in through additive API references and authorized endpoints; pilot retention and launch gates remain host-owned.
+
 ## 6.14.1
 
 ### Patch Changes
