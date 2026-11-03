@@ -132,3 +132,84 @@ describe("Google account linking", () => {
 		expect(connectButton()).toBeNull();
 	});
 });
+
+describe("optional Gmail permission", () => {
+	const base = window.location.origin;
+	function renderGmail(linked = false, configured = true) {
+		const linkSocial = vi.fn(async (): Promise<LinkResult> => ({ error: { code: "SYNTHETIC_CONSENT_DECLINED" } }));
+		vi.stubGlobal("fetch", vi.fn(async (input: string | URL | Request) => {
+			if (String(input).endsWith("/link-intent")) return Response.json({ callbackURL: `${base}/admin/google-connection`, errorCallbackURL: `${base}/admin/google-connection?google_link=error` });
+			return Response.json({ configured, mailbox: null });
+		}));
+		component = mount(GoogleAccountLink, { target: document.body, props: {
+			listAccounts: async () => ({ data: linked ? [{ providerId: "google" }] : [] }), linkSocial,
+			callbackURL: "/admin", gmail: { endpoint: "/api/admin/gmail" }, loginEmail: "owner@example.test",
+		} });
+		return linkSocial;
+	}
+	function button(text: string) { return [...document.querySelectorAll<HTMLButtonElement>("button")].find(b => b.textContent?.trim() === text); }
+	beforeEach(() => {
+		HTMLDialogElement.prototype.showModal = function() { this.open = true; };
+		HTMLDialogElement.prototype.close = function() { this.open = false; this.dispatchEvent(new Event("close")); };
+	});
+	afterEach(() => vi.unstubAllGlobals());
+	async function open(linked = false, configured = true) {
+		const link = renderGmail(linked, configured);
+		await vi.waitFor(() => expect(button(linked ? "google connections" : "connect google")).toBeDefined());
+		button(linked ? "google connections" : "connect google")?.click();
+		await vi.waitFor(() => expect(document.querySelector("dialog")?.open).toBe(true));
+		await vi.waitFor(() => expect(document.body.textContent).not.toContain("checking Gmail…"));
+		return link;
+	}
+	it("offers an explicit opt-in on a new link without adding Gmail to ordinary sign-in", async () => {
+		const link = await open();
+		const checkbox = document.querySelector<HTMLInputElement>('input[type="checkbox"]')!;
+		expect(checkbox.checked).toBe(false);
+		button("connect google sign-in")?.click();
+		await vi.waitFor(() => expect(link).toHaveBeenCalledOnce());
+		expect(link.mock.calls[0][0]).not.toHaveProperty("scopes");
+	});
+	it.each([false, true])("requests per-link Gmail scopes for linked=%s and retains login controls after failure", async linked => {
+		const link = await open(linked);
+		if (!linked) { document.querySelector<HTMLInputElement>('input[type="checkbox"]')?.click(); await tick(); }
+		button(linked ? "enable Gmail for my sign-in account" : "connect google sign-in")?.click();
+		await vi.waitFor(() => expect(link).toHaveBeenCalledOnce());
+		expect(link.mock.calls[0][0].scopes).toEqual(["https://www.googleapis.com/auth/gmail.readonly", "https://www.googleapis.com/auth/gmail.send"]);
+		expect(link.mock.calls[0][0].callbackURL).toBe(`${base}/admin/google-connection`);
+		await vi.waitFor(() => expect(addToast).toHaveBeenCalled());
+		expect(document.body.textContent).toContain(linked ? "Google is linked to your admin login" : "Add Google as a way to sign in");
+	});
+	it("keeps a separate mailbox form out of account linking", async () => {
+		const link = await open(true);
+		const form = document.querySelector<HTMLFormElement>("form")!;
+		expect(form.method).toBe("post"); expect(form.getAttribute("action")).toBe("/api/admin/gmail/connect");
+		expect(document.body.textContent).toContain("never becomes a sign-in method"); expect(link).not.toHaveBeenCalled();
+	});
+	it("permits Google-only linking when Gmail is not configured", async () => {
+		const link = await open(false, false);
+		expect(document.querySelector<HTMLInputElement>('input[type="checkbox"]')?.disabled).toBe(true);
+		button("connect google sign-in")?.click(); await vi.waitFor(() => expect(link).toHaveBeenCalledOnce());
+		expect(link.mock.calls[0][0]).not.toHaveProperty("scopes");
+	});
+	it("explains partial consent without assuming linkage or mailbox access from a URL", async () => {
+		page.set({ url: new URL("https://fixture.invalid/admin/inquiries?gmail=partial_consent") });
+		renderGmail(true);
+		await vi.waitFor(() => expect(document.body.textContent).toContain("Gmail permission request was incomplete"));
+		expect(document.body.textContent).toContain("admin sign-in remains usable");
+		expect(document.body.textContent).toContain("Google is linked");
+	});
+ it("ignores an earlier status read after the Google dialog is reopened",async()=>{
+  renderGmail(true);
+  const old=Promise.withResolvers<Response>(),current=Promise.withResolvers<Response>();
+  vi.stubGlobal("fetch",vi.fn().mockReturnValueOnce(old.promise).mockReturnValueOnce(current.promise));
+  await vi.waitFor(()=>expect(button("google connections")).toBeDefined());
+  button("google connections")?.click();await tick();
+  button("close")?.click();await tick();
+  button("google connections")?.click();await tick();
+  current.resolve(Response.json({configured:true,mailbox:null}));
+  await vi.waitFor(()=>expect(button("enable Gmail for my sign-in account")).toBeDefined());
+  old.resolve(Response.json({configured:false,mailbox:null}));await tick();
+  expect(button("enable Gmail for my sign-in account")).toBeDefined();
+ });
+
+});

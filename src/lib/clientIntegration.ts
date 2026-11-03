@@ -2,7 +2,7 @@ import type { AdminAPI } from "./config";
 
 /** New standard APIs must be adopted here; omission cannot silently opt a host out. */
 type StandardClientAPI = {
- [Key in Exclude<keyof AdminAPI, "businessRecords" | "inquiryNotifications" | "recurringInvoices" | "deliveryUploads" | "documentEmailAttempts" | "blogContent" | "postContent" | "catalogProducts" | "platformOffboarding" | "contentCleanup">]-?: Required<NonNullable<AdminAPI[Key]>>;
+ [Key in Exclude<keyof AdminAPI, "gmailConversations" | "businessRecords" | "inquiryNotifications" | "recurringInvoices" | "deliveryUploads" | "documentEmailAttempts" | "blogContent" | "postContent" | "catalogProducts" | "platformOffboarding" | "contentCleanup">]-?: Required<NonNullable<AdminAPI[Key]>>;
 };
 
 // Generated API references are opaque at this package boundary.

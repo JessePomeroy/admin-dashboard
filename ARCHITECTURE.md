@@ -402,3 +402,20 @@ About, Contact and Portfolio preview endpoints use the same host boundary. Zines
 use the existing fixed-price, merchant-fulfilled graph editor and require explicit
 tenant product-kind permission. Omitting the new options preserves existing host
 behavior; adoption does not activate payments.
+
+## Optional Gmail correspondence
+
+Hosts opt in with `gmail.endpoint` and `api.gmailConversations`; older hosts retain
+Google sign-in-only behavior. Inquiry/client components keep mail as escaped plain
+text and use the host's private attachment and OAuth adapters. Optional `linking`
+enables the host-backed search/preview/confirm picker; the server binds the reviewed
+thread to the authorized record. `correspondencePath` mounts `GmailQueuePage` and
+its queue/data controls when the matching optional API references are supplied.
+
+Workflow, retention, send evidence and deletion authority remain backend-owned.
+The UI distinguishes review-needed from needs-reply, provider acceptance from
+recipient delivery, and synchronization shutdown from imported-data erasure,
+sign-in unlinking and Google revocation. Export JSON and original attachment
+reads require host authorization; no provider credential or storage bearer URL
+enters the package. The current host policy is a controlled 30-day pilot with
+unresolved-send holds, not a general production retention default.

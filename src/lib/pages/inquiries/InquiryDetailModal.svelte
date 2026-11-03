@@ -1,5 +1,6 @@
 <script lang="ts">
 import { getAdminConfig } from "../../config";
+import GmailConversations from "../gmail/GmailConversations.svelte";
 import InquiryNotification from "./InquiryNotification.svelte";
 import InquiryWorkflow from "./InquiryWorkflow.svelte";
 import type { Inquiry } from "../../types";
@@ -25,6 +26,8 @@ interface Props {
 
 let { inquiry, onclose, onupdatestatus, ondelete, deleting = false, busy = false, workflowEnabled = false, onworkflowchange = () => {} }: Props = $props();
 
+let gmailDirty = $state(false);
+function closeModal() { if (!gmailDirty || confirm("This email reply has unsaved work. Leave without saving?")) onclose(); }
 const config = getAdminConfig();
 const workflow = config.api.inquiries;
 
@@ -37,7 +40,7 @@ function replyViaEmail(email: string, subject: string) {
 }
 </script>
 
-<AdminModal title={inquiry.subject || "no subject"} {onclose}>
+<AdminModal title={inquiry.subject || "no subject"} onclose={closeModal}>
 	<div class="modal-body">
 		<p class="modal-meta">
 			from <strong>{inquiry.name || "unknown"}</strong>
@@ -82,7 +85,7 @@ function replyViaEmail(email: string, subject: string) {
 					mark replied
 				</button>
 			{/if}
-			{#if inquiry.email}
+			{#if inquiry.email && !(config.gmail && config.api.gmailConversations)}
 				<button
 					class="action-btn primary"
 					onclick={() => replyViaEmail(inquiry.email!, inquiry.subject ?? "")}
@@ -91,6 +94,7 @@ function replyViaEmail(email: string, subject: string) {
 				</button>
 			{/if}
 		</div>
+		{#if config.gmail && config.api.gmailConversations}{#key inquiry._id}<GmailConversations inquiryId={inquiry._id} ondirty={value => { gmailDirty = value; }} />{/key}{/if}
 		{#if workflowEnabled && workflow.getWorkflow && workflow.clientOptions && workflow.linkClient && workflow.updateFollowUp}
 			{#key inquiry._id}<InquiryWorkflow id={inquiry._id} onchange={onworkflowchange} />{/key}
 		{/if}
