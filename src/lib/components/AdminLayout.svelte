@@ -120,7 +120,11 @@ let editorEnabled = $derived(capabilities.hasFeature("editor") && (
 let editorActive = $derived(
 	editorEnabled && isAdminRouteActive("/admin/editor", $page.url.pathname),
 );
-let navItems = $derived(getAdminNavItems({ editorEnabled }));
+let navItems = $derived(getAdminNavItems({ editorEnabled }).flatMap(item =>
+ item.href === "/admin/inquiries" && config.gmail?.correspondencePath && api.gmailConversations?.queue && (capabilities.hasFeature("inquiries") || capabilities.hasFeature("crm"))
+  ? [item, {href: config.gmail.correspondencePath, label: "correspondence", icon: "mail" as const}]
+  : [item],
+));
 let mobileMenuOpen = $state(false);
 let editorMenuOpen = $state(false);
 let mobileNavigation = $state(false);
@@ -345,6 +349,8 @@ function closeMobileMenu() {
 								listAccounts={listGoogleAccounts}
 								linkSocial={linkGoogleAccount}
 								callbackURL={config.authCallbackURL ?? "/admin"}
+								gmail={config.gmail}
+								loginEmail={authUserEmail}
 							/>
 						{/key}
 					{/if}

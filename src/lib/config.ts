@@ -228,6 +228,13 @@ export interface AdminAPI {
 		markPaid: FnRef;
 		getNextNumber: FnRef;
 	};
+	gmailConversations?: {
+		connection: FnRef; list: FnRef; create: FnRef; detail: FnRef; messages: FnRef;
+		saveDraft: FnRef; queueSend: FnRef; requestSync: FnRef; reconcile: FnRef;
+		reserveAttachment: FnRef; retryAttachment: FnRef;
+		queue?: FnRef; setWorkflow?: FnRef; restartRecovery?: FnRef;
+		requestDeletion?: FnRef; dataStatus?: FnRef; deleteMailboxData?: FnRef;
+	};
 	/** Full-history pages, indexed search and exact-ID reads. Enable after the additive backend and search backfill. */
 	businessRecords?: { list: FnRef; get: FnRef };
 	kanban: {
@@ -666,6 +673,7 @@ export interface AdminAuthClient {
 		error?: { message?: string; code?: string } | null;
 	}>;
 	linkSocial?: (opts: {
+		scopes?: string[];
 		provider: "google";
 		callbackURL: string;
 		errorCallbackURL: string;
@@ -677,6 +685,8 @@ export interface AdminAuthClient {
 }
 
 export interface AdminConfig {
+	/** Host-mounted mailbox adapters; omitted hosts keep Google sign-in-only controls. */
+	gmail?: { endpoint: string; linking?: boolean; correspondencePath?: string };
 	/** Enables the authenticated, bounded on-demand website-content export. */
 	contentExportEndpoint?: string;
 	siteUrl: string;

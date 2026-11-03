@@ -14,6 +14,7 @@ import {
 	getStatusColor,
 } from "../../utils";
 import ActivityTimeline from "./ActivityTimeline.svelte";
+import GmailConversations from "../gmail/GmailConversations.svelte";
 import ClientInquiries from "./ClientInquiries.svelte";
 import { getAdminConfig } from "../../config";
 import ClientEditForm from "./ClientEditForm.svelte";
@@ -56,7 +57,10 @@ let {
 }: Props = $props();
 
 let editMode = $state(false);
-const inquiryApi = getAdminConfig().api.inquiries;
+const config = getAdminConfig();
+const inquiryApi = config.api.inquiries;
+let gmailDirty = $state(false);
+function closeModal() { if (!gmailDirty || confirm("This email reply has unsaved work. Leave without saving?")) onclose(); }
 let confirmDelete = $state(false);
 let showTagPicker = $state(false);
 
@@ -86,7 +90,7 @@ function handleSave(data: ClientEditPayload) {
 }
 </script>
 
-<AdminModal title={editMode ? "edit client" : client.name} onclose={onclose} size="wide">
+<AdminModal title={editMode ? "edit client" : client.name} onclose={closeModal} size="wide">
 	{#if detailError}<p role="alert">could not load client tags or activity. close and reopen to try again.</p>{/if}
 	{#if editMode}
 		<ClientEditForm {client} {saving} onsave={handleSave} oncancel={() => { editMode = false; }} />
@@ -197,6 +201,7 @@ function handleSave(data: ClientEditPayload) {
 				</div>
 			</div>
 
+			{#if config.gmail && config.api.gmailConversations}{#key client._id}<GmailConversations clientId={client._id} ondirty={value => { gmailDirty = value; }} />{/key}{/if}
 			{#if inquiryApi?.listForClient}{#key client._id}<ClientInquiries clientId={client._id} />{/key}{/if}
 			<ActivityTimeline entries={clientActivity} loading={loadingActivity} onitemclick={onactivityclick} />
 

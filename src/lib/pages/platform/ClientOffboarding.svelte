@@ -2,7 +2,8 @@
 import { useQuery } from "convex-svelte";
 import { useAdminClient } from "../../adminClient";
 import { getAdminConfig } from "../../config";
-const api = getAdminConfig().api.platformOffboarding;
+const config = getAdminConfig();
+const api = config.api.platformOffboarding;
 if (!api) throw new Error("Offboarding is not configured");
 const actions = api;
 let { clientId }: { clientId: string } = $props();
@@ -45,8 +46,9 @@ async function act(action: "disable" | "restoreAccess" | "erase") {
 {#if clientState && !clientState.isCreator}
 <section aria-label="Client offboarding">
  <h3>offboarding</h3>
- <p>{clientState.offboarding ? `Public site offline; client access disabled. Default retention ends ${new Date(clientState.offboarding.retainUntil).toLocaleDateString()}. Nothing is automatically deleted.` : "Take the public site offline immediately and disable this client’s dashboard access and new payment/intake activity. Keep records for 90 days by default."}</p>
+ <p>{clientState.offboarding ? `Public site offline; client access disabled. Default retention ends ${new Date(clientState.offboarding.retainUntil).toLocaleDateString()}. Ordinary CRM records are not automatically deleted.` : "Take the public site offline immediately and disable this client’s dashboard access and new payment/intake activity. Keep records for 90 days by default."}</p>
  <p>Provider subscriptions, Worker credentials, and issued upload capabilities need separate shutdown. Existing paid orders and audit history remain protected.</p>
+ {#if config.api.gmailConversations}<p>Gmail pilot correspondence has a separate 30-day expiry, with holds for unresolved sends. Export and reconcile Gmail before disabling access. Offboarding stops sync and removes the connector credential; imported Gmail data and Google's grant need separate cleanup. Inquiries linked to retained Gmail evidence cannot be erased.</p>{/if}
  <label>type the site to confirm<input bind:value={confirmation} disabled={busy} placeholder={clientState.siteUrl} autocomplete="off" /></label>
  {#if clientState.offboarding}
   <label class="choice"><input type="checkbox" bind:checked={immediate} disabled={busy} /> erase eligible records before the 90-day period ends</label>
