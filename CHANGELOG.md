@@ -1,5 +1,11 @@
 # @jessepomeroy/admin
 
+## 6.14.1
+
+### Patch Changes
+
+- a5c8ab0: Update the package's authentication test fixture and verification dependencies to compatible patched versions. The host-owned authentication configuration and public package contract are unchanged.
+
 ## 6.14.0
 
 ### Minor Changes
