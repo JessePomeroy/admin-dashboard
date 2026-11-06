@@ -12,5 +12,5 @@ const client={_id:"client1",_creationTime:Date.now(),siteUrl:"example.test",name
 <AdminLayout data={{adminSession:{status:"authorized",email:"owner@example.test",tier:"full",isCreator:false}}}>
 {#if queue}<GmailQueuePage />{:else}<section class="admin-page"><header class="page-header"><h1>inquiries</h1></header><p>Synthetic local data. Google consent, mailbox transport and delivery are simulated.</p><button onclick={()=>show="inquiry"}>open inquiry</button><button onclick={()=>show="client"}>open client</button></section>{/if}
 {#if show==="inquiry"}<InquiryDetailModal {inquiry} onclose={()=>show=null} onupdatestatus={()=>{}} />{/if}
-{#if show==="client"}<ClientDetailModal {client} clientTags={[]} clientActivity={[]} availableTags={[]} loadingTags={false} loadingActivity={false} saving={false} onclose={()=>show=null} onsave={()=>{}} ondelete={()=>{}} onstatuschange={()=>{}} ontagassign={()=>{}} ontagremove={()=>{}} />{/if}
+{#if show==="client"}<ClientDetailModal {client} clientTags={[]} clientActivity={[]} availableTags={[]} loadingTags={false} loadingActivity={false} saving={false} onclose={()=>show=null} onsave={async()=>{}} ondelete={()=>{}} onstatuschange={()=>{}} ontagassign={()=>{}} ontagremove={()=>{}} />{/if}
 </AdminLayout>

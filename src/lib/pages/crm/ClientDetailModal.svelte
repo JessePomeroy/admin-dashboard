@@ -30,7 +30,10 @@ interface Props {
 	detailError?: boolean;
 	saving: boolean;
 	onclose: () => void;
-	onsave: (data: ClientEditPayload) => void | Promise<boolean>;
+	/** Return false to retain the draft; legacy void callbacks still complete normally. */
+	onsave:
+		| ((data: ClientEditPayload) => void)
+		| ((data: ClientEditPayload) => boolean | Promise<boolean>);
 	ondelete: () => void;
 	onstatuschange: (status: string) => void;
 	ontagassign: (tagId: string) => void;
