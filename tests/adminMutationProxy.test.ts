@@ -50,6 +50,28 @@ describe("resolveConvexFunction", () => {
 });
 
 describe("createAdminMutationHandler", () => {
+	it("preserves explicit client clears and omitted values through the HTTP adapter", async () => {
+		const fnRef = {};
+		const mutation = vi.fn(async () => null);
+		const handler = createAdminMutationHandler({
+			api: { crm: { updateClient: fnRef } },
+			getConvexUrl: () => "https://convex.example",
+			requireAuth: vi.fn(async () => "token"),
+			createClient: () => ({ setAuth: vi.fn(), mutation }),
+		});
+		const transport: typeof fetch = async (input, init) => {
+			const response = await handler({
+				request: new Request(input, init), cookies: makeCookies(),
+			} as Parameters<typeof handler>[0]);
+			if (!(response instanceof Response)) throw new Error("Expected mutation response");
+			return response;
+		};
+		await expect(requestAdminMutation("https://example.com/api/admin/mutation", "crm:updateClient", {
+			clientId: "synthetic-client", siteUrl: "example.com", phone: undefined, clearFields: ["notes", "type"],
+		}, transport)).resolves.toBeNull();
+		expect(mutation).toHaveBeenCalledWith(fnRef, { clientId: "synthetic-client", siteUrl: "example.com", clearFields: ["notes", "type"] });
+	});
+
 	it.each([
 		"null", "true", "false", "0", '"mutation"', "[]",
 		'[{"name":"kanban:moveCard"}]',

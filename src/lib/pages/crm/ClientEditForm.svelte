@@ -2,7 +2,7 @@
 import { CLIENT_STATUSES } from "../../constants";
 import type { Client, ClientCategory } from "../../types";
 import { formatStatus } from "../../utils";
-import type { ClientEditPayload } from "./clientFormPayloads";
+import type { ClientClearField, ClientEditPayload } from "./clientFormPayloads";
 
 interface Props {
 	client: Client;
@@ -64,9 +64,13 @@ function handleSave() {
 		notes: formNotes || undefined,
 		status: formStatus,
 	};
+	const clearFields: ClientClearField[] = (["email", "phone", "type", "source", "notes"] as const)
+		.filter(field => body[field] === undefined && client[field] !== undefined);
 	if (formCategory === "web") {
 		body.siteUrl_client = formClientWebsite || undefined;
+		if (body.siteUrl_client === undefined && client.siteUrl_client !== undefined) clearFields.push("siteUrl_client");
 	}
+	if (clearFields.length > 0) body.clearFields = clearFields;
 	onsave(body);
 }
 </script>

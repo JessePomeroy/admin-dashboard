@@ -45,6 +45,11 @@ const compatibleAsyncValue: ClientSave = legacyAsyncValueSave;
 const compatibleBoolean: ClientSave = booleanSave;
 const compatibleAsyncBoolean: ClientSave = asyncBooleanSave;
 void [compatibleOriginal, compatibleAsyncVoid, compatibleValue, compatibleAsyncValue, compatibleBoolean, compatibleAsyncBoolean];
+const explicitClientClear: Parameters<ClientSave>[0] = {
+	name: "Synthetic client", category: "web", status: "lead",
+	clearFields: ["email", "phone", "type", "source", "notes", "siteUrl_client"],
+};
+void explicitClientClear;
 
 const uploadConfig: CatalogPrivateEditorUploadConfig = {
 	convexJournalOrigin: "https://example.convex.site",
