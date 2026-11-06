@@ -156,6 +156,7 @@ async function saveNewClient(body: ClientCreatePayload) {
 async function saveEdit(body: ClientEditPayload) {
 	const target = selectedClient;
 	if (!target || saving) return false;
+	const { clearFields, ...fields } = body;
 	saving = true;
 	try {
 		await client.mutation(api.crm.updateClient, {
@@ -170,8 +171,13 @@ async function saveEdit(body: ClientEditPayload) {
 			source: body.source,
 			notes: body.notes,
 			siteUrl_client: body.siteUrl_client,
+			clearFields,
 		});
-		if (selectedClient?._id === target._id) selectedClient = { ...selectedClient, ...body };
+		if (selectedClient?._id === target._id) {
+			const saved = { ...selectedClient, ...fields };
+			for (const field of clearFields ?? []) delete saved[field];
+			selectedClient = saved;
+		}
 		refreshClients();
 		return true;
 	} catch (err) {

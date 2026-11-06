@@ -7,7 +7,7 @@ const mocks = vi.hoisted(() => ({
 	query: vi.fn(),
 	mutation: vi.fn(),
 	args: undefined as undefined | (() => Record<string, unknown>),
-	clients: [] as { _id: string; _creationTime: number; name: string; category: string; status: string; tags?: { _id: string; name: string }[] }[],
+	clients: [] as { _id: string; _creationTime: number; name: string; category: string; status: string; email?: string; phone?: string; type?: string; source?: string; notes?: string; siteUrl_client?: string; tags?: { _id: string; name: string }[] }[],
 	stats: { total: 1000, leads: 400, booked: 200, inProgress: 100, completed: 300, photography: 900, web: 100, truncated: undefined as boolean | undefined },
 }));
 vi.mock("convex-svelte", () => ({
@@ -26,7 +26,7 @@ vi.mock("convex-svelte", () => ({
 }));
 vi.mock("../src/lib/adminClient", () => ({ useAdminClient: () => ({ query: mocks.query, mutation: mocks.mutation }) }));
 vi.mock("../src/lib/config", () => ({ getAdminConfig: () => ({ siteUrl: "example.test", api: {
-	crm: { listClientsWithTags: "clients", getStats: "stats" }, activityLog: { getClientActivity: "activity" }, tags: { listTags: "tags", getClientTags: "clientTags" },
+	crm: { listClientsWithTags: "clients", getStats: "stats", updateClient: "update" }, activityLog: { getClientActivity: "activity" }, tags: { listTags: "tags", getClientTags: "clientTags" },
 } }) }));
 let component: ReturnType<typeof mount>;
 beforeEach(() => {
@@ -198,5 +198,49 @@ describe("CRM query completeness", () => {
 		completeSave(); await tick();
 		await vi.waitFor(() => expect(document.querySelector<HTMLInputElement>("#edit-name")?.disabled).toBe(false));
 		expect(document.querySelector<HTMLInputElement>("#edit-name")?.value).toBe("New lead");
+	});
+
+	it("explicitly clears existing optional fields and keeps them empty when editing again", async () => {
+		Object.assign(mocks.clients[0], { category: "web", email: "avery@example.invalid", phone: "555-0100", type: "website", source: "referral", notes: "Old notes", siteUrl_client: "https://avery.example.invalid" });
+		await render();
+		(document.querySelector("tbody tr") as HTMLElement).click(); await tick();
+		(document.querySelector(".detail-actions .btn-save") as HTMLButtonElement).click(); await tick();
+		for (const id of ["email", "phone", "type", "source", "notes", "website"]) {
+			const input = document.querySelector<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>(`#edit-${id}`)!;
+			input.value = "";
+			input.dispatchEvent(new Event(input instanceof HTMLSelectElement ? "change" : "input", { bubbles: true }));
+		}
+		await tick();
+		document.querySelector("form.modal-form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+		await vi.waitFor(() => expect(document.querySelector("#edit-name")).toBeNull());
+		expect(mocks.mutation).toHaveBeenCalledWith("update", expect.objectContaining({ clearFields: ["email", "phone", "type", "source", "notes", "siteUrl_client"] }));
+		(document.querySelector(".detail-actions .btn-save") as HTMLButtonElement).click(); await tick();
+		for (const id of ["email", "phone", "type", "source", "notes", "website"]) expect(document.querySelector<HTMLInputElement>(`#edit-${id}`)?.value).toBe("");
+	});
+
+	it("omits absent optional fields and preserves a website hidden in the photography form", async () => {
+		Object.assign(mocks.clients[0], { type: "portrait", siteUrl_client: "https://hidden.example.invalid" });
+		await render();
+		(document.querySelector("tbody tr") as HTMLElement).click(); await tick();
+		(document.querySelector(".detail-actions .btn-save") as HTMLButtonElement).click(); await tick();
+		expect(document.querySelector("#edit-website")).toBeNull();
+		document.querySelector("form.modal-form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+		await vi.waitFor(() => expect(document.querySelector("#edit-name")).toBeNull());
+		expect(mocks.mutation.mock.calls[0][1].clearFields).toBeUndefined();
+		expect(mocks.mutation.mock.calls[0][1].siteUrl_client).toBeUndefined();
+	});
+
+	it("clears the previous type after switching category without clearing the hidden website", async () => {
+		Object.assign(mocks.clients[0], { category: "web", type: "website", siteUrl_client: "https://hidden.example.invalid" });
+		await render();
+		(document.querySelector("tbody tr") as HTMLElement).click(); await tick();
+		(document.querySelector(".detail-actions .btn-save") as HTMLButtonElement).click(); await tick();
+		const category = document.querySelector<HTMLSelectElement>("#edit-category")!;
+		category.value = "photography";
+		category.dispatchEvent(new Event("change", { bubbles: true })); await tick();
+		document.querySelector("form.modal-form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+		await vi.waitFor(() => expect(document.querySelector("#edit-name")).toBeNull());
+		expect(mocks.mutation.mock.calls[0][1]).toMatchObject({ category: "photography", clearFields: ["type"] });
+		expect(mocks.mutation.mock.calls[0][1].siteUrl_client).toBeUndefined();
 	});
 });

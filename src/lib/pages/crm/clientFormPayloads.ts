@@ -4,4 +4,10 @@ export type ClientCreatePayload = Pick<Client,
 	"name" | "category" | "email" | "phone" | "type" | "source" | "notes" | "siteUrl_client"
 >;
 
-export type ClientEditPayload = ClientCreatePayload & Pick<Client, "status">;
+export type ClientClearField = keyof Pick<Client,
+	"email" | "phone" | "type" | "source" | "notes" | "siteUrl_client"
+>;
+
+export type ClientEditPayload = ClientCreatePayload & Pick<Client, "status"> & {
+	clearFields?: ClientClearField[];
+};
