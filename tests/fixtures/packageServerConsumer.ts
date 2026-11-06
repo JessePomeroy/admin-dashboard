@@ -17,6 +17,8 @@ import {
 	type CatalogPrivateEditorUploadVerifiedResponse,
 } from "@jessepomeroy/admin/server";
 import { getAdminConfig, type AdminAPI, type AdminConfig, type CatalogProductEditorRevision } from "@jessepomeroy/admin";
+import ClientDetailModal from "@jessepomeroy/admin/pages/crm/ClientDetailModal";
+import type { ComponentProps } from "svelte";
 // @ts-expect-error Server configuration is available only from @jessepomeroy/admin/server.
 import { getServerConfig as invalidRootServerImport } from "@jessepomeroy/admin";
 
@@ -28,6 +30,19 @@ const legacyPrintProjection: CatalogProductEditorRevision = {
 	printSourceAssets: [{ relationKey: "source", asset: { assetId: "legacy-asset" } }],
 };
 void [browserConfig, invalidRootServerImport, contactWithoutPublish, legacyPrintProjection];
+
+type ClientSave = ComponentProps<typeof ClientDetailModal>["onsave"];
+const originalClientSave: (data: Parameters<ClientSave>[0]) => void = async () => {};
+const clientSaves: ClientSave[] = [
+	originalClientSave,
+	() => {},
+	async () => {},
+	() => "legacy-result",
+	async () => "legacy-result",
+	() => true,
+	async () => false,
+];
+void clientSaves;
 
 const uploadConfig: CatalogPrivateEditorUploadConfig = {
 	convexJournalOrigin: "https://example.convex.site",
