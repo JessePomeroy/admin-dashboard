@@ -155,7 +155,7 @@ async function saveNewClient(body: ClientCreatePayload) {
 
 async function saveEdit(body: ClientEditPayload) {
 	const target = selectedClient;
-	if (!target) return;
+	if (!target || saving) return false;
 	saving = true;
 	try {
 		await client.mutation(api.crm.updateClient, {
@@ -173,9 +173,11 @@ async function saveEdit(body: ClientEditPayload) {
 		});
 		if (selectedClient?._id === target._id) selectedClient = { ...selectedClient, ...body };
 		refreshClients();
+		return true;
 	} catch (err) {
 		logger.error("Failed to update client:", err);
 		addToast("Failed to save changes. Please try again.");
+		return false;
 	} finally {
 		saving = false;
 	}

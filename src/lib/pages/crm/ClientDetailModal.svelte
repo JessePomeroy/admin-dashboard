@@ -30,7 +30,7 @@ interface Props {
 	detailError?: boolean;
 	saving: boolean;
 	onclose: () => void;
-	onsave: (data: ClientEditPayload) => void;
+	onsave: (data: ClientEditPayload) => void | Promise<boolean>;
 	ondelete: () => void;
 	onstatuschange: (status: string) => void;
 	ontagassign: (tagId: string) => void;
@@ -84,9 +84,8 @@ let unassignedTags = $derived(
 	availableTags.filter((t) => !clientTags.some((ct) => ct._id === t._id)),
 );
 
-function handleSave(data: ClientEditPayload) {
-	onsave(data);
-	editMode = false;
+async function handleSave(data: ClientEditPayload) {
+	if ((await onsave(data)) !== false) editMode = false;
 }
 </script>
 
