@@ -25,6 +25,59 @@ afterEach(() => {
 });
 
 describe("OrderTable", () => {
+	it.each(["Enter", " "])("leaves %j on the status select to the native control", (key) => {
+		const onorderclick = vi.fn();
+		const onupdatestatus = vi.fn();
+		const component = mount(OrderTable, { target: document.body, props: { orders: [order()], onorderclick, onupdatestatus } });
+		try {
+			const select = document.querySelector<HTMLSelectElement>(".status-select")!;
+			select.focus();
+			const event = new KeyboardEvent("keydown", { key, bubbles: true, cancelable: true });
+			select.dispatchEvent(event);
+			expect(onorderclick).not.toHaveBeenCalled();
+			expect(event.defaultPrevented).toBe(false);
+			expect(document.activeElement).toBe(select);
+			select.value = "printing";
+			select.dispatchEvent(new Event("change", { bubbles: true }));
+			expect(onupdatestatus).toHaveBeenCalledExactlyOnceWith("order-1", "printing");
+			expect(onorderclick).not.toHaveBeenCalled();
+		} finally { unmount(component); }
+	});
+
+	it.each(["Enter", " "])("opens details from the focused row with %j", (key) => {
+		const onorderclick = vi.fn();
+		const onupdatestatus = vi.fn();
+		const selected = order();
+		const component = mount(OrderTable, { target: document.body, props: { orders: [selected], onorderclick, onupdatestatus } });
+		try {
+			const row = document.querySelector<HTMLElement>(".order-row")!;
+			row.focus();
+			const event = new KeyboardEvent("keydown", { key, bubbles: true, cancelable: true });
+			row.dispatchEvent(event);
+			expect(event.defaultPrevented).toBe(true);
+			expect(onorderclick).toHaveBeenCalledExactlyOnceWith(selected);
+			expect(onupdatestatus).not.toHaveBeenCalled();
+		} finally { unmount(component); }
+	});
+
+	it("retains pointer activation, nested-control suppression and non-activation keys", () => {
+		const onorderclick = vi.fn();
+		const onupdatestatus = vi.fn();
+		const component = mount(OrderTable, { target: document.body, props: { orders: [order()], onorderclick, onupdatestatus } });
+		try {
+			const row = document.querySelector<HTMLElement>(".order-row")!;
+			const select = document.querySelector<HTMLSelectElement>(".status-select")!;
+			select.click();
+			expect(onorderclick).not.toHaveBeenCalled();
+			const event = new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true, cancelable: true });
+			row.dispatchEvent(event);
+			expect(event.defaultPrevented).toBe(false);
+			expect(onorderclick).not.toHaveBeenCalled();
+			row.click();
+			expect(onorderclick).toHaveBeenCalledOnce();
+		} finally { unmount(component); }
+	});
+
 	it("shows pending fee state without an amount", () => {
 		const component = mount(OrderTable, {
 			target: document.body,

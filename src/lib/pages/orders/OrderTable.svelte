@@ -50,7 +50,13 @@ const statuses: OrderStatus[] = [
 						role="button"
 						tabindex="0"
 						onclick={() => onorderclick(order)}
-						onkeydown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onorderclick(order); }}}
+						onkeydown={(e) => {
+							if (e.target !== e.currentTarget) return;
+							if (e.key === "Enter" || e.key === " ") {
+								e.preventDefault();
+								onorderclick(order);
+							}
+						}}
 					>
 						<td class="td-order">{order.orderNumber}</td>
 						<td class="td-date">{formatDateTime(order.createdAt)}</td>
@@ -72,6 +78,7 @@ const statuses: OrderStatus[] = [
 							<div class="status-cell">
 								<span class="status-dot" style="background: {getStatusColor(ORDER_STATUS_COLORS, order.status)}"></span>
 								<select
+									aria-label={`status for order ${order.orderNumber}`}
 									value={order.status}
 									onchange={(e) => onupdatestatus(order._id, e.currentTarget.value)}
 									class="status-select"
