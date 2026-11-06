@@ -134,12 +134,15 @@ const crmStats = $derived(crmStatsQuery.data ?? { total: 0, leads: 0, booked: 0,
 
 // Invoice stats
 const invoices = $derived((api.invoices.getDashboardSummary ? invoicesQuery.data?.recent ?? [] : invoicesQuery.data ?? []) as Invoice[]);
-const invoiceStats = $derived(api.invoices.getDashboardSummary ? invoicesQuery.data?.counts ?? { draft: 0, sent: 0, paid: 0, overdue: 0 } : {
+const invoiceStats = $derived(api.invoices.getDashboardSummary ? invoicesQuery.data?.counts ?? { draft: 0, sent: 0, paid: 0, overdue: 0, partial: 0 } : {
 	draft: invoices.filter((i: Invoice) => i.status === "draft").length,
 	sent: invoices.filter((i: Invoice) => i.status === "sent").length,
 	paid: invoices.filter((i: Invoice) => i.status === "paid").length,
 	overdue: invoices.filter((i: Invoice) => i.status === "overdue").length,
+	partial: invoices.filter((i: Invoice) => i.status === "partial").length,
 });
+const outstandingInvoiceCount = $derived(invoiceStats.draft + invoiceStats.sent + invoiceStats.overdue + (invoiceStats.partial ?? 0));
+const invoicePartialCountUnavailable = $derived(invoiceStats.partial === undefined);
 const pendingInvoiceAmount = $derived(
 	api.invoices.getDashboardSummary ? invoicesQuery.data?.pendingAmount ?? null : invoices
 		.filter((i: Invoice) => ["draft", "sent", "overdue", "partial"].includes(i.status))
@@ -356,10 +359,13 @@ let sparklineArea = $derived(() => {
 		{/if}
 		{#if capabilities.hasFeature("invoicing")}
 		<p class="summary-line">
-			<span class="summary-value">{invoiceStats.draft + invoiceStats.sent}</span> invoices outstanding
+			<span class="summary-value">{invoicePartialCountUnavailable ? "at least " : ""}{outstandingInvoiceCount}</span> invoices outstanding
 			<span class="summary-sep">&middot;</span>
 			<span class="summary-value">{pendingInvoiceAmount === null ? "invalid amount" : formatCents(pendingInvoiceAmount)}</span> pending
 		</p>
+		{#if invoicePartialCountUnavailable}
+			<p class="stats-completeness-note invoice-count-note">Partially paid invoice counts are unavailable.</p>
+		{/if}
 		{/if}
 		{#if capabilities.hasFeature("quotes")}
 		<p class="summary-line">
@@ -508,6 +514,10 @@ let sparklineArea = $derived(() => {
 		margin: 0 0 48px;
 		font-size: 0.78rem;
 		color: var(--admin-text-subtle);
+	}
+
+	.invoice-count-note {
+		margin-bottom: 12px;
 	}
 
 	.stat-item {
