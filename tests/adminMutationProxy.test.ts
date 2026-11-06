@@ -50,6 +50,59 @@ describe("resolveConvexFunction", () => {
 });
 
 describe("createAdminMutationHandler", () => {
+	it.each([
+		"null", "true", "false", "0", '"mutation"', "[]",
+		'[{"name":"kanban:moveCard"}]',
+	])(
+		"rejects non-object JSON %s before creating a backend client",
+		async (body) => {
+			const getConvexUrl = vi.fn(() => "https://convex.example");
+			const requireAuth = vi.fn(async () => "token");
+			const createClient = vi.fn(() => {
+				throw new Error("Unexpected backend client");
+			});
+			const handler = createAdminMutationHandler({
+				api: {}, getConvexUrl, requireAuth, createClient,
+			});
+			const response = await handler({
+				request: makeRequest(body), cookies: makeCookies(),
+			} as Parameters<typeof handler>[0]);
+			await expect(readJson(response as Response)).resolves.toEqual({
+				status: 400, body: { error: expect.any(String) },
+			});
+			expect(requireAuth).toHaveBeenCalledOnce();
+			expect(getConvexUrl).not.toHaveBeenCalled();
+			expect(createClient).not.toHaveBeenCalled();
+		},
+	);
+
+	it.each(["null", "{"])(
+		"authenticates before parsing malformed body %s",
+		async (body) => {
+			const request = makeRequest(body);
+			const parse = vi.spyOn(request, "json");
+			const getConvexUrl = vi.fn(() => "https://convex.example");
+			const createClient = vi.fn(() => {
+				throw new Error("Unexpected backend client");
+			});
+			const handler = createAdminMutationHandler({
+				api: {}, getConvexUrl, createClient,
+				requireAuth: async () => {
+					throw Object.assign(new Error("Unauthorized"), { status: 401 });
+				},
+			});
+			const response = await handler({
+				request, cookies: makeCookies(),
+			} as Parameters<typeof handler>[0]);
+			await expect(readJson(response as Response)).resolves.toEqual({
+				status: 401, body: { error: "Unauthorized" },
+			});
+			expect(parse).not.toHaveBeenCalled();
+			expect(getConvexUrl).not.toHaveBeenCalled();
+			expect(createClient).not.toHaveBeenCalled();
+		},
+	);
+
 	it("returns 400 for invalid JSON", async () => {
 		const handler = createAdminMutationHandler({
 			api: {},
@@ -68,25 +121,28 @@ describe("createAdminMutationHandler", () => {
 		});
 	});
 
-	it("returns 400 for missing function name", async () => {
-		const handler = createAdminMutationHandler({
-			api: {},
-			getConvexUrl: () => "https://convex.example",
-			requireAuth: vi.fn(async () => "token"),
-		});
+	it.each([{ args: {} }, { name: null }, { name: 0 }, { name: "kanban" }])(
+		"returns 400 for invalid function name in %j",
+		async (body) => {
+			const handler = createAdminMutationHandler({
+				api: {},
+				getConvexUrl: () => "https://convex.example",
+				requireAuth: vi.fn(async () => "token"),
+			});
 
-		const response = await handler({
-			request: makeRequest(JSON.stringify({ args: {} })),
-			cookies: makeCookies(),
-		} as Parameters<typeof handler>[0]);
+			const response = await handler({
+				request: makeRequest(JSON.stringify(body)),
+				cookies: makeCookies(),
+			} as Parameters<typeof handler>[0]);
 
-		await expect(readJson(response as Response)).resolves.toEqual({
-			status: 400,
-			body: {
-				error: "`name` must be a Convex function name like 'module:function'",
-			},
-		});
-	});
+			await expect(readJson(response as Response)).resolves.toEqual({
+				status: 400,
+				body: {
+					error: "`name` must be a Convex function name like 'module:function'",
+				},
+			});
+		},
+	);
 
 	it("returns 400 for unknown mutation names", async () => {
 		const handler = createAdminMutationHandler({

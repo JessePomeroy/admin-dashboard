@@ -55,14 +55,22 @@ export function createAdminMutationHandler(
 			);
 		}
 
-		let payload: { name?: unknown; args?: unknown };
+		let payload: unknown;
 		try {
 			payload = await request.json();
 		} catch {
 			return json({ error: "Invalid JSON body" }, { status: 400 });
 		}
 
-		const { name, args } = payload;
+		if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+			return json(
+				{ error: "Mutation body must be a JSON object" },
+				{ status: 400 },
+			);
+		}
+
+		const name = "name" in payload ? payload.name : undefined;
+		const args = "args" in payload ? payload.args : undefined;
 		if (typeof name !== "string" || !name.includes(":")) {
 			return json(
 				{ error: "`name` must be a Convex function name like 'module:function'" },
