@@ -17,6 +17,8 @@ import {
 	type CatalogPrivateEditorUploadVerifiedResponse,
 } from "@jessepomeroy/admin/server";
 import { getAdminConfig, type AdminAPI, type AdminConfig, type CatalogProductEditorRevision } from "@jessepomeroy/admin";
+import ClientDetailModal from "@jessepomeroy/admin/pages/crm/ClientDetailModal";
+import type { ComponentProps } from "svelte";
 // @ts-expect-error Server configuration is available only from @jessepomeroy/admin/server.
 import { getServerConfig as invalidRootServerImport } from "@jessepomeroy/admin";
 
@@ -28,6 +30,21 @@ const legacyPrintProjection: CatalogProductEditorRevision = {
 	printSourceAssets: [{ relationKey: "source", asset: { assetId: "legacy-asset" } }],
 };
 void [browserConfig, invalidRootServerImport, contactWithoutPublish, legacyPrintProjection];
+
+type ClientSave = ComponentProps<typeof ClientDetailModal>["onsave"];
+const originalClientSave: (data: Parameters<ClientSave>[0]) => void = async () => {};
+const legacyAsyncVoidSave = async () => {};
+const legacyValueSave = () => "legacy-result";
+const legacyAsyncValueSave = async () => "legacy-result";
+const booleanSave = () => true;
+const asyncBooleanSave = async () => false;
+const compatibleOriginal: ClientSave = originalClientSave;
+const compatibleAsyncVoid: ClientSave = legacyAsyncVoidSave;
+const compatibleValue: ClientSave = legacyValueSave;
+const compatibleAsyncValue: ClientSave = legacyAsyncValueSave;
+const compatibleBoolean: ClientSave = booleanSave;
+const compatibleAsyncBoolean: ClientSave = asyncBooleanSave;
+void [compatibleOriginal, compatibleAsyncVoid, compatibleValue, compatibleAsyncValue, compatibleBoolean, compatibleAsyncBoolean];
 
 const uploadConfig: CatalogPrivateEditorUploadConfig = {
 	convexJournalOrigin: "https://example.convex.site",

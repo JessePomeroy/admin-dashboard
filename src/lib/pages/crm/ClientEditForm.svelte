@@ -53,7 +53,7 @@ function formatType(type: string) {
 }
 
 function handleSave() {
-	if (!formName || !formCategory) return;
+	if (saving || !formName || !formCategory) return;
 	const body: ClientEditPayload = {
 		name: formName,
 		category: formCategory,
@@ -71,32 +71,32 @@ function handleSave() {
 }
 </script>
 
-<form class="modal-form" onsubmit={(e) => { e.preventDefault(); handleSave(); }}>
+<form class="modal-form" aria-busy={saving} onsubmit={(e) => { e.preventDefault(); handleSave(); }}>
 	<div class="form-group">
 		<label class="form-label" for="edit-name">name <span class="required">*</span></label>
-		<input id="edit-name" class="form-input" type="text" bind:value={formName} required />
+		<input id="edit-name" class="form-input" type="text" bind:value={formName} disabled={saving} required />
 	</div>
 	<div class="form-row">
 		<div class="form-group">
 			<label class="form-label" for="edit-email">email</label>
-			<input id="edit-email" class="form-input" type="email" bind:value={formEmail} />
+			<input id="edit-email" class="form-input" type="email" bind:value={formEmail} disabled={saving} />
 		</div>
 		<div class="form-group">
 			<label class="form-label" for="edit-phone">phone</label>
-			<input id="edit-phone" class="form-input" type="tel" bind:value={formPhone} />
+			<input id="edit-phone" class="form-input" type="tel" bind:value={formPhone} disabled={saving} />
 		</div>
 	</div>
 	<div class="form-row">
 		<div class="form-group">
 			<label class="form-label" for="edit-category">category <span class="required">*</span></label>
-			<select id="edit-category" class="form-input" bind:value={formCategory} onchange={() => { formType = ""; }}>
+			<select id="edit-category" class="form-input" bind:value={formCategory} disabled={saving} onchange={() => { formType = ""; }}>
 				<option value="photography">photography</option>
 				<option value="web">web</option>
 			</select>
 		</div>
 		<div class="form-group">
 			<label class="form-label" for="edit-type">type</label>
-			<select id="edit-type" class="form-input" bind:value={formType}>
+			<select id="edit-type" class="form-input" bind:value={formType} disabled={saving}>
 				<option value="">select type...</option>
 				{#each formCategory === "photography" ? photographyTypes : webTypes as t}
 					<option value={t}>{formatType(t)}</option>
@@ -107,13 +107,13 @@ function handleSave() {
 	{#if formCategory === "web"}
 		<div class="form-group">
 			<label class="form-label" for="edit-website">client website</label>
-			<input id="edit-website" class="form-input" type="url" placeholder="https://" bind:value={formClientWebsite} />
+			<input id="edit-website" class="form-input" type="url" placeholder="https://" bind:value={formClientWebsite} disabled={saving} />
 		</div>
 	{/if}
 	<div class="form-row">
 		<div class="form-group">
 			<label class="form-label" for="edit-source">source</label>
-			<select id="edit-source" class="form-input" bind:value={formSource}>
+			<select id="edit-source" class="form-input" bind:value={formSource} disabled={saving}>
 				<option value="">select source...</option>
 				{#each sources as s}
 					<option value={s}>{formatType(s)}</option>
@@ -122,7 +122,7 @@ function handleSave() {
 		</div>
 		<div class="form-group">
 			<label class="form-label" for="edit-status">status</label>
-			<select id="edit-status" class="form-input" bind:value={formStatus}>
+			<select id="edit-status" class="form-input" bind:value={formStatus} disabled={saving}>
 				{#each CLIENT_STATUSES as s}
 					<option value={s}>{formatStatus(s)}</option>
 				{/each}
@@ -131,10 +131,10 @@ function handleSave() {
 	</div>
 	<div class="form-group">
 		<label class="form-label" for="edit-notes">notes</label>
-		<textarea id="edit-notes" class="form-input form-textarea" bind:value={formNotes} rows="3"></textarea>
+		<textarea id="edit-notes" class="form-input form-textarea" bind:value={formNotes} disabled={saving} rows="3"></textarea>
 	</div>
 	<div class="modal-actions">
-		<button type="button" class="btn-cancel" onclick={oncancel}>cancel</button>
+		<button type="button" class="btn-cancel" onclick={oncancel} disabled={saving}>cancel</button>
 		<button type="submit" class="btn-save" disabled={saving || !formName}>
 			{saving ? "saving..." : "save changes"}
 		</button>

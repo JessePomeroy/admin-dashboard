@@ -158,4 +158,45 @@ describe("CRM query completeness", () => {
 		completeStatus(); await tick();
 		await vi.waitFor(() => expect(document.querySelector('[role="dialog"]')?.textContent).toContain("Renamed client"));
 	});
+	it("retains a pending or failed edit draft and closes it only after a successful retry", async () => {
+		let failSave!: (error: Error) => void;
+		mocks.mutation.mockImplementationOnce(() => new Promise((_resolve, reject) => { failSave = reject; }));
+		await render();
+		(document.querySelector("tbody tr") as HTMLElement).click(); await tick();
+		(document.querySelector(".detail-actions .btn-save") as HTMLButtonElement).click(); await tick();
+		const name = document.querySelector<HTMLInputElement>("#edit-name")!;
+		name.value = "Saved after retry";
+		name.dispatchEvent(new Event("input", { bubbles: true }));
+		await tick();
+		const submit = () => document.querySelector("form.modal-form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+		submit(); await tick();
+		expect(document.querySelector<HTMLInputElement>("#edit-name")?.value).toBe("Saved after retry");
+		for (const control of document.querySelectorAll<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>("form.modal-form input, form.modal-form select, form.modal-form textarea")) expect(control.disabled).toBe(true);
+		submit(); await tick();
+		expect(mocks.mutation).toHaveBeenCalledTimes(1);
+
+		failSave(new Error("Synthetic save rejection"));
+		await vi.waitFor(() => expect(document.querySelector<HTMLInputElement>("#edit-name")?.disabled).toBe(false));
+		expect(document.querySelector<HTMLInputElement>("#edit-name")?.value).toBe("Saved after retry");
+		submit(); await tick();
+		await vi.waitFor(() => expect(document.querySelector("#edit-name")).toBeNull());
+		expect(document.querySelector('[role="dialog"]')?.textContent).toContain("Saved after retry");
+		expect(mocks.mutation).toHaveBeenCalledTimes(2);
+	});
+
+	it("does not leave a different client's edit mode when an earlier save completes", async () => {
+		let completeSave!: () => void;
+		mocks.mutation.mockImplementationOnce(() => new Promise<void>(resolve => { completeSave = resolve; }));
+		await render();
+		(document.querySelector("tbody tr") as HTMLElement).click(); await tick();
+		(document.querySelector(".detail-actions .btn-save") as HTMLButtonElement).click(); await tick();
+		document.querySelector("form.modal-form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+		await tick();
+		(document.querySelector('[aria-label="Close dialog"]') as HTMLButtonElement).click(); await tick();
+		(document.querySelectorAll("tbody tr")[1] as HTMLElement).click(); await tick();
+		(document.querySelector(".detail-actions .btn-save") as HTMLButtonElement).click(); await tick();
+		completeSave(); await tick();
+		await vi.waitFor(() => expect(document.querySelector<HTMLInputElement>("#edit-name")?.disabled).toBe(false));
+		expect(document.querySelector<HTMLInputElement>("#edit-name")?.value).toBe("New lead");
+	});
 });
