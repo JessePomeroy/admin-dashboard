@@ -33,16 +33,18 @@ void [browserConfig, invalidRootServerImport, contactWithoutPublish, legacyPrint
 
 type ClientSave = ComponentProps<typeof ClientDetailModal>["onsave"];
 const originalClientSave: (data: Parameters<ClientSave>[0]) => void = async () => {};
-const clientSaves: ClientSave[] = [
-	originalClientSave,
-	() => {},
-	async () => {},
-	() => "legacy-result",
-	async () => "legacy-result",
-	() => true,
-	async () => false,
-];
-void clientSaves;
+const legacyAsyncVoidSave = async () => {};
+const legacyValueSave = () => "legacy-result";
+const legacyAsyncValueSave = async () => "legacy-result";
+const booleanSave = () => true;
+const asyncBooleanSave = async () => false;
+const compatibleOriginal: ClientSave = originalClientSave;
+const compatibleAsyncVoid: ClientSave = legacyAsyncVoidSave;
+const compatibleValue: ClientSave = legacyValueSave;
+const compatibleAsyncValue: ClientSave = legacyAsyncValueSave;
+const compatibleBoolean: ClientSave = booleanSave;
+const compatibleAsyncBoolean: ClientSave = asyncBooleanSave;
+void [compatibleOriginal, compatibleAsyncVoid, compatibleValue, compatibleAsyncValue, compatibleBoolean, compatibleAsyncBoolean];
 
 const uploadConfig: CatalogPrivateEditorUploadConfig = {
 	convexJournalOrigin: "https://example.convex.site",
