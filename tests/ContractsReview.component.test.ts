@@ -178,7 +178,7 @@ describe("contract email and acknowledged review", () => {
 			expect(transport.mutation).toHaveBeenCalledTimes(status === "sent" ? 1 : 0);
 		} finally {
 			pending.resolve(Response.json({ success: true }));
-			await vi.waitFor(() => expect(dialog().textContent).toContain("email sent"));
+			await vi.waitFor(() => expect(dialog().textContent).toContain("email request confirmed"));
 		}
 	});
 
@@ -187,7 +187,7 @@ describe("contract email and acknowledged review", () => {
 		await open();
 		await fill("#email-template", "email-template");
 		await click("send email");
-		await vi.waitFor(() => expect(dialog().textContent).toContain("email sent"));
+		await vi.waitFor(() => expect(dialog().textContent).toContain("email request confirmed"));
 		expect(sends()).toHaveLength(1);
 		const [endpoint, init] = sends()[0];
 		expect(endpoint).toBe("/api/admin/contracts/contract-1/send");

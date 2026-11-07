@@ -547,6 +547,9 @@ export async function resolveDocumentEmailRecovery(
  */
 export function createDocumentEmailRequestTracker() {
 	const attempts = new Map<string, TrackedRequest>();
+	const revisions = new Map<string, number>();
+	const revision = (key: string) => revisions.get(key) ?? 0;
+	const invalidateDiscovery = (key: string) => revisions.set(key, revision(key) + 1);
 
 	function trackedRequest(
 		key: string,
@@ -575,6 +578,7 @@ export function createDocumentEmailRequestTracker() {
 	function clearResolved(key: string, attemptId: string): boolean {
 		const current = attempts.get(key);
 		if (current && current.attemptId !== attemptId) return false;
+		invalidateDiscovery(key);
 		let cleared = false;
 		if (current?.attemptId === attemptId) {
 			attempts.delete(key);
@@ -623,12 +627,20 @@ export function createDocumentEmailRequestTracker() {
 			options: DocumentEmailRecoveryRequestOptions = {},
 		): Promise<HydratedDocumentEmailAttempt | null> {
 			const local = pending(key, endpoint);
+			const startedAt = revision(key);
 			const [openResult, exactResult] = await Promise.allSettled([
 				getOpenDocumentEmailRecovery(document, options),
 				local
 					? getDocumentEmailRecovery(local.attemptId, document, options)
 					: Promise.resolve(null),
 			]);
+
+			// A send or resolution supersedes reads begun before that action, even
+			// when it has already cleared its attempt by the time discovery returns.
+			if (revision(key) !== startedAt) {
+				const latest = pending(key, endpoint);
+				return latest ? { attemptId: latest.attemptId } : null;
+			}
 
 			if (openResult.status === "fulfilled" && openResult.value) {
 				adoptRecoveryAttempt(key, endpoint, openResult.value);
@@ -663,6 +675,7 @@ export function createDocumentEmailRequestTracker() {
 			body: Record<string, unknown>,
 			options: Omit<DocumentEmailRequestOptions, "attemptId"> = {},
 		) {
+			invalidateDiscovery(key);
 			let request = attempts.get(key) ?? readStoredRequest(key, endpoint);
 			if (!request) {
 				request = {
@@ -698,6 +711,7 @@ export function createDocumentEmailRequestTracker() {
 							adoptAttempt(key, request, error.attemptId);
 						}
 						if (isAmbiguousDocumentEmailError(error)) {
+							invalidateDiscovery(key);
 							delete request.inFlight;
 						} else {
 							clearResolved(key, request.attemptId);

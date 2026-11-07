@@ -1,5 +1,8 @@
 <script lang="ts">
 import { createBusinessRecords, downloadRecordsCsv } from "./businessRecords.svelte";
+import { onDestroy } from "svelte";
+import { type DocumentSendReceipt, type ReceiptOwner, createDocumentSendReceipts } from "./documentSendReceiptState.svelte";
+import DocumentSendReceipts from "./DocumentSendReceipts.svelte";
 import RecordPagination from "./RecordPagination.svelte";
 import { page } from "$app/stores";
 import { useQuery } from "convex-svelte";
@@ -9,8 +12,8 @@ import FeatureGate from "../components/FeatureGate.svelte";
 import FilterBar from "../components/FilterBar.svelte";
 import LoadingState from "../components/LoadingState.svelte";
 import PageHeader from "../components/PageHeader.svelte";
-import type { Invoice, InvoiceStatus } from "../types";
-import type { DocumentEmailRecovery } from "../documentEmailRecovery";
+import type { Client, Invoice, InvoiceStatus } from "../types";
+import { isTerminalDocumentEmailRecovery, type DocumentEmailRecovery } from "../documentEmailRecovery";
 import { addToast } from "../toast";
 import { logger } from "../logger";
 import { copyPortalLink, toId } from "../utils";
@@ -18,6 +21,7 @@ import {
 	type HydratedDocumentEmailAttempt,
 	createDocumentEmailRequestTracker,
 	documentEmailFailureMessage,
+	documentEmailRecoveryFromError,
 	presentableDocumentEmailRecoveryFromError,
 	statusAfterSuccessfulDocumentEmail,
 } from "./documentEmailRequest";
@@ -54,6 +58,57 @@ let selectedInvoice = $state<Invoice | null>(null);
 let shareLinkCopied = $state(false);
 const emailRequests = createDocumentEmailRequestTracker();
 let hydratedInvoiceId = "";
+let selectionEpoch = 0;
+let selectedEmailGeneration = $state<number | null>(null);
+let createEpoch = 0;
+let pageAlive = true;
+const sendReceipts = createDocumentSendReceipts<Invoice>({
+	siteUrl: config.siteUrl,
+	read: (id): Promise<Invoice | null> => client.query(api.invoices.get, { invoiceId: toId(id) }),
+	select: (invoice, openedReceipt) => selectInvoice(invoice, openedReceipt),
+});
+const selectedEmailAction = $derived(sendReceipts.items.find(item => item.id === selectedInvoice?._id && item.generation === selectedEmailGeneration) ?? null);
+
+function invalidateSelection() {
+	selectionEpoch += 1;
+	sendReceipts.invalidateOpen();
+}
+
+function selectInvoice(invoice: Invoice | null, openedReceipt?: DocumentSendReceipt) {
+	invalidateSelection();
+	const receipt = openedReceipt ?? sendReceipts.items.find(item => item.id === invoice?._id);
+	const currentReceipt = sendReceipts.items.find(item => item.id === invoice?._id);
+	selectedEmailGeneration = receipt?.stage === "pending" && currentReceipt?.generation === receipt.generation ? receipt.generation : null;
+	selectedInvoice = invoice ? { ...invoice } : null;
+	const current = selectedEmailAction;
+	if (selectedInvoice && current?.stage === "confirmed") {
+		selectedInvoice = { ...selectedInvoice, status: statusAfterSuccessfulDocumentEmail(selectedInvoice.status) };
+	}
+	shareLinkCopied = false;
+}
+
+function openCreate() {
+	invalidateSelection();
+	createEpoch += 1;
+	showCreateModal = true;
+}
+
+function closeCreate() {
+	invalidateSelection();
+	createEpoch += 1;
+	showCreateModal = false;
+}
+
+function openSavedInvoice(id: string) {
+	invalidateSelection();
+	void sendReceipts.open(id);
+}
+
+onDestroy(() => {
+	pageAlive = false;
+	createEpoch += 1;
+	invalidateSelection();
+});
 
 function invoiceEmailKey(invoiceId: string) {
 	return `invoice:${invoiceId}`;
@@ -90,7 +145,7 @@ $effect(() => {
 	if (openId) {
 		const match = invoices.find((inv: Invoice) => inv._id === openId);
 		if (match) {
-			selectedInvoice = match;
+			selectInvoice(match);
 			openHandled = true;
 		}
 	}
@@ -130,11 +185,11 @@ let stats = $derived({
 		.length,
 });
 
-async function sendInvoiceEmailRequest(
+function sendInvoiceEmailRequest(
 	invoiceId: string,
 	body: Record<string, unknown>,
 ) {
-	await emailRequests.post(
+	return emailRequests.post(
 		invoiceEmailKey(invoiceId),
 		invoiceEmailEndpoint(invoiceId),
 		body,
@@ -145,6 +200,7 @@ async function sendInvoiceEmailRequest(
 }
 
 async function createInvoice(body: InvoiceCreatePayload): Promise<string> {
+	const epoch = createEpoch;
 	const invoiceId = await client.mutation(api.invoices.create, {
 		siteUrl: config.siteUrl,
 		clientId: toId(body.clientId),
@@ -160,7 +216,10 @@ async function createInvoice(body: InvoiceCreatePayload): Promise<string> {
 		milestoneIndex: body.milestoneIndex,
 		parentInvoiceId: body.parentInvoiceId === undefined ? undefined : toId(body.parentInvoiceId),
 	});
-	showCreateModal = false;
+	if (pageAlive && epoch === createEpoch) {
+		showCreateModal = false;
+		createEpoch += 1;
+	}
 	return invoiceId;
 }
 
@@ -170,23 +229,49 @@ async function handleCreate(body: InvoiceCreatePayload) {
 
 async function saveAndSendInvoice(body: InvoiceCreateAndSendPayload) {
 	const { templateId, emailSubject, emailBody, ...invoiceBody } = body;
+	const label = clients.find((client: Client) => client._id === invoiceBody.clientId)?.name;
 	const invoiceId = await createInvoice(invoiceBody);
+	const owner = sendReceipts.begin(invoiceId, label);
 	try {
-		await sendInvoiceEmailRequest(invoiceId, {
+		const request = sendInvoiceEmailRequest(invoiceId, {
 			templateId,
 			customSubject: emailSubject,
 			customBody: emailBody,
 		});
+		bindInvoiceAttempt(owner);
+		const result = await request;
+		sendReceipts.bindAttempt(owner, result.attemptId);
+		if (sendReceipts.settle(owner, "confirmed", "email request confirmed")) {
+			confirmInvoiceEmail(invoiceId);
+		}
 	} catch (err) {
 		const attempt = presentableDocumentEmailRecoveryFromError(err);
-		if (
-			attempt &&
-			(!selectedInvoice || selectedInvoice._id === invoiceId)
-		) {
-			emailRecovery.remember(invoiceId, attempt);
+		const canonical = documentEmailRecoveryFromError(err);
+		if (canonical) sendReceipts.bindAttempt(owner, canonical.attemptId);
+		const current = sendReceipts.settle(owner, attempt ? "uncertain" : "failed", documentEmailFailureMessage(err));
+		if (current) {
+			if (attempt) {
+				sendReceipts.bindAttempt(owner, attempt.attemptId);
+				emailRecovery.remember(invoiceId, attempt);
+			} else emailRecovery.clear(invoiceId);
 		}
 		logger.error("Invoice saved but its email was not confirmed:", err);
-		addToast(`Invoice saved. ${documentEmailFailureMessage(err)}`);
+	}
+}
+
+function bindInvoiceAttempt(owner: ReceiptOwner) {
+	const pending = emailRequests.pending(invoiceEmailKey(owner.id), invoiceEmailEndpoint(owner.id));
+	if (pending) sendReceipts.bindAttempt(owner, pending.attemptId);
+}
+
+function confirmInvoiceEmail(invoiceId: string) {
+	if (!pageAlive) return;
+	emailRecovery.clear(invoiceId);
+	if (selectedInvoice?._id === invoiceId) {
+		selectedInvoice = {
+			...selectedInvoice,
+			status: statusAfterSuccessfulDocumentEmail(selectedInvoice.status),
+		};
 	}
 }
 
@@ -243,13 +328,23 @@ async function handleSendEmail(
 	templateId?: string,
 	changeNote?: string,
 ) {
-	await sendInvoiceEmailRequest(invoiceId, { templateId, changeNote });
-	emailRecovery.clear(invoiceId);
-	if (selectedInvoice?._id === invoiceId) {
-		selectedInvoice = {
-			...selectedInvoice,
-			status: statusAfterSuccessfulDocumentEmail(selectedInvoice.status),
-		} as Invoice;
+	invalidateSelection();
+	const owner = sendReceipts.items.some(item => item.id === invoiceId) ? sendReceipts.begin(invoiceId) : null;
+	if (owner && selectedInvoice?._id === invoiceId) selectedEmailGeneration = owner.generation;
+	try {
+		const request = sendInvoiceEmailRequest(invoiceId, { templateId, changeNote });
+		if (owner) bindInvoiceAttempt(owner);
+		const result = await request;
+		if (owner) sendReceipts.bindAttempt(owner, result.attemptId);
+		if (!owner || sendReceipts.settle(owner, "confirmed", "email request confirmed")) confirmInvoiceEmail(invoiceId);
+	} catch (error) {
+		const attempt = presentableDocumentEmailRecoveryFromError(error);
+		const canonical = documentEmailRecoveryFromError(error);
+		if (owner && canonical) sendReceipts.bindAttempt(owner, canonical.attemptId);
+		const current = !owner || sendReceipts.settle(owner, attempt ? "uncertain" : "failed", documentEmailFailureMessage(error));
+		if (owner && attempt) sendReceipts.bindAttempt(owner, attempt.attemptId);
+		if (current && !attempt) emailRecovery.clear(invoiceId);
+		throw error;
 	}
 }
 
@@ -257,7 +352,8 @@ function handleEmailResolved(result: {
 	attemptId: string;
 	recovery: DocumentEmailRecovery;
 }) {
-	if (!emailRecovery.resolve(result)) return;
+	if (!pageAlive || !emailRecovery.resolve(result)) return;
+	dismissMatchingReceipt(result);
 	if (!selectedInvoice) return;
 	if (result.recovery.status === "sent") {
 		selectedInvoice = {
@@ -271,23 +367,36 @@ function handleEmailRecovery(
 	invoiceId: string,
 	attempt: HydratedDocumentEmailAttempt,
 ) {
-	emailRecovery.remember(invoiceId, attempt);
+	if (pageAlive) emailRecovery.remember(invoiceId, attempt);
+}
+
+function dismissMatchingReceipt(result: { attemptId: string; recovery: DocumentEmailRecovery }) {
+	if (!isTerminalDocumentEmailRecovery(result.recovery) || result.recovery.document.type !== "invoice"
+		|| result.recovery.attemptId !== result.attemptId) return;
+	const receipt = sendReceipts.items.find(item => item.id === result.recovery.document.id && item.attemptId === result.attemptId);
+	if (!receipt) return;
+	if (receipt.stage === "pending") {
+		sendReceipts.settle(receipt, result.recovery.status === "sent" ? "confirmed" : "failed",
+			result.recovery.status === "sent" ? "email request confirmed" : "email request recorded as not accepted");
+	}
+	sendReceipts.dismiss(receipt.id);
 }
 
 function dismissEmailRecovery(result: {
 	attemptId: string;
 	recovery: DocumentEmailRecovery;
 }) {
-	emailRecovery.dismiss(result);
+	if (pageAlive && emailRecovery.dismiss(result)) dismissMatchingReceipt(result);
 }
 
 async function handleDelete() {
 	if (!selectedInvoice) return;
+	const invoiceId = selectedInvoice._id;
 	await client.mutation(api.invoices.remove, {
-		invoiceId: toId(selectedInvoice._id),
+		invoiceId: toId(invoiceId),
 		siteUrl: config.siteUrl,
 	});
-	selectedInvoice = null;
+	if (selectedInvoice?._id === invoiceId) selectInvoice(null);
 }
 
 async function handleShareLink() {
@@ -310,8 +419,9 @@ $effect(() => {
  if (!id) { openedRecordId = ""; return; }
  if (!records.enabled || !id || openedRecordId === id) return;
  openedRecordId = id;
+ const epoch = selectionEpoch;
  let active = true;
- void records.open(id).then((row) => { if (active && row && deepLinkedRecordId === id && !selectedInvoice) { selectedInvoice = row; } });
+ void records.open(id).then((row) => { if (active && row && epoch === selectionEpoch && deepLinkedRecordId === id && !selectedInvoice) { selectInvoice(row); } });
  return () => {active = false;};
 });
 async function exportRecords() {
@@ -331,9 +441,7 @@ async function exportRecords() {
 			{#snippet actions()}
 				<button
 					class="btn-add"
-					onclick={() => {
-						showCreateModal = true;
-					}}
+					onclick={openCreate}
 				>
 					<svg
 						width="14"
@@ -387,6 +495,7 @@ async function exportRecords() {
 					value: statusFilter,
 					allLabel: "all statuses",
 					onchange: (v) => {
+						invalidateSelection();
 						statusFilter = v;
 					},
 				},
@@ -394,15 +503,17 @@ async function exportRecords() {
 			{searchQuery}
 			searchPlaceholder="search by invoice # or client..."
 			onsearch={(q) => {
+				invalidateSelection();
 				searchQuery = q;
 			}}
 		/>
 
-	<RecordPagination {records} onexport={() => void exportRecords()} />
+		<DocumentSendReceipts documentLabel="invoice" items={sendReceipts.items} onopen={openSavedInvoice} ondismiss={id => sendReceipts.dismiss(id)} />
+	<RecordPagination {records} onrequest={invalidateSelection} onexport={() => void exportRecords()} />
 		<InvoiceTable
 			invoices={filteredInvoices}
 			onselect={(inv) => {
-				selectedInvoice = { ...inv };
+				selectInvoice(inv);
 			}}
 		/>
 	</div>
@@ -415,9 +526,7 @@ async function exportRecords() {
 			{emailTemplates}
 			oncreate={handleCreate}
 			onsaveandsend={saveAndSendInvoice}
-			onclose={() => {
-				showCreateModal = false;
-			}}
+			onclose={closeCreate}
 		/>
 	{/if}
 
@@ -425,6 +534,7 @@ async function exportRecords() {
 		<InvoiceDetailModal
 			invoice={selectedInvoice}
 			templates={emailTemplates}
+			externalEmailAction={selectedEmailAction}
 			onsave={handleSave}
 			onaction={handleAction}
 			onsend={handleSendEmail}
@@ -436,9 +546,7 @@ async function exportRecords() {
 			onemailrecovery={handleEmailRecovery}
 			onemailterminal={handleEmailResolved}
 			onemailrecoverydismiss={dismissEmailRecovery}
-			onclose={() => {
-				selectedInvoice = null;
-			}}
+			onclose={() => selectInvoice(null)}
 		/>
 	{/if}
 	{/if}

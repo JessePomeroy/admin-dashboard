@@ -1,5 +1,8 @@
 <script lang="ts">
 import { createBusinessRecords, downloadRecordsCsv } from "./businessRecords.svelte";
+import { onDestroy } from "svelte";
+import { createDocumentSendReceipts, type DocumentSendReceipt, type ReceiptOwner } from "./documentSendReceiptState.svelte";
+import DocumentSendReceipts from "./DocumentSendReceipts.svelte";
 import RecordPagination from "./RecordPagination.svelte";
 import { page } from "$app/stores";
 import { useQuery } from "convex-svelte";
@@ -59,6 +62,56 @@ let selectedContract = $state<Contract | null>(null);
 let showTemplateCreate = $state(false);
 const emailRequests = createDocumentEmailRequestTracker();
 let hydratedContractId = "";
+let selectionEpoch = 0;
+let createEpoch = 0;
+let pageAlive = true;
+let selectedEmailGeneration = $state<number | null>(null);
+const sendReceipts = createDocumentSendReceipts<Contract>({
+	siteUrl: config.siteUrl,
+	read: (id): Promise<Contract | null> => client.query(api.contracts.get, { contractId: toId(id) }),
+	select: (contract, openedReceipt) => selectContract(contract, openedReceipt),
+});
+const selectedEmailAction = $derived(sendReceipts.items.find(item => item.id === selectedContract?._id && item.generation === selectedEmailGeneration) ?? null);
+
+function invalidateSelection() {
+	selectionEpoch += 1;
+	sendReceipts.invalidateOpen();
+}
+
+function selectContract(contract: Contract | null, openedReceipt?: DocumentSendReceipt) {
+	invalidateSelection();
+	const receipt = openedReceipt ?? sendReceipts.items.find(item => item.id === contract?._id);
+	const current = sendReceipts.items.find(item => item.id === contract?._id);
+	selectedEmailGeneration = receipt?.stage === "pending" && current?.generation === receipt.generation ? receipt.generation : null;
+	selectedContract = contract ? {
+		...contract,
+		status: selectedEmailGeneration !== null && current?.stage === "confirmed"
+			? statusAfterSuccessfulDocumentEmail(contract.status) : contract.status,
+	} : null;
+}
+
+function openCreate() {
+	invalidateSelection();
+	createEpoch += 1;
+	showCreateModal = true;
+}
+
+function closeCreate() {
+	invalidateSelection();
+	createEpoch += 1;
+	showCreateModal = false;
+}
+
+function openSavedContract(id: string) {
+	invalidateSelection();
+	void sendReceipts.open(id);
+}
+
+onDestroy(() => {
+	pageAlive = false;
+	createEpoch += 1;
+	invalidateSelection();
+});
 
 function contractEmailKey(contractId: string) {
 	return `contract:${contractId}`;
@@ -95,7 +148,7 @@ $effect(() => {
 	if (openId) {
 		const match = contracts.find((c: Contract) => c._id === openId);
 		if (match) {
-			selectedContract = match;
+			selectContract(match);
 			openHandled = true;
 		}
 	}
@@ -126,6 +179,7 @@ let stats = $derived({
 
 // Contract CRUD callbacks
 async function createContract(payload: ContractCreatePayload): Promise<string> {
+	const epoch = createEpoch;
 	const contractId = await client.mutation(api.contracts.create, {
 		siteUrl: config.siteUrl,
 		title: payload.title,
@@ -138,7 +192,10 @@ async function createContract(payload: ContractCreatePayload): Promise<string> {
 		totalPrice: payload.totalPrice,
 		depositAmount: payload.depositAmount,
 	});
-	showCreateModal = false;
+	if (pageAlive && epoch === createEpoch) {
+		showCreateModal = false;
+		createEpoch += 1;
+	}
 	return contractId;
 }
 
@@ -146,30 +203,42 @@ async function handleCreateContract(payload: ContractCreatePayload) {
 	await createContract(payload);
 }
 
+function postContractEmail(id: string, body: Record<string, unknown>, owner: ReceiptOwner | null) {
+	const operation = emailRequests.post(contractEmailKey(id), contractEmailEndpoint(id), body, { retries: 2 });
+	const pending = emailRequests.pending(contractEmailKey(id), contractEmailEndpoint(id));
+	if (owner && pending) sendReceipts.bindAttempt(owner, pending.attemptId);
+	return operation;
+}
+
+function confirmContractEmail(id: string) {
+	if (!pageAlive) return;
+	emailRecovery.clear(id);
+	if (selectedContract?._id === id) {
+		selectedContract = { ...selectedContract, status: statusAfterSuccessfulDocumentEmail(selectedContract.status) };
+	}
+}
+
 async function saveAndSendContract(payload: ContractCreateAndSendPayload) {
 	const { emailTemplateId, emailSubject, emailBody, ...contractBody } = payload;
 	const contractId = await createContract(contractBody);
+	const owner = sendReceipts.begin(contractId, contractBody.title);
 	try {
-		await emailRequests.post(
-			contractEmailKey(contractId),
-			contractEmailEndpoint(contractId),
-			{
-				templateId: emailTemplateId,
-				customSubject: emailSubject,
-				customBody: emailBody,
-			},
-			{ retries: 2 },
-		);
-	} catch (err) {
-		const attempt = presentableDocumentEmailRecoveryFromError(err);
-		if (
-			attempt &&
-			(!selectedContract || selectedContract._id === contractId)
-		) {
-			emailRecovery.remember(contractId, attempt);
+		const result = await postContractEmail(contractId, {
+			templateId: emailTemplateId,
+			customSubject: emailSubject,
+			customBody: emailBody,
+		}, owner);
+		sendReceipts.bindAttempt(owner, result.attemptId);
+		if (sendReceipts.settle(owner, "confirmed", "email request confirmed")) confirmContractEmail(contractId);
+	} catch (error) {
+		const attempt = presentableDocumentEmailRecoveryFromError(error);
+		if (attempt) sendReceipts.bindAttempt(owner, attempt.attemptId);
+		const current = sendReceipts.settle(owner, attempt ? "uncertain" : "failed", documentEmailFailureMessage(error));
+		if (current) {
+			if (attempt) emailRecovery.remember(contractId, attempt);
+			else emailRecovery.clear(contractId);
 		}
-		logger.error("Contract saved but its email was not confirmed:", err);
-		addToast(`Contract saved. ${documentEmailFailureMessage(err)}`);
+		logger.error("Contract saved but its email was not confirmed:", error);
 	}
 }
 
@@ -218,18 +287,22 @@ async function handleContractAction(id: string, action: string) {
 }
 
 async function handleSendEmail(id: string, templateId?: string, changeNote?: string) {
-	await emailRequests.post(
-		contractEmailKey(id),
-		contractEmailEndpoint(id),
-		{ templateId, changeNote },
-		{ retries: 2 },
-	);
-	emailRecovery.clear(id);
-	if (selectedContract?._id === id) {
-		selectedContract = {
-			...selectedContract,
-			status: statusAfterSuccessfulDocumentEmail(selectedContract.status),
-		} as Contract;
+	invalidateSelection();
+	const owner = sendReceipts.items.some(item => item.id === id) ? sendReceipts.begin(id) : null;
+	if (owner && selectedContract?._id === id) selectedEmailGeneration = owner.generation;
+	try {
+		const result = await postContractEmail(id, { templateId, changeNote }, owner);
+		if (owner) sendReceipts.bindAttempt(owner, result.attemptId);
+		if (!owner || sendReceipts.settle(owner, "confirmed", "email request confirmed")) confirmContractEmail(id);
+	} catch (error) {
+		const attempt = presentableDocumentEmailRecoveryFromError(error);
+		if (owner && attempt) sendReceipts.bindAttempt(owner, attempt.attemptId);
+		const current = !owner || sendReceipts.settle(owner, attempt ? "uncertain" : "failed", documentEmailFailureMessage(error));
+		if (pageAlive && current) {
+			if (attempt) emailRecovery.remember(id, attempt);
+			else emailRecovery.clear(id);
+		}
+		throw error;
 	}
 }
 
@@ -237,13 +310,14 @@ function handleContractEmailResolved(result: {
 	attemptId: string;
 	recovery: DocumentEmailRecovery;
 }) {
-	if (!emailRecovery.resolve(result)) return;
-	if (!selectedContract) return;
+	if (!pageAlive || !emailRecovery.resolve(result)) return;
+	dismissMatchingReceipt(result);
+	if (selectedContract?._id !== result.recovery.document.id) return;
 	if (result.recovery.status === "sent") {
 		selectedContract = {
 			...selectedContract,
 			status: statusAfterSuccessfulDocumentEmail(selectedContract.status),
-		} as Contract;
+		};
 	}
 }
 
@@ -251,14 +325,23 @@ function handleContractEmailRecovery(
 	contractId: string,
 	attempt: HydratedDocumentEmailAttempt,
 ) {
-	emailRecovery.remember(contractId, attempt);
+	if (pageAlive) emailRecovery.remember(contractId, attempt);
+}
+
+function dismissMatchingReceipt(result: { attemptId: string; recovery: DocumentEmailRecovery }) {
+	const receipt = sendReceipts.items.find(item => item.id === result.recovery.document.id && item.attemptId === result.attemptId);
+	if (!receipt) return;
+	if (receipt.stage === "pending") {
+		sendReceipts.settle(receipt, result.recovery.status === "sent" ? "confirmed" : "failed", result.recovery.status === "sent" ? "email request confirmed" : "email request recorded as not accepted");
+	}
+	sendReceipts.dismiss(receipt.id);
 }
 
 function dismissContractEmailRecovery(result: {
 	attemptId: string;
 	recovery: DocumentEmailRecovery;
 }) {
-	emailRecovery.dismiss(result);
+	if (pageAlive && emailRecovery.dismiss(result)) dismissMatchingReceipt(result);
 }
 
 async function handleDeleteContract(id: string) {
@@ -266,7 +349,7 @@ async function handleDeleteContract(id: string) {
 		contractId: toId(id),
 		siteUrl: config.siteUrl,
 	});
-	selectedContract = null;
+	if (selectedContract?._id === id) selectContract(null);
 }
 
 async function handleShareLink(id: string, clientId: string) {
@@ -315,8 +398,9 @@ $effect(() => {
  if (!id) { openedRecordId = ""; return; }
  if (!records.enabled || !id || openedRecordId === id) return;
  openedRecordId = id;
+ const epoch = selectionEpoch;
  let active = true;
- void records.open(id).then((row) => { if (active && row && deepLinkedRecordId === id && !selectedContract) { selectedContract = row; } });
+ void records.open(id).then((row) => { if (active && row && epoch === selectionEpoch && deepLinkedRecordId === id && !selectedContract) { selectContract(row); } });
  return () => {active = false;};
 });
 async function exportRecords() {
@@ -339,8 +423,9 @@ async function exportRecords() {
 			<button
 				class="btn-add"
 				onclick={() => {
+					invalidateSelection();
 					if (activeTab === "templates") showTemplateCreate = true;
-					else showCreateModal = true;
+					else openCreate();
 				}}
 			>
 				<svg
@@ -385,6 +470,7 @@ async function exportRecords() {
 				role="tab"
 				aria-selected={activeTab === "contracts"}
 				onclick={() => {
+					invalidateSelection();
 					activeTab = "contracts";
 				}}>contracts</button
 			>
@@ -394,6 +480,7 @@ async function exportRecords() {
 				role="tab"
 				aria-selected={activeTab === "templates"}
 				onclick={() => {
+					invalidateSelection();
 					activeTab = "templates";
 				}}>templates</button
 			>
@@ -401,7 +488,7 @@ async function exportRecords() {
 
 		{#if activeTab === "contracts"}
 			<div class="filter-bar">
-				<select class="filter-select" bind:value={statusFilter}>
+				<select class="filter-select" bind:value={statusFilter} onchange={invalidateSelection}>
 					<option value="all">all statuses</option>
 					{#each allStatuses as s}
 						<option value={s}>{s}</option>
@@ -412,14 +499,16 @@ async function exportRecords() {
 					type="text"
 					placeholder="search by title or client..."
 					bind:value={searchQuery}
+					oninput={invalidateSelection}
 				/>
 			</div>
 
-		<RecordPagination {records} onexport={() => void exportRecords()} />
+		<DocumentSendReceipts documentLabel="contract" items={sendReceipts.items} onopen={openSavedContract} ondismiss={id => sendReceipts.dismiss(id)} />
+		<RecordPagination {records} onrequest={invalidateSelection} onexport={() => void exportRecords()} />
 		<ContractTable
 				contracts={filteredContracts}
 				onselect={(c) => {
-					selectedContract = { ...c };
+					selectContract(c);
 				}}
 			/>
 		{:else}
@@ -442,9 +531,7 @@ async function exportRecords() {
 			{emailTemplates}
 			onsave={handleCreateContract}
 			onsaveandsend={saveAndSendContract}
-			onclose={() => {
-				showCreateModal = false;
-			}}
+			onclose={closeCreate}
 		/>
 	{/if}
 
@@ -452,9 +539,8 @@ async function exportRecords() {
 		<ContractDetailModal
 			contract={selectedContract}
 			emailTemplates={emailTemplates}
-			onclose={() => {
-				selectedContract = null;
-			}}
+			onclose={() => selectContract(null)}
+			externalEmailAction={selectedEmailAction}
 			onsave={handleSaveContract}
 			onaction={handleContractAction}
 			onsend={handleSendEmail}

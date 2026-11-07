@@ -18,6 +18,12 @@ import {
 } from "@jessepomeroy/admin/server";
 import { getAdminConfig, type AdminAPI, type AdminConfig, type CatalogProductEditorRevision } from "@jessepomeroy/admin";
 import ClientDetailModal from "@jessepomeroy/admin/pages/crm/ClientDetailModal";
+import InvoiceDetailModal from "@jessepomeroy/admin/pages/invoicing/InvoiceDetailModal";
+import ContractDetailModal from "@jessepomeroy/admin/pages/contracts/ContractDetailModal";
+import DocumentSendReceipts from "@jessepomeroy/admin/pages/DocumentSendReceipts";
+import RecordPagination from "@jessepomeroy/admin/pages/RecordPagination";
+import QuoteDetailModal from "@jessepomeroy/admin/pages/quotes/QuoteDetailModal";
+import DocumentEmailRecoveryPanel from "@jessepomeroy/admin/pages/DocumentEmailRecoveryPanel";
 import type { ComponentProps } from "svelte";
 // @ts-expect-error Server configuration is available only from @jessepomeroy/admin/server.
 import { getServerConfig as invalidRootServerImport } from "@jessepomeroy/admin";
@@ -149,3 +155,15 @@ void [
 	prepareHandler,
 	completeHandler,
 ];
+
+// The emitted receipt component and rune helper must resolve together without casing conflicts.
+type SendReceipt = NonNullable<ComponentProps<typeof InvoiceDetailModal>["externalEmailAction"]>;
+const receipt: SendReceipt = { id: "synthetic-document", generation: 1, stage: "pending", message: "email request in progress.", opening: false, openError: "" };
+const contractEmailAction: ComponentProps<typeof ContractDetailModal>["externalEmailAction"] = receipt;
+const documentReceipts: ComponentProps<typeof DocumentSendReceipts>["items"] = [receipt];
+const requestRecordPage: ComponentProps<typeof RecordPagination>["onrequest"] = () => {};
+void [contractEmailAction, documentReceipts, requestRecordPage];
+
+const optionalQuoteRecoveryChange: ComponentProps<typeof QuoteDetailModal>["onemailrecoverychange"] = undefined;
+const optionalPanelRecoveryChange: ComponentProps<typeof DocumentEmailRecoveryPanel>["onrecoverychange"] = undefined;
+void [optionalQuoteRecoveryChange, optionalPanelRecoveryChange];

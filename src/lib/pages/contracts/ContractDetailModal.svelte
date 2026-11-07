@@ -1,4 +1,6 @@
 <script lang="ts">
+import { onDestroy } from "svelte";
+import type { DocumentSendReceipt } from "../documentSendReceiptState.svelte";
 import AdminModal from "../../components/AdminModal.svelte";
 import StatusDot from "../../components/StatusDot.svelte";
 import type {
@@ -36,6 +38,7 @@ interface Props {
 		recovery: DocumentEmailRecovery;
 	}) => void | Promise<void>;
 	emailRecoveryAttempt?: HydratedDocumentEmailAttempt | null;
+	externalEmailAction?: DocumentSendReceipt | null;
 	onemailrecovery: (
 		contractId: string,
 		attempt: HydratedDocumentEmailAttempt,
@@ -61,6 +64,7 @@ let {
 	onsend,
 	onemailresolved,
 	emailRecoveryAttempt: suppliedEmailRecoveryAttempt = null,
+	externalEmailAction = null,
 	onemailrecovery,
 	onemailterminal,
 	onemailrecoverydismiss,
@@ -83,9 +87,42 @@ let emailRecoveryAttempt = $state<{
 let shareLinkCopied = $state(false);
 let selectedTemplateId = $state<string>("");
 
+let alive = true;
+let sendIntent = 0;
+let displayedId = "";
+let observedExternalAction = "";
+const externalPending = $derived(externalEmailAction?.stage === "pending");
+const emailBusy = $derived(sending || externalPending);
+
+onDestroy(() => {
+	alive = false;
+	sendIntent += 1;
+});
+
 $effect(() => {
-	emailRecoveryAttempt = suppliedEmailRecoveryAttempt;
-	if (suppliedEmailRecoveryAttempt) sendResult = "uncertain";
+	const id = contract._id;
+	if (displayedId !== id) {
+		displayedId = id;
+		sendIntent += 1;
+		sending = false;
+		sendResult = null;
+		emailRecoveryAttempt = null;
+		observedExternalAction = "";
+	}
+	const action = externalEmailAction;
+	const stamp = action ? `${action.generation}:${action.stage}` : "";
+	if (stamp !== observedExternalAction) {
+		observedExternalAction = stamp;
+		if (action) {
+			sendResult = action.stage === "pending" ? null : action.stage === "confirmed" ? "success" : action.stage === "failed" ? "error" : "uncertain";
+		}
+	}
+	const supplied = suppliedEmailRecoveryAttempt;
+	emailRecoveryAttempt = supplied;
+	if (supplied && action?.stage !== "pending"
+		&& (!action || action.stage === "uncertain" || supplied.attemptId !== action.attemptId)) {
+		sendResult = "uncertain";
+	}
 });
 
 let editTitle = $state("");
@@ -162,21 +199,35 @@ function dismissResend() {
 }
 
 async function handleSendEmail(templateId?: string, changeNote?: string) {
+	if (emailBusy) return;
+	const id = contract._id;
+	const intent = ++sendIntent;
 	sending = true;
 	sendResult = null;
 	try {
-		await onsend(contract._id, templateId, changeNote);
+		await onsend(id, templateId, changeNote);
+		if (!alive || sendIntent !== intent || contract._id !== id) return;
 		sendResult = "success";
 		emailRecoveryAttempt = null;
-	} catch (err) {
-		emailRecoveryAttempt =
-			presentableDocumentEmailRecoveryFromError(err) ?? null;
+	} catch (error) {
+		if (!alive || sendIntent !== intent || contract._id !== id) return;
+		emailRecoveryAttempt = presentableDocumentEmailRecoveryFromError(error) ?? null;
 		sendResult = emailRecoveryAttempt ? "uncertain" : "error";
-		if (emailRecoveryAttempt) onemailrecovery(contract._id, emailRecoveryAttempt);
-		addToast(documentEmailFailureMessage(err));
+		if (emailRecoveryAttempt) onemailrecovery(id, emailRecoveryAttempt);
+		if (!externalEmailAction) addToast(documentEmailFailureMessage(error));
 	} finally {
-		sending = false;
+		if (alive && sendIntent === intent) sending = false;
 	}
+}
+
+function ownsRecovery(result: { attemptId: string; recovery: DocumentEmailRecovery }) {
+	return alive && contract?._id === result.recovery.document.id
+		&& emailRecoveryAttempt?.attemptId === result.attemptId
+		&& result.recovery.attemptId === result.attemptId;
+}
+
+function handleRecoveryChange(result: { attemptId: string; recovery: DocumentEmailRecovery }) {
+	if (ownsRecovery(result)) onemailrecovery(result.recovery.document.id, result);
 }
 
 async function handleRecoveryResolved(result: {
@@ -184,7 +235,10 @@ async function handleRecoveryResolved(result: {
 	outcome: DocumentEmailResolutionOutcome;
 	recovery: DocumentEmailRecovery;
 }) {
+	if (!ownsRecovery(result)) return;
+	const intent = sendIntent;
 	await onemailresolved(result);
+	if (!alive || sendIntent !== intent || contract._id !== result.recovery.document.id) return;
 	emailRecoveryAttempt = {
 		attemptId: result.attemptId,
 		recovery: result.recovery,
@@ -201,6 +255,7 @@ async function handleRecoveryTerminal(result: {
 	attemptId: string;
 	recovery: DocumentEmailRecovery;
 }) {
+	if (!ownsRecovery(result)) return;
 	await onemailterminal(result);
 }
 
@@ -208,7 +263,10 @@ async function dismissRecovery(result: {
 	attemptId: string;
 	recovery: DocumentEmailRecovery;
 }) {
+	if (!ownsRecovery(result)) return;
+	const intent = sendIntent;
 	await onemailrecoverydismiss(result);
+	if (!alive || sendIntent !== intent || contract._id !== result.recovery.document.id) return;
 	emailRecoveryAttempt = null;
 	sendResult = result.recovery.status === "sent" ? "success" : null;
 }
@@ -458,12 +516,14 @@ async function handleShareLink() {
 			{/if}
 
 			<div class="modal-actions detail-actions">
-				{#if confirmResend}
+				{#if externalPending}
+					<span role="status">email request in progress...</span>
+				{:else if confirmResend}
 					<span class="confirm-text">resend updated contract to client?</span>
 					<button
 						class="btn-save"
 						onclick={handleResend}
-						disabled={sending}
+						disabled={emailBusy}
 					>
 						{sending ? "sending..." : "yes, resend"}
 					</button>
@@ -487,7 +547,8 @@ async function handleShareLink() {
 						}}>no</button
 					>
 				{:else if sendResult === "success"}
-					<span class="send-success" role="status">email sent</span>
+					<span class="send-success" role="status">email request confirmed</span>
+					<button class="btn-cancel" onclick={() => { sendResult = null; }}>dismiss</button>
 				{:else if sendResult === "error"}
 					<span class="send-error" role="alert">failed to send</span>
 					<button
@@ -502,8 +563,9 @@ async function handleShareLink() {
 							attemptId={emailRecoveryAttempt.attemptId}
 							document={{ type: "contract", id: contract._id }}
 							recovery={emailRecoveryAttempt.recovery}
-							{sending}
+							sending={emailBusy}
 							onretry={() => handleSendEmail(selectedTemplateId || undefined)}
+							onrecoverychange={handleRecoveryChange}
 							onresolved={handleRecoveryResolved}
 							onterminal={handleRecoveryTerminal}
 							ondismiss={dismissRecovery}
@@ -518,13 +580,13 @@ async function handleShareLink() {
 							confirmDelete = true;
 						}}>delete</button
 					>
-					<button class="btn-cancel" onclick={startEdit} disabled={sending || saving}
+					<button class="btn-cancel" onclick={startEdit} disabled={emailBusy || saving}
 						>edit</button
 					>
 					<button
 						class="btn-send"
 						onclick={() => handleSendEmail(selectedTemplateId || undefined)}
-						disabled={sending}
+						disabled={emailBusy}
 					>
 						{sending ? "sending..." : "send email"}
 					</button>
@@ -536,7 +598,7 @@ async function handleShareLink() {
 						{saving ? "..." : "mark as sent"}
 					</button>
 				{:else if contract.status === "sent"}
-					<button class="btn-cancel" onclick={startEdit} disabled={sending || saving}>edit</button>
+					<button class="btn-cancel" onclick={startEdit} disabled={emailBusy || saving}>edit</button>
 					<button
 						class="btn-save"
 						onclick={() => handleAction("sign")}

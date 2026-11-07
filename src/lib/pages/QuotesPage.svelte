@@ -1,14 +1,18 @@
 <script lang="ts">
+import { onDestroy, untrack } from "svelte";
 import { createBusinessRecords, downloadRecordsCsv } from "./businessRecords.svelte";
 import RecordPagination from "./RecordPagination.svelte";
+import DocumentSendReceipts from "./DocumentSendReceipts.svelte";
+import { createDocumentSendReceipts, type DocumentSendReceipt } from "./documentSendReceiptState.svelte";
 import { page } from "$app/stores";
 import { useQuery } from "convex-svelte";
 import { useAdminClient } from "../adminClient";
 import { getAdminConfig } from "../config";
 import FeatureGate from "../components/FeatureGate.svelte";
 import LoadingState from "../components/LoadingState.svelte";
-import type { Quote, QuotePreset } from "../types";
+import type { Client, Quote, QuotePreset } from "../types";
 import {
+	isTerminalDocumentEmailRecovery,
 	type DocumentEmailRecovery,
 	type DocumentEmailResolutionOutcome,
 } from "../documentEmailRecovery";
@@ -18,6 +22,7 @@ import { logger } from "../logger";
 import {
 	createDocumentEmailRequestTracker,
 	documentEmailFailureMessage,
+	documentEmailRecoveryFromError,
 	presentableDocumentEmailRecoveryFromError,
 	statusAfterSuccessfulDocumentEmail,
 } from "./documentEmailRequest";
@@ -67,6 +72,8 @@ let showCreateModal = $state(false);
 let selectedQuote = $state<Quote | null>(null);
 let quoteSelectionEpoch = $state(0);
 let saving = $state(false);
+let createFormEpoch = 0;
+let alive = true;
 
 // Auto-open quote from ?open= query param
 let openHandled = false;
@@ -93,6 +100,13 @@ const emailRecovery = createDocumentEmailRecoveryState({
 	tracker: emailRequests,
 	onHydrateError: (error) => logger.error("Failed to discover quote email recovery:", error),
 });
+const sendReceipts = createDocumentSendReceipts<Quote>({
+	siteUrl: config.siteUrl,
+	read: (id) => client.query(api.quotes.get, { quoteId: toId(id) }),
+	select: openDetailModal,
+});
+let selectedReceipt = $derived(sendReceipts.items.find(receipt => receipt.id === selectedQuote?._id));
+let sendOperation: { quoteId: string; selectionEpoch: number } | null = null;
 let converting = $state(false);
 let convertSuccess = $state(false);
 let conversionOperation: { quoteId: Quote["_id"]; selectionEpoch: number } | null = null;
@@ -100,6 +114,14 @@ let conversionOperation: { quoteId: Quote["_id"]; selectionEpoch: number } | nul
 // Preset modal state
 let showPresetModal = $state(false);
 let selectedPreset = $state<QuotePreset | null>(null);
+
+onDestroy(() => {
+	alive = false;
+	createFormEpoch += 1;
+	quoteSelectionEpoch += 1;
+	sendOperation = null;
+	sendReceipts.invalidateOpen();
+});
 
 const allStatuses = ["draft", "sent", "accepted", "declined", "expired"];
 
@@ -134,6 +156,7 @@ async function saveNewQuote(formData: {
 	validUntil: string;
 	notes: string;
 }) {
+	const createEpoch = createFormEpoch;
 	saving = true;
 	try {
 		const packages = normalizeEditableQuotePackages(formData.packages);
@@ -145,12 +168,12 @@ async function saveNewQuote(formData: {
 			validUntil: formData.validUntil || undefined,
 			notes: formData.notes || undefined,
 		});
-		showCreateModal = false;
+		if (alive && createFormEpoch === createEpoch) showCreateModal = false;
 	} catch (err) {
 		logger.error("Failed to create quote:", err);
-		addToast("Failed to create quote.");
+		if (alive) addToast("Failed to create quote.");
 	} finally {
-		saving = false;
+		if (alive) saving = false;
 	}
 }
 
@@ -164,6 +187,8 @@ async function saveAndSendQuote(formData: {
 	emailSubject?: string;
 	emailBody?: string;
 }) {
+	const createEpoch = createFormEpoch;
+	const receiptLabel = clients.find((candidate: Client) => candidate._id === formData.clientId)?.name;
 	saving = true;
 	try {
 		const packages = normalizeEditableQuotePackages(formData.packages);
@@ -175,9 +200,10 @@ async function saveAndSendQuote(formData: {
 			validUntil: formData.validUntil || undefined,
 			notes: formData.notes || undefined,
 		});
-		showCreateModal = false;
+		if (alive && createFormEpoch === createEpoch) showCreateModal = false;
+		const owner = sendReceipts.begin(quoteId as string, receiptLabel);
 		try {
-			await emailRequests.post(
+			const request = emailRequests.post(
 				`quote:${quoteId}`,
 				`/api/admin/quotes/${quoteId}/send`,
 				{
@@ -187,18 +213,36 @@ async function saveAndSendQuote(formData: {
 				},
 				{ retries: 2 },
 			);
+			const pending = emailRequests.pending(`quote:${quoteId}`, quoteEmailEndpoint(quoteId as string));
+			if (pending) sendReceipts.bindAttempt(owner, pending.attemptId);
+			const result = await request;
+			sendReceipts.bindAttempt(owner, result.attemptId);
+			if (sendReceipts.settle(owner, "confirmed", "email request confirmed")) {
+				emailRecovery.clear(quoteId as string);
+				if (selectedQuote && selectedQuote._id === quoteId) {
+					sendResult = "success";
+					selectedQuote = {
+						...selectedQuote,
+						status: statusAfterSuccessfulDocumentEmail(selectedQuote.status),
+					} as Quote;
+				}
+			}
 		} catch (err) {
+			const canonical = documentEmailRecoveryFromError(err);
+			if (canonical) sendReceipts.bindAttempt(owner, canonical.attemptId);
 			const attempt = presentableDocumentEmailRecoveryFromError(err) ?? null;
-			if (attempt) emailRecovery.remember(quoteId as string, attempt);
-			else emailRecovery.clear(quoteId as string);
+			if (sendReceipts.settle(owner, attempt ? "uncertain" : "failed", documentEmailFailureMessage(err))) {
+				if (attempt) emailRecovery.remember(quoteId as string, attempt);
+				else emailRecovery.clear(quoteId as string);
+				if (selectedQuote?._id === quoteId) sendResult = attempt ? "uncertain" : "error";
+			}
 			logger.error("Quote saved but its email was not confirmed:", err);
-			addToast(`Quote saved. ${documentEmailFailureMessage(err)}`);
 		}
 	} catch (err) {
 		logger.error("Failed to create quote:", err);
-		addToast("Failed to create quote.");
+		if (alive) addToast("Failed to create quote.");
 	} finally {
-		saving = false;
+		if (alive) saving = false;
 	}
 }
 
@@ -259,17 +303,29 @@ async function saveQuoteEdit(editData: {
 async function sendQuoteEmail(templateId?: string, changeNote?: string) {
 	if (!selectedQuote) return;
 	const quoteId = selectedQuote._id as string;
+	sendReceipts.invalidateOpen();
+	const owner = sendReceipts.items.some(receipt => receipt.id === quoteId)
+		? sendReceipts.begin(quoteId) : null;
+	const operation = { quoteId, selectionEpoch: quoteSelectionEpoch };
+	sendOperation = operation;
+	const isCurrent = () => alive && sendOperation === operation
+		&& quoteSelectionEpoch === operation.selectionEpoch && selectedQuote?._id === quoteId;
 	sending = true;
 	sendResult = null;
 	try {
-		await emailRequests.post(
+		const request = emailRequests.post(
 			`quote:${quoteId}`,
 			`/api/admin/quotes/${quoteId}/send`,
 			{ templateId, changeNote },
 			{ retries: 2 },
 		);
-		emailRecovery.clear(quoteId);
-		if (selectedQuote?._id === quoteId) {
+		const pending = emailRequests.pending(`quote:${quoteId}`, quoteEmailEndpoint(quoteId));
+		if (owner && pending) sendReceipts.bindAttempt(owner, pending.attemptId);
+		const result = await request;
+		if (owner) sendReceipts.bindAttempt(owner, result.attemptId);
+		const owned = owner ? sendReceipts.settle(owner, "confirmed", "email request confirmed") : isCurrent();
+		if (owned) emailRecovery.clear(quoteId);
+		if (owned && selectedQuote?._id === quoteId) {
 			sendResult = "success";
 			selectedQuote = {
 				...selectedQuote,
@@ -278,16 +334,39 @@ async function sendQuoteEmail(templateId?: string, changeNote?: string) {
 		}
 	} catch (err) {
 		logger.error("Failed to send quote email:", err);
-		addToast(documentEmailFailureMessage(err));
+		const canonical = documentEmailRecoveryFromError(err);
+		if (owner && canonical) sendReceipts.bindAttempt(owner, canonical.attemptId);
 		const attempt = presentableDocumentEmailRecoveryFromError(err) ?? null;
-		if (!selectedQuote || selectedQuote._id === quoteId) {
+		const owned = owner ? sendReceipts.settle(owner, attempt ? "uncertain" : "failed", documentEmailFailureMessage(err)) : isCurrent();
+		if (!owner && isCurrent()) addToast(documentEmailFailureMessage(err));
+		if (owned) {
 			if (attempt) emailRecovery.remember(quoteId, attempt);
 			else emailRecovery.clear(quoteId);
-			sendResult = attempt ? "uncertain" : "error";
+			if (selectedQuote?._id === quoteId) sendResult = attempt ? "uncertain" : "error";
 		}
 	} finally {
-		sending = false;
+		if (isCurrent()) {
+			sending = false;
+			sendOperation = null;
+		}
 	}
+}
+
+function dismissQuoteReceiptForAttempt(result: { attemptId: string; recovery: DocumentEmailRecovery }) {
+	if (!isTerminalDocumentEmailRecovery(result.recovery) || result.recovery.document.type !== "quote"
+		|| result.recovery.attemptId !== result.attemptId) return;
+	const receipt = sendReceipts.items.find(item => item.id === result.recovery.document.id
+		&& item.attemptId === result.attemptId);
+	if (!receipt) return;
+	if (receipt.stage === "pending") {
+		sendReceipts.settle(receipt, result.recovery.status === "sent" ? "confirmed" : "failed",
+			result.recovery.status === "sent" ? "email request confirmed" : "email request not confirmed");
+	}
+	sendReceipts.dismiss(receipt.id);
+}
+
+function handleQuoteEmailRecoveryChange(result: { attemptId: string; recovery: DocumentEmailRecovery }) {
+	if (alive) emailRecovery.remember(result.recovery.document.id, result);
 }
 
 function handleQuoteEmailResolved(result: {
@@ -296,6 +375,7 @@ function handleQuoteEmailResolved(result: {
 	recovery: DocumentEmailRecovery;
 }) {
 	if (!emailRecovery.resolve(result)) return;
+	dismissQuoteReceiptForAttempt(result);
 	if (!selectedQuote) return;
 	if (result.recovery.status === "sent") {
 		sendResult = "uncertain";
@@ -315,6 +395,7 @@ function handleQuoteEmailTerminal(result: {
 	recovery: DocumentEmailRecovery;
 }) {
 	if (!emailRecovery.resolve(result)) return;
+	dismissQuoteReceiptForAttempt(result);
 	if (!selectedQuote) return;
 	if (result.recovery.status === "sent") {
 		selectedQuote = {
@@ -329,6 +410,7 @@ function dismissQuoteEmailRecovery(result: {
 	recovery: DocumentEmailRecovery;
 }) {
 	if (!emailRecovery.dismiss(result)) return;
+	dismissQuoteReceiptForAttempt(result);
 	if (selectedQuote && selectedQuote._id !== result.recovery.document.id) return;
 	sendResult = result.recovery.status === "sent" ? "success" : null;
 }
@@ -379,7 +461,7 @@ async function deleteQuote() {
 			quoteId: toId(selectedQuote._id),
 			siteUrl: config.siteUrl,
 		});
-		selectedQuote = null;
+		closeDetailModal();
 	} catch (err) {
 		logger.error("Failed to delete quote:", err);
 		addToast("Failed to delete quote.");
@@ -509,19 +591,63 @@ async function deletePreset(presetId: string) {
 	}
 }
 
-function openDetailModal(quote: Quote) {
+function invalidateQuoteOpen() {
+	quoteSelectionEpoch += 1;
+	sendReceipts.invalidateOpen();
+}
+
+function openCreateModal() {
+	invalidateQuoteOpen();
+	createFormEpoch += 1;
+	showCreateModal = true;
+}
+
+function closeCreateModal() {
+	invalidateQuoteOpen();
+	createFormEpoch += 1;
+	showCreateModal = false;
+}
+
+function openSavedQuote(id: string) {
+	if (showCreateModal || showPresetModal || selectedQuote) return;
+	invalidateQuoteOpen();
+	void sendReceipts.open(id);
+}
+
+function openDetailModal(quote: Quote, openedReceipt?: DocumentSendReceipt) {
+	sendReceipts.invalidateOpen();
 	quoteSelectionEpoch += 1;
 	selectedQuote = { ...quote };
+	sending = false;
+	sendOperation = null;
 	sendResult = null;
 	shareLinkCopied = false;
 	converting = false;
 	convertSuccess = false;
-	void emailRecovery.hydrate(quote._id as string, () => { sendResult = "uncertain"; });
+	const currentReceipt = sendReceipts.items.find(receipt => receipt.id === quote._id);
+	if (openedReceipt?.stage === "pending" && currentReceipt?.generation === openedReceipt.generation) {
+		if (currentReceipt.stage === "confirmed") {
+			sendResult = "success";
+			selectedQuote = {
+				...selectedQuote,
+				status: statusAfterSuccessfulDocumentEmail(selectedQuote.status),
+			} as Quote;
+		} else if (currentReceipt.stage === "failed") sendResult = "error";
+		else if (currentReceipt.stage === "uncertain") sendResult = "uncertain";
+	}
+	void emailRecovery.hydrate(quote._id as string, () => {
+		if (sendReceipts.items.find(receipt => receipt.id === quote._id)?.stage !== "pending") {
+			sendResult = "uncertain";
+		}
+	});
 }
 
 function closeDetailModal() {
+	sendReceipts.invalidateOpen();
 	quoteSelectionEpoch += 1;
 	selectedQuote = null;
+	sending = false;
+	sendOperation = null;
 	sendResult = null;
 	convertSuccess = false;
 	converting = false;
@@ -529,11 +655,13 @@ function closeDetailModal() {
 }
 
 function openPresetModal(preset?: QuotePreset) {
+	invalidateQuoteOpen();
 	selectedPreset = preset ? ({ ...preset } as QuotePreset) : null;
 	showPresetModal = true;
 }
 
 function closePresetModal() {
+	invalidateQuoteOpen();
 	showPresetModal = false;
 	selectedPreset = null;
 }
@@ -545,8 +673,9 @@ $effect(() => {
  if (!id) { openedRecordId = ""; return; }
  if (!records.enabled || !id || openedRecordId === id) return;
  openedRecordId = id;
+ const selectionEpoch = untrack(() => quoteSelectionEpoch);
  let active = true;
- void records.open(id).then((row) => { if (active && row && deepLinkedRecordId === id && !selectedQuote) { openDetailModal(row); } });
+ void records.open(id).then((row) => { if (alive && active && row && deepLinkedRecordId === id && quoteSelectionEpoch === selectionEpoch && !selectedQuote && !showCreateModal && !showPresetModal) { openDetailModal(row); } });
  return () => {active = false;};
 });
 async function exportRecords() {
@@ -566,7 +695,7 @@ async function exportRecords() {
 		<div class="header-left">
 			<h1>quotes</h1>
 		</div>
-		<button class="btn-add" onclick={() => { if (activeTab === "presets") openPresetModal(); else showCreateModal = true; }}>
+		<button class="btn-add" onclick={() => { if (activeTab === "presets") openPresetModal(); else openCreateModal(); }}>
 			<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
 			{activeTab === "presets" ? "new preset" : "new quote"}
 		</button>
@@ -589,23 +718,25 @@ async function exportRecords() {
 		{/if}
 	</div>
 
+	<DocumentSendReceipts documentLabel="quote" items={sendReceipts.items} onopen={openSavedQuote} ondismiss={sendReceipts.dismiss} />
+
 	<div class="tab-bar" role="tablist">
-		<button class="tab-btn" class:tab-active={activeTab === "quotes"} role="tab" aria-selected={activeTab === "quotes"} onclick={() => { activeTab = "quotes"; }}>quotes</button>
-		<button class="tab-btn" class:tab-active={activeTab === "presets"} role="tab" aria-selected={activeTab === "presets"} onclick={() => { activeTab = "presets"; }}>presets</button>
+		<button class="tab-btn" class:tab-active={activeTab === "quotes"} role="tab" aria-selected={activeTab === "quotes"} onclick={() => { invalidateQuoteOpen(); activeTab = "quotes"; }}>quotes</button>
+		<button class="tab-btn" class:tab-active={activeTab === "presets"} role="tab" aria-selected={activeTab === "presets"} onclick={() => { invalidateQuoteOpen(); activeTab = "presets"; }}>presets</button>
 	</div>
 
 	{#if activeTab === "quotes"}
 		<div class="filter-bar">
-			<select class="filter-select" bind:value={statusFilter}>
+			<select class="filter-select" bind:value={statusFilter} onchange={invalidateQuoteOpen}>
 				<option value="all">all statuses</option>
 				{#each allStatuses as s}
 					<option value={s}>{s}</option>
 				{/each}
 			</select>
-			<input class="filter-search" type="text" placeholder="search by quote # or client..." bind:value={searchQuery} />
+			<input class="filter-search" type="text" placeholder="search by quote # or client..." bind:value={searchQuery} oninput={invalidateQuoteOpen} />
 		</div>
 
-	<RecordPagination {records} onexport={() => void exportRecords()} />
+	<RecordPagination {records} onexport={() => void exportRecords()} onrequest={invalidateQuoteOpen} />
 		<QuoteTable quotes={filteredQuotes} onselect={openDetailModal} />
 	{:else}
 		<PresetManager
@@ -632,7 +763,7 @@ async function exportRecords() {
 		onsave={saveNewQuote}
 		onsaveandsend={saveAndSendQuote}
 		onsaveaspreset={saveAsPreset}
-		onclose={() => { showCreateModal = false; }}
+		onclose={closeCreateModal}
 	/>
 {/if}
 
@@ -642,7 +773,7 @@ async function exportRecords() {
 		quote={selectedQuote}
 		{invoiceNumberPreview}
 		{saving}
-		{sending}
+		sending={sending || selectedReceipt?.stage === "pending"}
 		{shareLinkCopied}
 		{sendResult}
 		emailRecoveryAttempt={emailRecovery.forDocument(selectedQuote._id as string)}
@@ -652,6 +783,7 @@ async function exportRecords() {
 		onclose={closeDetailModal}
 		onsaveedit={saveQuoteEdit}
 		onsendquoteemail={sendQuoteEmail}
+		onemailrecoverychange={handleQuoteEmailRecoveryChange}
 		onemailresolved={handleQuoteEmailResolved}
 		onemailterminal={handleQuoteEmailTerminal}
 		onemailrecoverydismiss={dismissQuoteEmailRecovery}

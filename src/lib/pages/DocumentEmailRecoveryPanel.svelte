@@ -15,6 +15,8 @@ interface Props {
 	document: DocumentEmailReference;
 	recovery?: DocumentEmailRecovery | null;
 	sending?: boolean;
+	/** Reports an explicitly refreshed nonterminal projection; terminal states use onterminal. */
+	onrecoverychange?: (result: { attemptId: string; recovery: DocumentEmailRecovery }) => void | Promise<void>;
 	onretry: () => Promise<void>;
 	onresolved: (result: {
 		attemptId: string;
@@ -37,6 +39,7 @@ let {
 	recovery = null,
 	sending = false,
 	onretry,
+	onrecoverychange,
 	onresolved,
 	onterminal,
 	ondismiss,
@@ -142,8 +145,12 @@ async function refreshRecovery() {
 	localBusy = true;
 	actionError = "";
 	try {
-		currentRecovery = await getDocumentEmailRecovery(attemptId, document);
-		await notifyTerminal(currentRecovery);
+		const refreshed = await getDocumentEmailRecovery(attemptId, document);
+		currentRecovery = refreshed;
+		if (!isTerminalDocumentEmailRecovery(refreshed)) {
+			await onrecoverychange?.({ attemptId: refreshed.attemptId, recovery: refreshed });
+		}
+		await notifyTerminal(refreshed);
 	} catch (error) {
 		actionError =
 			error instanceof Error

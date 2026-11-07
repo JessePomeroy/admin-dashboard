@@ -37,6 +37,7 @@ function mountPanel(
 		recovery: DocumentEmailRecovery | null;
 		onretry: () => Promise<void>;
 		onresolved: ReturnType<typeof vi.fn>;
+		onrecoverychange: ReturnType<typeof vi.fn>;
 		onterminal: ReturnType<typeof vi.fn>;
 		ondismiss: ReturnType<typeof vi.fn>;
 	}> = {},
@@ -44,6 +45,7 @@ function mountPanel(
 	const onretry = overrides.onretry ?? vi.fn(async () => {});
 	const onresolved = overrides.onresolved ?? vi.fn();
 	const onterminal = overrides.onterminal ?? vi.fn();
+	const onrecoverychange = overrides.onrecoverychange ?? vi.fn();
 	const ondismiss = overrides.ondismiss ?? vi.fn();
 	components.push(
 		mount(DocumentEmailRecoveryPanel, {
@@ -55,11 +57,12 @@ function mountPanel(
 				onretry,
 				onresolved,
 				onterminal,
+				onrecoverychange,
 				ondismiss,
 			},
 		}),
 	);
-	return { onretry, onresolved, onterminal, ondismiss };
+	return { onretry, onresolved, onterminal, ondismiss, onrecoverychange };
 }
 
 function button(label: string): HTMLButtonElement {
@@ -178,6 +181,23 @@ describe("DocumentEmailRecoveryPanel", () => {
 		}));
 		expect(document.body.textContent).toContain("email delivery confirmed");
 		expect(document.body.textContent).not.toContain("email delivery needs review");
+	});
+
+	it("reports an explicitly refreshed nonterminal projection without treating it as terminal", async () => {
+		const refreshed = recovery({ updatedAt: 1_700_000_000_300, canRetry: true });
+		const fetchMock = vi.fn(async () => Response.json({ recovery: refreshed }));
+		vi.stubGlobal("fetch", fetchMock);
+		const { onrecoverychange, onterminal } = mountPanel();
+		await tick();
+		expect(onrecoverychange).not.toHaveBeenCalled();
+		expect(onterminal).not.toHaveBeenCalled();
+		button("refresh status").click();
+		await vi.waitFor(() => expect(onrecoverychange).toHaveBeenCalledExactlyOnceWith({ attemptId: ATTEMPT_ID, recovery: refreshed }));
+		expect(onterminal).not.toHaveBeenCalled();
+		expect(fetchMock).toHaveBeenCalledExactlyOnceWith(
+			`/api/admin/document-email-attempts/${ATTEMPT_ID}?documentType=invoice&documentId=invoice-1`,
+			expect.objectContaining({ cache: "no-store" }),
+		);
 	});
 
 	it("records a provider acceptance ID through the fixed resolve route", async () => {
