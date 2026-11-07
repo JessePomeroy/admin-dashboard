@@ -156,10 +156,11 @@ existing callers compatible. Attempt-ID matching prevents old canonical recovery
 callbacks from dismissing a newer notice. Detail recovery callbacks require a
 live view of that document and attempt before reaching page state, so a closed
 panel's late refresh or explicit resolution cannot replace a newer confirmation.
-Metadata-only discovery results retain a newer full recovery projection for the
-same attempt, including its frozen facts and server-computed action flags.
-Tracker discovery captures a
-transient per-document revision: a later POST or matching resolution invalidates
+Recovery discovery captures a per-document presentation revision; later recovery
+updates, clears, dismissals or discovery starts invalidate that view's old read.
+Both older full and metadata-only projections retain newer canonical facts and
+server-computed action flags. Tracker discovery separately captures its request
+revision: a later POST, ambiguous completion or matching resolution invalidates
 that read before it can restore cleared browser storage or replace a newer frozen
 request. Storage format, backend journal and provider idempotency are unchanged.
 Receipts disappear on unmount/refresh; they do not persist a second send queue.

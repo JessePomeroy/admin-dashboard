@@ -711,6 +711,7 @@ export function createDocumentEmailRequestTracker() {
 							adoptAttempt(key, request, error.attemptId);
 						}
 						if (isAmbiguousDocumentEmailError(error)) {
+							invalidateDiscovery(key);
 							delete request.inFlight;
 						} else {
 							clearResolved(key, request.attemptId);

@@ -528,6 +528,45 @@ describe("created-document email context through the real pages", () => {
 		expect(transport.mutation).toHaveBeenCalledOnce();
 	});
 
+	it.each(kinds)("%s: an older full claimed response retains newer same-attempt recovery controls", async (documentKind) => {
+		await render(documentKind);
+		await startSend();
+		const attemptId = posted[0].body.attemptId;
+		const frozenBody = JSON.stringify(posted[0].body);
+		recoveryRead = Promise.withResolvers<DocumentEmailRecovery | null>();
+		await openSaved();
+		await vi.waitFor(() => expect(heldRecoveryFetches).toBe(2));
+		expect(consumedRecoveryBodies).toBe(0);
+		const reads = transport.fetch.mock.calls.filter(([input]) => String(input).startsWith("/api/admin/document-email-attempts/"));
+		expect(reads).toHaveLength(2);
+		expect(new Set(reads.map(([input]) => new URL(String(input), "https://fixture.invalid").pathname))).toEqual(new Set([
+			"/api/admin/document-email-attempts/open", `/api/admin/document-email-attempts/${attemptId}`,
+		]));
+		for (const [input, init] of reads) {
+			expect(Object.fromEntries(new URL(String(input), "https://fixture.invalid").searchParams)).toEqual({ documentType: documentKind, documentId: `${documentKind}-new` });
+			expect(init?.method ?? "GET").toBe("GET");
+			expect(init?.cache).toBe("no-store");
+		}
+		const oldClaim: DocumentEmailRecovery = { ...recovery("claimed"), updatedAt: 1_700_000_000_050 };
+		await finishSend("uncertain");
+		await vi.waitFor(() => expect(detail().querySelector<HTMLInputElement>(`#provider-message-${attemptId}`)).not.toBeNull());
+		expect(detail().querySelector(".recovery")?.textContent).toContain("record acceptance");
+		expect(consumedRecoveryBodies).toBe(0);
+
+		recoveryRead.resolve(oldClaim);
+		await vi.waitFor(() => expect(consumedRecoveryBodies).toBe(2));
+		await flushAsyncTurns();
+		expect(detail().querySelector<HTMLInputElement>(`#provider-message-${attemptId}`), "old claimed projection must retain newer uncertainty reconciliation").not.toBeNull();
+		expect(detail().querySelector(".recovery")?.textContent).toContain("record acceptance");
+		expect(detail().querySelector(".recovery")?.textContent).toContain("Frozen message for original recipient");
+		expect(detail().querySelector(".recovery")?.textContent).toContain("frozen@example.test");
+		expect(detail().querySelector(".recovery code")?.textContent).toBe(attemptId);
+		expect(receipt().textContent).toContain("Delivery is still being reconciled");
+		expect(posted).toHaveLength(3);
+		expect(posted.every((request) => JSON.stringify(request.body) === frozenBody)).toBe(true);
+		expect(transport.mutation).toHaveBeenCalledOnce();
+	});
+
 	it("contract: a terminal create-send receipt permits a later manual send of that saved record", async () => {
 		await render("contract");
 		await startSend();

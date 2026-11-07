@@ -13,10 +13,19 @@ export function createDocumentEmailRecoveryState(options: {
 }) {
 	let visible = $state<{ documentId: string; attempt: HydratedDocumentEmailAttempt } | null>(null);
 	const key = (documentId: string) => `${options.type}:${documentId}`;
+	const revisions = new Map<string, number>();
+	function invalidate(documentId: string) {
+		const revision = (revisions.get(documentId) ?? 0) + 1;
+		revisions.set(documentId, revision);
+		return revision;
+	}
 
 	function remember(documentId: string, attempt: HydratedDocumentEmailAttempt) {
 		const selected = options.selectedId();
 		if (selected && selected !== documentId) return false;
+		invalidate(documentId);
+		const current = forDocument(documentId);
+		if (current?.attemptId === attempt.attemptId && current.recovery && !attempt.recovery) return true;
 		visible = { documentId, attempt };
 		return true;
 	}
@@ -26,6 +35,7 @@ export function createDocumentEmailRecoveryState(options: {
 	}
 
 	function clear(documentId: string) {
+		invalidate(documentId);
 		if (visible?.documentId === documentId) visible = null;
 	}
 
@@ -33,18 +43,13 @@ export function createDocumentEmailRecoveryState(options: {
 		const endpoint = options.endpoint(documentId);
 		const pending = options.tracker.pending(key(documentId), endpoint);
 		if (pending && remember(documentId, { attemptId: pending.attemptId })) onVisible?.();
-		const displayedAtStart = visible?.documentId === documentId ? visible.attempt.attemptId : undefined;
+		const revision = invalidate(documentId);
 		try {
 			const hydrated = await options.tracker.hydrate(key(documentId), endpoint, { type: options.type, id: documentId });
-			if (options.selectedId() !== documentId) return;
+			if (revisions.get(documentId) !== revision || options.selectedId() !== documentId) return;
 			const latest = options.tracker.pending(key(documentId), endpoint);
 			if (hydrated && latest && latest.attemptId !== hydrated.attemptId) return;
-			if (visible?.documentId === documentId && visible.attempt.attemptId !== displayedAtStart
-				&& visible.attempt.attemptId !== hydrated?.attemptId) return;
-			// A superseded discovery may only know the current attempt ID. Keep
-			// the newer canonical facts and action flags already shown for it.
-			const displayed = forDocument(documentId);
-			if (hydrated && !hydrated.recovery && displayed?.attemptId === hydrated.attemptId && displayed.recovery) return;
+			// Only this discovery's unchanged presentation owner may adopt its result.
 			if (hydrated) {
 				if (remember(documentId, hydrated)) onVisible?.();
 			} else if (!latest && visible?.documentId === documentId && (!visible.attempt.recovery || !isTerminalDocumentEmailRecovery(visible.attempt.recovery))) {
@@ -68,6 +73,7 @@ export function createDocumentEmailRecoveryState(options: {
 
 	function dismiss(result: { attemptId: string; recovery: DocumentEmailRecovery }) {
 		if (visible?.documentId !== result.recovery.document.id || visible.attempt.attemptId !== result.attemptId) return false;
+		invalidate(result.recovery.document.id);
 		visible = null;
 		return true;
 	}
