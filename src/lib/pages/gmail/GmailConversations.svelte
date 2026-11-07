@@ -38,7 +38,11 @@ function manageConnection() { window.dispatchEvent(new CustomEvent("admin:google
  {:else}<p class="hint">{mailbox.address} · {mailbox.recovering ? "recovering conversation history" : mailbox.problem ?? "updates automatically"}</p>{/if}
  {#if conversations.length}
   <label for={`gmail-conversation-${inquiryId ?? clientId}`}>conversation</label>
-  <select id={`gmail-conversation-${inquiryId ?? clientId}`} value={selected ?? ""} onchange={e => choose(e.currentTarget.value)}>
+  <select id={`gmail-conversation-${inquiryId ?? clientId}`} value={selected ?? ""} onchange={e => {
+   choose(e.currentTarget.value);
+   // The native picker changes before confirmation; keep it on the accepted conversation.
+   e.currentTarget.value = selected ?? "";
+  }}>
    <option value="">choose a conversation</option>
    {#each conversations as c (c._id)}<option value={c._id}>{c.subject} · {c.recipient}</option>{/each}
   </select>

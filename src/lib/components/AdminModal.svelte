@@ -105,6 +105,8 @@ function handleOverlayClick(e: MouseEvent) {
 	}
 
 	.modal-title {
+		min-width: 0;
+		overflow-wrap: anywhere;
 		font-family: "Chillax", sans-serif;
 		font-size: 1.35rem;
 		font-weight: 500;
@@ -113,6 +115,7 @@ function handleOverlayClick(e: MouseEvent) {
 	}
 
 	.modal-close {
+		flex-shrink: 0;
 		background: none;
 		border: none;
 		color: var(--admin-text-muted);
