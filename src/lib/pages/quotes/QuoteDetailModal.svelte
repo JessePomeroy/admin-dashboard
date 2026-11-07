@@ -1,4 +1,5 @@
 <script lang="ts">
+import { onDestroy } from "svelte";
 import AdminModal from "../../components/AdminModal.svelte";
 import StatusDot from "../../components/StatusDot.svelte";
 import type {
@@ -91,6 +92,27 @@ let {
 	converting,
 	templates,
 }: Props = $props();
+
+let alive = true;
+onDestroy(() => { alive = false; });
+
+function ownsRecovery(result: { attemptId: string; recovery: DocumentEmailRecovery }) {
+	return alive && quote?._id === result.recovery.document.id
+		&& emailRecoveryAttempt?.attemptId === result.attemptId
+		&& result.recovery.attemptId === result.attemptId;
+}
+
+function handleRecoveryResolved(result: Parameters<Props["onemailresolved"]>[0]) {
+	if (ownsRecovery(result)) return onemailresolved(result);
+}
+
+function handleRecoveryTerminal(result: Parameters<Props["onemailterminal"]>[0]) {
+	if (ownsRecovery(result)) return onemailterminal(result);
+}
+
+function dismissRecovery(result: Parameters<Props["onemailrecoverydismiss"]>[0]) {
+	if (ownsRecovery(result)) return onemailrecoverydismiss(result);
+}
 
 let editMode = $state(false);
 let selectedTemplateId = $state<string>("");
@@ -351,9 +373,9 @@ async function handleConvert() {
 							recovery={emailRecoveryAttempt.recovery}
 							{sending}
 							onretry={() => handleSendEmail(selectedTemplateId || undefined)}
-							onresolved={onemailresolved}
-							onterminal={onemailterminal}
-							ondismiss={onemailrecoverydismiss}
+							onresolved={handleRecoveryResolved}
+							onterminal={handleRecoveryTerminal}
+							ondismiss={dismissRecovery}
 						/>
 					{:else}
 						<span class="send-error" role="alert">delivery not confirmed</span>

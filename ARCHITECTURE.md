@@ -155,7 +155,10 @@ terminal feedback. Optional detail status props and pagination `onrequest` keep
 existing callers compatible. Attempt-ID matching prevents old canonical recovery
 callbacks from dismissing a newer notice. Detail recovery callbacks require a
 live view of that document and attempt before reaching page state, so a closed
-panel's late refresh cannot replace a newer confirmation. Tracker discovery captures a
+panel's late refresh or explicit resolution cannot replace a newer confirmation.
+Metadata-only discovery results retain a newer full recovery projection for the
+same attempt, including its frozen facts and server-computed action flags.
+Tracker discovery captures a
 transient per-document revision: a later POST or matching resolution invalidates
 that read before it can restore cleared browser storage or replace a newer frozen
 request. Storage format, backend journal and provider idempotency are unchanged.

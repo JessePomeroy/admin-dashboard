@@ -62,6 +62,20 @@ describe("document email recovery state", () => {
 		expect(state.forDocument("a")).toBeNull();
 	});
 
+	it("retains a newer full recovery when an older hydration returns its metadata-only placeholder", async () => {
+		const { state, tracker, pendingAttempts } = setup();
+		const deferred = Promise.withResolvers<{ attemptId: string }>();
+		vi.mocked(tracker.hydrate).mockReturnValueOnce(deferred.promise);
+		pendingAttempts.set("invoice:a", "old");
+		const hydration = state.hydrate("a");
+		const current = { attemptId: "new", recovery: recovery("a", "new") };
+		pendingAttempts.set("invoice:a", "new");
+		state.remember("a", current);
+		deferred.resolve({ attemptId: "new" });
+		await hydration;
+		expect(state.forDocument("a")).toEqual(current);
+	});
+
 	it("does not replace a newer visible attempt with a late hydration of the same document", async () => {
 		const { state, tracker, pendingAttempts } = setup();
 		const deferred = Promise.withResolvers<{ attemptId: string; recovery: DocumentEmailRecovery }>();

@@ -222,7 +222,8 @@ async function handleSendEmail(templateId?: string, changeNote?: string) {
 
 function ownsRecovery(result: { attemptId: string; recovery: DocumentEmailRecovery }) {
 	return alive && contract?._id === result.recovery.document.id
-		&& emailRecoveryAttempt?.attemptId === result.attemptId;
+		&& emailRecoveryAttempt?.attemptId === result.attemptId
+		&& result.recovery.attemptId === result.attemptId;
 }
 
 async function handleRecoveryResolved(result: {

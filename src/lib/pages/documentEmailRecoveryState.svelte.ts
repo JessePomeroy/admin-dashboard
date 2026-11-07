@@ -41,6 +41,10 @@ export function createDocumentEmailRecoveryState(options: {
 			if (hydrated && latest && latest.attemptId !== hydrated.attemptId) return;
 			if (visible?.documentId === documentId && visible.attempt.attemptId !== displayedAtStart
 				&& visible.attempt.attemptId !== hydrated?.attemptId) return;
+			// A superseded discovery may only know the current attempt ID. Keep
+			// the newer canonical facts and action flags already shown for it.
+			const displayed = forDocument(documentId);
+			if (hydrated && !hydrated.recovery && displayed?.attemptId === hydrated.attemptId && displayed.recovery) return;
 			if (hydrated) {
 				if (remember(documentId, hydrated)) onVisible?.();
 			} else if (!latest && visible?.documentId === documentId && (!visible.attempt.recovery || !isTerminalDocumentEmailRecovery(visible.attempt.recovery))) {
