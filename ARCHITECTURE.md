@@ -153,7 +153,9 @@ the detail, including when the send settles before the read returns. Later
 opens use current stored document/recovery state rather than replaying historical
 terminal feedback. Optional detail status props and pagination `onrequest` keep
 existing callers compatible. Attempt-ID matching prevents old canonical recovery
-callbacks from dismissing a newer notice. Tracker discovery also captures a
+callbacks from dismissing a newer notice. Detail recovery callbacks require a
+live view of that document and attempt before reaching page state, so a closed
+panel's late refresh cannot replace a newer confirmation. Tracker discovery captures a
 transient per-document revision: a later POST or matching resolution invalidates
 that read before it can restore cleared browser storage or replace a newer frozen
 request. Storage format, backend journal and provider idempotency are unchanged.

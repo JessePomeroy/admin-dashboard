@@ -266,11 +266,17 @@ async function handleSendReminder() {
 	await handleSendEmail(undefined, "payment reminder");
 }
 
+function ownsRecovery(result: { attemptId: string; recovery: DocumentEmailRecovery }) {
+	return alive && invoice?._id === result.recovery.document.id
+		&& emailRecoveryAttempt?.attemptId === result.attemptId;
+}
+
 async function handleRecoveryResolved(result: {
 	attemptId: string;
 	outcome: DocumentEmailResolutionOutcome;
 	recovery: DocumentEmailRecovery;
 }) {
+	if (!ownsRecovery(result)) return;
 	const intent = sendIntent;
 	await onemailresolved(result);
 	if (!alive || sendIntent !== intent || invoice?._id !== result.recovery.document.id) return;
@@ -290,6 +296,7 @@ async function handleRecoveryTerminal(result: {
 	attemptId: string;
 	recovery: DocumentEmailRecovery;
 }) {
+	if (!ownsRecovery(result)) return;
 	await onemailterminal(result);
 }
 
@@ -297,6 +304,7 @@ async function dismissRecovery(result: {
 	attemptId: string;
 	recovery: DocumentEmailRecovery;
 }) {
+	if (!ownsRecovery(result)) return;
 	const intent = sendIntent;
 	await onemailrecoverydismiss(result);
 	if (!alive || sendIntent !== intent || invoice?._id !== result.recovery.document.id) return;

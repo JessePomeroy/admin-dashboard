@@ -495,4 +495,85 @@ describe("created-document email context through the real pages", () => {
 		expect(transport.mutation).toHaveBeenCalledOnce();
 		expect(receipt().textContent).toContain("email request confirmed");
 	});
+
+	it.each(kinds)("%s: a closed older recovery panel cannot replace a newer confirmed send", async (documentKind) => {
+		await render(documentKind);
+		await startSend();
+		await openSaved();
+		await finishSend("uncertain");
+		await vi.waitFor(() => expect(detail().querySelector(".recovery h3")?.textContent).toContain("needs review"));
+		await flushAsyncTurns();
+		const originalAttempt = posted[0].body.attemptId;
+		const originalBody = posted[0].body;
+		const originalEndpoint = endpoint();
+		const exactPath = `/api/admin/document-email-attempts/${originalAttempt}`;
+		const olderTerminal: DocumentEmailRecovery = {
+			...recovery("failed"), attemptId: originalAttempt, canRetry: false, canRecordAcceptance: false,
+		};
+		const originalFetch = transport.fetch.getMockImplementation();
+		if (!originalFetch) throw new Error("Missing strict fictional fetch");
+		const refresh = Promise.withResolvers<DocumentEmailRecovery>();
+		let refreshStarted = false;
+		let refreshBodyConsumed = false;
+
+		function assertRecoveryRead(input: RequestInfo | URL, init: RequestInit | undefined, path: string) {
+			const url = new URL(String(input), "https://fixture.invalid");
+			expect(url.pathname).toBe(path);
+			expect(Object.fromEntries(url.searchParams)).toEqual({ documentType: documentKind, documentId: `${documentKind}-new` });
+			expect(init?.method ?? "GET").toBe("GET");
+			expect(init?.cache).toBe("no-store");
+		}
+
+		try {
+			transport.fetch.mockImplementationOnce(async (input, init) => {
+				assertRecoveryRead(input, init, exactPath);
+				refreshStarted = true;
+				const response = Response.json({ recovery: await refresh.promise });
+				const json = response.json.bind(response);
+				vi.spyOn(response, "json").mockImplementation(async () => {
+					const body: unknown = await json();
+					refreshBodyConsumed = true;
+					return body;
+				});
+				return response;
+			});
+			await click("refresh status", detail());
+			await vi.waitFor(() => expect(refreshStarted).toBe(true));
+			expect(refreshBodyConsumed).toBe(false);
+			await closeDialog();
+			transport.fetch.mockImplementation(async (input, init) => {
+				const url = new URL(String(input), "https://fixture.invalid");
+				if ((!init?.method || init.method === "GET") && (url.pathname === "/api/admin/document-email-attempts/open" || url.pathname === exactPath)) {
+					assertRecoveryRead(input, init, url.pathname);
+					return Response.json({ recovery: url.pathname === exactPath ? olderTerminal : null });
+				}
+				return originalFetch(input, init);
+			});
+			await openSaved();
+			await vi.waitFor(() => expect(detail().querySelector(".recovery h3")?.textContent).toContain("rejected"));
+			await click("dismiss status", detail());
+			expect(posted).toHaveLength(3);
+			expect(posted.every((request) => request.endpoint === originalEndpoint && JSON.stringify(request.body) === JSON.stringify(originalBody))).toBe(true);
+			outcome = "confirmed";
+			await click("send email", detail());
+			await vi.waitFor(() => expect(detail().querySelector(".send-success")).not.toBeNull());
+			expect(posted).toHaveLength(4);
+			expect(posted[3].body.attemptId).not.toBe(originalAttempt);
+			expect(posted[3].endpoint).toBe(originalEndpoint);
+			expect(transport.mutation).toHaveBeenCalledOnce();
+
+			refresh.resolve(olderTerminal);
+			await vi.waitFor(() => expect(refreshBodyConsumed).toBe(true));
+			await flushAsyncTurns();
+			expect(detail().querySelector(".send-success"), "late closed panel must not replace newer confirmation").not.toBeNull();
+			expect(detail().querySelector(".recovery")).toBeNull();
+			expect(detail().querySelector(".status-label")?.textContent).toBe("sent");
+			expect(sessionStorage.getItem(`document-email-request-v1:${documentKind}%3A${documentKind}-new`)).toBeNull();
+			expect(posted).toHaveLength(4);
+			expect(transport.mutation).toHaveBeenCalledOnce();
+		} finally {
+			refresh.resolve(olderTerminal);
+			await flushAsyncTurns();
+		}
+	});
 });
