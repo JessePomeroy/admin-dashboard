@@ -90,7 +90,7 @@
   "devDependencies": {
     "@changesets/cli": "^2.31.1",
     "@oxlint/plugins": "1.86.0",
-    "@sveltejs/kit": "^2.70.3",
+    "@sveltejs/kit": "^2.70.4",
     "@sveltejs/package": "^2.3.0",
     "@sveltejs/vite-plugin-svelte": "^6.0.0",
     "better-auth": "1.6.34",
