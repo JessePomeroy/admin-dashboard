@@ -38,30 +38,95 @@ let pageCursors = $state<(string | null)[]>([null]);
 let pageVersion = $state(0);
 let clientsPage = $state<PaginationResult<ClientWithTags> | null>(null);
 let loadingClients = $state(true);
-let clientsError = $state(false);
+const scanClients = api.crm.scanClientsWithTags;
+type ClientScanPage = PaginationResult<ClientWithTags> & { scannedCount: number };
+let phase = $state<"ready" | "paused" | "cancelled" | "error" | "invalid">("ready");
+let resumeScan = $state<(() => void) | undefined>();
+let pauseScan = $state<(() => void) | undefined>();
 
-// Snapshot pages avoid the installed experimental client's later-page split bug
-// and reactive pagination journals growing the joined read beyond its row budget.
+// One owner per filter/window keeps snapshot reads bounded and discards abandoned work.
 $effect(() => {
 	const args = {
 		siteUrl: config.siteUrl,
 		...(categoryFilter === "all" ? {} : { category: categoryFilter }),
 		...(statusFilter === "all" ? {} : { status: statusFilter }),
-		paginationOpts: { cursor: pageCursors[pageCursors.length - 1], numItems: 50, id: nextPageRequestId++ },
+		...(scanClients && searchQuery ? { search: searchQuery } : {}),
+		...(scanClients && tagFilter !== "all" ? { tagId: tagFilter } : {}),
 	};
+	let cursor = pageCursors[pageCursors.length - 1];
 	pageVersion;
 	let active = true;
-	loadingClients = true;
-	clientsError = false;
+	let running = false;
+	let episode = 0;
+	let requestLimit = 50;
+	let rows: ClientWithTags[] = [];
 	clientsPage = null;
-	void client.query(api.crm.listClientsWithTags, args).then((page) => {
-		if (active) clientsPage = page;
-	}).catch(() => {
-		if (active) clientsError = true;
-	}).finally(() => {
-		if (active) loadingClients = false;
-	});
-	return () => { active = false; };
+	phase = "ready";
+	loadingClients = true;
+
+	async function scan() {
+		if (!active || running) return;
+		running = true;
+		loadingClients = true;
+		phase = "ready";
+		const currentEpisode = ++episode;
+		try {
+			// Pause after at most 200 candidates; continuing is an explicit user action.
+			for (let batch = 0; batch < 4; batch++) {
+				if (!active || episode !== currentEpisode) return;
+				const numItems = Math.min(requestLimit, 50 - rows.length);
+				const result: ClientScanPage = await client.query(scanClients, {
+					...args,
+					paginationOpts: { cursor, numItems, id: nextPageRequestId++ },
+				});
+				if (!active || episode !== currentEpisode) return;
+				// Required splits can omit rows. Keep the committed checkpoint and retry smaller.
+				if (result.pageStatus === "SplitRequired") {
+					requestLimit = Math.max(1, Math.floor(numItems / 2));
+					throw new Error("Incomplete client batch");
+				}
+				if (result.page.length > numItems || (!result.isDone && (!result.continueCursor || result.continueCursor === cursor))) {
+					throw new Error("Client scan did not advance safely");
+				}
+				const matches = new Map(rows.map(row => [row._id, row]));
+				for (const row of result.page) matches.set(row._id, row);
+				rows = [...matches.values()];
+				cursor = result.continueCursor;
+				clientsPage = { ...result, page: rows };
+				if (result.isDone || rows.length === 50) return;
+			}
+			phase = "paused";
+		} catch {
+			if (active && episode === currentEpisode) phase = "error";
+		} finally {
+			running = false;
+			if (active) loadingClients = false;
+		}
+	}
+
+	resumeScan = () => { void scan(); };
+	pauseScan = () => { episode++; phase = "cancelled"; };
+	if (scanClients) {
+		if (searchQuery.length > 200) {
+			phase = "invalid";
+			loadingClients = false;
+		} else {
+			void scan();
+		}
+	} else {
+		// Legacy hosts retain the original page-local contract and never send scan arguments.
+		void client.query(api.crm.listClientsWithTags, {
+			...args,
+			paginationOpts: { cursor, numItems: 50, id: nextPageRequestId++ },
+		}).then(page => {
+			if (active) clientsPage = page;
+		}).catch(() => {
+			if (active) phase = "error";
+		}).finally(() => {
+			if (active) loadingClients = false;
+		});
+	}
+	return () => { active = false; episode++; };
 });
 
 function refreshClients() { pageVersion += 1; }
@@ -71,20 +136,22 @@ const tagsQuery = useQuery(api.tags.listTags, { siteUrl: config.siteUrl });
 let clients = $derived(clientsPage?.page ?? []);
 let stats = $derived(statsQuery.data ?? { total: 0, leads: 0, booked: 0, inProgress: 0, completed: 0, photography: 0, web: 0 });
 let countPrefix = $derived(stats.truncated === true ? "at least " : "");
-let tags = $derived(tagsQuery.data ?? []);
+let tags: ClientTag[] = $derived(tagsQuery.data ?? []);
 let isLoading = $derived(statsQuery.isLoading || tagsQuery.isLoading);
 
 // Modal state
 let showAddModal = $state(false);
 let selectedClient = $state<Client | null>(null);
+let selectionVersion = 0;
 $effect(() => {
 	const clientId = $page.url.searchParams.get("client");
+	const version = ++selectionVersion;
 	if (!clientId || !api.crm.getClient) return;
 	let active = true;
 	void client.query(api.crm.getClient, { clientId }).then((result) => {
 		if (result?.siteUrl !== config.siteUrl) throw new Error("Client is not in this site");
-		if (active) selectedClient = result;
-	}).catch(() => { if (active) addToast("Could not open the linked client."); });
+		if (active && selectionVersion === version) selectedClient = result;
+	}).catch(() => { if (active && selectionVersion === version) addToast("Could not open the linked client."); });
 	return () => { active = false; };
 });
 let showTagManager = $state(false);
@@ -104,7 +171,7 @@ let loadingTags = $derived(clientTagsQuery.isLoading);
 let loadingActivity = $derived(clientActivityQuery.isLoading);
 
 let filteredClients = $derived(
-	clients.filter((c) => {
+	scanClients ? clients : clients.filter((c) => {
 		if (tagFilter !== "all") {
 			if (!c.tags.some((tag) => tag._id === tagFilter))
 				return false;
@@ -122,10 +189,12 @@ let filteredClients = $derived(
 );
 
 function openDetailModal(c: Client) {
+	selectionVersion++;
 	selectedClient = { ...c };
 }
 
 function closeDetailModal() {
+	selectionVersion++;
 	selectedClient = null;
 }
 
@@ -278,6 +347,7 @@ async function deleteTag(tagId: string) {
 		await client.mutation(api.tags.deleteTag, {
 			tagId: toId(tagId),
 		});
+		if (tagFilter === tagId) { tagFilter = "all"; pageCursors = [null]; }
 		refreshClients();
 	} catch (err) {
 		logger.error("Failed to delete tag:", err);
@@ -340,30 +410,66 @@ function formatStatus(status: string) {
 				<option value={s}>{formatStatus(s)}</option>
 			{/each}
 		</select>
-		{#if tags.length > 0}
-			<select class="filter-select" aria-label="Client tag" bind:value={tagFilter}>
+		{#if tags.length > 0 || tagFilter !== "all"}
+			<select class="filter-select" aria-label="Client tag" bind:value={tagFilter} onchange={() => { if (pageCursors.length > 1) pageCursors = [null]; }}>
 				<option value="all">all tags</option>
+				{#if tagFilter !== "all" && !tags.some(tag => tag._id === tagFilter)}
+					<option value={tagFilter}>selected tag (unavailable)</option>
+				{/if}
 				{#each tags as tag (tag._id)}
 					<option value={tag._id}>{tag.name}</option>
 				{/each}
 			</select>
 		{/if}
-		<input class="filter-search" type="text" placeholder="search by name or email..." bind:value={searchQuery} />
+		<input class="filter-search" type="text" aria-label="Search clients" placeholder="search by name or email..." maxlength={scanClients ? 200 : undefined} aria-invalid={phase === "invalid" ? true : undefined} aria-describedby={phase === "invalid" ? "client-search-error" : undefined} bind:value={searchQuery} oninput={() => { if (pageCursors.length > 1) pageCursors = [null]; }} />
+		{#if categoryFilter !== "all" || statusFilter !== "all" || tagFilter !== "all" || searchQuery}
+			<button class="btn-manage-tags" onclick={() => { categoryFilter = "all"; statusFilter = "all"; tagFilter = "all"; searchQuery = ""; pageCursors = [null]; }}>clear filters</button>
+		{/if}
 		<button class="btn-manage-tags" onclick={() => { showTagManager = true; }}>manage tags</button>
 	</div>
 
-	{#if clientsPage && (!clientsPage.isDone || pageCursors.length > 1)}
-		<p class="result-note">page {pageCursors.length}: {clients.length} matching clients. search and tag filters apply to this page.</p>
-	{/if}
-	{#if clientsError}<p class="result-note" role="alert">could not load clients. please try again.</p>{/if}
-	{#if loadingClients}<LoadingState />{:else}<ClientTable clients={filteredClients} onselect={openDetailModal} />{/if}
-	{#if pageCursors.length > 1}
-		<button class="btn-manage-tags" disabled={loadingClients} onclick={() => { pageCursors = pageCursors.slice(0, -1); }}>previous clients</button>
-	{/if}
-	{#if clientsPage && !clientsPage.isDone}
-		<button class="btn-manage-tags" disabled={loadingClients} onclick={() => { if (clientsPage) pageCursors = [...pageCursors, clientsPage.continueCursor]; }}>next clients</button>
-	{/if}
-	<button class="btn-manage-tags" disabled={loadingClients} onclick={refreshClients}>refresh clients</button>
+	<section class="client-results" aria-label="Client results" aria-busy={loadingClients}>
+		{#if phase === "invalid"}
+			<p class="result-note" id="client-search-error" role="alert">use 200 characters or fewer to search clients.</p>
+		{:else if phase === "error"}
+			<p class="result-note" role="alert">could not finish loading clients. {clients.length > 0 ? "your results are kept. " : ""}please retry.</p>
+		{:else if scanClients}
+			<p class="result-note" role="status">
+				{#if phase === "cancelled"}search paused. {clients.length} matching clients so far; more clients to check.
+				{:else if loadingClients}searching clients... {clients.length} matches so far.
+				{:else if phase === "paused"}{clients.length} matching clients so far; more clients to check.
+				{:else if clientsPage?.isDone}search complete. {clients.length} matching clients on this page.
+				{:else}page {pageCursors.length}: {clients.length} matching clients. more clients are available.{/if}
+			</p>
+		{:else if clientsPage && (!clientsPage.isDone || pageCursors.length > 1)}
+			<p class="result-note">page {pageCursors.length}: {clients.length} matching clients. search and tag filters apply to this page.</p>
+		{/if}
+		{#if filteredClients.length > 0 && (scanClients || !loadingClients)}
+			<ClientTable clients={filteredClients} onselect={openDetailModal} />
+		{:else if loadingClients && phase !== "cancelled"}
+			<LoadingState />
+		{:else if phase === "ready" && clientsPage && (!scanClients || clientsPage.isDone)}
+			<ClientTable clients={[]} onselect={openDetailModal} />
+		{/if}
+		<div class="client-controls">
+			{#if scanClients && loadingClients && phase !== "cancelled"}
+				<button class="btn-manage-tags" onclick={() => pauseScan?.()}>pause search</button>
+			{/if}
+			{#if scanClients && (phase === "paused" || phase === "cancelled")}
+				<button class="btn-manage-tags" disabled={loadingClients} onclick={() => resumeScan?.()}>continue search</button>
+			{/if}
+			{#if phase === "error"}
+				<button class="btn-manage-tags" disabled={loadingClients} onclick={() => { if (scanClients) resumeScan?.(); else refreshClients(); }}>{scanClients ? "retry search" : "retry clients"}</button>
+			{/if}
+			{#if pageCursors.length > 1}
+				<button class="btn-manage-tags" disabled={loadingClients} onclick={() => { pageCursors = pageCursors.slice(0, -1); }}>previous clients</button>
+			{/if}
+			{#if clientsPage && !clientsPage.isDone && (!scanClients || clients.length === 50)}
+				<button class="btn-manage-tags" disabled={loadingClients || phase === "error"} onclick={() => { if (clientsPage) pageCursors = [...pageCursors, clientsPage.continueCursor]; }}>next clients</button>
+			{/if}
+			<button class="btn-manage-tags" disabled={loadingClients} onclick={refreshClients}>refresh clients</button>
+		</div>
+	</section>
 </div>
 
 {#if showAddModal}
@@ -396,7 +502,7 @@ function formatStatus(status: string) {
 			};
 			const route = routes[docType];
 			if (route) {
-				selectedClient = null;
+				closeDetailModal();
 				goto(`${route}?open=${docId}`);
 			}
 		}}
@@ -462,6 +568,18 @@ function formatStatus(status: string) {
 		margin-bottom: 24px;
 		font-size: 0.82rem;
 		color: var(--admin-text-muted);
+	}
+
+	.client-controls {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 10px;
+		margin-top: 16px;
+	}
+
+	.client-controls button:disabled {
+		opacity: 0.5;
+		cursor: not-allowed;
 	}
 
 	.result-note {
@@ -531,6 +649,8 @@ function formatStatus(status: string) {
 	}
 
 	@media (max-width: 768px) {
+		.client-controls button { min-height: 44px; font-size: 0.875rem; }
+
 		.crm-page {
 			padding: 20px 16px;
 		}
