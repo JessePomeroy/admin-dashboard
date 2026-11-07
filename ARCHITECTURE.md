@@ -448,3 +448,40 @@ sign-in unlinking and Google revocation. Export JSON and original attachment
 reads require host authorization; no provider credential or storage bearer URL
 enters the package. The current host policy is a controlled 30-day pilot with
 unresolved-send holds, not a general production retention default.
+
+
+## Dashboard attention snapshots
+
+The dashboard places bounded, read-only attention previews before reporting.
+Each source checks the authorized layout session, feature restrictions and its
+required configured references before making an authenticated snapshot read.
+Due follow-ups require Full CRM and inquiry access plus the destination workflow
+references; the first five due rows use the local calendar date, refreshed at
+midnight and on visibility changes. Invoice previews read five records for each
+persisted overdue, partial and sent status through optional businessRecords.list,
+then show at most five in that priority order. Drafts remain part of the existing
+outstanding invoice metric, separate from the attention preview.
+
+Fulfillment errors use the existing site/status-filtered orders.list read, capped
+at 500 matching records. That extra snapshot read is bounded and occurs on the
+eligible page visit or explicit refresh, rather than retaining a reactive 500-row
+journal. The preview shows at most five and discloses the cap; the ten recent
+orders are not evidence that no errors exist. A paginated business-record error
+filter is separate producer work because the current status validator omits it.
+
+Loading, failure/retry, incomplete and confirmed-empty states remain independent.
+Accepted rows from other invoice statuses remain visible when one fails. Required
+native splits cannot establish a complete empty page. Refresh, permission changes
+and teardown invalidate old snapshot ownership. Links use existing encoded ?open=
+record routes only when the destination's independent reader/workflow capability
+is configured; legacy order hosts receive collection links. Collection links do
+not invent status or due-date URL filters. Snapshots require explicit refresh for
+changes between visits; they are previews, not a complete cross-domain work queue.
+
+Reporting queries are also gated by the authorized session and each feature.
+One loading/error source no longer hides ready reports or becomes a successful
+zero balance/count. A partial activity feed never claims a confirmed empty result.
+Latest-200 invoice/quote and bounded CRM warnings appear beside their affected
+metrics. Existing AF05 status and amount arithmetic remains authoritative,
+including draft/sent/overdue/partial outstanding totals and invalid-money states.
+Source delivery does not publish the package, deploy a backend, or adopt the host.
