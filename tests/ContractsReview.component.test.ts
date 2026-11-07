@@ -249,6 +249,31 @@ describe("contract email and acknowledged review", () => {
 		expect(sends()).toHaveLength(0);
 	});
 
+	it("keeps the pending edit session locked until rejection restores editing and cancel", async () => {
+		await render();
+		await open();
+		await edit();
+		const save = Promise.withResolvers<null>();
+		transport.mutation.mockReturnValueOnce(save.promise);
+		await click("save changes");
+		const cancel = button("cancel");
+		cancel.click();
+		await tick();
+		expect(field("#edit-title").value).toBe("Updated contract");
+		const controls = [...dialog().querySelectorAll<HTMLInputElement | HTMLTextAreaElement>("input, textarea")];
+		expect(controls).toHaveLength(6);
+		expect(controls.every(control => control.disabled)).toBe(true);
+		expect(cancel.disabled).toBe(true);
+		expect(transport.mutation).toHaveBeenCalledTimes(1);
+		save.reject(new Error("fictional save rejection"));
+		await vi.waitFor(() => expect(dialog().querySelector('[role="alert"]')).not.toBeNull());
+		expect(controls.every(control => !control.disabled)).toBe(true);
+		expect(cancel.disabled).toBe(false);
+		await fill("#edit-title", "A new revision after rejection");
+		expect(field("#edit-title").value).toBe("A new revision after rejection");
+		expect(sends()).toHaveLength(0);
+	});
+
 	it.each(["other", "same"] as const)("does not replace a %s record selection when an earlier save completes", async (selection) => {
 		await render([contract("sent"), contract("draft", true)]);
 		await open();

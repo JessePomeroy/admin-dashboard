@@ -137,7 +137,8 @@ Undefined update fields retain their previous values, matching the backend's
 omission semantics; no timestamp or revision is fabricated. A rejected save keeps
 the editor and its values available with an inline retry message. Draft sends use
 the selected email template, while existing frozen attempts and recovery retain
-their original envelope.
+their original envelope. Pending saves disable editing and Cancel until they
+settle; Close remains available, and repeated submissions cannot start another save.
 
 ## Gallery boundary
 
