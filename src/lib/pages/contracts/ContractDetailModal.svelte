@@ -73,6 +73,7 @@ let confirmDelete = $state(false);
 let confirmResend = $state(false);
 let lastChangeNote = $state("");
 let saving = $state(false);
+let saveError = $state("");
 let sending = $state(false);
 let sendResult = $state<"success" | "error" | "uncertain" | null>(null);
 let emailRecoveryAttempt = $state<{
@@ -95,6 +96,7 @@ let editTotalPrice = $state(0);
 let editDepositAmount = $state(0);
 
 function startEdit() {
+	saveError = "";
 	editTitle = contract.title;
 	editBody = contract.body;
 	editEventDate = contract.eventDate || "";
@@ -122,8 +124,10 @@ function buildChangeNote(): string {
 }
 
 async function handleSaveEdit() {
-	if (!editTitle || !editBody) return;
+	if (saving || !editTitle || !editBody) return;
+	const snapshot = contract;
 	saving = true;
+	saveError = "";
 	try {
 		lastChangeNote = buildChangeNote();
 		const payload: ContractUpdatePayload = {
@@ -136,11 +140,13 @@ async function handleSaveEdit() {
 			depositAmount:
 				editDepositAmount > 0 ? dollarsToCents(editDepositAmount) : undefined,
 		};
-		await onsave(contract._id, payload);
+		await onsave(snapshot._id, payload);
 		editMode = false;
-		if (contract.status === "sent") {
+		if (snapshot.status === "sent") {
 			confirmResend = true;
 		}
+	} catch {
+		saveError = "could not save changes. try again.";
 	} finally {
 		saving = false;
 	}
@@ -257,6 +263,7 @@ async function handleShareLink() {
 					class="form-input"
 					type="text"
 					bind:value={editTitle}
+					disabled={saving}
 					required
 				/>
 			</div>
@@ -269,6 +276,7 @@ async function handleShareLink() {
 					id="edit-body"
 					class="form-input form-textarea form-textarea-large"
 					bind:value={editBody}
+					disabled={saving}
 					rows="10"
 					required
 				></textarea>
@@ -284,6 +292,7 @@ async function handleShareLink() {
 						class="form-input"
 						type="date"
 						bind:value={editEventDate}
+						disabled={saving}
 					/>
 				</div>
 				<div class="form-group">
@@ -295,6 +304,7 @@ async function handleShareLink() {
 						class="form-input"
 						type="text"
 						bind:value={editEventLocation}
+						disabled={saving}
 					/>
 				</div>
 			</div>
@@ -311,6 +321,7 @@ async function handleShareLink() {
 						min="0"
 						step="0.01"
 						bind:value={editTotalPrice}
+						disabled={saving}
 					/>
 				</div>
 				<div class="form-group">
@@ -324,12 +335,17 @@ async function handleShareLink() {
 						min="0"
 						step="0.01"
 						bind:value={editDepositAmount}
+						disabled={saving}
 					/>
 				</div>
 			</div>
 
+			{#if saveError}
+				<p class="save-error" role="alert">{saveError}</p>
+			{/if}
+
 			<div class="modal-actions">
-				<button type="button" class="btn-cancel" onclick={cancelEdit}
+				<button type="button" class="btn-cancel" onclick={cancelEdit} disabled={saving}
 					>cancel</button
 				>
 				<button
@@ -502,12 +518,12 @@ async function handleShareLink() {
 							confirmDelete = true;
 						}}>delete</button
 					>
-					<button class="btn-cancel" onclick={startEdit}
+					<button class="btn-cancel" onclick={startEdit} disabled={sending || saving}
 						>edit</button
 					>
 					<button
 						class="btn-send"
-						onclick={() => handleSendEmail()}
+						onclick={() => handleSendEmail(selectedTemplateId || undefined)}
 						disabled={sending}
 					>
 						{sending ? "sending..." : "send email"}
@@ -520,7 +536,7 @@ async function handleShareLink() {
 						{saving ? "..." : "mark as sent"}
 					</button>
 				{:else if contract.status === "sent"}
-					<button class="btn-cancel" onclick={startEdit}>edit</button>
+					<button class="btn-cancel" onclick={startEdit} disabled={sending || saving}>edit</button>
 					<button
 						class="btn-save"
 						onclick={() => handleAction("sign")}
@@ -543,6 +559,12 @@ async function handleShareLink() {
 	@import "../../styles/detail-modal.css";
 
 	.required {
+		color: var(--status-rose);
+	}
+
+	.save-error {
+		margin: 0;
+		font-size: 0.82rem;
 		color: var(--status-rose);
 	}
 
