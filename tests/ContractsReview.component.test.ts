@@ -152,6 +152,36 @@ afterEach(async () => {
 });
 
 describe("contract email and acknowledged review", () => {
+	it.each(["draft", "sent"] as const)("does not enter a competing edit while the %s email request is pending", async status => {
+		await render([contract(status)]);
+		await open();
+		const pending = Promise.withResolvers<Response>();
+		transport.fetch.mockImplementation(async (input, init) => {
+			if (init?.method === "POST") return pending.promise;
+			if (String(input).startsWith("/api/admin/document-email-attempts/open?")) return Response.json({ recovery: null });
+			throw new Error(`Unexpected request: ${String(input)}`);
+		});
+		if (status === "sent") {
+			await edit();
+			await click("save changes");
+			await vi.waitFor(() => expect(dialog().querySelector("#edit-title")).toBeNull());
+			await click("yes, resend");
+		} else {
+			await click("send email");
+		}
+		try {
+			expect(button("edit").disabled).toBe(true);
+			button("edit").click();
+			await tick();
+			expect(dialog().querySelector("#edit-title")).toBeNull();
+			expect(sends()).toHaveLength(1);
+			expect(transport.mutation).toHaveBeenCalledTimes(status === "sent" ? 1 : 0);
+		} finally {
+			pending.resolve(Response.json({ success: true }));
+			await vi.waitFor(() => expect(dialog().textContent).toContain("email sent"));
+		}
+	});
+
 	it("sends the selected email template from an existing draft", async () => {
 		await render();
 		await open();

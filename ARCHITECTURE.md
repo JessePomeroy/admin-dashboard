@@ -139,6 +139,8 @@ the editor and its values available with an inline retry message. Draft sends us
 the selected email template, while existing frozen attempts and recovery retain
 their original envelope. Pending saves disable editing and Cancel until they
 settle; Close remains available, and repeated submissions cannot start another save.
+Edit also stays disabled during an in-flight email request or record write so
+competing acknowledgements cannot discard a newer draft.
 
 ## Gallery boundary
 

@@ -518,7 +518,7 @@ async function handleShareLink() {
 							confirmDelete = true;
 						}}>delete</button
 					>
-					<button class="btn-cancel" onclick={startEdit}
+					<button class="btn-cancel" onclick={startEdit} disabled={sending || saving}
 						>edit</button
 					>
 					<button
@@ -536,7 +536,7 @@ async function handleShareLink() {
 						{saving ? "..." : "mark as sent"}
 					</button>
 				{:else if contract.status === "sent"}
-					<button class="btn-cancel" onclick={startEdit}>edit</button>
+					<button class="btn-cancel" onclick={startEdit} disabled={sending || saving}>edit</button>
 					<button
 						class="btn-save"
 						onclick={() => handleAction("sign")}
