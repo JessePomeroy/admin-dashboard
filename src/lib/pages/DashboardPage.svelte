@@ -2,6 +2,7 @@
 import { getAdminCapabilitiesForLayout } from "../capabilities";
 import { onMount } from "svelte";
 import ContentExport from "./dashboard/ContentExport.svelte";
+import DashboardAttention from "./dashboard/DashboardAttention.svelte";
 import { goto } from "$app/navigation";
 import { useQuery } from "convex-svelte";
 import { getAdminConfig } from "../config";
@@ -78,6 +79,7 @@ interface DailyGrossPayment {
 let { data } = $props();
 
 let capabilities = $derived(getAdminCapabilitiesForLayout(data));
+let authorized = $derived(data.adminSession?.status === "authorized");
 
 // Convex subscriptions
 let utcDay = $state(new Date().toISOString().slice(0, 10));
@@ -87,14 +89,22 @@ onMount(() => {
 	document.addEventListener("visibilitychange", refreshDay);
 	return () => { clearInterval(timer); document.removeEventListener("visibilitychange", refreshDay); };
 });
-const orderStatsQuery = useQuery(api.orders.getStatsForDay ?? api.orders.getStats, () => !capabilities.hasFeature("orders") ? "skip" : api.orders.getStatsForDay
+const orderStatsQuery = useQuery(api.orders.getStatsForDay ?? api.orders.getStats, () => !authorized || !capabilities.hasFeature("orders") ? "skip" : api.orders.getStatsForDay
 	? { siteUrl: config.siteUrl, day: utcDay } : { siteUrl: config.siteUrl });
-const crmStatsQuery = useQuery(api.crm.getStats, () => capabilities.hasFeature("crm") ? { siteUrl: config.siteUrl } : "skip");
-const invoicesQuery = useQuery(api.invoices.getDashboardSummary ?? api.invoices.list, () => capabilities.hasFeature("invoicing") ? { siteUrl: config.siteUrl } : "skip");
-const quotesQuery = useQuery(api.quotes.getDashboardSummary ?? api.quotes.list, () => capabilities.hasFeature("quotes") ? { siteUrl: config.siteUrl } : "skip");
+const crmStatsQuery = useQuery(api.crm.getStats, () => authorized && capabilities.hasFeature("crm") ? { siteUrl: config.siteUrl } : "skip");
+const invoicesQuery = useQuery(api.invoices.getDashboardSummary ?? api.invoices.list, () => authorized && capabilities.hasFeature("invoicing") ? { siteUrl: config.siteUrl } : "skip");
+const quotesQuery = useQuery(api.quotes.getDashboardSummary ?? api.quotes.list, () => authorized && capabilities.hasFeature("quotes") ? { siteUrl: config.siteUrl } : "skip");
 
-let isLoading = $derived(
-	orderStatsQuery.isLoading || crmStatsQuery.isLoading || invoicesQuery.isLoading || quotesQuery.isLoading,
+let hasActivitySources = $derived(capabilities.hasFeature("orders") || capabilities.hasFeature("invoicing") || capabilities.hasFeature("quotes"));
+let activityLoading = $derived(
+	(capabilities.hasFeature("orders") && orderStatsQuery.isLoading) ||
+	(capabilities.hasFeature("invoicing") && invoicesQuery.isLoading) ||
+	(capabilities.hasFeature("quotes") && quotesQuery.isLoading),
+);
+let activityUnavailable = $derived(
+	(capabilities.hasFeature("orders") && (orderStatsQuery.error || (!orderStatsQuery.isLoading && orderStatsQuery.data === undefined))) ||
+	(capabilities.hasFeature("invoicing") && (invoicesQuery.error || (!invoicesQuery.isLoading && invoicesQuery.data === undefined))) ||
+	(capabilities.hasFeature("quotes") && (quotesQuery.error || (!quotesQuery.isLoading && quotesQuery.data === undefined))),
 );
 
 // Order stats
@@ -132,6 +142,8 @@ const recentOrders = $derived(orderStatsData?.recentOrders ?? []);
 // CRM stats
 const crmStats = $derived(crmStatsQuery.data ?? { total: 0, leads: 0, booked: 0, inProgress: 0, completed: 0, photography: 0, web: 0 });
 
+const crmCountPrefix = $derived(crmStats.truncated === true ? "at least " : "");
+
 // Invoice stats
 const invoices = $derived((api.invoices.getDashboardSummary ? invoicesQuery.data?.recent ?? [] : invoicesQuery.data ?? []) as Invoice[]);
 const invoiceStats = $derived(api.invoices.getDashboardSummary ? invoicesQuery.data?.counts ?? { draft: 0, sent: 0, paid: 0, overdue: 0, partial: 0 } : {
@@ -143,6 +155,7 @@ const invoiceStats = $derived(api.invoices.getDashboardSummary ? invoicesQuery.d
 });
 const outstandingInvoiceCount = $derived(invoiceStats.draft + invoiceStats.sent + invoiceStats.overdue + (invoiceStats.partial ?? 0));
 const invoicePartialCountUnavailable = $derived(invoiceStats.partial === undefined);
+const invoiceCountPrefix = $derived(invoicePartialCountUnavailable || invoicesQuery.data?.isTruncated === true ? "at least " : "");
 const pendingInvoiceAmount = $derived(
 	api.invoices.getDashboardSummary ? invoicesQuery.data?.pendingAmount ?? null : invoices
 		.filter((i: Invoice) => ["draft", "sent", "overdue", "partial"].includes(i.status))
@@ -169,7 +182,7 @@ const newInquiryCount = $derived(data.newInquiryCount);
 
 // Activity feed: combine recent orders, invoices, quotes
 const activityFeed = $derived(() => {
-	const recentInvoices = invoices.slice(0, 5).map((inv: Invoice) => ({
+	const recentInvoices = (invoicesQuery.isLoading || invoicesQuery.error ? [] : invoices).slice(0, 5).map((inv: Invoice) => ({
 		type: "invoice" as const,
 		id: inv._id,
 		description: `${inv.invoiceNumber} — ${inv.clientName}`,
@@ -177,7 +190,7 @@ const activityFeed = $derived(() => {
 		status: inv.status,
 	}));
 
-	const recentQuoteItems = quotes.slice(0, 5).map((q: Quote) => ({
+	const recentQuoteItems = (quotesQuery.isLoading || quotesQuery.error ? [] : quotes).slice(0, 5).map((q: Quote) => ({
 		type: "quote" as const,
 		id: q._id,
 		description: `${q.quoteNumber} — ${q.clientName}`,
@@ -185,7 +198,7 @@ const activityFeed = $derived(() => {
 		status: q.status,
 	}));
 
-	const recentOrderItems = (recentOrders as RecentOrderUI[]).slice(0, 5).map((o: RecentOrderUI) => ({
+	const recentOrderItems = (orderStatsQuery.isLoading || orderStatsQuery.error ? [] : recentOrders as RecentOrderUI[]).slice(0, 5).map((o: RecentOrderUI) => ({
 		type: "order" as const,
 		id: o._id,
 		description: `${o.orderNumber} — ${o.customerName || o.customerEmail}`,
@@ -248,15 +261,19 @@ let sparklineArea = $derived(() => {
 });
 </script>
 
-{#if isLoading}
-	<LoadingState />
-{:else}
+{#if authorized}
 <div class="dashboard admin-page">
 	<header class="page-header">
 		<h1>dashboard</h1>
 	</header>
+	<div class="attention-panel"><DashboardAttention {data} /></div>
 
 	{#if capabilities.hasFeature("orders")}
+	{#if orderStatsQuery.isLoading}
+		<div class="report-state" role="status">loading order report...<LoadingState /></div>
+	{:else if orderStatsQuery.error || orderStatsQuery.data === undefined}
+		<p class="report-state" role="alert">order report could not load. <a href="/admin/orders">open orders</a> to review current records.</p>
+	{:else}
 	<!-- Currency groups remain separate; the layout only changes their hierarchy. -->
 	<div
 		class="stats-line"
@@ -342,51 +359,83 @@ let sparklineArea = $derived(() => {
 	</div>
 
 	{/if}
+	{/if}
 
 	<!-- Activity summary -->
+	{#if capabilities.hasFeature("crm") || capabilities.hasFeature("invoicing") || capabilities.hasFeature("quotes") || (capabilities.hasFeature("inquiries") && newInquiryCount > 0)}
 	<div class="activity-summary">
 		<h2 class="section-label">activity</h2>
 		{#if capabilities.hasFeature("crm")}
+		{#if crmStatsQuery.isLoading}
+			<p class="report-state" role="status">loading client summary...</p>
+		{:else if crmStatsQuery.error || crmStatsQuery.data === undefined}
+			<p class="report-state" role="alert">client summary could not load. <a href="/admin/crm">open clients</a> to review current records.</p>
+		{:else}
 		<p class="summary-line">
-			<span class="summary-value">{crmStats.total}</span> clients
+			<span class="summary-value">{crmCountPrefix}{crmStats.total}</span> clients
 			<span class="summary-sep">&middot;</span>
-			<span class="summary-value">{crmStats.leads}</span> leads
+			<span class="summary-value">{crmCountPrefix}{crmStats.leads}</span> leads
 			<span class="summary-sep">&middot;</span>
-			<span class="summary-value">{crmStats.booked}</span> booked
+			<span class="summary-value">{crmCountPrefix}{crmStats.booked}</span> booked
 			<span class="summary-sep">&middot;</span>
-			<span class="summary-value">{crmStats.inProgress}</span> in progress
+			<span class="summary-value">{crmCountPrefix}{crmStats.inProgress}</span> in progress
 		</p>
+		{#if crmStats.truncated === true}<p class="stats-completeness-note invoice-count-note">client totals cover a limited set; actual counts may be higher.</p>{/if}
+		{/if}
 		{/if}
 		{#if capabilities.hasFeature("invoicing")}
+		{#if invoicesQuery.isLoading}
+			<p class="report-state" role="status">loading invoice summary...</p>
+		{:else if invoicesQuery.error || invoicesQuery.data === undefined}
+			<p class="report-state" role="alert">invoice summary could not load. <a href="/admin/invoicing">open invoices</a> to review current records.</p>
+		{:else}
 		<p class="summary-line">
-			<span class="summary-value">{invoicePartialCountUnavailable ? "at least " : ""}{outstandingInvoiceCount}</span> invoices outstanding
+			<span class="summary-value">{invoiceCountPrefix}{outstandingInvoiceCount}</span> invoices outstanding
 			<span class="summary-sep">&middot;</span>
-			<span class="summary-value">{pendingInvoiceAmount === null ? "invalid amount" : formatCents(pendingInvoiceAmount)}</span> pending
+			<span class="summary-value">{pendingInvoiceAmount === null ? "invalid amount" : `${invoicesQuery.data?.isTruncated === true ? "at least " : ""}${formatCents(pendingInvoiceAmount)}`}</span> pending
 		</p>
 		{#if invoicePartialCountUnavailable}
 			<p class="stats-completeness-note invoice-count-note">Partially paid invoice counts are unavailable.</p>
 		{/if}
+		{#if invoicesQuery.data?.isTruncated}
+			<p class="stats-completeness-note invoice-count-note">Invoice totals cover the most recent 200 documents; actual totals may be higher.</p>
+		{:else if !api.invoices.getDashboardSummary}
+			<p class="stats-completeness-note invoice-count-note">Invoice totals cover the loaded records.</p>
+		{/if}
+		{/if}
 		{/if}
 		{#if capabilities.hasFeature("quotes")}
+		{#if quotesQuery.isLoading}
+			<p class="report-state" role="status">loading quote summary...</p>
+		{:else if quotesQuery.error || quotesQuery.data === undefined}
+			<p class="report-state" role="alert">quote summary could not load. <a href="/admin/quotes">open quotes</a> to review current records.</p>
+		{:else}
 		<p class="summary-line">
-			<span class="summary-value">{quoteStats.sent}</span> quotes awaiting response
+			<span class="summary-value">{quotesQuery.data?.isTruncated === true ? "at least " : ""}{quoteStats.sent}</span> quotes awaiting response
 		</p>
+		{#if quotesQuery.data?.isTruncated}
+			<p class="stats-completeness-note invoice-count-note">Quote totals cover the most recent 200 documents; actual totals may be higher.</p>
+		{:else if !api.quotes.getDashboardSummary}
+			<p class="stats-completeness-note invoice-count-note">Quote totals cover the loaded records.</p>
 		{/if}
-		{#if newInquiryCount > 0}
+		{/if}
+		{/if}
+		{#if capabilities.hasFeature("inquiries") && newInquiryCount > 0}
 			<p class="summary-line inquiry-highlight">
 				<span class="summary-value">{newInquiryCount}</span> new {newInquiryCount === 1 ? 'inquiry' : 'inquiries'}
 			</p>
 		{/if}
 	</div>
+	{/if}
 
 	<!-- Recent activity feed -->
-	{#if invoicesQuery.data?.isTruncated || quotesQuery.data?.isTruncated}
-		<p class="stats-completeness-note">Invoice and quote summaries cover the most recent 200 documents.</p>
-	{/if}
+	{#if hasActivitySources}
 	<div class="feed-section">
 		<h2 class="section-label">recent activity</h2>
+		{#if activityUnavailable}<p class="report-state" role="alert">some recent activity could not load; available records are shown below.</p>{/if}
 		{#if activityFeed().length === 0}
-			<p class="empty-state">no recent activity</p>
+			{#if activityLoading}<p class="report-state" role="status">loading recent activity...</p>
+			{:else if !activityUnavailable}<p class="empty-state">no recent activity</p>{/if}
 		{:else}
 			<ul class="activity-feed">
 				{#each activityFeed() as item}
@@ -411,8 +460,9 @@ let sparklineArea = $derived(() => {
 			</ul>
 		{/if}
 	</div>
+	{/if}
 
-	{#if capabilities.hasFeature("orders")}
+	{#if capabilities.hasFeature("orders") && !orderStatsQuery.isLoading && !orderStatsQuery.error && orderStatsQuery.data !== undefined}
 	<!-- Recent orders -->
 	<div class="orders-section">
 		<h2 class="section-label">recent orders</h2>
@@ -482,6 +532,17 @@ let sparklineArea = $derived(() => {
 		grid-column: 1 / -1;
 		min-width: 0;
 	}
+	.attention-panel { margin-bottom: 40px; }
+
+	.report-state {
+		color: var(--admin-text-muted);
+		font-size: 0.875rem;
+		line-height: 1.6;
+		margin: 0 0 24px;
+	}
+
+	.report-state a { color: var(--admin-accent); text-underline-offset: 3px; }
+
 	.page-header {
 		margin-bottom: 40px;
 	}
@@ -831,7 +892,18 @@ let sparklineArea = $derived(() => {
 			grid-template-columns: minmax(0, 1fr);
 		}
 
-		.page-header {
+		.attention-panel { margin-bottom: 40px; }
+
+	.report-state {
+		color: var(--admin-text-muted);
+		font-size: 0.875rem;
+		line-height: 1.6;
+		margin: 0 0 24px;
+	}
+
+	.report-state a { color: var(--admin-accent); text-underline-offset: 3px; }
+
+	.page-header {
 			margin-bottom: 28px;
 		}
 

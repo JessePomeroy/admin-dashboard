@@ -19,6 +19,7 @@ const invoice: Invoice = {
 };
 let listedInvoices = [invoice];
 
+vi.mock("../src/lib/adminClient", () => ({ useAdminClient: () => ({ query: vi.fn().mockResolvedValue([]) }) }));
 vi.mock("convex-svelte", () => ({
 	useQuery: (ref: string) => ({ data: ref === "invoices" ? listedInvoices : undefined, isLoading: false }),
 }));

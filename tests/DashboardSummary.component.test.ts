@@ -11,6 +11,7 @@ vi.mock("../src/lib/config", () => ({ getAdminConfig: () => ({
 		quotes: { list: "quote-list", ...(queries.modern ? { getDashboardSummary: "quote-summary" } : {}) },
 	},
 }) }));
+vi.mock("../src/lib/adminClient", () => ({ useAdminClient: () => ({ query: vi.fn().mockResolvedValue([]) }) }));
 vi.mock("convex-svelte", () => ({ useQuery: (name: string) => {
 	queries.calls.push(name);
 	const recent = queries.empty ? [] : [{ _id: "invoice-1", _creationTime: 1, invoiceNumber: "INV-1", clientName: "Fixture", status: "sent" }];
