@@ -293,6 +293,35 @@ filters apply to the current page. One-shot reads avoid experimental pagination
 split bugs and reactive journal growth beyond the joined-read budget. Hosts upgrading to
 Admin 6 must supply this reference after deploying the matching CRM API.
 
+Hosts may explicitly bind optional `crm.scanClientsWithTags` after deploying the
+additive filtered scan query. The standard API factory deliberately does not bind
+it, even when the generated API contains the export. Older hosts keep page-local
+search/tag filtering and its notice; every changed filter resets later-page cursors.
+The optional reader applies literal case-insensitive name/email and tag membership
+before returning sparse candidate batches. Significant whitespace is preserved;
+search is limited to 200 UTF-16 units. A selected tag can be absent from a client's
+bounded displayed-tag projection, so scan results are not filtered a second time.
+
+One visible snapshot keeps at most 50 matches. Each automatic episode makes at
+most four sequential requests of at most the remaining window capacity (no more
+than 200 candidates), then offers explicit continuation. Searching, paused,
+cancelled, failed and exhausted states are distinct; an empty intermediate batch
+is never global no-match evidence. Retry retains accepted matches and the committed
+cursor. Required native splits are rejected before accepting rows/cursor and retry
+with a smaller request; recommended split metadata is retained with the accepted
+batch. Nonadvancing unfinished cursors fail visibly rather than looping. Pausing
+discards an in-flight result without promising network abort; continuation becomes
+available when that request settles. Filter changes and teardown invalidate the
+owner, and only user-driven next/previous changes visible-window history.
+
+Refresh and successful local mutations reread the current window. Deep-linked
+client reads remain independent of list filters and cannot replace a later manual
+selection or reopen its closed dialog. Acknowledged deletion clears an active tag;
+an unavailable selected tag remains clearable without treating the capped picker
+as proof of deletion. Package publication, backend deployment and explicit host
+configuration/adoption remain separate rollout gates; this source addition does
+not opt a host in or prove live backend availability.
+
 Selected-client tags and activity use reactive queries with previous data
 disabled. The page does not keep a second tag cache or imperatively reload reads
 after mutations. Mutation completions retain their initiating client identity.

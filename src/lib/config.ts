@@ -160,6 +160,8 @@ export interface AdminAPI {
 		listClients: FnRef;
 		/** Paginated CRM rows including each client's tags. */
 		listClientsWithTags: FnRef;
+		/** Opt into progressive filtered scans only after deploying the matching backend. */
+		scanClientsWithTags?: FnRef;
 		getStats: FnRef;
 	};
 	emailLog: {
