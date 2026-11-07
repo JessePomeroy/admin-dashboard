@@ -22,6 +22,8 @@ import InvoiceDetailModal from "@jessepomeroy/admin/pages/invoicing/InvoiceDetai
 import ContractDetailModal from "@jessepomeroy/admin/pages/contracts/ContractDetailModal";
 import DocumentSendReceipts from "@jessepomeroy/admin/pages/DocumentSendReceipts";
 import RecordPagination from "@jessepomeroy/admin/pages/RecordPagination";
+import QuoteDetailModal from "@jessepomeroy/admin/pages/quotes/QuoteDetailModal";
+import DocumentEmailRecoveryPanel from "@jessepomeroy/admin/pages/DocumentEmailRecoveryPanel";
 import type { ComponentProps } from "svelte";
 // @ts-expect-error Server configuration is available only from @jessepomeroy/admin/server.
 import { getServerConfig as invalidRootServerImport } from "@jessepomeroy/admin";
@@ -161,3 +163,7 @@ const contractEmailAction: ComponentProps<typeof ContractDetailModal>["externalE
 const documentReceipts: ComponentProps<typeof DocumentSendReceipts>["items"] = [receipt];
 const requestRecordPage: ComponentProps<typeof RecordPagination>["onrequest"] = () => {};
 void [contractEmailAction, documentReceipts, requestRecordPage];
+
+const optionalQuoteRecoveryChange: ComponentProps<typeof QuoteDetailModal>["onemailrecoverychange"] = undefined;
+const optionalPanelRecoveryChange: ComponentProps<typeof DocumentEmailRecoveryPanel>["onrecoverychange"] = undefined;
+void [optionalQuoteRecoveryChange, optionalPanelRecoveryChange];

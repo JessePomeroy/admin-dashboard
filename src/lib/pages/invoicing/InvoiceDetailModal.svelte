@@ -272,6 +272,10 @@ function ownsRecovery(result: { attemptId: string; recovery: DocumentEmailRecove
 		&& result.recovery.attemptId === result.attemptId;
 }
 
+function handleRecoveryChange(result: { attemptId: string; recovery: DocumentEmailRecovery }) {
+	if (ownsRecovery(result)) onemailrecovery(result.recovery.document.id, result);
+}
+
 async function handleRecoveryResolved(result: {
 	attemptId: string;
 	outcome: DocumentEmailResolutionOutcome;
@@ -667,6 +671,7 @@ async function handleDelete() {
 							recovery={emailRecoveryAttempt.recovery}
 							sending={emailBusy}
 							onretry={() => handleSendEmail(selectedTemplateId || undefined)}
+							onrecoverychange={handleRecoveryChange}
 							onresolved={handleRecoveryResolved}
 							onterminal={handleRecoveryTerminal}
 							ondismiss={dismissRecovery}

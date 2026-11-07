@@ -51,6 +51,7 @@ interface Props {
 		attemptId: string;
 		recovery?: DocumentEmailRecovery;
 	} | null;
+	onemailrecoverychange?: (result: { attemptId: string; recovery: DocumentEmailRecovery }) => void | Promise<void>;
 	onemailresolved: (result: {
 		attemptId: string;
 		outcome: DocumentEmailResolutionOutcome;
@@ -85,6 +86,7 @@ let {
 	sendResult,
 	emailRecoveryAttempt,
 	onemailresolved,
+	onemailrecoverychange,
 	onemailterminal,
 	onemailrecoverydismiss,
 	onsendresultclear,
@@ -100,6 +102,10 @@ function ownsRecovery(result: { attemptId: string; recovery: DocumentEmailRecove
 	return alive && quote?._id === result.recovery.document.id
 		&& emailRecoveryAttempt?.attemptId === result.attemptId
 		&& result.recovery.attemptId === result.attemptId;
+}
+
+function handleRecoveryChange(result: { attemptId: string; recovery: DocumentEmailRecovery }) {
+	if (ownsRecovery(result)) return onemailrecoverychange?.(result);
 }
 
 function handleRecoveryResolved(result: Parameters<Props["onemailresolved"]>[0]) {
@@ -373,6 +379,7 @@ async function handleConvert() {
 							recovery={emailRecoveryAttempt.recovery}
 							{sending}
 							onretry={() => handleSendEmail(selectedTemplateId || undefined)}
+							onrecoverychange={handleRecoveryChange}
 							onresolved={handleRecoveryResolved}
 							onterminal={handleRecoveryTerminal}
 							ondismiss={dismissRecovery}

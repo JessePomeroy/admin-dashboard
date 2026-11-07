@@ -365,6 +365,10 @@ function dismissQuoteReceiptForAttempt(result: { attemptId: string; recovery: Do
 	sendReceipts.dismiss(receipt.id);
 }
 
+function handleQuoteEmailRecoveryChange(result: { attemptId: string; recovery: DocumentEmailRecovery }) {
+	if (alive) emailRecovery.remember(result.recovery.document.id, result);
+}
+
 function handleQuoteEmailResolved(result: {
 	attemptId: string;
 	outcome: DocumentEmailResolutionOutcome;
@@ -779,6 +783,7 @@ async function exportRecords() {
 		onclose={closeDetailModal}
 		onsaveedit={saveQuoteEdit}
 		onsendquoteemail={sendQuoteEmail}
+		onemailrecoverychange={handleQuoteEmailRecoveryChange}
 		onemailresolved={handleQuoteEmailResolved}
 		onemailterminal={handleQuoteEmailTerminal}
 		onemailrecoverydismiss={dismissQuoteEmailRecovery}

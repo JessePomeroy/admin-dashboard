@@ -567,6 +567,55 @@ describe("created-document email context through the real pages", () => {
 		expect(transport.mutation).toHaveBeenCalledOnce();
 	});
 
+	it.each(kinds)("%s: older page discovery retains a later explicit panel refresh", async (documentKind) => {
+		await render(documentKind);
+		await startSend();
+		await finishSend("uncertain");
+		const attemptId = posted[0].body.attemptId;
+		const frozenBody = JSON.stringify(posted[0].body);
+		recoveryRead = Promise.withResolvers<DocumentEmailRecovery | null>();
+		await openSaved();
+		await vi.waitFor(() => expect(heldRecoveryFetches).toBe(2));
+		expect(consumedRecoveryBodies).toBe(0);
+		const oldClaim: DocumentEmailRecovery = { ...recovery("claimed"), updatedAt: 1_700_000_000_200 };
+		const fresh: DocumentEmailRecovery = { ...recovery("uncertain"), updatedAt: 1_700_000_000_300 };
+		let refreshBodyConsumed = false;
+		transport.fetch.mockImplementationOnce(async (input, init) => {
+			const url = new URL(String(input), "https://fixture.invalid");
+			expect(url.pathname).toBe(`/api/admin/document-email-attempts/${attemptId}`);
+			expect(Object.fromEntries(url.searchParams)).toEqual({ documentType: documentKind, documentId: `${documentKind}-new` });
+			expect(init?.method ?? "GET").toBe("GET");
+			expect(init?.cache).toBe("no-store");
+			const response = Response.json({ recovery: fresh });
+			const json = response.json.bind(response);
+			vi.spyOn(response, "json").mockImplementation(async () => {
+				const body: unknown = await json();
+				refreshBodyConsumed = true;
+				return body;
+			});
+			return response;
+		});
+		await click("refresh status", detail());
+		await vi.waitFor(() => expect(refreshBodyConsumed).toBe(true));
+		await flushAsyncTurns();
+		expect(detail().querySelector<HTMLInputElement>(`#provider-message-${attemptId}`)).not.toBeNull();
+		expect(detail().querySelector(".recovery")?.textContent).toContain("record acceptance");
+		expect(consumedRecoveryBodies).toBe(0);
+
+		recoveryRead.resolve(oldClaim);
+		await vi.waitFor(() => expect(consumedRecoveryBodies).toBe(2));
+		await flushAsyncTurns();
+		expect(detail().querySelector<HTMLInputElement>(`#provider-message-${attemptId}`), "old page discovery must not replace the newer explicit refresh").not.toBeNull();
+		expect(detail().querySelector(".recovery")?.textContent).toContain("record acceptance");
+		expect(detail().querySelector(".recovery")?.textContent).toContain("Frozen message for original recipient");
+		expect(detail().querySelector(".recovery")?.textContent).toContain("frozen@example.test");
+		expect(detail().querySelector(".recovery code")?.textContent).toBe(attemptId);
+		expect(posted).toHaveLength(3);
+		expect(posted.every((request) => JSON.stringify(request.body) === frozenBody)).toBe(true);
+		expect(transport.fetch.mock.calls.filter(([, init]) => init?.method === "POST")).toHaveLength(3);
+		expect(transport.mutation).toHaveBeenCalledOnce();
+	});
+
 	it("contract: a terminal create-send receipt permits a later manual send of that saved record", async () => {
 		await render("contract");
 		await startSend();

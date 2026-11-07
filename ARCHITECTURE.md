@@ -158,6 +158,9 @@ live view of that document and attempt before reaching page state, so a closed
 panel's late refresh or explicit resolution cannot replace a newer confirmation.
 Recovery discovery captures a per-document presentation revision; later recovery
 updates, clears, dismissals or discovery starts invalidate that view's old read.
+An explicit nonterminal panel refresh reports its parsed projection through an
+optional callback into that same page owner; terminal refreshes keep the existing
+terminal callback. Detail forwarding checks the live document and attempt first.
 Both older full and metadata-only projections retain newer canonical facts and
 server-computed action flags. Tracker discovery separately captures its request
 revision: a later POST, ambiguous completion or matching resolution invalidates
