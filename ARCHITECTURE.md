@@ -389,6 +389,13 @@ initiating inquiry ID. Successful mutations refresh the current page because
 HTTP acknowledgement can precede the query connection's update. Hosts without the reference retain their supplied
 `data.inquiries` behavior.
 
+At phone widths, the same inquiry rows reflow into a vertical layout so sender,
+subject, status, follow-up and View do not require horizontal panning. Desktop
+retains its table. Explicit table roles preserve relationships when CSS changes
+the row display; full detail text wraps without hiding the sheet's Close control.
+The shared modal header lets long titles shrink and wrap while retaining a fixed
+Close button. Pagination, filter and selected-record ownership are unchanged.
+
 ## Connected client workflows
 
 After deploying the matching shared backend, hosts may bind

@@ -4,7 +4,15 @@ import { queryClient } from "../../controlledQueryClient";
 import "../../../src/lib/theme.css";
 
 const queryName = "inquiries:listPaginated";
-let rows = Array.from({ length: 206 }, (_, index) => ({
+const longTokens = new URLSearchParams(location.search).get("case") === "long-tokens";
+const longInquiry = {
+	_id: "inquiry-long-tokens", _creationTime: Date.UTC(2026, 9, 1),
+	siteUrl: "example.test", name: "Long-token inquiry", status: "new",
+	email: `${"s".repeat(64)}@${"d".repeat(63)}.example.test`,
+	subject: "EveningPortraitSessionAtTheOldStationWithFamilyAndFriendsAndAdditionalLocations".repeat(3).slice(0, 180),
+	message: `Please review this fictional location reference.\nhttps://location.example.test/${"0123456789abcdef".repeat(20)}\nI would like to discuss available dates.`,
+};
+let rows = longTokens ? [longInquiry] : Array.from({ length: 206 }, (_, index) => ({
 	_id: `inquiry-${index}`, _creationTime: Date.UTC(2026, 9, 1) - index * 3600000,
 	siteUrl: "example.test", name: index === 205 ? "Oldest unanswered" : `Synthetic inquiry ${index + 1}`,
 	email: "person@example.test", subject: "Photography inquiry", message: "Synthetic inquiry for browser verification.",
@@ -33,4 +41,5 @@ Object.assign(window, { inquiryFixture: {
 	respond,
 	fail() { queries.emit(queries.latest(queryName), new Error("Synthetic connection failure")); },
 	get request() { return queries.latest(queryName).args; },
+	get expectedLongInquiry() { return longInquiry; },
 } });
