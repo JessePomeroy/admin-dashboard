@@ -1,5 +1,27 @@
 # @jessepomeroy/admin
 
+## 6.16.0
+
+### Minor Changes
+
+- ecdd4f9: Show capability-aware, bounded dashboard previews for due follow-ups, unpaid invoices
+  and fulfillment errors before reporting. Keep loading, failure and incomplete reads
+  separate from confirmed empty results, and retain the existing financial semantics.
+- 54c31c4: Send explicit, allowlisted client field clears and keep cleared values empty when reopening the editor. Deploy the compatible CRM `updateClient.clearFields` backend contract before adopting this package in a host.
+- 2422468: Add an explicitly configured CRM client scan capability with bounded search progress,
+  continuation, cancellation and retry. Preserve legacy bindings and page-local reads,
+  reset filter cursors, and keep late linked-client reads from replacing manual selection.
+
+### Patch Changes
+
+- a08ff0a: Update the development SvelteKit dependency to 2.70.4 for the compatible security
+  backports. The public SvelteKit 2 peer range is unchanged; hosts must update their
+  own framework dependency.
+- ceb44af: Reject non-object JSON mutation bodies with HTTP 400 after authentication, preserving valid HTTP mutation transport and backend authorization.
+- 439cda7: Keep Enter and Space on an order's inline status control from opening order details, retain row activation, and give each status control an order-specific accessible name.
+- 01407fb: Include overdue and partially paid invoices in the dashboard outstanding count, matching the pending-balance status population in compact summaries and the supported list fallback. Older summaries without partial counts show an explicit lower bound and incomplete-count note; invalid amounts and the existing 200-document warning remain visible.
+- df0e809: Retain client edit drafts through pending and failed saves, and leave edit mode only after the server acknowledges success.
+
 ## 6.15.1
 
 ### Patch Changes
