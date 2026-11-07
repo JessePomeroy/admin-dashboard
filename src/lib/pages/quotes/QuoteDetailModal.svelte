@@ -321,6 +321,9 @@ async function handleConvert() {
 				</div>
 			{/if}
 
+			{#if sending && sendResult === null}
+				<p class="email-progress" role="status">email request in progress…</p>
+			{/if}
 			<div class="modal-actions detail-actions">
 				{#if confirmResend}
 					<span class="confirm-text">resend updated quote to client?</span>
@@ -335,7 +338,8 @@ async function handleConvert() {
 					</button>
 					<button class="btn-cancel" onclick={() => { confirmDelete = false; }}>no</button>
 				{:else if sendResult === "success"}
-					<span class="send-success" role="status">email sent</span>
+					<span class="send-success" role="status">email request confirmed</span>
+					<button class="btn-cancel" onclick={onsendresultclear}>dismiss</button>
 				{:else if sendResult === "error"}
 					<span class="send-error" role="alert">failed to send</span>
 					<button class="btn-cancel" onclick={onsendresultclear}>dismiss</button>
@@ -356,7 +360,7 @@ async function handleConvert() {
 					{/if}
 				{:else if quote.status === "draft"}
 					<button class="btn-danger-outline" onclick={() => { confirmDelete = true; }}>delete</button>
-					<button class="btn-cancel" onclick={startEdit}>edit</button>
+					<button class="btn-cancel" onclick={startEdit} disabled={saving || sending}>edit</button>
 					<button class="btn-send" onclick={() => handleSendEmail(selectedTemplateId || undefined)} disabled={sending}>
 						{sending ? "sending..." : "send email"}
 					</button>
@@ -364,7 +368,7 @@ async function handleConvert() {
 						{saving ? "..." : "mark as sent"}
 					</button>
 				{:else if quote.status === "sent"}
-					<button class="btn-cancel" onclick={startEdit}>edit</button>
+					<button class="btn-cancel" onclick={startEdit} disabled={saving || sending}>edit</button>
 					<button class="btn-danger-outline" onclick={() => onquoteaction("decline")} disabled={saving}>decline</button>
 					<button class="btn-save" onclick={() => onquoteaction("accept")} disabled={saving}>
 						{saving ? "..." : "mark accepted"}
@@ -436,6 +440,12 @@ async function handleConvert() {
 
 <style>
 	@import "../../styles/detail-modal.css";
+
+	.email-progress {
+		margin: 0;
+		color: var(--admin-text-muted);
+		font-size: 0.82rem;
+	}
 
 	.detail-category {
 		color: var(--admin-text-muted);

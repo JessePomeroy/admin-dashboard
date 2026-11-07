@@ -538,6 +538,39 @@ describe("document email request boundary", () => {
 		});
 	});
 
+	it("does not restore an old discovered attempt after a newer send confirms", async () => {
+		vi.stubGlobal("sessionStorage", memoryStorage());
+		vi.spyOn(globalThis.crypto, "randomUUID").mockReturnValue(ATTEMPT_ONE);
+		const discovery = Promise.withResolvers<Response>();
+		const tracker = createDocumentEmailRequestTracker();
+		const hydration = tracker.hydrate("invoice:invoice-1", "/send",
+			{ type: "invoice", id: "invoice-1" }, { fetchImpl: vi.fn(() => discovery.promise) });
+		await tracker.post("invoice:invoice-1", "/send", { templateId: "new-message" }, {
+			fetchImpl: vi.fn(async () => Response.json({ success: true, attemptId: ATTEMPT_ONE })),
+		});
+		discovery.resolve(Response.json({ recovery: recovery(ATTEMPT_TWO) }));
+		await expect(hydration).resolves.toBeNull();
+		expect(tracker.pending("invoice:invoice-1", "/send")).toBeUndefined();
+		expect(sessionStorage.length).toBe(0);
+	});
+
+	it("does not replace a newer ambiguous attempt with an older open discovery", async () => {
+		vi.stubGlobal("sessionStorage", memoryStorage());
+		vi.spyOn(globalThis.crypto, "randomUUID").mockReturnValue(ATTEMPT_ONE);
+		const discovery = Promise.withResolvers<Response>();
+		const tracker = createDocumentEmailRequestTracker();
+		const hydration = tracker.hydrate("invoice:invoice-1", "/send",
+			{ type: "invoice", id: "invoice-1" }, { fetchImpl: vi.fn(() => discovery.promise) });
+		await expect(tracker.post("invoice:invoice-1", "/send", { templateId: "new-frozen-message" }, {
+			fetchImpl: vi.fn(async () => { throw new Error("connection reset"); }),
+		})).rejects.toMatchObject({ kind: "uncertain", attemptId: ATTEMPT_ONE });
+		discovery.resolve(Response.json({ recovery: recovery(ATTEMPT_TWO) }));
+		await expect(hydration).resolves.toEqual({ attemptId: ATTEMPT_ONE });
+		expect(tracker.pending("invoice:invoice-1", "/send")).toEqual({
+			attemptId: ATTEMPT_ONE, endpoint: "/send", body: { templateId: "new-frozen-message" },
+		});
+	});
+
 	it.each(["sent", "failed", "resolved_not_sent"] as const)(
 		"clears the exact session tracker after hydrating terminal %s",
 		async (status) => {

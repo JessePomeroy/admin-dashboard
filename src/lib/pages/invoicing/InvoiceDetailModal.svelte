@@ -1,4 +1,6 @@
 <script lang="ts">
+import { onDestroy } from "svelte";
+import type { DocumentSendReceipt } from "../documentSendReceiptState.svelte";
 import RecurringInvoiceSchedule from "./RecurringInvoiceSchedule.svelte";
 import { getAdminConfig } from "../../config";
 import AdminModal from "../../components/AdminModal.svelte";
@@ -47,6 +49,7 @@ interface Props {
 		recovery: DocumentEmailRecovery;
 	}) => void | Promise<void>;
 	emailRecoveryAttempt?: HydratedDocumentEmailAttempt | null;
+	externalEmailAction?: DocumentSendReceipt | null;
 	onemailrecovery: (
 		invoiceId: string,
 		attempt: HydratedDocumentEmailAttempt,
@@ -73,6 +76,7 @@ let {
 	onshare,
 	onemailresolved,
 	emailRecoveryAttempt: suppliedEmailRecoveryAttempt = null,
+	externalEmailAction = null,
 	onemailrecovery,
 	onemailterminal,
 	onemailrecoverydismiss,
@@ -94,9 +98,36 @@ let emailRecoveryAttempt = $state<{
 } | null>(null);
 let selectedTemplateId = $state<string>("");
 
+const emailBusy = $derived(sending || externalEmailAction?.stage === "pending");
+let alive = true;
+let sendIntent = 0;
+let observedDocument = "";
+let observedExternal = "";
+onDestroy(() => { alive = false; sendIntent += 1; });
+
 $effect(() => {
-	emailRecoveryAttempt = suppliedEmailRecoveryAttempt;
-	if (suppliedEmailRecoveryAttempt) sendResult = "uncertain";
+	const id = invoice._id;
+	const action = externalEmailAction;
+	const supplied = suppliedEmailRecoveryAttempt;
+	if (observedDocument !== id) {
+		observedDocument = id;
+		sendIntent += 1;
+		observedExternal = "";
+		sendResult = null;
+		sending = false;
+	}
+	emailRecoveryAttempt = supplied;
+	const transition = action ? `${action.generation}:${action.stage}` : "";
+	if (transition && transition !== observedExternal) {
+		observedExternal = transition;
+		sendResult = action?.stage === "confirmed" ? "success"
+			: action?.stage === "failed" ? "error"
+			: action?.stage === "uncertain" ? "uncertain" : null;
+	}
+	if (supplied && action?.stage !== "pending"
+		&& (action?.stage === "uncertain" || supplied.attemptId !== action?.attemptId)) {
+		sendResult = "uncertain";
+	}
 });
 
 // Edit form state
@@ -112,6 +143,7 @@ let overpaidCents = $derived(detailAmounts ? Math.max(0, paidCents - detailAmoun
 let invoiceDraft = $derived(prepareInvoiceDraft(editItems, editTaxPercent));
 
 function startEdit() {
+	if (emailBusy || saving) return;
 	editItems = invoice.items.map((it: InvoiceItem) => ({
 		...it,
 		unitPrice: it.unitPrice / 100,
@@ -179,20 +211,25 @@ function dismissResend() {
 }
 
 async function handleSendEmail(templateId?: string, changeNote?: string) {
+	if (emailBusy || saving) return;
+	const invoiceId = invoice._id;
+	const intent = ++sendIntent;
 	sending = true;
 	sendResult = null;
 	try {
-		await onsend(invoice._id, templateId, changeNote);
+		await onsend(invoiceId, templateId, changeNote);
+		if (!alive || sendIntent !== intent || invoice?._id !== invoiceId) return;
 		sendResult = "success";
 		emailRecoveryAttempt = null;
 	} catch (err) {
-		emailRecoveryAttempt =
-			presentableDocumentEmailRecoveryFromError(err) ?? null;
-		sendResult = emailRecoveryAttempt ? "uncertain" : "error";
-		if (emailRecoveryAttempt) onemailrecovery(invoice._id, emailRecoveryAttempt);
-		addToast(documentEmailFailureMessage(err));
+		const attempt = presentableDocumentEmailRecoveryFromError(err) ?? null;
+		if (!alive || sendIntent !== intent || invoice?._id !== invoiceId) return;
+		if (attempt) onemailrecovery(invoiceId, attempt);
+		emailRecoveryAttempt = attempt;
+		sendResult = attempt ? "uncertain" : "error";
+		if (!externalEmailAction) addToast(documentEmailFailureMessage(err));
 	} finally {
-		sending = false;
+		if (alive && sendIntent === intent && invoice?._id === invoiceId) sending = false;
 	}
 }
 
@@ -207,6 +244,7 @@ async function handleAction(action: string) {
 			try {
 				await onsend(invoiceId, undefined, "payment overdue");
 			} catch (err) {
+				if (!alive || invoice?._id !== invoiceId) return;
 				emailRecoveryAttempt =
 					presentableDocumentEmailRecoveryFromError(err) ?? null;
 				if (emailRecoveryAttempt) {
@@ -218,29 +256,14 @@ async function handleAction(action: string) {
 		}
 	} catch (err) {
 		logger.error("Failed to update invoice:", err);
-		addToast("Failed to save changes.");
+		if (alive && invoice?._id === invoiceId) addToast("Failed to save changes.");
 	} finally {
 		saving = false;
 	}
 }
 
 async function handleSendReminder() {
-	sending = true;
-	sendResult = null;
-	try {
-		await onsend(invoice._id, undefined, "payment reminder");
-		sendResult = "success";
-		emailRecoveryAttempt = null;
-		addToast("Reminder sent.", "success");
-	} catch (err) {
-		emailRecoveryAttempt =
-			presentableDocumentEmailRecoveryFromError(err) ?? null;
-		sendResult = emailRecoveryAttempt ? "uncertain" : "error";
-		if (emailRecoveryAttempt) onemailrecovery(invoice._id, emailRecoveryAttempt);
-		addToast(documentEmailFailureMessage(err));
-	} finally {
-		sending = false;
-	}
+	await handleSendEmail(undefined, "payment reminder");
 }
 
 async function handleRecoveryResolved(result: {
@@ -248,7 +271,9 @@ async function handleRecoveryResolved(result: {
 	outcome: DocumentEmailResolutionOutcome;
 	recovery: DocumentEmailRecovery;
 }) {
+	const intent = sendIntent;
 	await onemailresolved(result);
+	if (!alive || sendIntent !== intent || invoice?._id !== result.recovery.document.id) return;
 	emailRecoveryAttempt = {
 		attemptId: result.attemptId,
 		recovery: result.recovery,
@@ -272,7 +297,9 @@ async function dismissRecovery(result: {
 	attemptId: string;
 	recovery: DocumentEmailRecovery;
 }) {
+	const intent = sendIntent;
 	await onemailrecoverydismiss(result);
+	if (!alive || sendIntent !== intent || invoice?._id !== result.recovery.document.id) return;
 	emailRecoveryAttempt = null;
 	sendResult = result.recovery.status === "sent" ? "success" : null;
 }
@@ -572,7 +599,7 @@ async function handleDelete() {
 			{#if invoice.status === "draft" && templates.length > 0}
 				<div class="email-template-picker">
 					<label class="detail-label" for="email-template">email template</label>
-					<select id="email-template" class="template-select" bind:value={selectedTemplateId}>
+					<select id="email-template" class="template-select" bind:value={selectedTemplateId} disabled={emailBusy}>
 						<option value="">default email</option>
 						{#each templates as t}
 							<option value={t._id}>{t.name}</option>
@@ -582,12 +609,14 @@ async function handleDelete() {
 			{/if}
 
 			<div class="modal-actions detail-actions">
-				{#if confirmResend}
+				{#if externalEmailAction?.stage === "pending"}
+					<span role="status">email request in progress.</span>
+				{:else if confirmResend}
 					<span class="confirm-text">resend updated invoice to client?</span>
 					<button
 						class="btn-save"
 						onclick={handleResend}
-						disabled={sending}
+						disabled={emailBusy}
 					>
 						{sending ? "sending..." : "yes, resend"}
 					</button>
@@ -611,7 +640,8 @@ async function handleDelete() {
 						}}>no</button
 					>
 				{:else if sendResult === "success"}
-					<span class="send-success" role="status">email sent</span>
+					<span class="send-success" role="status">email request confirmed</span>
+					<button class="btn-cancel" onclick={() => { sendResult = null; }}>dismiss</button>
 				{:else if sendResult === "error"}
 					<span class="send-error" role="alert">failed to send</span>
 					<button
@@ -626,7 +656,7 @@ async function handleDelete() {
 							attemptId={emailRecoveryAttempt.attemptId}
 							document={{ type: "invoice", id: invoice._id }}
 							recovery={emailRecoveryAttempt.recovery}
-							{sending}
+							sending={emailBusy}
 							onretry={() => handleSendEmail(selectedTemplateId || undefined)}
 							onresolved={handleRecoveryResolved}
 							onterminal={handleRecoveryTerminal}
@@ -642,13 +672,13 @@ async function handleDelete() {
 							confirmDelete = true;
 						}}>delete</button
 					>
-					<button class="btn-cancel" onclick={startEdit}
+					<button class="btn-cancel" onclick={startEdit} disabled={emailBusy || saving}
 						>edit</button
 					>
 					<button
 						class="btn-send"
 						onclick={() => handleSendEmail()}
-						disabled={sending}
+						disabled={emailBusy}
 					>
 						{sending ? "sending..." : "send email"}
 					</button>
@@ -660,7 +690,7 @@ async function handleDelete() {
 						{saving ? "..." : "mark as sent"}
 					</button>
 				{:else if invoice.status === "sent"}
-					<button class="btn-cancel" onclick={startEdit}>edit</button>
+					<button class="btn-cancel" onclick={startEdit} disabled={emailBusy || saving}>edit</button>
 					<button
 						class="btn-action"
 						onclick={() => handleAction("overdue")}
@@ -674,11 +704,11 @@ async function handleDelete() {
 						{saving ? "..." : "mark as paid"}
 					</button>
 				{:else if invoice.status === "overdue"}
-					<button class="btn-cancel" onclick={startEdit}>edit</button>
+					<button class="btn-cancel" onclick={startEdit} disabled={emailBusy || saving}>edit</button>
 					<button
 						class="btn-action"
 						onclick={handleSendReminder}
-						disabled={sending}
+						disabled={emailBusy}
 					>
 						{sending ? "sending..." : "send reminder"}
 					</button>
@@ -694,7 +724,7 @@ async function handleDelete() {
 						>paid on {formatTimestamp(invoice.paidAt ?? 0)}</span
 					>
 				{:else if invoice.status === "partial"}
-					<button class="btn-cancel" onclick={startEdit}>edit</button>
+					<button class="btn-cancel" onclick={startEdit} disabled={emailBusy || saving}>edit</button>
 					<span class="paid-note"
 						>partially paid — use the share link to collect the remaining balance</span
 					>

@@ -142,6 +142,24 @@ settle; Close remains available, and repeated submissions cannot start another s
 Edit also stays disabled during an in-flight email request or record write so
 competing acknowledgements cannot discard a newer draft.
 
+Save & Send keeps mounted-page receipts keyed by the acknowledged document ID.
+The receipt helper owns feedback generations and explicit-read intent only;
+creation, sending, selection and canonical recovery remain page/tracker owned.
+Open uses the area's existing enriched exact getter and checks the returned ID
+and site before selection, retaining filters and cursor history. Row, Close,
+create-form, filter, page-request and unmount intents invalidate older reads.
+A read started during a pending send carries that operation's generation into
+the detail, including when the send settles before the read returns. Later
+opens use current stored document/recovery state rather than replaying historical
+terminal feedback. Optional detail status props and pagination `onrequest` keep
+existing callers compatible. Attempt-ID matching prevents old canonical recovery
+callbacks from dismissing a newer notice. Tracker discovery also captures a
+transient per-document revision: a later POST or matching resolution invalidates
+that read before it can restore cleared browser storage or replace a newer frozen
+request. Storage format, backend journal and provider idempotency are unchanged.
+Receipts disappear on unmount/refresh; they do not persist a second send queue.
+Confirmation describes the email request, not recipient mailbox delivery.
+
 ## Gallery boundary
 
 The gallery UI/controller owns selection and upload orchestration. Server

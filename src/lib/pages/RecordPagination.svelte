@@ -2,6 +2,7 @@
 let {
 	records,
 	onexport,
+	onrequest,
 }: {
 	records: {
 		enabled: boolean;
@@ -19,6 +20,8 @@ let {
 		refresh: () => void;
 	};
 	onexport?: () => void;
+	/** Runs before an operator changes or refreshes the visible record page. */
+	onrequest?: () => void;
 } = $props();
 </script>
 {#if records.enabled}
@@ -27,10 +30,10 @@ let {
 		{#if records.deepLinkError}<p role="alert">{records.deepLinkError}</p>{/if}
 		{#if records.exportError}<p role="alert">{records.exportError}</p>{/if}
 		<nav aria-label="Record pages">
-			<button disabled={!records.hasPrevious || records.isLoading} onclick={records.previous}>previous</button>
+			<button disabled={!records.hasPrevious || records.isLoading} onclick={() => { onrequest?.(); records.previous(); }}>previous</button>
 			<span aria-live="polite">{records.isLoading ? "loading records…" : `page ${records.pageNumber}`}</span>
-			<button disabled={!records.hasNext || records.isLoading} onclick={records.next}>next</button>
-			<button disabled={records.isLoading} onclick={records.refresh}>refresh</button>
+			<button disabled={!records.hasNext || records.isLoading} onclick={() => { onrequest?.(); records.next(); }}>next</button>
+			<button disabled={records.isLoading} onclick={() => { onrequest?.(); records.refresh(); }}>refresh</button>
 			{#if onexport}<button disabled={records.exporting} onclick={onexport}>{records.exporting ? `exporting ${records.exportCount}…` : "export matching records"}</button>{/if}
 		</nav>
 	</div>
