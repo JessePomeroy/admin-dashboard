@@ -1,9 +1,0 @@
----
-"@jessepomeroy/admin": patch
----
-
-Use the selected email template when sending a draft contract. Keep acknowledged
-edits visible in the same contract review without clearing omitted fields, and
-show a retryable save error while preserving unsaved edits after rejection.
-Lock editing and Cancel during a pending save so its result cannot discard newer work.
-Keep Edit disabled during an in-flight email request or record write.

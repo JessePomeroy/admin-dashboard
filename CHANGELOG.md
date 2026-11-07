@@ -1,5 +1,37 @@
 # @jessepomeroy/admin
 
+## 6.16.0
+
+### Minor Changes
+
+- ecdd4f9: Show capability-aware, bounded dashboard previews for due follow-ups, unpaid invoices
+  and fulfillment errors before reporting. Keep loading, failure and incomplete reads
+  separate from confirmed empty results, and retain the existing financial semantics.
+- 54c31c4: Send explicit, allowlisted client field clears and keep cleared values empty when reopening the editor. Deploy the compatible CRM `updateClient.clearFields` backend contract before adopting this package in a host.
+- 2422468: Add an explicitly configured CRM client scan capability with bounded search progress,
+  continuation, cancellation and retry. Preserve legacy bindings and page-local reads,
+  reset filter cursors, and keep late linked-client reads from replacing manual selection.
+- 5f42a2b: Keep a saved-document email receipt and exact-open action after creating and sending invoices, quotes, or contracts. Preserve newer selections and drafts, synchronize an opened pending request, and ignore stale recovery discovery after a newer send or resolution.
+
+### Patch Changes
+
+- a08ff0a: Update the development SvelteKit dependency to 2.70.4 for the compatible security
+  backports. The public SvelteKit 2 peer range is unchanged; hosts must update their
+  own framework dependency.
+- 6335b34: Use the selected email template when sending a draft contract. Keep acknowledged
+  edits visible in the same contract review without clearing omitted fields, and
+  show a retryable save error while preserving unsaved edits after rejection.
+  Lock editing and Cancel during a pending save so its result cannot discard newer work.
+  Keep Edit disabled during an in-flight email request or record write.
+- ceb44af: Reject non-object JSON mutation bodies with HTTP 400 after authentication, preserving valid HTTP mutation transport and backend authorization.
+- 0f9d1ab: Keep inquiry sender, subject, status, follow-up and View visible on phones without
+  horizontal panning. Wrap long inquiry text and modal titles while keeping Close
+  reachable. Restore the displayed Gmail conversation after a dirty switch is
+  cancelled, preserving the original recipient and unsaved draft.
+- 439cda7: Keep Enter and Space on an order's inline status control from opening order details, retain row activation, and give each status control an order-specific accessible name.
+- 01407fb: Include overdue and partially paid invoices in the dashboard outstanding count, matching the pending-balance status population in compact summaries and the supported list fallback. Older summaries without partial counts show an explicit lower bound and incomplete-count note; invalid amounts and the existing 200-document warning remain visible.
+- df0e809: Retain client edit drafts through pending and failed saves, and leave edit mode only after the server acknowledges success.
+
 ## 6.15.1
 
 ### Patch Changes
