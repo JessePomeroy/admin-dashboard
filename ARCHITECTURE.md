@@ -132,6 +132,13 @@ attempt as `resolved_not_sent` without sending. Client cleanup compares the
 terminal attempt ID before removing memory or session storage, and no ambiguous
 state is automatically cleared or replaced.
 
+Contract review reflects acknowledged edits only in the initiating open selection.
+Undefined update fields retain their previous values, matching the backend's
+omission semantics; no timestamp or revision is fabricated. A rejected save keeps
+the editor and its values available with an inline retry message. Draft sends use
+the selected email template, while existing frozen attempts and recovery retain
+their original envelope.
+
 ## Gallery boundary
 
 The gallery UI/controller owns selection and upload orchestration. Server

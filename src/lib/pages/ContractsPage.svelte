@@ -177,6 +177,7 @@ async function handleSaveContract(
 	id: string,
 	payload: ContractUpdatePayload,
 ) {
+	const snapshot = selectedContract;
 	await client.mutation(api.contracts.update, {
 		contractId: toId(id),
 		siteUrl: config.siteUrl,
@@ -188,6 +189,18 @@ async function handleSaveContract(
 		depositAmount: payload.depositAmount,
 		status: payload.status,
 	});
+	if (!snapshot || snapshot._id !== id || selectedContract !== snapshot) return;
+	// The update omits undefined fields; mirror only acknowledged, provided values.
+	selectedContract = {
+		...snapshot,
+		title: payload.title ?? snapshot.title,
+		body: payload.body ?? snapshot.body,
+		eventDate: payload.eventDate ?? snapshot.eventDate,
+		eventLocation: payload.eventLocation ?? snapshot.eventLocation,
+		totalPrice: payload.totalPrice ?? snapshot.totalPrice,
+		depositAmount: payload.depositAmount ?? snapshot.depositAmount,
+		status: payload.status ?? snapshot.status,
+	};
 }
 
 async function handleContractAction(id: string, action: string) {

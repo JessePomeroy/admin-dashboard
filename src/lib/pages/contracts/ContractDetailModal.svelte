@@ -73,6 +73,7 @@ let confirmDelete = $state(false);
 let confirmResend = $state(false);
 let lastChangeNote = $state("");
 let saving = $state(false);
+let saveError = $state("");
 let sending = $state(false);
 let sendResult = $state<"success" | "error" | "uncertain" | null>(null);
 let emailRecoveryAttempt = $state<{
@@ -95,6 +96,7 @@ let editTotalPrice = $state(0);
 let editDepositAmount = $state(0);
 
 function startEdit() {
+	saveError = "";
 	editTitle = contract.title;
 	editBody = contract.body;
 	editEventDate = contract.eventDate || "";
@@ -123,7 +125,9 @@ function buildChangeNote(): string {
 
 async function handleSaveEdit() {
 	if (!editTitle || !editBody) return;
+	const snapshot = contract;
 	saving = true;
+	saveError = "";
 	try {
 		lastChangeNote = buildChangeNote();
 		const payload: ContractUpdatePayload = {
@@ -136,11 +140,13 @@ async function handleSaveEdit() {
 			depositAmount:
 				editDepositAmount > 0 ? dollarsToCents(editDepositAmount) : undefined,
 		};
-		await onsave(contract._id, payload);
+		await onsave(snapshot._id, payload);
 		editMode = false;
-		if (contract.status === "sent") {
+		if (snapshot.status === "sent") {
 			confirmResend = true;
 		}
+	} catch {
+		saveError = "could not save changes. try again.";
 	} finally {
 		saving = false;
 	}
@@ -328,6 +334,10 @@ async function handleShareLink() {
 				</div>
 			</div>
 
+			{#if saveError}
+				<p class="save-error" role="alert">{saveError}</p>
+			{/if}
+
 			<div class="modal-actions">
 				<button type="button" class="btn-cancel" onclick={cancelEdit}
 					>cancel</button
@@ -507,7 +517,7 @@ async function handleShareLink() {
 					>
 					<button
 						class="btn-send"
-						onclick={() => handleSendEmail()}
+						onclick={() => handleSendEmail(selectedTemplateId || undefined)}
 						disabled={sending}
 					>
 						{sending ? "sending..." : "send email"}
@@ -543,6 +553,12 @@ async function handleShareLink() {
 	@import "../../styles/detail-modal.css";
 
 	.required {
+		color: var(--status-rose);
+	}
+
+	.save-error {
+		margin: 0;
+		font-size: 0.82rem;
 		color: var(--status-rose);
 	}
 
