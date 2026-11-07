@@ -104,6 +104,8 @@ function replyViaEmail(email: string, subject: string) {
 <style>
 	.modal-body {
 		padding: 0 28px 28px;
+		min-width: 0;
+		overflow-wrap: anywhere;
 	}
 
 	.modal-meta {
@@ -126,12 +128,18 @@ function replyViaEmail(email: string, subject: string) {
 		align-items: center;
 		gap: 12px;
 		font-size: 0.85rem;
+		min-width: 0;
+	}
+
+	.detail-row > span:not(.detail-label) {
+		min-width: 0;
 	}
 
 	.detail-label {
 		color: var(--admin-text-subtle);
 		min-width: 50px;
 		font-size: 0.78rem;
+		flex-shrink: 0;
 	}
 
 	.message-body {
