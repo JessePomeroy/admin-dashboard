@@ -1,5 +1,11 @@
 # @jessepomeroy/admin
 
+## 6.16.2
+
+### Patch Changes
+
+- 03cb64c: Remove the dashboard's large needs-attention queue section so reports are visible immediately. Existing notifications, navigation indicators, and collection pages remain available.
+
 ## 6.16.1
 
 ### Patch Changes
