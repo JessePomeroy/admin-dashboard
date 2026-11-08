@@ -6,11 +6,22 @@ import DashboardAttention from "../src/lib/pages/dashboard/DashboardAttention.sv
 
 const fixture = vi.hoisted(() => ({
 	query: vi.fn(), clientSetup: vi.fn(),
+	subscriptions: [] as Array<{ ref: string; args: QueryArgs; value: (value: unknown) => void; error: (error: Error) => void; active: boolean }>,
 	missingInquiryRef: "", records: true, recordGet: true, orderList: true,
 }));
 vi.mock("../src/lib/adminClient", () => ({ useAdminClient: () => {
 	fixture.clientSetup();
-	return { query: fixture.query };
+	return {
+		query: fixture.query,
+		onUpdate(ref: string, args: QueryArgs, value: (value: unknown) => void, error: (error: Error) => void) {
+			const subscription = { ref, args, value, error, active: true };
+			fixture.subscriptions.push(subscription);
+			void fixture.query(ref, args).then((result: unknown) => {
+				if (subscription.active) value(result);
+			}).catch((reason: Error) => { if (subscription.active) error(reason); });
+			return () => { subscription.active = false; };
+		},
+	};
 } }));
 vi.mock("../src/lib/config", () => ({ getAdminConfig: () => ({
 	siteUrl: "fixture.example", api: {
@@ -71,6 +82,7 @@ function calls(name: string) {
 }
 
 beforeEach(() => {
+	fixture.subscriptions.length = 0;
 	fixture.missingInquiryRef = ""; fixture.records = true; fixture.recordGet = true; fixture.orderList = true;
 	fixture.clientSetup.mockClear();
 	results = new Map([["follow-ups", page()], ["overdue", page()], ["partial", page()], ["sent", page()], ["fulfillment", []]]);
@@ -149,6 +161,38 @@ describe("dashboard attention access and contracts", () => {
 });
 
 describe("dashboard attention completeness and recovery", () => {
+	it("recovers every failed preview on a later valid result without clicking Retry", async () => {
+		for (const name of results.keys()) results.set(name, new Error("Unauthenticated"));
+		await render();
+		for (const name of ["follow-ups", "invoices", "fulfillment"])
+			expect(group(name).textContent).toContain("some records could not load");
+		for (const subscription of fixture.subscriptions) {
+			const name = key(subscription.ref, subscription.args);
+			subscription.value(name === "follow-ups" ? page([inquiry("recovered")])
+				: name === "fulfillment" ? [order("recovered")] : page([invoice(name)]));
+		}
+		await settle();
+		expect(group("follow-ups").textContent).toContain("Older follow-up");
+		expect(group("invoices").textContent).toContain("INV-overdue");
+		expect(group("fulfillment").textContent).toContain("ORDER-recovered");
+		expect(document.body.textContent).not.toContain("some records could not load");
+		expect(fixture.query).toHaveBeenCalledTimes(5);
+		expect(fixture.subscriptions).toHaveLength(5);
+		expect(fixture.subscriptions.every((subscription) => !subscription.active)).toBe(true);
+	});
+	it("freezes successful snapshots and ignores stale callbacks after refresh", async () => {
+		results.set("follow-ups", new Error("offline")); await render();
+		const old = fixture.subscriptions.find((subscription) => key(subscription.ref, subscription.args) === "follow-ups");
+		results.set("follow-ups", page([inquiry("fresh", "Fresh snapshot")]));
+		button("retry due follow-ups").click(); await settle();
+		old?.value(page([inquiry("stale", "Stale callback")])); old?.error(new Error("late"));
+		const current = fixture.subscriptions.at(-1);
+		current?.value(page([inquiry("later", "Later update")])); current?.error(new Error("later"));
+		await settle();
+		expect(group("follow-ups").textContent).toContain("Fresh snapshot");
+		expect(group("follow-ups").textContent).not.toMatch(/Stale callback|Later update|could not load/);
+		expect(fixture.subscriptions.every((subscription) => !subscription.active)).toBe(true);
+	});
 	it("allows other queues and successful invoice statuses to finish while a source loads", async () => {
 		const pending = deferred(); results.set("follow-ups", pending.promise); results.set("sent", pending.promise);
 		results.set("overdue", page([invoice()])); results.set("fulfillment", [order()]);
