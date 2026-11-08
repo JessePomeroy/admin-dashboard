@@ -1,5 +1,11 @@
 # @jessepomeroy/admin
 
+## 6.16.1
+
+### Patch Changes
+
+- df93372: Allow failed dashboard attention previews to recover when a later query result succeeds, including after sign-in. Preserve genuine error messages, bounded snapshots, explicit refresh and subscription cleanup.
+
 ## 6.16.0
 
 ### Minor Changes
