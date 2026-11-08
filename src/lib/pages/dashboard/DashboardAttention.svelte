@@ -4,6 +4,7 @@ import { useAdminClient } from "../../adminClient";
 import type { TenantAdminLayoutData } from "../../adminSession";
 import { getAdminCapabilitiesForLayout } from "../../capabilities";
 import { getAdminConfig } from "../../config";
+import { readDashboardSnapshot } from "./readDashboardSnapshot";
 
 let { data }: { data: Pick<TenantAdminLayoutData, "adminSession"> } = $props();
 const config = getAdminConfig();
@@ -104,53 +105,45 @@ $effect(() => {
 	const date = day;
 	followUpRefresh;
 	if (!enabled) return;
-	let active = true;
 	followUps = loading();
-	void client.query(api.inquiries.listPaginated, {
+	return readDashboardSnapshot(client, api.inquiries.listPaginated, {
 		siteUrl: config.siteUrl, followUpBefore: date,
 		paginationOpts: { numItems: 5, cursor: null },
-	}).then((result: unknown) => {
-		if (active) followUps = paginatedSnapshot(result, "follow-up");
-	}).catch(() => { if (active) followUps = failed(); });
-	return () => { active = false; };
+	}, (result: unknown) => {
+		followUps = paginatedSnapshot(result, "follow-up");
+	}, () => { followUps = failed(); });
 });
 
 $effect(() => {
 	const enabled = invoicesEnabled && recordsAvailable;
 	invoiceRefresh;
 	if (!enabled) return;
-	let active = true;
 	overdue = loading(); partial = loading(); sent = loading();
-	for (const status of ["overdue", "partial", "sent"] as const) {
+	const stops = (["overdue", "partial", "sent"] as const).map((status) => {
 		const accept = (snapshot: Snapshot) => {
-			if (!active) return;
 			if (status === "overdue") overdue = snapshot;
 			else if (status === "partial") partial = snapshot;
 			else sent = snapshot;
 		};
-		void client.query(api.businessRecords?.list, {
+		return readDashboardSnapshot(client, api.businessRecords?.list, {
 			siteUrl: config.siteUrl, kind: "invoices", status,
 			paginationOpts: { numItems: 5, cursor: null },
-		}).then((result: unknown) => accept(paginatedSnapshot(result, "invoice")))
-			.catch(() => accept(failed()));
-	}
-	return () => { active = false; };
+		}, (result: unknown) => accept(paginatedSnapshot(result, "invoice")), () => accept(failed()));
+	});
+	return () => { for (const stop of stops) stop(); };
 });
 
 $effect(() => {
 	const enabled = fulfillmentEnabled && Boolean(api.orders?.list);
 	fulfillmentRefresh;
 	if (!enabled) return;
-	let active = true;
 	fulfillment = loading();
-	void client.query(api.orders.list, { siteUrl: config.siteUrl, status: "fulfillment_error" })
-		.then((result: unknown) => {
-			if (!active) return;
+	return readDashboardSnapshot(client, api.orders.list, { siteUrl: config.siteUrl, status: "fulfillment_error" },
+		(result: unknown) => {
 			if (!Array.isArray(result)) throw new Error("Invalid order preview");
 			const rows = result.map((row: unknown) => previewRow(row, "order")).sort((a, b) => b.createdAt - a.createdAt);
 			fulfillment = { phase: "ready", rows: rows.slice(0, 5), count: rows.length, complete: rows.length < 500, split: false };
-		}).catch(() => { if (active) fulfillment = failed(); });
-	return () => { active = false; };
+		}, () => { fulfillment = failed(); });
 });
 
 const invoiceSources = $derived([overdue, partial, sent]);
