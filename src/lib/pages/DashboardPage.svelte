@@ -2,7 +2,6 @@
 import { getAdminCapabilitiesForLayout } from "../capabilities";
 import { onMount } from "svelte";
 import ContentExport from "./dashboard/ContentExport.svelte";
-import DashboardAttention from "./dashboard/DashboardAttention.svelte";
 import { goto } from "$app/navigation";
 import { useQuery } from "convex-svelte";
 import { getAdminConfig } from "../config";
@@ -266,7 +265,6 @@ let sparklineArea = $derived(() => {
 	<header class="page-header">
 		<h1>dashboard</h1>
 	</header>
-	<div class="attention-panel"><DashboardAttention {data} /></div>
 
 	{#if capabilities.hasFeature("orders")}
 	{#if orderStatsQuery.isLoading}
@@ -532,7 +530,6 @@ let sparklineArea = $derived(() => {
 		grid-column: 1 / -1;
 		min-width: 0;
 	}
-	.attention-panel { margin-bottom: 40px; }
 
 	.report-state {
 		color: var(--admin-text-muted);
@@ -891,8 +888,6 @@ let sparklineArea = $derived(() => {
 			padding: 20px 16px;
 			grid-template-columns: minmax(0, 1fr);
 		}
-
-		.attention-panel { margin-bottom: 40px; }
 
 	.report-state {
 		color: var(--admin-text-muted);

@@ -49,9 +49,11 @@ describe("Dashboard independent report states", () => {
 	it("suppresses order-empty wording while its source is unavailable", async () => {
 		mocks.errors.add("orders");const text=await render();expect(text).toContain("order report could not load");expect(text).not.toContain("no orders yet");
 	});
-	it("puts attention before financial reporting", async () => {
-		await render();const attention=document.querySelector(".attention-panel");const reporting=document.querySelector(".stats-line");
-		expect(attention).not.toBeNull();expect(reporting).not.toBeNull();expect(attention!.compareDocumentPosition(reporting!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+	it("keeps reporting visible without a second attention queue section", async () => {
+		const text=await render();
+		expect(text).not.toContain("needs attention");
+		expect(document.querySelector(".stats-line")).not.toBeNull();
+		expect(text).toContain("4 invoices outstanding");
 	});
 	it("labels bounded CRM and financial counts beside their summaries", async () => {
 		mocks.truncated=true;const text=await render();expect(text).toContain("at least 500 clients");expect(text).toContain("at least 4 invoices outstanding");expect(text).toContain("at least 2 quotes awaiting response");
