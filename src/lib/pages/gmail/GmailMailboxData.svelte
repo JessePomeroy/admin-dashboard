@@ -19,7 +19,7 @@ async function remove() {
 {#if api.dataStatus && api.deleteMailboxData}
 <details class="data-controls">
  <summary>Gmail data and offboarding</summary>
- <p>The approved pilot keeps each imported conversation for at most 30 days from creation, including later replies, drafts, cached attachments, and resolved send records. Unresolved sends hold cleanup. Production retention is not approved.</p>
+ <p>Imported conversations are kept for at most 30 days from creation in this app; later replies do not restart that period. This includes messages, drafts, cached attachments and resolved send records. Unresolved sends hold cleanup until reconciliation.</p>
  <p>Open each conversation to export its text and send evidence and download private attachment originals. Other administrators' private drafts are excluded from your export.</p>
  <p>To remove all imported Gmail data for this site, stop synchronization using Google connection first. Then type the mailbox address below. Deletion includes every administrator's Gmail drafts and cached files. Original Gmail mail, ordinary Google sign-in, and Google's access grant are managed separately. The mailbox/site ownership registry remains to prevent reassignment.</p>
  <button type="button" onclick={() => window.dispatchEvent(new CustomEvent("admin:google-connections"))}>manage Google connection</button>
