@@ -2,7 +2,7 @@
 
 Shared Svelte 5 admin UI and SvelteKit server adapters for the Angels Rest
 photographer platform. The package is consumed by the Angels Rest hub and
-client spoke sites such as Reflecting Pool.
+client spoke sites such as queenworm.
 
 ## Package boundaries
 
@@ -50,7 +50,7 @@ Put a `read:packages` token in user or hosted npm configuration before install.
 7. Mount only the server handlers required by enabled features.
 
 Reference integrations live in `../angelsrest/src/routes/admin/` and
-`../reflecting-pool/src/routes/admin/`.
+`../queenworm/src/routes/admin/`.
 
 ## Client configuration
 
@@ -58,12 +58,25 @@ Reference integrations live in `../angelsrest/src/routes/admin/` and
 import { createStandardAdminAPI, type AdminConfig } from "@jessepomeroy/admin";
 import { api } from "$convex/api";
 
+const standardAdminApi = createStandardAdminAPI(api);
+
+// Convex proxies expose every namespace, so presence does not prove a backend
+// is deployed. Leave optional features off until the backend and host adapters
+// are verified for this site.
+const adminApi = {
+  ...standardAdminApi,
+  businessRecords: undefined,
+  inquiryNotifications: undefined,
+  recurringInvoices: undefined,
+  deliveryUploads: undefined,
+};
+
 export const adminConfig: AdminConfig = {
   siteUrl: "client.example",
   siteName: "client studio",
   fromEmail: "Client Studio <noreply@client.example>",
   isCreator: false,
-  api: createStandardAdminAPI(api),
+  api: adminApi,
   authClient,
   mutationTransport: "http",
   mutationEndpoint: "/api/admin/mutation",

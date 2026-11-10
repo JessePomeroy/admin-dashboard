@@ -225,7 +225,7 @@ larger gallery files must use the direct browser-to-Worker PUT path.
 This boundary spans three repositories and must be verified end-to-end:
 
 - `admin-dashboard`
-- host app (`angelsrest` or `reflecting-pool`)
+- host app (`angelsrest` or `queenworm`)
 - `gallery-worker`
 
 ## Catalog private-editor upload boundary

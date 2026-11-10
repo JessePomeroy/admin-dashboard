@@ -64,7 +64,7 @@ or server handlers.
 - Preserve streaming request/response bodies; do not buffer large images in the
   package.
 - Changes to handler contracts require coordinated verification in Angels Rest,
-  Reflecting Pool, and `gallery-worker`.
+  queenworm, and `gallery-worker`.
 
 ## Checks
 
