@@ -13,7 +13,7 @@ import FilterBar from "../components/FilterBar.svelte";
 import LoadingState from "../components/LoadingState.svelte";
 import PageHeader from "../components/PageHeader.svelte";
 import type { Client, Invoice, InvoiceStatus } from "../types";
-import { isTerminalDocumentEmailRecovery, type DocumentEmailRecovery } from "../documentEmailRecovery";
+import type { DocumentEmailRecovery } from "../documentEmailRecovery";
 import { addToast } from "../toast";
 import { logger } from "../logger";
 import { copyPortalLink, toId } from "../utils";
@@ -353,7 +353,7 @@ function handleEmailResolved(result: {
 	recovery: DocumentEmailRecovery;
 }) {
 	if (!pageAlive || !emailRecovery.resolve(result)) return;
-	dismissMatchingReceipt(result);
+	sendReceipts.reconcileAttempt(result, "invoice");
 	if (!selectedInvoice) return;
 	if (result.recovery.status === "sent") {
 		selectedInvoice = {
@@ -370,23 +370,11 @@ function handleEmailRecovery(
 	if (pageAlive) emailRecovery.remember(invoiceId, attempt);
 }
 
-function dismissMatchingReceipt(result: { attemptId: string; recovery: DocumentEmailRecovery }) {
-	if (!isTerminalDocumentEmailRecovery(result.recovery) || result.recovery.document.type !== "invoice"
-		|| result.recovery.attemptId !== result.attemptId) return;
-	const receipt = sendReceipts.items.find(item => item.id === result.recovery.document.id && item.attemptId === result.attemptId);
-	if (!receipt) return;
-	if (receipt.stage === "pending") {
-		sendReceipts.settle(receipt, result.recovery.status === "sent" ? "confirmed" : "failed",
-			result.recovery.status === "sent" ? "email request confirmed" : "email request recorded as not accepted");
-	}
-	sendReceipts.dismiss(receipt.id);
-}
-
 function dismissEmailRecovery(result: {
 	attemptId: string;
 	recovery: DocumentEmailRecovery;
 }) {
-	if (pageAlive && emailRecovery.dismiss(result)) dismissMatchingReceipt(result);
+	if (pageAlive && emailRecovery.dismiss(result)) sendReceipts.reconcileAttempt(result, "invoice");
 }
 
 async function handleDelete() {

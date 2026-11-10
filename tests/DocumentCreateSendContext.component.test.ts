@@ -296,6 +296,36 @@ afterEach(async () => {
 });
 
 describe("created-document email context through the real pages", () => {
+	for (const status of ["sent", "failed", "resolved_not_sent"] as const) {
+		it.each(kinds)(`%s: reconciles the saved receipt after an exact terminal ${status} refresh`, async documentKind => {
+			await render(documentKind);
+			await startSend();
+			await openSaved();
+			await finishSend("uncertain");
+			await flushAsyncTurns();
+			const attemptId = posted[0].body.attemptId;
+			const frozenBody = JSON.stringify(posted[0].body);
+			const postCount = posted.length;
+			transport.fetch.mockImplementationOnce(async (input, init) => {
+				const url = new URL(String(input), "https://fixture.invalid");
+				expect(url.pathname).toBe(`/api/admin/document-email-attempts/${attemptId}`);
+				expect(Object.fromEntries(url.searchParams)).toEqual({ documentType: documentKind, documentId: `${documentKind}-new` });
+				expect(init?.method ?? "GET").toBe("GET");
+				return Response.json({ recovery: {
+					...recovery(status), canRetry: false, canRecordAcceptance: false,
+				} });
+			});
+			await click("refresh status", detail());
+			await vi.waitFor(() => expect(document.querySelector(`[data-document-id="${kind}-new"]`)).toBeNull());
+			await flushAsyncTurns();
+			expect(detail().querySelector(".recovery h3")?.textContent).toContain(status === "sent" ? "confirmed" : status === "failed" ? "rejected" : "not accepted");
+			expect(detail().querySelector(".status-label")?.textContent).toBe(status === "sent" ? "sent" : "draft");
+			expect(posted).toHaveLength(postCount);
+			expect(posted.every(request => JSON.stringify(request.body) === frozenBody)).toBe(true);
+			expect(transport.mutation).toHaveBeenCalledOnce();
+		});
+	}
+
 	for (const documentKind of kinds) {
 		const cases: [Mode, Outcome][] = [["legacy", "confirmed"], ["modern", "uncertain"], [documentKind === "quote" ? "modern" : "legacy", "failed"]];
 		it.each(cases)(`${documentKind}: retains an excluded saved record through %s %s`, async (mode, result) => {

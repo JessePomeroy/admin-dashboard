@@ -11,10 +11,9 @@ import { getAdminConfig } from "../config";
 import FeatureGate from "../components/FeatureGate.svelte";
 import LoadingState from "../components/LoadingState.svelte";
 import type { Client, Quote, QuotePreset } from "../types";
-import {
-	isTerminalDocumentEmailRecovery,
-	type DocumentEmailRecovery,
-	type DocumentEmailResolutionOutcome,
+import type {
+	DocumentEmailRecovery,
+	DocumentEmailResolutionOutcome,
 } from "../documentEmailRecovery";
 import { copyPortalLink, toId } from "../utils";
 import { addToast } from "../toast";
@@ -352,19 +351,6 @@ async function sendQuoteEmail(templateId?: string, changeNote?: string) {
 	}
 }
 
-function dismissQuoteReceiptForAttempt(result: { attemptId: string; recovery: DocumentEmailRecovery }) {
-	if (!isTerminalDocumentEmailRecovery(result.recovery) || result.recovery.document.type !== "quote"
-		|| result.recovery.attemptId !== result.attemptId) return;
-	const receipt = sendReceipts.items.find(item => item.id === result.recovery.document.id
-		&& item.attemptId === result.attemptId);
-	if (!receipt) return;
-	if (receipt.stage === "pending") {
-		sendReceipts.settle(receipt, result.recovery.status === "sent" ? "confirmed" : "failed",
-			result.recovery.status === "sent" ? "email request confirmed" : "email request not confirmed");
-	}
-	sendReceipts.dismiss(receipt.id);
-}
-
 function handleQuoteEmailRecoveryChange(result: { attemptId: string; recovery: DocumentEmailRecovery }) {
 	if (alive) emailRecovery.remember(result.recovery.document.id, result);
 }
@@ -375,7 +361,7 @@ function handleQuoteEmailResolved(result: {
 	recovery: DocumentEmailRecovery;
 }) {
 	if (!emailRecovery.resolve(result)) return;
-	dismissQuoteReceiptForAttempt(result);
+	sendReceipts.reconcileAttempt(result, "quote");
 	if (!selectedQuote) return;
 	if (result.recovery.status === "sent") {
 		sendResult = "uncertain";
@@ -395,7 +381,7 @@ function handleQuoteEmailTerminal(result: {
 	recovery: DocumentEmailRecovery;
 }) {
 	if (!emailRecovery.resolve(result)) return;
-	dismissQuoteReceiptForAttempt(result);
+	sendReceipts.reconcileAttempt(result, "quote");
 	if (!selectedQuote) return;
 	if (result.recovery.status === "sent") {
 		selectedQuote = {
@@ -410,7 +396,7 @@ function dismissQuoteEmailRecovery(result: {
 	recovery: DocumentEmailRecovery;
 }) {
 	if (!emailRecovery.dismiss(result)) return;
-	dismissQuoteReceiptForAttempt(result);
+	sendReceipts.reconcileAttempt(result, "quote");
 	if (selectedQuote && selectedQuote._id !== result.recovery.document.id) return;
 	sendResult = result.recovery.status === "sent" ? "success" : null;
 }

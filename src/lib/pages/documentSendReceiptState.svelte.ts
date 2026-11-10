@@ -1,4 +1,5 @@
 import { onDestroy } from "svelte";
+import { isTerminalDocumentEmailRecovery, type DocumentEmailRecovery, type DocumentEmailType } from "../documentEmailRecovery";
 
 export type DocumentSendStage = "pending" | "confirmed" | "failed" | "uncertain";
 
@@ -44,6 +45,12 @@ export function createDocumentSendReceipts<T extends { _id: string; siteUrl: str
 		}
 	}
 
+	function dismiss(id: string) {
+		if (disposed || !items.some(item => item.id === id && item.stage !== "pending")) return;
+		invalidateOpen();
+		items = items.filter(item => item.id !== id);
+	}
+
 	onDestroy(() => {
 		disposed = true;
 		readIntent += 1;
@@ -74,6 +81,22 @@ export function createDocumentSendReceipts<T extends { _id: string; siteUrl: str
 		bindAttempt(owner: ReceiptOwner, attemptId: string) {
 			return update(owner, receipt => ({ ...receipt, attemptId }));
 		},
+		reconcileAttempt(result: { attemptId: string; recovery: DocumentEmailRecovery }, type: DocumentEmailType) {
+			const { attemptId, recovery } = result;
+			if (disposed || recovery.document.type !== type || recovery.attemptId !== attemptId
+				|| !isTerminalDocumentEmailRecovery(recovery)) return false;
+			const receipt = items.find(item => item.id === recovery.document.id && item.attemptId === attemptId);
+			if (!receipt) return false;
+			if (receipt.stage === "pending") {
+				update(receipt, item => ({
+					...item,
+					stage: recovery.status === "sent" ? "confirmed" : "failed",
+					message: recovery.status === "sent" ? "email request confirmed" : "email request recorded as not accepted",
+				}));
+			}
+			dismiss(receipt.id);
+			return true;
+		},
 		async open(id: string) {
 			const receipt = items.find(item => item.id === id);
 			if (disposed || !receipt || receipt.opening) return;
@@ -99,10 +122,6 @@ export function createDocumentSendReceipts<T extends { _id: string; siteUrl: str
 			}
 		},
 		invalidateOpen,
-		dismiss(id: string) {
-			if (disposed || !items.some(item => item.id === id && item.stage !== "pending")) return;
-			invalidateOpen();
-			items = items.filter(item => item.id !== id);
-		},
+		dismiss,
 	};
 }
