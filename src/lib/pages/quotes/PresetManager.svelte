@@ -230,6 +230,9 @@ async function handleDelete() {
 {/if}
 
 <style>
+	@import "../../styles/modal-buttons.css";
+	@import "../../styles/modal-danger-buttons.css";
+
 	@import "../../styles/form-fields.css";
 	.empty-state {
 		padding: 48px 0;
@@ -423,45 +426,6 @@ async function handleDelete() {
 		color: var(--status-rose);
 		margin-right: auto;
 		align-self: center;
-	}
-
-	.btn-cancel,
-	.btn-save,
-	.btn-danger,
-	.btn-danger-outline {
-		padding: 7px 16px;
-		border-radius: 6px;
-		font-size: 0.82rem;
-		font-family: "Synonym", system-ui, sans-serif;
-		cursor: pointer;
-		transition: background 0.15s, border-color 0.15s, opacity 0.15s;
-		border: 1px solid transparent;
-	}
-
-	.btn-cancel {
-		background: transparent;
-		color: var(--admin-text-muted);
-		border-color: var(--admin-border-strong);
-	}
-
-	.btn-cancel:hover {
-		color: var(--admin-text);
-	}
-
-	.btn-save {
-		background: rgba(129, 140, 248, 0.15);
-		border-color: rgba(129, 140, 248, 0.25);
-		color: var(--admin-accent-hover);
-		font-weight: 500;
-	}
-
-	.btn-save:hover {
-		background: rgba(129, 140, 248, 0.22);
-	}
-
-	.btn-save:disabled {
-		opacity: 0.4;
-		cursor: not-allowed;
 	}
 
 	.btn-danger {
