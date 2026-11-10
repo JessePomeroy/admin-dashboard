@@ -1,5 +1,12 @@
 # @jessepomeroy/admin
 
+## 6.16.3
+
+### Patch Changes
+
+- 6e99f59: Share attempt-aware receipt reconciliation across invoice, quote and contract pages while preserving terminal-attempt, document, generation and disposal guards.
+- 62c574a: Align Gmail retention wording with the current policy and share scoped modal action styles and singleton draft preview behavior without changing public resolver exports.
+
 ## 6.16.2
 
 ### Patch Changes
