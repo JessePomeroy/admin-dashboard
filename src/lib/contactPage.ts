@@ -86,14 +86,4 @@ export function hasContactPageErrors(errors: ContactPageFieldErrors) {
 	return Object.keys(errors).length > 0;
 }
 
-export function resolveContactPagePreviewUrl(value: unknown, currentOrigin: string) {
-	if (typeof value !== "string" || !value) {
-		throw new Error("The preview endpoint returned an invalid URL.");
-	}
-	const origin = new URL(currentOrigin).origin;
-	const url = new URL(value, `${origin}/`);
-	if (url.origin !== origin) {
-		throw new Error("The preview endpoint returned an unsafe URL.");
-	}
-	return url.toString();
-}
+export { resolveEditorPreviewUrl as resolveContactPagePreviewUrl } from "./editorPreview";
