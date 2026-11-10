@@ -55,7 +55,7 @@ Reference integrations live in `../angelsrest/src/routes/admin/` and
 ## Client configuration
 
 ```ts
-import type { AdminConfig } from "@jessepomeroy/admin";
+import { createStandardAdminAPI, type AdminConfig } from "@jessepomeroy/admin";
 import { api } from "$convex/api";
 
 export const adminConfig: AdminConfig = {
@@ -63,11 +63,10 @@ export const adminConfig: AdminConfig = {
   siteName: "client studio",
   fromEmail: "Client Studio <noreply@client.example>",
   isCreator: false,
-  api,
+  api: createStandardAdminAPI(api),
   authClient,
   mutationTransport: "http",
   mutationEndpoint: "/api/admin/mutation",
-  sanityStudioUrl: "https://client.sanity.studio",
   galleryWorkerUrl: "https://gallery-worker.example.workers.dev",
 };
 ```

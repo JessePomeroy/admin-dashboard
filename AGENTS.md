@@ -89,7 +89,7 @@ The build writes `dist/`; tests/checks should pass before release.
 ## Consumers
 
 - `../angelsrest`: creator hub, HTTP mutations, manually authenticated queries
-- `../reflecting-pool`: tenant spoke, HTTP mutations, manually authenticated
+- `../queenworm`: tenant spoke, HTTP mutations, manually authenticated
   queries
 
 Treat both as required integration surfaces for auth, page, and handler changes.

@@ -64,7 +64,7 @@ export function isGalleryOriginalKeyForSite(
 		&& parseGalleryStorageKey(r2Key)?.kind === "original";
 }
 
-export function parseGalleryStorageKeyForSession(
+function parseGalleryStorageKeyForSession(
 	r2Key: string,
 	session: { siteUrl: string; galleryId: string },
 ): GalleryStorageKey | null {

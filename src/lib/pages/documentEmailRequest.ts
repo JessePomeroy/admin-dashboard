@@ -358,7 +358,7 @@ export async function postDocumentEmail(
 	});
 }
 
-export function isAmbiguousDocumentEmailError(
+function isAmbiguousDocumentEmailError(
 	error: unknown,
 ): error is DocumentEmailRequestError {
 	return (
@@ -468,7 +468,7 @@ export async function getDocumentEmailRecovery(
 	});
 }
 
-export async function getOpenDocumentEmailRecovery(
+async function getOpenDocumentEmailRecovery(
 	expectedDocument: DocumentEmailReference,
 	options: DocumentEmailRecoveryRequestOptions = {},
 ): Promise<DocumentEmailRecovery | null> {
