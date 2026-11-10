@@ -1,5 +1,6 @@
 import { mount, tick, unmount } from "svelte";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { DocumentEmailRecovery } from "../src/lib/documentEmailRecovery";
 import type { DocumentSendReceipt } from "../src/lib/pages/documentSendReceiptState.svelte";
 import Harness from "./DocumentSendReceiptsHarness.svelte";
 
@@ -10,6 +11,16 @@ let component: ReturnType<typeof mount<typeof Harness>> | undefined;
 
 function record(id = "a", title = id, siteUrl = "example.test"): Record {
 	return { _id: id, title, siteUrl };
+}
+
+function recovery(overrides: Partial<DocumentEmailRecovery> = {}): DocumentEmailRecovery {
+	return {
+		protocolVersion: 1, attemptId: "attempt-a", document: { type: "invoice", id: "a" },
+		status: "sent", recipient: "test@example.invalid", subject: "Invoice",
+		claimCount: 1, createdAt: 1, updatedAt: 2, retryUntil: 3, resolveNotAcceptedAt: 3,
+		portalExpired: false, canRetry: false, canFinalizeAcceptance: false,
+		canRecordAcceptance: false, canResolveNotAccepted: false, ...overrides,
+	};
 }
 
 async function render() {
@@ -128,6 +139,73 @@ describe("saved document send receipts", () => {
 		expect(state.items[0]).toMatchObject({ generation: current.generation, stage: "uncertain", attemptId: "current-attempt", opening: false });
 		state.dismiss("a");
 		expect(state.bindAttempt(current, "dismissed-attempt")).toBe(false);
+	});
+
+	it.each(["sent", "failed", "resolved_not_sent"] as const)("reconciles only the matching pending receipt for terminal %s", async status => {
+		const state = await render();
+		const owner = state.begin("a");
+		state.bindAttempt(owner, "attempt-a");
+		state.begin("b");
+		expect(state.reconcileAttempt({ attemptId: "attempt-a", recovery: recovery({ status }) }, "invoice")).toBe(true);
+		await tick();
+		expect(state.items.map(item => item.id)).toEqual(["b"]);
+		expect(document.querySelector('[data-document-id="a"]')).toBeNull();
+		expect(receipt("b").textContent).toContain("email request in progress");
+		expect(state.settle(owner, "uncertain", "late POST result")).toBe(false);
+		expect(read).not.toHaveBeenCalled();
+		expect(select).not.toHaveBeenCalled();
+	});
+
+	it.each(["confirmed", "failed", "uncertain"] as const)("reconciles a matching %s receipt without requiring a pending send", async stage => {
+		const state = await render();
+		const owner = state.begin("a");
+		state.bindAttempt(owner, "attempt-a");
+		state.settle(owner, stage, "previous presentation");
+		expect(state.reconcileAttempt({ attemptId: "attempt-a", recovery: recovery() }, "invoice")).toBe(true);
+		expect(state.items).toHaveLength(0);
+	});
+
+	it.each([
+		{ name: "another document", projection: recovery({ document: { type: "invoice", id: "b" } }) },
+		{ name: "another document type", projection: recovery({ document: { type: "quote", id: "a" } }) },
+		{ name: "mismatched inner attempt", projection: recovery({ attemptId: "other" }) },
+		{ name: "prepared attempt", projection: recovery({ status: "prepared" }) },
+		{ name: "claimed attempt", projection: recovery({ status: "claimed" }) },
+		{ name: "uncertain attempt", projection: recovery({ status: "uncertain" }) },
+	])("retains all receipts for $name", async ({ projection }) => {
+		const state = await render();
+		const owner = state.begin("a");
+		state.bindAttempt(owner, "attempt-a");
+		state.bindAttempt(state.begin("b"), "attempt-b");
+		const before = state.items;
+		expect(state.reconcileAttempt({ attemptId: "attempt-a", recovery: projection }, "invoice")).toBe(false);
+		expect(state.items).toBe(before);
+		expect(read).not.toHaveBeenCalled();
+		expect(select).not.toHaveBeenCalled();
+	});
+
+	it("retains a new generation before and after binding a different attempt", async () => {
+		const state = await render();
+		state.bindAttempt(state.begin("a"), "attempt-a");
+		const current = state.begin("a");
+		const result = { attemptId: "attempt-a", recovery: recovery() };
+		expect(state.reconcileAttempt(result, "invoice")).toBe(false);
+		state.bindAttempt(current, "new-attempt");
+		expect(state.reconcileAttempt(result, "invoice")).toBe(false);
+		expect(state.items[0]).toMatchObject({ generation: current.generation, attemptId: "new-attempt", stage: "pending" });
+	});
+
+	it("invalidates a delayed open when its exact attempt is reconciled", async () => {
+		const state = await render();
+		state.bindAttempt(state.begin("a"), "attempt-a");
+		const deferred = Promise.withResolvers<Record | null>();
+		read.mockReturnValueOnce(deferred.promise);
+		const opening = state.open("a");
+		expect(state.reconcileAttempt({ attemptId: "attempt-a", recovery: recovery() }, "invoice")).toBe(true);
+		deferred.resolve(record());
+		await opening;
+		expect(select).not.toHaveBeenCalled();
+		expect(state.items).toHaveLength(0);
 	});
 
 	it.each([
@@ -257,6 +335,7 @@ describe("saved document send receipts", () => {
 	it("ignores late reads, results and acknowledgements after unmount", async () => {
 		const state = await render();
 		const owner = state.begin("a");
+		state.bindAttempt(owner, "attempt-a");
 		const deferred = Promise.withResolvers<Record | null>();
 		read.mockReturnValueOnce(deferred.promise);
 		const opening = state.open("a");
@@ -268,6 +347,7 @@ describe("saved document send receipts", () => {
 		state.begin("b");
 		expect(state.settle(owner, "failed", "late failure")).toBe(false);
 		expect(state.bindAttempt(owner, "late-attempt")).toBe(false);
+		expect(state.reconcileAttempt({ attemptId: "attempt-a", recovery: recovery() }, "invoice")).toBe(false);
 		state.dismiss("a");
 		deferred.resolve(record());
 		await opening;

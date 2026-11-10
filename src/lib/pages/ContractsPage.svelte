@@ -311,7 +311,7 @@ function handleContractEmailResolved(result: {
 	recovery: DocumentEmailRecovery;
 }) {
 	if (!pageAlive || !emailRecovery.resolve(result)) return;
-	dismissMatchingReceipt(result);
+	sendReceipts.reconcileAttempt(result, "contract");
 	if (selectedContract?._id !== result.recovery.document.id) return;
 	if (result.recovery.status === "sent") {
 		selectedContract = {
@@ -328,20 +328,11 @@ function handleContractEmailRecovery(
 	if (pageAlive) emailRecovery.remember(contractId, attempt);
 }
 
-function dismissMatchingReceipt(result: { attemptId: string; recovery: DocumentEmailRecovery }) {
-	const receipt = sendReceipts.items.find(item => item.id === result.recovery.document.id && item.attemptId === result.attemptId);
-	if (!receipt) return;
-	if (receipt.stage === "pending") {
-		sendReceipts.settle(receipt, result.recovery.status === "sent" ? "confirmed" : "failed", result.recovery.status === "sent" ? "email request confirmed" : "email request recorded as not accepted");
-	}
-	sendReceipts.dismiss(receipt.id);
-}
-
 function dismissContractEmailRecovery(result: {
 	attemptId: string;
 	recovery: DocumentEmailRecovery;
 }) {
-	if (pageAlive && emailRecovery.dismiss(result)) dismissMatchingReceipt(result);
+	if (pageAlive && emailRecovery.dismiss(result)) sendReceipts.reconcileAttempt(result, "contract");
 }
 
 async function handleDeleteContract(id: string) {
