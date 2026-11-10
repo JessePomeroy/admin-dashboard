@@ -64,7 +64,7 @@ or server handlers.
 - Preserve streaming request/response bodies; do not buffer large images in the
   package.
 - Changes to handler contracts require coordinated verification in Angels Rest,
-  Reflecting Pool, and `gallery-worker`.
+  queenworm, and `gallery-worker`.
 
 ## Checks
 
@@ -89,7 +89,7 @@ The build writes `dist/`; tests/checks should pass before release.
 ## Consumers
 
 - `../angelsrest`: creator hub, HTTP mutations, manually authenticated queries
-- `../reflecting-pool`: tenant spoke, HTTP mutations, manually authenticated
+- `../queenworm`: tenant spoke, HTTP mutations, manually authenticated
   queries
 
 Treat both as required integration surfaces for auth, page, and handler changes.
