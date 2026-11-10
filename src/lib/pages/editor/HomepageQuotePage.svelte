@@ -2,6 +2,7 @@
 import EditorDocumentHeader from "./EditorDocumentHeader.svelte";
 import PublicationControl from "./PublicationControl.svelte";
 import { browser } from "$app/environment";
+import { openEditorDraftPreview } from "../../editorPreview";
 import { useQuery } from "convex-svelte";
 import { createSingletonDraft } from "../../singletonDraft.svelte";
 import { useAdminClient } from "../../adminClient";
@@ -14,7 +15,6 @@ import {
 	copyHomepageQuoteDraft,
 	emptyHomepageQuoteDraft,
 	hasHomepageQuoteErrors,
-	resolveHomepageQuotePreviewUrl,
 	serializeHomepageQuoteDraft,
 	type HomepageQuoteFieldErrors,
 	validateHomepageQuoteForPublish,
@@ -111,45 +111,11 @@ async function publish() {
 	}
 }
 
-async function preview() {
+function preview() {
 	if (!browser || !previewEndpoint) return;
-	const previewWindow = window.open("about:blank", "homepage-quote-preview");
-	if (!previewWindow) {
-		draft.error = "Allow pop-ups for this site to open the draft preview.";
-		return;
-	}
-	previewWindow.opener = null;
-	previewing = true;
-	draft.error = "";
-	try {
-		if (!(await draft.saveNow()) || !draft.revisionId) {
-			previewWindow.close();
-			return;
-		}
-		const response = await fetch(previewEndpoint, {
-			method: "POST",
-			headers: { "Content-Type": "application/json" },
-			body: JSON.stringify({ draftRevisionId: draft.revisionId }),
-		});
-		const result = await response.json().catch(() => null) as {
-			previewUrl?: unknown;
-			error?: unknown;
-		} | null;
-		if (!response.ok) {
-			throw new Error(typeof result?.error === "string"
-				? result.error
-				: "Could not create the draft preview.");
-		}
-		previewWindow.location.href = resolveHomepageQuotePreviewUrl(
-			result?.previewUrl,
-			window.location.origin,
-		);
-	} catch (error) {
-		previewWindow.close();
-		draft.error = error instanceof Error ? error.message : "Could not create the draft preview.";
-	} finally {
-		previewing = false;
-	}
+	return openEditorDraftPreview(previewEndpoint, "homepage-quote-preview", draft, (value) => {
+		previewing = value;
+	});
 }
 
 async function discard() {
