@@ -16,7 +16,42 @@ permissions:
   pull-requests: write
 
 jobs:
+  # Browser-dependent verification runs in the pinned Playwright image. The
+  # release job below needs no browser and runs only after this job passes.
+  verify:
+    runs-on: ubuntu-24.04
+    container:
+      image: mcr.microsoft.com/playwright:v1.59.1-noble@sha256:b0ab6f3cb99aa7803adbc14d9027ec1785fc6e433b97e134e0f8fe61683b6b53
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "24.22.1"
+          registry-url: "https://npm.pkg.github.com"
+          scope: "@jessepomeroy"
+          package-manager-cache: false
+          token: ""
+
+      - run: corepack enable
+      - run: corepack pnpm install --frozen-lockfile --ignore-scripts
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      # The container supplies browsers and their system libraries, so no apt
+      # mirror is contacted. Bump the image tag and digest with Playwright.
+      - name: Match the Playwright package to the container browsers
+        run: test "$(node -p "require('playwright/package.json').version")" = "1.59.1"
+      - run: corepack pnpm lint
+      - run: corepack pnpm check
+      - run: corepack pnpm test
+      - run: corepack pnpm build
+
   release:
+    needs: verify
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
@@ -36,10 +71,6 @@ jobs:
       - run: corepack pnpm install --frozen-lockfile --ignore-scripts
         env:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      - run: corepack pnpm lint
-      - run: corepack pnpm check
-      - run: corepack pnpm exec playwright install --with-deps chromium
-      - run: corepack pnpm test
       - run: corepack pnpm build
 
       # Pending changesets produce a reviewable version PR. Publication occurs

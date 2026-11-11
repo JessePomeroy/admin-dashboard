@@ -12,6 +12,8 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-24.04
+    container:
+      image: mcr.microsoft.com/playwright:v1.59.1-noble@sha256:b0ab6f3cb99aa7803adbc14d9027ec1785fc6e433b97e134e0f8fe61683b6b53
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
@@ -25,7 +27,10 @@ jobs:
           token: ""
       - run: corepack enable
       - run: corepack pnpm install --frozen-lockfile --ignore-scripts
-      - run: corepack pnpm exec playwright install --with-deps chromium
+      # The container supplies browsers and their system libraries, so no apt
+      # mirror is contacted. Bump the image tag and digest with Playwright.
+      - name: Match the Playwright package to the container browsers
+        run: test "$(node -p "require('playwright/package.json').version")" = "1.59.1"
       - name: Require a changeset for public package changes
         if: github.event_name == 'pull_request'
         env:
