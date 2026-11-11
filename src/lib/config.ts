@@ -117,16 +117,7 @@ export interface AdminAPI {
 		archive: FnRef;
 		restore: FnRef;
 	};
-	/** Private catalog draft operations. Public catalog reads and V1 publication stay host-owned. */
-	catalogProducts?: {
-		listForEditor: FnRef;
-		getEditorState: FnRef;
-		createDraft: FnRef;
-		saveDraft: FnRef;
-		discardDraft: FnRef;
-		remove?: FnRef;
-	};
-	/** Private V2 catalog graph operations for multi-kind product read-back and staged editing. */
+	/** Private catalog graph operations for multi-kind product read-back and staged editing. */
 	catalogProductGraphs?: {
 		listForEditor: FnRef;
 		getEditorState: FnRef;
@@ -164,9 +155,6 @@ export interface AdminAPI {
 		scanClientsWithTags?: FnRef;
 		getStats: FnRef;
 	};
-	emailLog: {
-		create: FnRef;
-	};
 	/** Durable, tenant-scoped delivery journal for invoice, quote, and contract emails. */
 	documentEmailAttempts?: {
 		get: FnRef;
@@ -203,13 +191,12 @@ export interface AdminAPI {
 		getProofImages?: FnRef;
 		reopenProof?: FnRef;
 		listImageStorageKeys?: FnRef;
-		listBySite: FnRef;
-		/** Deploy the matching shared backend before opting into filtered cursor pages. */
-		listBySitePaginated?: FnRef;
+		/** Server-filtered cursor pages; the only delivery gallery list read. */
+		listBySitePaginated: FnRef;
 	};
 	inquiries: {
-		/** Opt into reactive, server-filtered inbox pages after deploying the matching backend. */
-		listPaginated?: FnRef;
+		/** Reactive, server-filtered inbox pages; the only inquiry list read. */
+		listPaginated: FnRef;
 		getWorkflow?: FnRef;
 		clientOptions?: FnRef;
 		linkClient?: FnRef;
@@ -723,23 +710,14 @@ export interface AdminConfig {
 		light?: AdminTheme;
 	};
 	/**
-	 * How mutations are sent to Convex.
-	 *
-	 * - `"websocket"` (default): calls `client.mutation(...)` directly over
-	 *   the Convex WebSocket. Requires the WebSocket to be authenticated
-	 *   (e.g. via `createSvelteAuthClient`).
-	 * - `"http"`: routes each mutation through a SvelteKit `+server.ts`
-	 *   endpoint that holds the Better Auth cookie and calls Convex via
-	 *   a fresh HTTP client. This keeps mutation auth independent of the
-	 *   browser WebSocket lifecycle; queries may still use an authenticated
-	 *   socket.
-	 *
-	 * Default: `"websocket"`.
+	 * @deprecated Mutations always use the HTTP proxy at `mutationEndpoint`.
+	 * The WebSocket mutation transport was removed in 7.0. This literal is
+	 * accepted only so existing `"http"` hosts upgrade without edits; it has no
+	 * runtime effect and will be removed in a future major.
 	 */
-	mutationTransport?: "websocket" | "http";
+	mutationTransport?: "http";
 	/**
-	 * Endpoint path for the HTTP mutation proxy. Only consulted when
-	 * `mutationTransport === "http"`. The endpoint must accept
+	 * Endpoint path for the HTTP mutation proxy. The endpoint must accept
 	 * `POST { name: string, args: unknown }` and return
 	 * `{ result } | { error }`.
 	 *

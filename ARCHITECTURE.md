@@ -16,7 +16,7 @@ Consumer SvelteKit app
 @jessepomeroy/admin
   ├── page and component UI
   ├── normalized feature/session model
-  ├── query + mutation transport adapter
+  ├── query client + HTTP mutation proxy adapter
   └── server handler factories
            ↓
 Convex, Resend, gallery-worker
@@ -30,7 +30,11 @@ Convex references remain opaque inside the package because each consumer owns
 the concrete generated types.
 
 Reactive queries use `convex-svelte`. `useAdminClient` wraps the raw client and
-only intercepts mutations when HTTP transport is selected.
+always sends mutations through the host's HTTP mutation proxy
+(`mutationEndpoint`, default `/api/admin/mutation`); queries and other methods
+pass through to the browser client. The 7.0 release removed the WebSocket
+mutation transport; `mutationTransport` remains only as a deprecated `"http"`
+literal with no runtime effect.
 
 Feature gates present the host-supplied tier and role state. A locked state may
 offer operator-contact guidance, but it must not initiate billing or choose
@@ -189,9 +193,9 @@ deletion replays pass the configured `siteUrl` to `removeImage`. Deploy those
 additive backend contracts before host adoption. Storage deletion precedes
 metadata deletion, and a partial batch keeps only failed cleanup targets.
 
-Hosts may supply `galleryDelivery.listBySitePaginated` to filter and browse
-delivery galleries by server cursor. Older hosts retain `listBySite` behavior
-until they explicitly bind that capability.
+Hosts must supply `galleryDelivery.listBySitePaginated`; the page filters and
+browses delivery galleries by server cursor. The unpaginated `listBySite`
+fallback was removed in 7.0.
 
 Storage keys are parsed from the right as
 `<siteUrl>/<galleryId>/<kind>/<filename>`. The host adapter compares the parsed
@@ -406,8 +410,7 @@ must outlive their continuation and capability windows and have no active lease.
 The Worker replaces the exact private original with an empty conditional-write
 marker; it must never erase that marker and reopen the old upload capability.
 
-The additive refs are `catalogProducts.remove`, `catalogProductGraphs.remove`,
-`inquiries.remove`, and `catalogPrivateAssets.{listForCleanup,listExpiredUploadsForCleanup,requestDeletion}`.
+The additive refs are `catalogProductGraphs.remove`, `inquiries.remove`, and `catalogPrivateAssets.{listForCleanup,listExpiredUploadsForCleanup,requestDeletion}`.
 The host must deploy the corresponding backend/Worker first, mount
 `createCatalogPrivateDeleteHandler`, and configure `privateAssetDeleteEndpoint`
 and the existing `mediaDeleteEndpoint`. Older hosts omit these options and retain
@@ -415,16 +418,16 @@ their existing UI. No endpoint or credential is inferred from another tenant.
 
 ## Inquiry read contract
 
-Hosts can opt into `api.inquiries.listPaginated` after deploying the additive
-Convex query. The inbox subscribes to one 25-row page at a time, applies status
+Hosts must supply `api.inquiries.listPaginated`. The inbox subscribes to one 25-row page at a time, applies status
 filters on the server, and retains cursor history for previous/next navigation.
 Changing the status resets to the first page. Loading, failure, and empty results
 remain distinct; incomplete split pages require an explicit retry at the same
 cursor. Pending status edits are separate from query results, so a rejected
 mutation reveals the latest server data. Mutation completion retains the
 initiating inquiry ID. Successful mutations refresh the current page because
-HTTP acknowledgement can precede the query connection's update. Hosts without the reference retain their supplied
-`data.inquiries` behavior.
+HTTP acknowledgement can precede the query connection's update. The page no
+longer reads a host-supplied `data.inquiries` list; that fallback was removed
+in 7.0.
 
 At phone widths, the same inquiry rows reflow into a vertical layout so sender,
 subject, status, follow-up and View do not require horizontal panning. Desktop

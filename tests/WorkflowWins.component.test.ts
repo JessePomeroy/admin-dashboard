@@ -4,6 +4,7 @@ import { queryClient } from "./controlledQueryClient";
 import Harness from "./WorkflowWinsHarness.svelte";
 
 vi.mock("../src/lib/config", async () => import("./fixtures/workflow-wins/config"));
+vi.mock("../src/lib/adminClient", () => import("./stubs/contextAdminClient"));
 let component: ReturnType<typeof mount> | undefined;
 afterEach(async () => {
 	if (component) await unmount(component);

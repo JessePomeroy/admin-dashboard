@@ -3,12 +3,9 @@ import { mount, tick, unmount } from "svelte";
 import Harness from "./GalleryDeliveryHarness.svelte";
 import { queryClient } from "./controlledQueryClient";
 
-const fixture = vi.hoisted(() => ({ legacy: false }));
 vi.mock("../src/lib/config", async () => {
 	const { galleryDeliveryFixtureConfig: config } = await import("./fixtures/gallery-delivery/config");
-	return { getAdminConfig: () => ({ ...config, api: { galleryDelivery: { ...config.api.galleryDelivery,
-		listBySitePaginated: fixture.legacy ? undefined : config.api.galleryDelivery.listBySitePaginated,
-	} } }) };
+	return { getAdminConfig: () => config };
 });
 
 const queryName = "galleries:listBySitePaginated";
@@ -29,7 +26,7 @@ async function render() {
 	await tick();
 	return queries;
 }
-afterEach(async () => { if (component) await unmount(component); component = undefined; fixture.legacy = false; document.body.replaceChildren(); });
+afterEach(async () => { if (component) await unmount(component); component = undefined; document.body.replaceChildren(); });
 
 it("navigates cursor pages and resets the cursor for server status filtering", async () => {
 	const queries = await render();
@@ -69,17 +66,6 @@ it("separates failures and split pages from empty results and retries the same c
 	expect(document.querySelector('[role="alert"]')).toBeNull();
 	expect(document.body.textContent).toContain("no client galleries yet");
 });
-
-it("keeps the existing host contract usable without the pagination capability", async () => {
-	fixture.legacy = true;
-	const queries = await render();
-	queries.emit(queries.latest("galleries:listBySite"), [gallery("published-example"), gallery("archived-example", "archived")]); await tick();
-	expect(document.querySelector('[aria-label="gallery pages"]')).toBeNull();
-	button("archived").click(); await tick();
-	expect(document.body.textContent).toContain("archived-example");
-	expect(document.body.textContent).not.toContain("published-example");
-});
-
 
 it("reaches older galleries through the submitted-selections query and resets paging when leaving it", async () => {
  const queries = await render();

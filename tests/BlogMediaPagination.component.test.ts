@@ -6,6 +6,7 @@ import { mediaAsset, mediaPage, postEditorState } from "./fixtures/blog-media/da
 import type { PortfolioMediaPage } from "../src/lib/portfolioEditor";
 
 vi.mock("../src/lib/config", async () => import("./fixtures/blog-media/config"));
+vi.mock("../src/lib/adminClient", () => import("./stubs/contextAdminClient"));
 
 let component: ReturnType<typeof mount> | undefined;
 

@@ -2,19 +2,18 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { mount, tick, unmount } from "svelte";
 import Harness from "./InquiriesHarness.svelte";
 import { queryClient } from "./controlledQueryClient";
-import type { InquiryStatus, InquiryUI } from "../src/lib/types";
+import type { InquiryStatus } from "../src/lib/types";
 
-const fixture = vi.hoisted(() => ({ legacy: false, http: false, toast: vi.fn() }));
+const fixture = vi.hoisted(() => ({ http: false, toast: vi.fn() }));
 vi.mock("../src/lib/config", async () => {
 	const { inquiryFixtureConfig } = await import("./fixtures/inquiries/config");
-	return { getAdminConfig: () => ({
-		...inquiryFixtureConfig,
-		mutationTransport: fixture.http ? "http" : "websocket",
-		api: { inquiries: {
-			...inquiryFixtureConfig.api.inquiries,
-			listPaginated: fixture.legacy ? undefined : inquiryFixtureConfig.api.inquiries.listPaginated,
-		} },
-	}) };
+	return { getAdminConfig: () => inquiryFixtureConfig };
+});
+// Most cases drive the fixture client directly; the HTTP case exercises the real proxy.
+vi.mock("../src/lib/adminClient", async (importOriginal) => {
+	const actual = await importOriginal<typeof import("../src/lib/adminClient")>();
+	const { useAdminClient: useContextClient } = await import("./stubs/contextAdminClient");
+	return { ...actual, useAdminClient: () => fixture.http ? actual.useAdminClient() : useContextClient() };
 });
 vi.mock("../src/lib/toast", () => ({ addToast: fixture.toast }));
 vi.mock("../src/lib/logger", () => ({ logger: { error: vi.fn() } }));
@@ -58,13 +57,13 @@ function deferred() {
 }
 
 let component: ReturnType<typeof mount> | undefined;
-async function render(onMutation?: Parameters<typeof queryClient>[0], inquiries?: InquiryUI[]) {
+async function render(onMutation?: Parameters<typeof queryClient>[0]) {
 	const queries = queryClient(onMutation);
-	component = mount(Harness, { target: document.body, props: { client: queries.client, inquiries } });
+	component = mount(Harness, { target: document.body, props: { client: queries.client } });
 	await tick();
 	return queries;
 }
-beforeEach(() => { fixture.legacy = false; fixture.http = false; fixture.toast.mockClear(); });
+beforeEach(() => { fixture.http = false; fixture.toast.mockClear(); });
 afterEach(async () => {
 	if (component) await unmount(component);
 	component = undefined;
@@ -214,22 +213,5 @@ describe("reactive inquiry pages", () => {
 		queries.emit(queries.latest(queryName), page([inquiry("beta")])); await tick();
 		expect(document.querySelectorAll("tbody tr")).toHaveLength(1);
 		expect(row("beta")).toBeDefined();
-	});
-
-	it("keeps the legacy supplied-data path usable without the optional query", async () => {
-		fixture.legacy = true;
-		vi.stubGlobal("confirm", () => true);
-		const legacy: InquiryUI = { ...inquiry("legacy"), subject: null, submittedAt: new Date(1).toISOString() };
-		const mutate = vi.fn().mockResolvedValue(null);
-		const queries = await render(mutate, [legacy]);
-		expect(queries.subscriptions).toHaveLength(0);
-		expect(document.querySelector('[aria-label="Inquiry pages"]')).toBeNull();
-		button("view", row("legacy")).click(); await tick();
-		button("mark read").click(); await tick(); await tick();
-		expect(row("legacy").textContent).toContain("read");
-		await vi.waitFor(() => expect(button("delete inquiry").disabled).toBe(false));
-		button("delete inquiry").click();
-		await vi.waitFor(() => expect(document.querySelector('[role="dialog"]')).toBeNull());
-		expect(document.body.textContent).toContain("no inquiries found");
 	});
 });

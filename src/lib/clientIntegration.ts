@@ -2,7 +2,7 @@ import type { AdminAPI } from "./config";
 
 /** New standard APIs must be adopted here; omission cannot silently opt a host out. */
 type StandardClientAPI = {
- [Key in Exclude<keyof AdminAPI, "gmailConversations" | "businessRecords" | "inquiryNotifications" | "recurringInvoices" | "deliveryUploads" | "documentEmailAttempts" | "blogContent" | "postContent" | "catalogProducts" | "platformOffboarding" | "contentCleanup">]-?: Required<
+ [Key in Exclude<keyof AdminAPI, "gmailConversations" | "businessRecords" | "inquiryNotifications" | "recurringInvoices" | "deliveryUploads" | "documentEmailAttempts" | "blogContent" | "postContent" | "platformOffboarding" | "contentCleanup">]-?: Required<
   Key extends "crm"
    ? Omit<NonNullable<AdminAPI[Key]>, "scanClientsWithTags">
    : NonNullable<AdminAPI[Key]>
@@ -25,9 +25,8 @@ export interface StandardAdminApiSource {
 	contentExport: Record<"page", AdminFunction>;
 	contracts: Record<"create" | "createTemplate" | "get" | "list" | "listTemplates" | "markSent" | "markSigned" | "remove" | "removeTemplate" | "update" | "updateTemplate", AdminFunction>;
 	crm: Record<"createClient" | "deleteClient" | "getClient" | "getStats" | "listClients" | "listClientsWithTags" | "updateClient", AdminFunction>;
-	emailLog: Record<"create", AdminFunction>;
 	emailTemplates: Record<"create" | "get" | "getByCategory" | "list" | "remove" | "update", AdminFunction>;
-	galleries: Record<"addImage" | "create" | "get" | "getImages" | "getProofImages" | "getUploadPolicy" | "listBySite" | "listBySitePaginated" | "listImageStorageKeys" | "listProofs" | "listSubmittedProofs" | "remove" | "removeImage" | "reopenProof" | "reorderImages" | "update", AdminFunction>;
+	galleries: Record<"addImage" | "create" | "get" | "getImages" | "getProofImages" | "getUploadPolicy" | "listBySitePaginated" | "listImageStorageKeys" | "listProofs" | "listSubmittedProofs" | "remove" | "removeImage" | "reopenProof" | "reorderImages" | "update", AdminFunction>;
 	galleryPassword: Record<"setPassword", AdminFunction>;
 	inquiries: Record<"clientOptions" | "getWorkflow" | "linkClient" | "listForClient" | "listPaginated" | "remove" | "unlinkClient" | "updateFollowUp" | "updateStatus", AdminFunction>;
 	invoices: Record<"create" | "get" | "getDashboardSummary" | "getNextNumber" | "list" | "markPaid" | "markSent" | "remove" | "update", AdminFunction>;
@@ -75,7 +74,6 @@ export function createStandardAdminAPI(api: StandardAdminApiSource) {
 		listClientsWithTags: api.crm.listClientsWithTags,
 		getStats: api.crm.getStats,
 	},
-	emailLog: { create: api.emailLog.create },
 	emailTemplates: {
 		create: api.emailTemplates.create,
 		update: api.emailTemplates.update,
@@ -180,7 +178,6 @@ export function createStandardAdminAPI(api: StandardAdminApiSource) {
 		reorderImages: api.galleries.reorderImages,
 		getImages: api.galleries.getImages,
 		listImageStorageKeys: api.galleries.listImageStorageKeys,
-		listBySite: api.galleries.listBySite,
 	},
 	catalogPrivateAssets: {
 		listForCleanup: api.catalogPrivateAssets.listForCleanup,

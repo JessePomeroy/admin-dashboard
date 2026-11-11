@@ -44,8 +44,9 @@ Put a `read:packages` token in user or hosted npm configuration before install.
    with a provider-verified account that the host binds to a stable identity.
 4. Initialize `setupConvex`/`setupAuth` in the browser layout for reactive
    authenticated queries.
-5. Choose a mutation transport. Current platform hosts use the HTTP proxy with
-   a fresh authenticated `ConvexHttpClient` per request.
+5. Mount `createAdminMutationHandler` at `mutationEndpoint` (default
+   `/api/admin/mutation`). Every package mutation uses this HTTP proxy with a
+   fresh authenticated `ConvexHttpClient` per request.
 6. Mount thin route wrappers around the shared page components.
 7. Mount only the server handlers required by enabled features.
 
@@ -78,7 +79,6 @@ export const adminConfig: AdminConfig = {
   isCreator: false,
   api: adminApi,
   authClient,
-  mutationTransport: "http",
   mutationEndpoint: "/api/admin/mutation",
   galleryWorkerUrl: "https://gallery-worker.example.workers.dev",
 };
@@ -91,11 +91,10 @@ If the host's generated Convex module name differs from `AdminAPI`—for example
 ### Private product drafts
 
 The optional Products workspace is capability-driven. It appears only when the
-host declares `editor.products` and provides a complete private-draft API.
-Legacy hosts may provide `catalogProducts.listForEditor`, `getEditorState`,
-`createDraft`, `saveDraft`, and `discardDraft` for the single-print editor.
-Hosts using the catalog graph model may instead provide the same function names
-under `catalogProductGraphs`. The Graph V2 workspace creates and edits all six
+host declares `editor.products` and provides `catalogProductGraphs.listForEditor`,
+`getEditorState`, `createDraft`, `saveDraft`, and `discardDraft`
+(`createStandardAdminAPI` binds them). The single-print `catalogProducts`
+editor was removed in 7.0. The Graph V2 workspace creates and edits all six
 supported product kinds: prints, print sets, postcards, merchandise, tapestries,
 and digital downloads. It owns draft copy, sale settings, USD pricing, variants,
 artwork, optional gallery images, customer-download ZIPs, and publication
@@ -200,13 +199,14 @@ substitute route-presence or identity validity for tenant-aware authorization.
 ## Query and mutation transport
 
 Every package mutation must use `useAdminClient()`, not `useConvexClient()`.
+It POSTs `{ name, args }` to `mutationEndpoint` (default `/api/admin/mutation`).
+The supplied `createAdminMutationHandler` authenticates the request, resolves the
+generated function reference, creates a fresh Convex HTTP client, and forwards
+the mutation.
 
-- `"websocket"` sends mutations through the browser Convex connection and
-  requires that connection to be authenticated.
-- `"http"` POSTs `{ name, args }` to the configured mutation endpoint. The
-  supplied `createAdminMutationHandler` authenticates the request, resolves the
-  generated function reference, creates a fresh Convex HTTP client, and forwards
-  the mutation.
+The WebSocket mutation transport was removed in 7.0. `mutationTransport` is
+accepted only as a deprecated `"http"` literal with no runtime effect; hosts may
+delete it.
 
 Queries always use `convex-svelte`'s reactive WebSocket path. Current hosts
 manually wire `setupAuth` to avoid a historical session-pause race during

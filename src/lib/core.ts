@@ -33,7 +33,7 @@ export {
 	type ModelingPageRevisionState,
 } from "./config.js";
 
-// Convex client (honors AdminConfig.mutationTransport)
+// Convex client (mutations use the HTTP proxy at AdminConfig.mutationEndpoint)
 export { useAdminClient } from "./adminClient.js";
 
 

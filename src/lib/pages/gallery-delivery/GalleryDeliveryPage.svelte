@@ -28,22 +28,20 @@ let statusFilter = $state("all");
 let cursors = $state<(string | null)[]>([null]);
 let requestId = $state(0);
 let switchingPage = $state(false);
-const paginated = Boolean(galleryApi.listBySitePaginated);
 const cursor = $derived(cursors[cursors.length - 1]);
-const regularQuery = useQuery(galleryApi.listBySitePaginated ?? galleryApi.listBySite, () => statusFilter === "submitted" ? "skip" : paginated ? {
+const regularQuery = useQuery(galleryApi.listBySitePaginated, () => statusFilter === "submitted" ? "skip" : {
 	siteUrl: config.siteUrl, ...(statusFilter === "all" ? {} : { status: statusFilter }),
 	paginationOpts: { numItems: 25, cursor, id: requestId },
-} : { siteUrl: config.siteUrl }, { keepPreviousData: false });
-const submittedQuery = galleryApi.listSubmittedProofs && paginated ? useQuery(galleryApi.listSubmittedProofs, () => statusFilter === "submitted" ? {
+}, { keepPreviousData: false });
+const submittedQuery = galleryApi.listSubmittedProofs ? useQuery(galleryApi.listSubmittedProofs, () => statusFilter === "submitted" ? {
  siteUrl: config.siteUrl, paginationOpts: { numItems: 25, cursor, id: requestId },
 } : "skip", { keepPreviousData: false }) : null;
 const galleriesQuery = $derived(statusFilter === "submitted" && submittedQuery ? submittedQuery : regularQuery);
-const result = $derived(galleriesQuery.data as PaginationResult<GalleryWithClient> | GalleryWithClient[] | undefined);
-const page = $derived(result && !Array.isArray(result) ? result : undefined);
+const page = $derived(galleriesQuery.data as PaginationResult<GalleryWithClient> | undefined);
 const splitError = new Error("This gallery page changed. Retry to reload it.");
 const pageError = $derived(page?.pageStatus === "SplitRequired" ? splitError : galleriesQuery.error);
 const hasNext = $derived(Boolean(page && !page.isDone && page.continueCursor && page.continueCursor !== cursor));
-$effect(() => { if (result || galleriesQuery.error) switchingPage = false; });
+$effect(() => { if (page || galleriesQuery.error) switchingPage = false; });
 const uploadFactory = useGalleryUploadFactory();
 const uploadPolicy = $derived(uploadFactory.policy);
 
@@ -86,14 +84,14 @@ onDestroy(() => {
 	for (const queue of uploadQueues) void queue.controller.dispose().catch((error) => logger.warn("Could not cancel unfinished uploads:", error));
 });
 
-const galleries = $derived(pageError ? [] : Array.isArray(result) ? result : page?.page ?? []);
-const isLoading = $derived(switchingPage || galleriesQuery.isLoading || (!result && !pageError));
+const galleries = $derived(pageError ? [] : page?.page ?? []);
+const isLoading = $derived(switchingPage || galleriesQuery.isLoading || (!page && !pageError));
 
 function changeFilter(status: string) {
 	if (statusFilter === status) return;
 	statusFilter = status;
 	cursors = [null];
-	if (paginated) switchingPage = true;
+	switchingPage = true;
 }
 function nextPage() {
 	if (isLoading || !hasNext || !page) return;
@@ -106,7 +104,6 @@ function previousPage() {
 	cursors = cursors.slice(0, -1);
 }
 function retryPage() {
-	if (!paginated) { window.location.reload(); return; }
 	switchingPage = true;
 	requestId += 1;
 }
@@ -119,13 +116,6 @@ async function handleQuickAction(e: Event, galleryId: string, status: string) {
 let showCreateModal = $state(false);
 let selectedGallery = $state<(Gallery & { clientName: string }) | null>(null);
 const selectedQueue = $derived(uploadQueues.find((queue) => queue.gallery._id === selectedGallery?._id));
-
-let filteredGalleries = $derived(
-	galleries.filter((g: Gallery & { clientName: string }) => {
-		if (!paginated && statusFilter !== "all" && g.status !== statusFilter) return false;
-		return true;
-	}),
-);
 
 const statusLabels: Record<string, string> = {
 	draft: "draft",
@@ -176,11 +166,11 @@ const statusLabels: Record<string, string> = {
 	{#if pageError}
 		<div class="empty-state" role="alert">
 			<p>could not load this gallery page</p>
-			<button class="action-btn page-button" onclick={retryPage}>{paginated ? "retry" : "reload"}</button>
+			<button class="action-btn page-button" onclick={retryPage}>retry</button>
 		</div>
 	{:else if isLoading}
 		<LoadingState />
-	{:else if filteredGalleries.length === 0}
+	{:else if galleries.length === 0}
 		<div class="empty-state">
 			{#if statusFilter === "submitted"}
 				no submitted selections
@@ -192,7 +182,7 @@ const statusLabels: Record<string, string> = {
 		</div>
 	{:else}
 		<div class="gallery-list">
-			{#each filteredGalleries as gallery (gallery._id)}
+			{#each galleries as gallery (gallery._id)}
 				<div class="gallery-row">
 					<button class="row-main" onclick={() => openGallery(gallery)}>
 						<div class="gallery-info">
@@ -220,13 +210,11 @@ const statusLabels: Record<string, string> = {
 			{/each}
 		</div>
 	{/if}
-	{#if paginated}
-		<nav class="pagination" aria-label="gallery pages">
-			<button class="page-button" disabled={isLoading || cursors.length === 1} onclick={previousPage}>previous</button>
-			<span>page {cursors.length}{!isLoading && !pageError ? ` · ${filteredGalleries.length} galleries on this page` : ""}</span>
-			<button class="page-button" disabled={isLoading || Boolean(pageError) || !hasNext} onclick={nextPage}>next</button>
-		</nav>
-	{/if}
+	<nav class="pagination" aria-label="gallery pages">
+		<button class="page-button" disabled={isLoading || cursors.length === 1} onclick={previousPage}>previous</button>
+		<span>page {cursors.length}{!isLoading && !pageError ? ` · ${galleries.length} galleries on this page` : ""}</span>
+		<button class="page-button" disabled={isLoading || Boolean(pageError) || !hasNext} onclick={nextPage}>next</button>
+	</nav>
 </div>
 
 {#if showCreateModal}

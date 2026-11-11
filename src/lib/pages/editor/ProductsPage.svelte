@@ -6,7 +6,7 @@ import ProductWorkbench from "./ProductWorkbench.svelte";
 
 const config = getAdminConfig();
 if (!getCatalogProductEditorCapability(config)) {
-	throw new Error("Single-print product editor is not configured for this host");
+	throw new Error("Product editor is not configured for this host");
 }
 </script>
 

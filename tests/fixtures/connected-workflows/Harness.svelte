@@ -11,7 +11,7 @@ let screen = $state("inquiries");
 </script>
 <nav><button onclick={() => screen = "inquiries"}>inquiry inbox</button><button onclick={() => screen = "proofs"}>gallery selections</button><button onclick={() => screen = "client"}>client requests</button></nav>
 {#if screen === "inquiries"}
-	<InquiriesPage data={{ inquiries: [], adminSession: { status: "authorized", tier: "full", isCreator: false, email: "owner@example.test" } }} />
+	<InquiriesPage data={{ adminSession: { status: "authorized", tier: "full", isCreator: false, email: "owner@example.test" } }} />
 {:else if screen === "client"}
 	<main><h1>client requests</h1><ClientInquiries clientId="client-1" /></main>
 {:else}

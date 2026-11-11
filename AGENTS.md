@@ -20,7 +20,7 @@ or server handlers.
 - `src/lib/index.ts`: public Svelte/client surface
 - `src/lib/server.ts`: public server-only surface
 - `src/lib/config.ts`: host contracts and Svelte/server configuration
-- `src/lib/adminClient.ts`: mutation-transport proxy
+- `src/lib/adminClient.ts`: HTTP mutation proxy client
 - `src/lib/adminSession.ts`: normalized server/client session shapes
 - `src/lib/pages/`: page-level UI
 - `src/lib/components/`: reusable UI
@@ -48,10 +48,11 @@ or server handlers.
 
 ## Mutation transport
 
-- `"websocket"` is supported for hosts with a stable authenticated Convex
-  browser connection.
-- `"http"` routes mutations through the universal SvelteKit proxy and a fresh
-  authenticated Convex HTTP client.
+- Mutations always route through the universal SvelteKit HTTP proxy and a fresh
+  authenticated Convex HTTP client. The WebSocket mutation transport was
+  removed in 7.0; do not reintroduce it or a transport switch.
+- `mutationTransport` survives only as a deprecated `"http"` literal with no
+  runtime effect.
 - New mutations must work through `useAdminClient` without transport-specific
   call-site branches.
 - Do not add per-mutation consumer endpoints when the universal proxy suffices.

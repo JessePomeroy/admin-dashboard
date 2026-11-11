@@ -11,7 +11,6 @@ export type CatalogPrintFulfillmentMode =
 	| "merchant_fulfilled";
 export type CatalogSaleAvailability = "available" | "unavailable";
 export type CatalogVariantStatus = "enabled" | "disabled";
-export type CatalogRevisionSource = "admin" | "sanityImport" | "restore";
 export type CatalogProductWebMediaRole =
 	| "primary"
 	| "cover"
@@ -90,11 +89,11 @@ export interface CatalogProductDraftForm {
 	framePriceMultiplierBasisPoints: number;
 	variants: CatalogProductVariantDraftForm[];
 	setMembers: CatalogProductSetMemberDraftForm[];
-	/** V2-only. Absent on the legacy V1 single-print form. */
+	/** Display media placements. */
 	webMedia?: CatalogProductWebMediaDraftForm[];
-	/** V2-only verified private print-source relations. */
+	/** Verified private print-source relations. */
 	printSources?: CatalogProductGraphV2PrintSourceDraft[];
-	/** V2-only verified paid download relation. */
+	/** Verified paid download relation. */
 	paidFile?: CatalogProductGraphV2PaidFileDraft;
 }
 
@@ -106,33 +105,12 @@ export interface CatalogProductRevisionSummary {
 	createdAt: number;
 }
 
-export interface CatalogProductVariantProjection {
-	key: string;
-	order: number;
-	materialOptionKey: string | null;
-	sizeOptionKey: string | null;
-	retailPriceCents: number | null;
-	status: CatalogVariantStatus;
-}
-
+/** Editor-safe projection of one catalog graph revision. */
 export interface CatalogProductEditorRevision {
 	revisionId: string;
-	schemaVersion: 1 | 2;
+	schemaVersion: 2;
 	productKind: CatalogProductKind;
 	createdAt: number;
-	currency?: "usd";
-	title?: string | null;
-	slug?: string | null;
-	description?: string | null;
-	fulfillmentMode?: CatalogPrintFulfillmentMode;
-	saleAvailability?: CatalogSaleAvailability;
-	borderOptionsEnabled?: boolean;
-	frameOptionsEnabled?: boolean;
-	framePriceMultiplierBasisPoints?: number;
-	variantCount?: number;
-	checksum?: string;
-	source?: CatalogRevisionSource;
-	variants?: CatalogProductVariantProjection[];
 	draft?: CatalogProductGraphV2Draft;
 	webMediaAssets?: CatalogEditorMediaRelation[];
 	printSourceAssets?: CatalogEditorMediaRelation[];
@@ -155,7 +133,7 @@ export interface CatalogProductEditorState {
 	productId: string;
 	productKey: string;
 	productKind: CatalogProductKind;
-	graphVersion?: 1 | 2;
+	graphVersion?: 2;
 	slug: string | null;
 	draft: CatalogProductEditorRevision | null;
 	published: CatalogProductEditorRevision | null;
@@ -476,53 +454,6 @@ export function newCatalogProductReplacementGraphDraft(
 	return buildNewCatalogProductGraphDraft(productKind, input, false);
 }
 
-export function catalogProductDraftFromRevision(
-	revision: CatalogProductEditorRevision | null | undefined,
-): CatalogProductDraftForm {
-	if (!revision) return emptyCatalogProductDraft();
-	if (revision.productKind !== "print") {
-		throw new Error(
-			"The single-print editor cannot edit another product kind.",
-		);
-	}
-	if (revision.currency !== "usd") {
-		throw new Error("The single-print editor requires USD pricing.");
-	}
-	if (revision.variantCount !== revision.variants?.length) {
-		throw new Error("The catalog variant count does not match its revision.");
-	}
-	if (
-		revision.fulfillmentMode === undefined ||
-		revision.saleAvailability === undefined ||
-		revision.borderOptionsEnabled === undefined ||
-		revision.frameOptionsEnabled === undefined ||
-		revision.framePriceMultiplierBasisPoints === undefined
-	) {
-		throw new Error("The single-print editor requires a complete print revision.");
-	}
-	return {
-		productKind: "print",
-		title: optionalProjectionValue(revision.title),
-		slug: optionalProjectionValue(revision.slug),
-		description: optionalProjectionValue(revision.description),
-		fulfillmentMode: requirePrintFulfillmentMode(revision.fulfillmentMode),
-		saleAvailability: revision.saleAvailability,
-		borderOptionsEnabled: revision.borderOptionsEnabled,
-		frameOptionsEnabled: revision.frameOptionsEnabled,
-		framePriceMultiplierBasisPoints: parseCatalogBasisPoints(
-			revision.framePriceMultiplierBasisPoints,
-		),
-		variants: (revision.variants ?? []).map((variant) => ({
-			key: variant.key,
-			materialOptionKey: optionalProjectionValue(variant.materialOptionKey),
-			sizeOptionKey: optionalProjectionValue(variant.sizeOptionKey),
-			retailPriceCents: parseCatalogPriceCents(variant.retailPriceCents),
-			status: variant.status,
-		})),
-		setMembers: [],
-	};
-}
-
 export function canEditCatalogProductGraphKind(
 	kind: CatalogProductKind | null | undefined,
 ): kind is CatalogEditableGraphProductKind {
@@ -607,14 +538,9 @@ export function catalogProductGraphDraftFromRevision(
 }
 
 export function copyCatalogProductDraft(
-	source:
-		| CatalogProductDraftForm
-		| CatalogProductEditorRevision
-		| null
-		| undefined,
+	source: CatalogProductDraftForm | null | undefined,
 ): CatalogProductDraftForm {
 	if (!source) return emptyCatalogProductDraft();
-	if ("revisionId" in source) return catalogProductDraftFromRevision(source);
 	return {
 		title: source.title,
 		slug: source.slug,
@@ -1341,24 +1267,23 @@ export function catalogProductKindLabel(kind: CatalogProductKind) {
 export function catalogProductEditorTitle(
 	revision: CatalogProductEditorRevision | null | undefined,
 ) {
-	return revision?.title ?? revision?.draft?.title ?? null;
+	return revision?.draft?.title ?? null;
 }
 
 export function catalogProductEditorDescription(
 	revision: CatalogProductEditorRevision | null | undefined,
 ) {
-	return revision?.description ?? revision?.draft?.description ?? null;
+	return revision?.draft?.description ?? null;
 }
 
 export function catalogProductEditorSaleAvailability(
 	revision: CatalogProductEditorRevision | null | undefined,
 ) {
-	return revision?.saleAvailability ?? revision?.draft?.saleAvailability ?? null;
+	return revision?.draft?.saleAvailability ?? null;
 }
 
 export function catalogProductEditorVariantCount(
 	revision: CatalogProductEditorRevision | null | undefined,
 ) {
-	return revision?.variantCount ?? revision?.variants?.length ??
-		revision?.draft?.variants?.length ?? 0;
+	return revision?.draft?.variants?.length ?? 0;
 }

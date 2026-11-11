@@ -23,40 +23,21 @@ export async function requestAdminMutation(
 }
 
 /**
- * Return a Convex client whose `.mutation()` routing is governed by
- * `AdminConfig.mutationTransport`.
+ * Return a Convex client whose `.mutation()` calls POST to
+ * `AdminConfig.mutationEndpoint` (default `"/api/admin/mutation"`).
  *
- * When transport is `"websocket"` (default) this is just the raw client
- * from `useConvexClient()` — mutations fly over the authenticated Convex
- * WebSocket like usual.
- *
- * When transport is `"http"` we return a `Proxy` that intercepts
- * `.mutation()` and POSTs to `AdminConfig.mutationEndpoint` instead. The
- * endpoint holds the Better Auth cookie server-side, attaches the token
- * to a Convex HTTP client, and forwards the call. All other methods
+ * The endpoint holds the Better Auth cookie server-side, attaches the token to
+ * a fresh Convex HTTP client, and forwards the call. All other methods
  * (queries, actions, connection state, etc.) pass through untouched, so
- * reactive `useQuery()` subscriptions keep running on the same WebSocket.
+ * reactive `useQuery()` subscriptions keep running on the browser WebSocket.
  *
- * Call sites do not change shape: `await client.mutation(api.foo.bar, args)`
- * works regardless of transport.
- *
- * Why this exists: older Better Auth Svelte adapters could pause the Convex
- * WebSocket on SvelteKit client-side navigation when the session briefly
- * emitted null. This proxy preserves working mutations by routing them
- * through a SvelteKit endpoint that *does* have the auth cookie when consumers
- * choose `mutationTransport: "http"`.
- *
- * See the Obsidian note "PR candidate — convex-better-auth-svelte pause bug"
- * for background and the upstream fix plan.
+ * Call sites keep the Convex shape: `await client.mutation(api.foo.bar, args)`.
+ * Mutation authority therefore never depends on the browser WebSocket's
+ * session lifecycle during SvelteKit client navigation.
  */
 export function useAdminClient(): ConvexClient {
 	const client = useConvexClient();
-	const config = getAdminConfig();
-	const transport = config.mutationTransport ?? "websocket";
-
-	if (transport !== "http") return client;
-
-	const endpoint = config.mutationEndpoint ?? "/api/admin/mutation";
+	const endpoint = getAdminConfig().mutationEndpoint ?? "/api/admin/mutation";
 
 	return new Proxy(client, {
 		get(target, prop, receiver) {
