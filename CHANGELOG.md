@@ -1,5 +1,11 @@
 # @jessepomeroy/admin
 
+## 6.16.4
+
+### Patch Changes
+
+- 636d412: Make internal document-email recovery and gallery session key helpers module-private. The README configuration example drops the retired `sanityStudioUrl` field and now builds its API with `createStandardAdminAPI`, leaving unverified optional features disabled. Package entry points are unchanged.
+
 ## 6.16.3
 
 ### Patch Changes
