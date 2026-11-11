@@ -12,15 +12,13 @@ import { toId } from "../utils";
 import InquiryDetailModal from "./inquiries/InquiryDetailModal.svelte";
 import InquiryTable from "./inquiries/InquiryTable.svelte";
 
-let { data }: { data: { inquiries: InquiryUI[]; adminSession?: TenantAdminServerSession } } = $props();
+let { data }: { data: { adminSession?: TenantAdminServerSession } } = $props();
 
 const config = getAdminConfig();
 const { api } = config;
 const workflowEnabled = $derived(data.adminSession?.status === "authorized" && data.adminSession.tier === "full" && Boolean(api.inquiries.getWorkflow && api.inquiries.clientOptions && api.inquiries.linkClient && api.inquiries.updateFollowUp));
 const convexClient = useAdminClient();
 
-// svelte-ignore state_referenced_locally
-let legacyInquiries = $state<InquiryUI[]>(data.inquiries);
 let selection = $state<InquiryUI | null>(null);
 $effect(() => {
 	const id = $routePage.url.searchParams.get("open");
@@ -42,27 +40,25 @@ function today() {
 	const date = new Date();
 	return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 }
-const inquiryQuery = api.inquiries.listPaginated ? useQuery(api.inquiries.listPaginated, () => ({
+const inquiryQuery = useQuery(api.inquiries.listPaginated, () => ({
 	siteUrl: config.siteUrl,
 	...(statusFilter === "due" ? { followUpBefore: today() } : statusFilter === "all" ? {} : { status: statusFilter }),
 	// Leave headroom under the backend's read ceiling for reactive changes.
 	paginationOpts: { numItems: 25, cursor, id: requestId },
-}), { keepPreviousData: false }) : null;
-const result = $derived(inquiryQuery?.data as PaginationResult<Inquiry> | undefined);
+}), { keepPreviousData: false });
+const result = $derived(inquiryQuery.data as PaginationResult<Inquiry> | undefined);
 const splitError = new Error("This inquiry page changed. Retry to reload it.");
-const pageError = $derived(result?.pageStatus === "SplitRequired" ? splitError : inquiryQuery?.error);
+const pageError = $derived(result?.pageStatus === "SplitRequired" ? splitError : inquiryQuery.error);
 const page = $derived(pageError ? undefined : result);
-const loading = $derived(switchingPage || Boolean(inquiryQuery?.isLoading));
+const loading = $derived(switchingPage || inquiryQuery.isLoading);
 const hasNext = $derived(Boolean(page && !page.isDone && page.continueCursor && page.continueCursor !== cursor));
-const inquiries = $derived(inquiryQuery
-	? (page?.page ?? []).map((inquiry): InquiryUI => ({
-		...inquiry, subject: inquiry.subject ?? null,
-		submittedAt: new Date(inquiry._creationTime).toISOString(),
-	}))
-	: legacyInquiries);
+const inquiries = $derived((page?.page ?? []).map((inquiry): InquiryUI => ({
+	...inquiry, subject: inquiry.subject ?? null,
+	submittedAt: new Date(inquiry._creationTime).toISOString(),
+})));
 
 $effect(() => {
-	if (result || inquiryQuery?.error) switchingPage = false;
+	if (result || inquiryQuery.error) switchingPage = false;
 });
 
 function withPendingStatus(inquiry: InquiryUI): InquiryUI {
@@ -89,7 +85,6 @@ function closeModal() {
 }
 
 function resetPages() {
-	if (!inquiryQuery) return;
 	switchingPage = true;
 	cursors = [null];
 }
@@ -112,7 +107,6 @@ function retryPage() {
 }
 
 function refreshPage() {
-	if (!inquiryQuery) return;
 	// HTTP mutations can finish before the separate query connection catches up.
 	// Read after acknowledgement so clearing an edit cannot reveal the old page.
 	switchingPage = true;
@@ -127,7 +121,6 @@ async function deleteInquiry(id: string) {
 	inquiryBusy = true;
 	try {
 		await convexClient.mutation(api.inquiries.remove, { id: toId(id) });
-		if (!inquiryQuery) legacyInquiries = legacyInquiries.filter((inquiry) => inquiry._id !== id);
 		if (selection?._id === id) selection = null;
 		refreshPage();
 		addToast("Inquiry deleted.");
@@ -147,7 +140,6 @@ async function updateStatus(id: string, newStatus: InquiryStatus) {
 			id: toId(id),
 			status: newStatus,
 		});
-		if (!inquiryQuery) legacyInquiries = legacyInquiries.map((inquiry) => inquiry._id === id ? { ...inquiry, status: newStatus } : inquiry);
 		// Keep the open detail usable when its new status removes it from this filter.
 		if (selection?._id === id) selection = { ...selection, status: newStatus };
 		refreshPage();
@@ -177,7 +169,7 @@ async function updateStatus(id: string, newStatus: InquiryStatus) {
 			{/each}
 		</select>
 		{#if !loading && !pageError}
-			<span class="count">{filteredInquiries.length} {filteredInquiries.length === 1 ? "inquiry" : "inquiries"}{inquiryQuery ? " on this page" : ""}</span>
+			<span class="count">{filteredInquiries.length} {filteredInquiries.length === 1 ? "inquiry" : "inquiries"} on this page</span>
 		{/if}
 	</div>
 
@@ -193,13 +185,11 @@ async function updateStatus(id: string, newStatus: InquiryStatus) {
 	{:else}
 		<InquiryTable inquiries={filteredInquiries} onview={openInquiry} followUpEnabled={workflowEnabled} />
 	{/if}
-	{#if inquiryQuery}
-		<nav class="pagination" aria-label="Inquiry pages">
-			<button class="page-button" onclick={previousPage} disabled={loading || cursors.length === 1}>previous</button>
-			<span class="count" aria-live="polite">page {cursors.length}</span>
-			<button class="page-button" onclick={nextPage} disabled={loading || !hasNext}>next</button>
-		</nav>
-	{/if}
+	<nav class="pagination" aria-label="Inquiry pages">
+		<button class="page-button" onclick={previousPage} disabled={loading || cursors.length === 1}>previous</button>
+		<span class="count" aria-live="polite">page {cursors.length}</span>
+		<button class="page-button" onclick={nextPage} disabled={loading || !hasNext}>next</button>
+	</nav>
 </div>
 
 {#if selectedInquiry}
@@ -212,9 +202,7 @@ async function updateStatus(id: string, newStatus: InquiryStatus) {
 		deleting={deletingInquiry}
 		busy={inquiryBusy}
 		onworkflowchange={(inquiry) => {
-			const updated = { ...inquiry, subject: inquiry.subject ?? null, submittedAt: new Date(inquiry._creationTime).toISOString() };
-			if (selection?._id === inquiry._id) selection = updated;
-			legacyInquiries = legacyInquiries.map((item) => item._id === inquiry._id ? updated : item);
+			if (selection?._id === inquiry._id) selection = { ...inquiry, subject: inquiry.subject ?? null, submittedAt: new Date(inquiry._creationTime).toISOString() };
 		}}
 	/>
 {/if}

@@ -11,7 +11,6 @@ import {
 	CATALOG_PRODUCT_VARIANT_LIMIT,
 	catalogProductGraphDraftFromForm,
 	catalogProductGraphDraftFromRevision,
-	catalogProductDraftFromRevision,
 	catalogProductLabel,
 	catalogProductStatus,
 	copyCatalogProductDraft,
@@ -35,43 +34,10 @@ import {
 	serializeCatalogProductDraft,
 	slugifyCatalogOptionKey,
 	slugifyCatalogProductTitle,
+	type CatalogProductDraftForm,
 	type CatalogProductEditorRevision,
 	type CatalogProductEditorSummary,
 } from "../src/lib/catalogProductEditor";
-
-function revision(
-	overrides: Partial<CatalogProductEditorRevision> = {},
-): CatalogProductEditorRevision {
-	return {
-		revisionId: "revision-1",
-		schemaVersion: 1,
-		productKind: "print",
-		currency: "usd",
-		title: "Moonrise",
-		slug: "moonrise",
-		description: null,
-		fulfillmentMode: "production_partner",
-		saleAvailability: "available",
-		borderOptionsEnabled: false,
-		frameOptionsEnabled: true,
-		framePriceMultiplierBasisPoints: 0,
-		variantCount: 1,
-		checksum: "checksum",
-		source: "admin",
-		createdAt: 1,
-		variants: [
-			{
-				key: "variant-opaque",
-				order: 0,
-				materialOptionKey: null,
-				sizeOptionKey: "8x10",
-				retailPriceCents: 0,
-				status: "enabled",
-			},
-		],
-		...overrides,
-	};
-}
 
 function summary(
 	overrides: Partial<CatalogProductEditorSummary> = {},
@@ -134,6 +100,23 @@ describe("catalog product editor helpers", () => {
 		expect(capability({ ...explicitApi, unpublish: undefined }, true)?.publication).toBeNull();
 	});
 
+	it("enables products only through the catalog graph API", () => {
+		const draftApi = {
+			listForEditor: { name: "list" },
+			getEditorState: { name: "get" },
+			createDraft: { name: "create" },
+			saveDraft: { name: "save" },
+			discardDraft: { name: "discard" },
+		};
+		const products = { enabledKinds: ["print"] };
+		const capability = (config: object) =>
+			getCatalogProductEditorCapability(config as unknown as AdminConfig);
+		// The retired single-print `catalogProducts` refs no longer enable the editor.
+		expect(capability({ editor: { products }, api: { catalogProducts: draftApi } })).toBeNull();
+		expect(capability({ editor: { products }, api: { catalogProductGraphs: draftApi } })?.api).toBe(draftApi);
+		expect(capability({ api: { catalogProductGraphs: draftApi } })).toBeNull();
+	});
+
 	it("projects private upload routes independently from legacy replacement refs", () => {
 		const graphApi = new Proxy({}, {
 			get: (_, property) => ({ name: String(property) }),
@@ -179,38 +162,7 @@ describe("catalog product editor helpers", () => {
 		});
 	});
 
-	it("converts nullable projections, preserves zero, and strips order", () => {
-		const projected = revision();
-		const draft = catalogProductDraftFromRevision(projected);
-		expect(draft).toEqual({
-			productKind: "print",
-			title: "Moonrise",
-			slug: "moonrise",
-			description: undefined,
-			fulfillmentMode: "production_partner",
-			saleAvailability: "available",
-			borderOptionsEnabled: false,
-			frameOptionsEnabled: true,
-			framePriceMultiplierBasisPoints: 0,
-			variants: [
-				{
-					key: "variant-opaque",
-					materialOptionKey: undefined,
-					sizeOptionKey: "8x10",
-					retailPriceCents: 0,
-					status: "enabled",
-				},
-			],
-			setMembers: [],
-		});
-		expect(draft.variants[0]).not.toHaveProperty("order");
-		expect(projected.variants[0]).toHaveProperty("order", 0);
-	});
-
-	it("uses an unavailable physical-print draft when no revision exists", () => {
-		expect(catalogProductDraftFromRevision(null)).toEqual(
-			emptyCatalogProductDraft(),
-		);
+	it("starts an unavailable physical-print form when no draft exists", () => {
 		expect(emptyCatalogProductDraft()).toEqual({
 			productKind: "print",
 			fulfillmentMode: "production_partner",
@@ -223,20 +175,12 @@ describe("catalog product editor helpers", () => {
 		});
 	});
 
-	it("fails closed for non-print fulfillment and inconsistent projections", () => {
-		expect(() =>
-			catalogProductDraftFromRevision({
-				...revision(),
-				fulfillmentMode: "digital_delivery",
-			} as unknown as CatalogProductEditorRevision),
-		).toThrow(/physical fulfillment/i);
-		expect(() =>
-			catalogProductDraftFromRevision(revision({ variantCount: 2 })),
-		).toThrow(/variant count/i);
-	});
-
 	it("copies and serializes drafts without retaining variant references", () => {
-		const original = catalogProductDraftFromRevision(revision());
+		const original: CatalogProductDraftForm = {
+			...emptyCatalogProductDraft(),
+			title: "Moonrise",
+			variants: [{ key: "variant-opaque", sizeOptionKey: "8x10", retailPriceCents: 0, status: "enabled" }],
+		};
 		const copy = copyCatalogProductDraft(original);
 		copy.variants[0].sizeOptionKey = "11x14";
 		expect(original.variants[0].sizeOptionKey).toBe("8x10");

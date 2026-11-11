@@ -7,6 +7,7 @@ import { blogFixtureConfig } from "./fixtures/blog-media/config";
 import { mediaAsset, mediaPage, postEditorState } from "./fixtures/blog-media/data";
 
 vi.mock("../src/lib/config", async () => import("./fixtures/blog-media/config"));
+vi.mock("../src/lib/adminClient", () => import("./stubs/contextAdminClient"));
 
 let component: ReturnType<typeof mount> | undefined;
 

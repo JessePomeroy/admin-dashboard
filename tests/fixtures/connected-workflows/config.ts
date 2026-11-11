@@ -1,6 +1,6 @@
 import { makeFunctionReference } from "convex/server";
 export function getAdminConfig() {
-	return { siteUrl: "example.test", isCreator: false, mutationTransport: "websocket", api: {
+	return { siteUrl: "example.test", isCreator: false, api: {
 		inquiries: {
 			listPaginated: makeFunctionReference<"query">("inquiries:listPaginated"),
 			listForClient: makeFunctionReference<"query">("inquiries:listForClient"),

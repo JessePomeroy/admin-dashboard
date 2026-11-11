@@ -40,7 +40,6 @@ const mocks = vi.hoisted(() => ({
 	candidateArgs: undefined as unknown,
 	notifyQuery: undefined as (() => void) | undefined,
 	enabledKinds: ["print"] as string[],
-	graphApiEnabled: false,
 	privateAssetEnabled: false,
 	publicationEnabled: false,
 	publicationRefsEnabled: false,
@@ -146,30 +145,25 @@ vi.mock("../src/lib/config", () => ({
 		fromEmail: "test@example.com",
 		isCreator: true,
 		api: {
-			catalogProducts: mocks.refs,
-			...(mocks.graphApiEnabled
-				? {
-						catalogProductGraphs: {
-							listForEditor: mocks.refs.listForEditor,
-							getEditorState: mocks.refs.getEditorState,
-							createDraft: mocks.refs.createDraft,
-							saveDraft: mocks.refs.saveDraft,
-							discardDraft: mocks.refs.discardDraft,
-							...(mocks.privateAssetEnabled
-								? {
-										listDraftPrivateAssetCandidates: mocks.refs.listDraftPrivateAssetCandidates,
-										replaceDraftPrivateAsset: mocks.refs.replaceDraftPrivateAsset,
-									}
-								: {}),
-							...(mocks.publicationRefsEnabled
-								? {
-										publishDraft: mocks.refs.publishDraft,
-										unpublish: mocks.refs.unpublish,
-									}
-								: {}),
-						},
-					}
-				: {}),
+			catalogProductGraphs: {
+				listForEditor: mocks.refs.listForEditor,
+				getEditorState: mocks.refs.getEditorState,
+				createDraft: mocks.refs.createDraft,
+				saveDraft: mocks.refs.saveDraft,
+				discardDraft: mocks.refs.discardDraft,
+				...(mocks.privateAssetEnabled
+					? {
+							listDraftPrivateAssetCandidates: mocks.refs.listDraftPrivateAssetCandidates,
+							replaceDraftPrivateAsset: mocks.refs.replaceDraftPrivateAsset,
+						}
+					: {}),
+				...(mocks.publicationRefsEnabled
+					? {
+							publishDraft: mocks.refs.publishDraft,
+							unpublish: mocks.refs.unpublish,
+						}
+					: {}),
+			},
 			...(mocks.mediaEnabled
 				? {
 						mediaAssets: {
@@ -215,34 +209,6 @@ vi.mock("../src/lib/config", () => ({
 }));
 
 const components: ReturnType<typeof mount>[] = [];
-const revision = {
-	revisionId: "revision-1",
-	schemaVersion: 1,
-	productKind: "print",
-	currency: "usd",
-	title: "Lake print",
-	slug: "lake-print",
-	description: "A quiet lake.",
-	fulfillmentMode: "production_partner",
-	saleAvailability: "available",
-	borderOptionsEnabled: false,
-	frameOptionsEnabled: false,
-	framePriceMultiplierBasisPoints: 10000,
-	variantCount: 1,
-	checksum: "checksum",
-	source: "admin",
-	createdAt: 1,
-	variants: [
-		{
-			key: "variant-original",
-			order: 0,
-			materialOptionKey: "fine-art-paper",
-			sizeOptionKey: "8x10",
-			retailPriceCents: 2500,
-			status: "enabled",
-		},
-	],
-};
 const graphRevision = {
 	revisionId: "graph-revision-1",
 	schemaVersion: 2,
@@ -576,21 +542,8 @@ async function updateDetailQuery(value: unknown) {
 	await tick();
 }
 function enablePublication() {
-	mocks.graphApiEnabled = true;
 	mocks.publicationEnabled = true;
 	mocks.publicationRefsEnabled = true;
-}
-function legacyDetail() {
-	return {
-		productId: "product-1",
-		productKey: "print-one",
-		productKind: "print",
-		slug: "lake-print",
-		draft: revision,
-		published: null,
-		updatedAt: 1,
-		publishedAt: null,
-	};
 }
 function graphDetail(
 	draft: typeof graphRevision | null = graphRevision,
@@ -650,7 +603,6 @@ describe("draft-only product editor", () => {
 		mocks.candidateError = undefined;
 		mocks.candidateArgs = undefined;
 		mocks.enabledKinds = ["print"];
-		mocks.graphApiEnabled = false;
 		mocks.privateAssetEnabled = false;
 		mocks.publicationEnabled = false;
 		mocks.publicationRefsEnabled = false;
@@ -735,7 +687,6 @@ describe("draft-only product editor", () => {
 	});
 
 	it("creates a real Graph V2 product kind without redundant workspace copy", async () => {
-		mocks.graphApiEnabled = true;
 		mocks.enabledKinds = ["digital_download"];
 		mocks.publicationEnabled = true;
 		mocks.publicationRefsEnabled = true;
@@ -776,7 +727,6 @@ describe("draft-only product editor", () => {
 	});
 
 	it("filters the enabled taxonomy and keeps the selected record current", async () => {
-		mocks.graphApiEnabled = true;
 		mocks.enabledKinds = ["print", "tapestry"];
 		mocks.listData = [
 			{
@@ -990,7 +940,6 @@ describe("draft-only product editor", () => {
 		for (const component of components.splice(0)) unmount(component);
 		document.body.innerHTML = "";
 
-		mocks.graphApiEnabled = true;
 		await mountList();
 		expect(document.body.textContent).toContain("Select one from the list, or create a new product draft.");
 		expect(document.body.textContent).not.toContain("publication controls");
@@ -1071,58 +1020,6 @@ describe("draft-only product editor", () => {
 		expect(fallbackLink?.textContent).toContain("Open the product draft");
 	});
 
-	it("fails closed on deep links when single prints are disabled", () => {
-		mocks.enabledKinds = [];
-		expect(() => mount(ProductsPage, { target: document.body })).toThrow(
-			/single-print product editor is not configured/i,
-		);
-		expect(() =>
-			mount(ProductPage, {
-				target: document.body,
-				props: { productId: "product-1" },
-			}),
-		).toThrow(/single-print product editor is not configured/i);
-		expect(mocks.mutation).not.toHaveBeenCalled();
-	});
-
-	it("saves an explicitly edited draft with its CAS revision and ordered variants", async () => {
-		mocks.detailData = legacyDetail();
-		await mountDetail();
-		expect(document.querySelector(".settings-header .description")).toBeNull();
-		expect(button("publish")).toBeUndefined();
-		expect(document.querySelector("#catalog-publication-heading")).toBeNull();
-		button("add variant")?.click();
-		await tick();
-		const newVariantKey = document.querySelectorAll<HTMLInputElement>(".variant-fields .price-field input")[1]?.id.replace(/^catalog-price-/, "") ?? "";
-		expect(newVariantKey).not.toBe("");
-		document.querySelector("#catalog-variants-heading")?.closest("section")?.querySelector("ol")?.dispatchEvent(new CustomEvent("finalize", { bubbles: true, detail: { items: [{ key: newVariantKey, status: "enabled", id: newVariantKey }, { ...revision.variants[0], id: revision.variants[0].key }], info: { source: "pointer", trigger: "droppedIntoZone", id: newVariantKey } } }));
-		const name = input("product name");
-		name!.value = "Lake print revised";
-		name!.dispatchEvent(new Event("input", { bubbles: true }));
-		const slug = input("URL name");
-		slug!.value = "Lake Light !!!";
-		slug!.dispatchEvent(new Event("input", { bubbles: true }));
-		await tick();
-		button("save draft")?.click();
-		await tick();
-		await Promise.resolve();
-		const saveCall = mocks.mutation.mock.calls.find(
-			([ref]) => ref === mocks.refs.saveDraft,
-		);
-		expect(saveCall?.[1]).toEqual(
-			expect.objectContaining({
-				productId: "product-1",
-				expectedDraftRevisionId: "revision-1",
-				draft: expect.objectContaining({
-					title: "Lake print revised",
-					slug: "lake-light",
-				}),
-			}),
-		);
-		expect(saveCall?.[1].draft.variants).toHaveLength(2);
-		expect(saveCall?.[1].draft.variants[1].key).toBe("variant-original");
-	});
-
 	it("saves migrated V2 print drafts without dropping imported graph relations", async () => {
 		mocks.detailData = graphDetail(graphRevision, null, 1);
 		await mountDetail();
@@ -1178,7 +1075,6 @@ describe("draft-only product editor", () => {
 	});
 
 	it("uses consistent segmented sale controls without native popup menus or checkboxes", async () => {
-		mocks.graphApiEnabled = true;
 		mocks.detailData = graphDetail();
 		await mountDetail();
 
@@ -1218,7 +1114,6 @@ describe("draft-only product editor", () => {
 	});
 
 	it("renders host-labelled material and compatible size listboxes without rewriting legacy keys", async () => {
-		mocks.graphApiEnabled = true;
 		mocks.variantOptionsEnabled = true;
 		mocks.detailData = graphDetail();
 		await mountDetail();
@@ -1251,7 +1146,6 @@ describe("draft-only product editor", () => {
 	});
 
 	it("clears only an incompatible size when a material choice changes", async () => {
-		mocks.graphApiEnabled = true;
 		mocks.variantOptionsEnabled = true;
 		const optionRevision = {
 			...graphRevision,
@@ -1407,16 +1301,13 @@ describe("draft-only product editor", () => {
 		expect(input("retail price (USD)")?.getAttribute("aria-invalid")).toBe("false");
 	});
 
-	for (const [graph, action] of [[false, "save"], [true, "save"], [false, "discard"], [false, "start"], [true, "start"]] as const) {
+	for (const action of ["save", "start"] as const) {
 		for (const outcome of ["success", "error"] as const) {
-			it.each([false, true])(`ignores a late ${graph ? "graph" : "legacy"} ${action} ${outcome} after navigation (return to original: %s)`, async (returnToOriginal) => {
-				mocks.graphApiEnabled = graph;
+			it.each([false, true])(`ignores a late graph ${action} ${outcome} after navigation (return to original: %s)`, async (returnToOriginal) => {
 				const detail = (productId: string, revisionId: string, title: string, active = true) => {
-					const draft = graph
-						? { ...graphRevision, revisionId, draft: { ...graphRevision.draft, title } }
-						: { ...revision, revisionId, title };
+					const draft = { ...graphRevision, revisionId, draft: { ...graphRevision.draft, title } };
 					return {
-						...graphDetail(), productId, graphVersion: graph ? 2 : undefined,
+						...graphDetail(), productId,
 						draft: active ? draft : null, published: active ? null : draft,
 					};
 				};
@@ -1669,7 +1560,6 @@ describe("draft-only product editor", () => {
 	});
 
 	it("starts a replacement Graph V2 draft from the published revision and saves before query echo", async () => {
-		mocks.graphApiEnabled = true;
 		mocks.detailData = graphDetail(null, graphRevision, 20);
 		mocks.mutation
 			.mockResolvedValueOnce({ revisionId: "revision-restarted" })
@@ -1738,7 +1628,6 @@ describe("draft-only product editor", () => {
 	});
 
 	it("starts an incomplete fixed-price Graph V2 replacement without inventing a price", async () => {
-		mocks.graphApiEnabled = true;
 		mocks.enabledKinds = ["digital_download"];
 		mocks.detailData = {
 			productId: "product-1",
@@ -1848,7 +1737,6 @@ describe("draft-only product editor", () => {
 	});
 
 	it("recomputes a host-owned print margin as the USD price changes", async () => {
-		mocks.graphApiEnabled = true;
 		mocks.marginEnabled = true;
 		const pricedPrint = {
 			...graphRevision,
@@ -1928,7 +1816,6 @@ describe("draft-only product editor", () => {
 	});
 
 	it("does not invent margin estimates for fixed-price product kinds", async () => {
-		mocks.graphApiEnabled = true;
 		mocks.enabledKinds = ["tapestry"];
 		mocks.marginEnabled = true;
 		mocks.detailData = {
@@ -1948,7 +1835,6 @@ describe("draft-only product editor", () => {
 	});
 
 	it("edits product display media while preserving hidden share metadata", async () => {
-		mocks.graphApiEnabled = true;
 		mocks.mediaEnabled = true;
 		mocks.mediaRegisterEnabled = false;
 		mocks.enabledKinds = ["print", "tapestry"];
@@ -2103,7 +1989,6 @@ describe("draft-only product editor", () => {
 	});
 
 	it("keeps an upload that finishes during a save dirty until it is persisted", async () => {
-		mocks.graphApiEnabled = true;
 		mocks.mediaEnabled = true;
 		mocks.enabledKinds = ["print", "tapestry"];
 		mocks.mediaListData = { page: [], isDone: true, continueCursor: "" };
@@ -2188,7 +2073,6 @@ describe("draft-only product editor", () => {
 	});
 
 	it("surfaces product media query failures", async () => {
-		mocks.graphApiEnabled = true;
 		mocks.mediaEnabled = true;
 		mocks.mediaListError = new Error("media unavailable");
 		mocks.detailData = {
@@ -2209,7 +2093,6 @@ describe("draft-only product editor", () => {
 	});
 
 	it("allows a set-member asset to become the single missing cover without changing its member relation", async () => {
-		mocks.graphApiEnabled = true;
 		mocks.mediaEnabled = true;
 		mocks.privateAssetEnabled = true;
 		mocks.enabledKinds = ["print", "print_set"];
@@ -2374,7 +2257,6 @@ describe("draft-only product editor", () => {
 	});
 
 	it("saves migrated digital-download drafts while showing only safe paid-file metadata", async () => {
-		mocks.graphApiEnabled = true;
 		mocks.privateAssetEnabled = true;
 		mocks.enabledKinds = ["print", "digital_download"];
 		mocks.detailData = {
@@ -2472,7 +2354,6 @@ describe("draft-only product editor", () => {
 	});
 
 	it("uploads one print image through the paired private and display-media seam", async () => {
-		mocks.graphApiEnabled = true;
 		mocks.privateAssetEnabled = true;
 		mocks.mediaEnabled = true;
 		const currentDisplay = mediaAsset(
@@ -2543,7 +2424,6 @@ describe("draft-only product editor", () => {
 	});
 
 	it("attaches print-set artwork in the selected file order", async () => {
-		mocks.graphApiEnabled = true;
 		mocks.privateAssetEnabled = true;
 		mocks.mediaEnabled = true;
 		mocks.enabledKinds = ["print", "print_set"];
@@ -2659,7 +2539,6 @@ describe("draft-only product editor", () => {
 	});
 
 	function downloadLifetimeFixture() {
-		mocks.graphApiEnabled = true;
 		mocks.privateAssetEnabled = true;
 		mocks.enabledKinds = ["digital_download"];
 		const detail = {
@@ -2761,7 +2640,6 @@ describe("draft-only product editor", () => {
 	});
 
 	it("attaches a customer ZIP through the compact download control", async () => {
-		mocks.graphApiEnabled = true;
 		mocks.privateAssetEnabled = true;
 		mocks.enabledKinds = ["digital_download"];
 		const draftWithoutFile = {
@@ -2868,7 +2746,7 @@ describe("draft-only product editor", () => {
 	});
 
 	it("accepts a delayed own-save query echo without replacing the next local edit", async () => {
-		mocks.detailData = legacyDetail();
+		mocks.detailData = graphDetail(graphRevision, null, 1);
 		mocks.mutation
 			.mockResolvedValueOnce({
 				productId: "product-1",
@@ -2891,16 +2769,12 @@ describe("draft-only product editor", () => {
 		name!.value = "A later local edit";
 		name!.dispatchEvent(new Event("input", { bubbles: true }));
 		await tick();
-		await updateDetailQuery({
-			...legacyDetail(),
-			draft: {
-				...revision,
-				revisionId: "revision-2",
-				title: "First saved title",
-				createdAt: 2,
-			},
-			updatedAt: 2,
-		});
+		await updateDetailQuery(graphDetail({
+			...graphRevision,
+			revisionId: "revision-2",
+			createdAt: 2,
+			draft: { ...graphRevision.draft, title: "First saved title" },
+		}, null, 2));
 
 		expect(input("product name")?.value).toBe("A later local edit");
 		expect(document.querySelector('[role="alert"]')).toBeNull();
@@ -2923,7 +2797,7 @@ describe("draft-only product editor", () => {
 	});
 
 	it("surfaces save conflicts without replacing local work", async () => {
-		mocks.detailData = legacyDetail();
+		mocks.detailData = graphDetail();
 		mocks.mutation.mockRejectedValueOnce(
 			new Error("Catalog draft conflict: reload before saving"),
 		);
@@ -2943,7 +2817,7 @@ describe("draft-only product editor", () => {
 	});
 
 	it("accepts USD prices and blocks values beyond two decimal places", async () => {
-		mocks.detailData = legacyDetail();
+		mocks.detailData = graphDetail();
 		await mountDetail();
 		const name = input("product name");
 		name!.value = "Lake print revised";
@@ -2975,7 +2849,7 @@ describe("draft-only product editor", () => {
 	});
 
 	it("does not let a hidden invalid frame multiplier block an otherwise valid save", async () => {
-		mocks.detailData = legacyDetail();
+		mocks.detailData = graphDetail();
 		await mountDetail();
 
 		const name = input("product name");
@@ -3001,100 +2875,10 @@ describe("draft-only product editor", () => {
 		const saveCall = mocks.mutation.mock.calls.find(
 			([ref]) => ref === mocks.refs.saveDraft,
 		);
-		expect(saveCall?.[1].draft).toEqual(
+		expect(saveCall?.[1].draft.printOptions).toEqual(
 			expect.objectContaining({
 				frameOptionsEnabled: false,
 				framePriceMultiplierBasisPoints: 10_000,
-			}),
-		);
-	});
-
-	it("keeps the active draft when discard confirmation is cancelled", async () => {
-		mocks.detailData = legacyDetail();
-		const confirm = vi.spyOn(globalThis, "confirm").mockReturnValue(false);
-		await mountDetail();
-
-		button("discard draft")?.click();
-		await tick();
-
-		expect(confirm).toHaveBeenCalledOnce();
-		expect(mocks.mutation).not.toHaveBeenCalled();
-		expect(button("save draft")).toBeUndefined();
-		expect(document.querySelector("#discarded-product-heading")).toBeNull();
-	});
-
-	it("preserves a restarted draft edit across delayed discard and restart query echoes", async () => {
-		mocks.detailData = legacyDetail();
-		vi.spyOn(globalThis, "confirm").mockReturnValue(true);
-		mocks.mutation
-			.mockResolvedValueOnce({ productId: "product-1", draftRevisionId: null })
-			.mockResolvedValueOnce({
-				productId: "product-1",
-				revisionId: "revision-restarted",
-			})
-			.mockResolvedValueOnce({
-				productId: "product-1",
-				revisionId: "revision-after-edit",
-			});
-		await mountDetail();
-
-		button("discard draft")?.click();
-		await tick();
-		await Promise.resolve();
-		expect(button("start a new draft")).toBeDefined();
-
-		button("start a new draft")?.click();
-		await tick();
-		await Promise.resolve();
-		const name = input("product name");
-		name!.value = "Edit after restarting";
-		name!.dispatchEvent(new Event("input", { bubbles: true }));
-		await tick();
-
-		await updateDetailQuery({
-			...legacyDetail(),
-			slug: null,
-			draft: null,
-			updatedAt: 2,
-		});
-		expect(input("product name")?.value).toBe("Edit after restarting");
-		expect(document.querySelector('[role="alert"]')).toBeNull();
-
-		await updateDetailQuery({
-			...legacyDetail(),
-			slug: null,
-			draft: {
-				...revision,
-				revisionId: "revision-restarted",
-				title: null,
-				slug: null,
-				description: null,
-				saleAvailability: "unavailable",
-				frameOptionsEnabled: false,
-				framePriceMultiplierBasisPoints: 10_000,
-				variantCount: 0,
-				variants: [],
-				createdAt: 3,
-			},
-			updatedAt: 3,
-		});
-
-		expect(input("product name")?.value).toBe("Edit after restarting");
-		expect(document.querySelector('[role="alert"]')).toBeNull();
-		expect(button("save draft")?.disabled).toBe(false);
-		button("save draft")?.click();
-		await tick();
-		await Promise.resolve();
-
-		const saveCalls = mocks.mutation.mock.calls.filter(
-			([ref]) => ref === mocks.refs.saveDraft,
-		);
-		expect(saveCalls).toHaveLength(2);
-		expect(saveCalls[1][1]).toEqual(
-			expect.objectContaining({
-				productId: "product-1",
-				expectedDraftRevisionId: "revision-restarted",
-				draft: expect.objectContaining({ title: "Edit after restarting" }),
 			}),
 		);
 	});
@@ -3113,15 +2897,12 @@ describe("draft-only product editor", () => {
 		const variants = Array.from({ length: 100 }, (_, index) => ({
 			key: `variant-${index}`,
 			order: index,
-			materialOptionKey: null,
-			sizeOptionKey: null,
-			retailPriceCents: null,
 			status: "enabled",
 		}));
-		mocks.detailData = {
-			...legacyDetail(),
-			draft: { ...revision, variantCount: variants.length, variants },
-		};
+		mocks.detailData = graphDetail({
+			...graphRevision,
+			draft: { ...graphRevision.draft, variants },
+		});
 		await mountDetail();
 
 		expect(button("add variant")?.disabled).toBe(true);
@@ -3132,12 +2913,7 @@ describe("draft-only product editor", () => {
 	});
 
 	it("shows a truthful discarded state and can start a replacement draft", async () => {
-		mocks.detailData = {
-			...legacyDetail(),
-			slug: null,
-			draft: null,
-			updatedAt: 2,
-		};
+		mocks.detailData = { ...graphDetail(null, null, 2), slug: null };
 		await mountDetail();
 		expect(
 			document.querySelector("#discarded-product-heading")?.textContent,

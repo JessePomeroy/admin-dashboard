@@ -2,7 +2,6 @@ import { makeFunctionReference } from "convex/server";
 import type { AdminAPI } from "../../../src/lib/config";
 
 const galleryDelivery = {
-	listBySite: makeFunctionReference<"query">("galleries:listBySite"),
 	listSubmittedProofs: makeFunctionReference<"query">("galleries:listSubmittedProofs"),
 	listBySitePaginated: makeFunctionReference<"query">("galleries:listBySitePaginated"),
 	get: makeFunctionReference<"query">("galleries:get"),

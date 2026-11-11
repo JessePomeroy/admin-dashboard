@@ -16,7 +16,6 @@ import {
 	addCatalogProductGalleryMedia,
 	alignCatalogProductWebMediaWithSetMembers,
 	attachCatalogProductArtwork,
-	catalogProductDraftFromRevision,
 	catalogProductEditorDescription,
 	catalogProductEditorSaleAvailability,
 	catalogProductEditorTitle,
@@ -55,7 +54,7 @@ let { productId }: { productId: string } = $props();
 const config = getAdminConfig();
 const capability = getCatalogProductEditorCapability(config);
 if (!capability) {
-	throw new Error("Single-print product editor is not configured for this host");
+	throw new Error("Product editor is not configured for this host");
 }
 const {
 	api: catalogApi,
@@ -144,9 +143,8 @@ let selectedAssetIds = $derived.by(() => {
 	);
 });
 let currentJson = $derived(serializeCatalogProductDraft(form));
-let isGraphV2 = $derived(editorState?.graphVersion === 2 || editorState?.draft?.schemaVersion === 2 || editorState?.published?.schemaVersion === 2);
 let graphProductKindEditable = $derived(
-	isGraphV2 && canEditCatalogProductGraphKind(editorState?.productKind),
+	canEditCatalogProductGraphKind(editorState?.productKind),
 );
 let canEditGraphProduct = $derived(
 	graphProductKindEditable && Boolean(editorState?.draft || graphSourceRevision),
@@ -238,14 +236,6 @@ function finishLoadingServerDraft(state: CatalogProductEditorState) {
 	saveError = "";
 	variantsValid = true;
 	initialized = true;
-}
-
-function loadServerDraft(state: CatalogProductEditorState) {
-	locallyCommittedRevisionIds = [];
-	form = catalogProductDraftFromRevision(state.draft);
-	hasActiveDraft = Boolean(state.draft);
-	baseRevisionId = state.draft?.revisionId;
-	finishLoadingServerDraft(state);
 }
 
 function loadServerGraphProductDraft(state: CatalogProductEditorState) {
@@ -395,88 +385,63 @@ $effect(() => {
 
 $effect(() => {
 	if (!editorState || editorState.productId !== productId) return;
-	if (isGraphV2) {
-		const serverRevisionId = editorState.draft?.revisionId ?? null;
-		const serverPublishedRevisionId = editorState.published?.revisionId ?? null;
-		if (!initialized) {
-			if (graphProductKindEditable && editorState.draft) {
-				return loadServerGraphProductDraft(editorState);
-			}
-			loadServerGraphProductWithoutDraft(editorState);
-			return;
+	const serverRevisionId = editorState.draft?.revisionId ?? null;
+	const serverPublishedRevisionId = editorState.published?.revisionId ?? null;
+	if (!initialized) {
+		if (graphProductKindEditable && editorState.draft) {
+			return loadServerGraphProductDraft(editorState);
 		}
-		if (publicationOperation) {
-			reconcilePublicationState(editorState);
-			return;
-		}
-		if (!graphProductKindEditable) {
-			syncLoadedPublication(editorState);
-			if (saveState !== "conflict") saveState = "saved";
-			return;
-		}
-		if (saveState === "conflict") return;
-		if (["saving", "discarding"].includes(saveState)) return;
-		if (
-			serverRevisionId === loadedServerRevisionId
-			&& serverPublishedRevisionId === loadedPublishedRevisionId
-			&& editorState.updatedAt === loadedUpdatedAt
-		) return;
-		const localEchoIndex = locallyCommittedRevisionIds.indexOf(serverRevisionId);
-		if (
-			localEchoIndex >= 0
-			&& serverPublishedRevisionId === loadedPublishedRevisionId
-		) {
-			const remainingCommittedRevisionIds = locallyCommittedRevisionIds.slice(
-				localEchoIndex + 1,
-			);
-			syncLoadedPublication(editorState);
-			if (remainingCommittedRevisionIds.length === 0) {
-				baseRevisionId = serverRevisionId ?? undefined;
-				graphSourceRevision = editorState.draft;
-				hasActiveDraft = Boolean(editorState.draft);
-			}
-			locallyCommittedRevisionIds = remainingCommittedRevisionIds;
-			return;
-		}
-		if (
-			serverRevisionId === null
-			&& graphSourceRevision
-			&& locallyCommittedRevisionIds.includes(graphSourceRevision.revisionId)
-		) return;
-		if (dirty) {
-			saveState = "conflict";
-			saveError = "A newer server state arrived while this page had unsaved changes. Reload before continuing.";
-			return;
-		}
-		if (!editorState.draft) {
-			loadServerGraphProductWithoutDraft(editorState);
-			return;
-		}
-		loadServerGraphProductDraft(editorState);
+		loadServerGraphProductWithoutDraft(editorState);
 		return;
 	}
-	const serverRevisionId = editorState.draft?.revisionId ?? null;
-	if (!initialized) return loadServerDraft(editorState);
+	if (publicationOperation) {
+		reconcilePublicationState(editorState);
+		return;
+	}
+	if (!graphProductKindEditable) {
+		syncLoadedPublication(editorState);
+		if (saveState !== "conflict") saveState = "saved";
+		return;
+	}
+	if (saveState === "conflict") return;
 	if (["saving", "discarding"].includes(saveState)) return;
-	if (serverRevisionId === loadedServerRevisionId) return;
+	if (
+		serverRevisionId === loadedServerRevisionId
+		&& serverPublishedRevisionId === loadedPublishedRevisionId
+		&& editorState.updatedAt === loadedUpdatedAt
+	) return;
 	const localEchoIndex = locallyCommittedRevisionIds.indexOf(serverRevisionId);
-	if (localEchoIndex >= 0) {
+	if (
+		localEchoIndex >= 0
+		&& serverPublishedRevisionId === loadedPublishedRevisionId
+	) {
 		const remainingCommittedRevisionIds = locallyCommittedRevisionIds.slice(
 			localEchoIndex + 1,
 		);
-		loadedServerRevisionId = serverRevisionId;
+		syncLoadedPublication(editorState);
 		if (remainingCommittedRevisionIds.length === 0) {
 			baseRevisionId = serverRevisionId ?? undefined;
+			graphSourceRevision = editorState.draft;
+			hasActiveDraft = Boolean(editorState.draft);
 		}
 		locallyCommittedRevisionIds = remainingCommittedRevisionIds;
 		return;
 	}
+	if (
+		serverRevisionId === null
+		&& graphSourceRevision
+		&& locallyCommittedRevisionIds.includes(graphSourceRevision.revisionId)
+	) return;
 	if (dirty) {
 		saveState = "conflict";
-		saveError = "A newer server draft arrived while this page had unsaved changes. Reload before continuing.";
+		saveError = "A newer server state arrived while this page had unsaved changes. Reload before continuing.";
 		return;
 	}
-	loadServerDraft(editorState);
+	if (!editorState.draft) {
+		loadServerGraphProductWithoutDraft(editorState);
+		return;
+	}
+	loadServerGraphProductDraft(editorState);
 });
 
 $effect(() => {
@@ -673,15 +638,12 @@ async function previewProduct() {
 async function saveDraft() {
 	if (!canSave) return;
 	if (!editorState) return;
-	if (isGraphV2 && !graphSourceRevision) return;
-	if (!isGraphV2 && !editorState.draft) return;
+	if (!graphSourceRevision) return;
 	const isCurrentOperation = beginDraftMutation("saving");
 	try {
 		const submittedForm = copyCatalogProductDraft(form);
 		const submittedJson = serializeCatalogProductDraft(submittedForm);
-		const draft = isGraphV2 && graphSourceRevision
-			? catalogProductGraphDraftFromForm(graphSourceRevision, submittedForm)
-			: submittedForm;
+		const draft = catalogProductGraphDraftFromForm(graphSourceRevision, submittedForm);
 		const result = await client.mutation(catalogApi.saveDraft, {
 			productId,
 			...(baseRevisionId ? { expectedDraftRevisionId: baseRevisionId } : {}),
@@ -689,13 +651,11 @@ async function saveDraft() {
 		}) as { revisionId: string };
 		if (!isCurrentOperation()) return;
 		baseRevisionId = result.revisionId;
-		if (isGraphV2 && graphSourceRevision && "schemaVersion" in draft && draft.schemaVersion === 2) {
-			graphSourceRevision = graphRevisionFromDraft(
-				draft,
-				result.revisionId,
-				graphSourceRevision.createdAt,
-			);
-		}
+		graphSourceRevision = graphRevisionFromDraft(
+			draft,
+			result.revisionId,
+			graphSourceRevision.createdAt,
+		);
 		rememberCommittedRevision(result.revisionId);
 		savedJson = submittedJson;
 		saveState = serializeCatalogProductDraft(form) === submittedJson ? "saved" : "dirty";
@@ -721,48 +681,18 @@ async function deleteProduct() {
 	}
 }
 
-async function discardDraft() {
-	if (!hasActiveDraft || !baseRevisionId) return;
-	if (!globalThis.confirm(
-		"Discard this draft? This clears its staged product details and any unsaved changes. The product identity remains, but this editor does not yet provide a restore action.",
-	)) return;
-	const isCurrentOperation = beginDraftMutation("discarding");
-	try {
-		await client.mutation(catalogApi.discardDraft, { productId, draftRevisionId: baseRevisionId });
-		if (!isCurrentOperation()) return;
-		rememberCommittedRevision(null);
-		hasActiveDraft = false;
-		baseRevisionId = undefined;
-		graphSourceRevision = null;
-		form = emptyCatalogProductDraft();
-		savedJson = serializeCatalogProductDraft(form);
-		syncMultiplierFromForm();
-		saveState = "saved";
-	} catch (error) {
-		if (!isCurrentOperation()) return;
-		saveError = mutationError(error, "Could not discard this product draft.");
-	}
-}
 async function startDraft() {
 	if (editorLocked || !editorState) return;
-	if (isGraphV2 && !graphProductKindEditable) return;
-	let draft: CatalogProductDraftForm | CatalogProductGraphV2Draft;
-	let nextForm: CatalogProductDraftForm;
-	if (isGraphV2) {
-		if (!canEditCatalogProductGraphKind(editorState.productKind)) return;
-		const publishedDraft = editorState.published?.draft;
-		draft = publishedDraft && publishedDraft.productKind === editorState.productKind
-			? publishedDraft
-			: newCatalogProductReplacementGraphDraft(editorState.productKind, {
-				...(editorState.slug ? { slug: editorState.slug } : {}),
-			});
-		nextForm = catalogProductGraphDraftFromRevision(
-			graphRevisionFromDraft(draft, "pending-replacement", Date.now()),
-		);
-	} else {
-		draft = catalogProductDraftFromRevision(editorState.published);
-		nextForm = draft;
-	}
+	if (!canEditCatalogProductGraphKind(editorState.productKind)) return;
+	const publishedDraft = editorState.published?.draft;
+	const draft: CatalogProductGraphV2Draft = publishedDraft && publishedDraft.productKind === editorState.productKind
+		? publishedDraft
+		: newCatalogProductReplacementGraphDraft(editorState.productKind, {
+			...(editorState.slug ? { slug: editorState.slug } : {}),
+		});
+	const nextForm = catalogProductGraphDraftFromRevision(
+		graphRevisionFromDraft(draft, "pending-replacement", Date.now()),
+	);
 	const isCurrentOperation = beginDraftMutation("saving");
 	try {
 		const result = await client.mutation(catalogApi.saveDraft, { productId, draft }) as { revisionId: string };
@@ -770,13 +700,11 @@ async function startDraft() {
 		form = nextForm;
 		hasActiveDraft = true;
 		baseRevisionId = result.revisionId;
-		if (isGraphV2 && "schemaVersion" in draft && draft.schemaVersion === 2) {
-			graphSourceRevision = graphRevisionFromDraft(
-				draft,
-				result.revisionId,
-				Date.now(),
-			);
-		}
+		graphSourceRevision = graphRevisionFromDraft(
+			draft,
+			result.revisionId,
+			Date.now(),
+		);
 		rememberCommittedRevision(result.revisionId);
 		savedJson = serializeCatalogProductDraft(nextForm);
 		syncMultiplierFromForm();
@@ -855,7 +783,7 @@ function removeSetMember(member: CatalogProductDraftForm["setMembers"][number]) 
 }
 </script>
 
-<svelte:head><title>{canEditGraphProduct || !isGraphV2 ? form.title?.trim() || "Untitled product" : catalogProductEditorTitle(readOnlyRevision)?.trim() || "Product"} — {config.siteName}</title></svelte:head>
+<svelte:head><title>{canEditGraphProduct ? form.title?.trim() || "Untitled product" : catalogProductEditorTitle(readOnlyRevision)?.trim() || "Product"} — {config.siteName}</title></svelte:head>
 {#key productId}
 <ProductWorkbench selectedProductId={productId}>
 {#if editorError}
@@ -865,13 +793,13 @@ function removeSetMember(member: CatalogProductDraftForm["setMembers"][number]) 
 {:else}
 		<div class="settings-page product-page editor-document editor-workbench">
 		<a class="back" href={baseHref}>← products</a>
-		<EditorDocumentHeader saveState={hasActiveDraft && (!isGraphV2 || canEditGraphProduct) ? saveState : undefined}>
-			{#snippet title()}<h1>{canEditGraphProduct || !isGraphV2 ? form.title?.trim() || "Untitled product" : catalogProductEditorTitle(readOnlyRevision)?.trim() || "Product"}</h1>{/snippet}
+		<EditorDocumentHeader saveState={hasActiveDraft && canEditGraphProduct ? saveState : undefined}>
+			{#snippet title()}<h1>{canEditGraphProduct ? form.title?.trim() || "Untitled product" : catalogProductEditorTitle(readOnlyRevision)?.trim() || "Product"}</h1>{/snippet}
 			{#snippet actions()}
-				{#if hasActiveDraft && (!isGraphV2 || canEditGraphProduct) && (dirty || saveState === "saving" || saveState === "error")}
+				{#if hasActiveDraft && canEditGraphProduct && (dirty || saveState === "saving" || saveState === "error")}
 					<button type="button" class="primary" onclick={() => void saveDraft()} disabled={!canSave}>{saveState === "saving" ? "saving…" : saveState === "error" ? "try save again" : "save draft"}</button>
 				{/if}
-				{#if isGraphV2 && productsConfig.previewEndpoint && hasActiveDraft}<button type="button" disabled={editorLocked || previewing} onclick={() => void previewProduct()}>{previewing ? "opening…" : "preview in shop"}</button>{/if}
+				{#if productsConfig.previewEndpoint && hasActiveDraft}<button type="button" disabled={editorLocked || previewing} onclick={() => void previewProduct()}>{previewing ? "opening…" : "preview in shop"}</button>{/if}
 				{#if publicationCapability}
 					<PublicationControl published={Boolean(editorState.published)} hasChanges={Boolean(editorState.draft && (dirty || editorState.draft.revisionId !== editorState.published?.revisionId))} item="product" onpublish={editorState.draft ? () => runPublication("publish") : undefined} onunpublish={() => runPublication("unpublish")} publishDisabled={!canPublish} unpublishDisabled={!canUnpublish} busy={publicationRequestActive || deletingProduct} />
 				{/if}
@@ -882,7 +810,7 @@ function removeSetMember(member: CatalogProductDraftForm["setMembers"][number]) 
 		{#if mediaActionError}<p class="alert" role="alert">{mediaActionError}</p>{/if}
 		{#if media.error}<p class="alert" role="alert">Could not load product images. Refresh this page to try again.</p>{/if}
 		{#if publicationMessage}<p class="publication-message" role="status" aria-live="polite">{publicationMessage}</p>{/if}
-		{#if isGraphV2 && !graphProductKindEditable}
+		{#if !graphProductKindEditable}
 			<section aria-labelledby="product-readback-heading">
 				<div class="section-heading"><span>01</span><div><h2 id="product-readback-heading">imported catalog draft</h2><p>{publicationCapability ? "This product is stored in the Convex CMS catalog graph." : "This product is stored in the new graph model as an unpublished draft."}</p></div></div>
 				<dl class="readback-grid">
@@ -902,7 +830,7 @@ function removeSetMember(member: CatalogProductDraftForm["setMembers"][number]) 
 				<button type="button" onclick={() => void startDraft()} disabled={editorLocked}>{saveState === "saving" ? "starting…" : "start a new draft"}</button>
 			</section>
 		{:else}
-			{#if isGraphV2 && mediaCapability}
+			{#if mediaCapability}
 				<CatalogProductMedia
 					placements={form.webMedia ?? []}
 					productKind={form.productKind}
@@ -979,12 +907,6 @@ function removeSetMember(member: CatalogProductDraftForm["setMembers"][number]) 
 						{#if uploads.message}<p class:upload-error={uploads.phase === "error"} role={uploads.phase === "error" ? "alert" : "status"}>{uploads.message}</p>{/if}
 					{/if}
 					{#if privateAssetRows[0]?.asset && !uploads.hasDownload}<p class="download-ready">{privateAssetRows[0].asset.originalFilename}</p>{/if}
-				</section>
-			{/if}
-			{#if !isGraphV2}
-				<section aria-labelledby="product-draft-actions-heading">
-					<div class="section-heading"><span>04</span><div><h2 id="product-draft-actions-heading">draft actions</h2><p>Discard the current draft and return to the published product.</p></div></div>
-					<button type="button" class="danger" onclick={() => void discardDraft()} disabled={saveState === "saving" || saveState === "discarding"}>{saveState === "discarding" ? "discarding…" : "discard draft"}</button>
 				</section>
 			{/if}
 		{/if}

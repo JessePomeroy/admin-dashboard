@@ -26,7 +26,6 @@ function legacySource() {
 			listClientsWithTags: makeFunctionReference<"query">("crm:listClientsWithTags"),
 			getStats: makeFunctionReference<"query">("crm:getStats"),
 		},
-		emailLog: anyApi.emailLog,
 		emailTemplates: anyApi.emailTemplates,
 		galleries: anyApi.galleries,
 		galleryPassword: anyApi.galleryPassword,
@@ -64,6 +63,9 @@ describe("optional CRM client scan capability", () => {
 		const legacy = createStandardAdminAPI(source);
 		expect(legacy.crm).toEqual(source.crm);
 		expect(Object.hasOwn(legacy.crm, "scanClientsWithTags")).toBe(false);
+		// Retired bindings stay out so the backend can delete their functions.
+		expect(Object.hasOwn(legacy, "emailLog")).toBe(false);
+		expect(Object.hasOwn(legacy.galleryDelivery, "listBySite")).toBe(false);
 
 		const scanClientsWithTags = makeFunctionReference<"query">("crm:scanClientsWithTags");
 		const generatedSource = { ...source, crm: { ...source.crm, scanClientsWithTags } };

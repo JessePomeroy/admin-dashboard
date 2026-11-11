@@ -18,6 +18,10 @@ export default defineConfig({
 				replacement: fileURLToPath(new URL("./config.ts", import.meta.url)),
 			},
 			{
+				find: /^(?:(?:\.\.\/)+|\.\/)adminClient$/,
+				replacement: fileURLToPath(new URL("../../stubs/contextAdminClient.ts", import.meta.url)),
+			},
+			{
 				find: "$app/stores",
 				replacement: fileURLToPath(new URL("../../stubs/svelteKitStores.ts", import.meta.url)),
 			},

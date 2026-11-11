@@ -7,6 +7,7 @@ export default defineConfig({
 	plugins: [svelte({ configFile: false, preprocess: vitePreprocess(), compilerOptions: { css: "injected" } })],
 	resolve: { alias: [
 		{ find: /^(?:(?:\.\.\/)+|\.\/)config$/, replacement: fileURLToPath(new URL("./config.ts", import.meta.url)) },
+		{ find: /^(?:(?:\.\.\/)+|\.\/)adminClient$/, replacement: fileURLToPath(new URL("../../stubs/contextAdminClient.ts", import.meta.url)) },
 		{ find: "$app/stores", replacement: fileURLToPath(new URL("../../stubs/svelteKitStores.ts", import.meta.url)) },
 		{ find: "$app/navigation", replacement: fileURLToPath(new URL("../../stubs/svelteKitNavigation.ts", import.meta.url)) },
 		{ find: "$app/environment", replacement: fileURLToPath(new URL("../../stubs/svelteKitEnvironment.ts", import.meta.url)) },

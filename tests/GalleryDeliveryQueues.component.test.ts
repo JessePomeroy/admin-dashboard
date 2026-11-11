@@ -14,12 +14,12 @@ vi.mock("../src/lib/adminClient", () => ({ useAdminClient: () => ({ mutation: mo
 vi.mock("../src/lib/config", () => ({ getAdminConfig: () => ({
 	siteUrl: "site.example", siteName: "Fictional studio", fromEmail: "owner@example.invalid", isCreator: true, galleryWorkerUrl: "https://worker.example",
 	api: { galleryDelivery: {
-		listBySite: { name: "list" }, getUploadPolicy: { name: "policy" }, get: { name: "get" }, getImages: { name: "images" },
+		listBySitePaginated: { name: "list" }, getUploadPolicy: { name: "policy" }, get: { name: "get" }, getImages: { name: "images" },
 		addImage: { name: "add" }, removeImage: { name: "remove-image" }, update: { name: "update" }, remove: { name: "remove" },
 	} },
 }) }));
 vi.mock("convex-svelte", () => ({ useQuery: (reference: { name: string }) => ({
-	data: reference.name === "list" ? [mocks.gallery] : reference.name === "get" ? mocks.gallery : reference.name === "policy" ? "media" : [], isLoading: false,
+	data: reference.name === "list" ? { page: [mocks.gallery], isDone: true, continueCursor: "" } : reference.name === "get" ? mocks.gallery : reference.name === "policy" ? "media" : [], isLoading: false,
 }) }));
 
 let releaseUpload: () => void;

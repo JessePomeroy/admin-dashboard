@@ -8,7 +8,6 @@ import {
 	catalogProductKindLabel,
 	catalogProductLabel,
 	catalogProductStatus,
-	emptyCatalogProductDraft,
 	newCatalogProductGraphDraft,
 	newCatalogProductKey,
 	parseCatalogPriceDollars,
@@ -34,12 +33,11 @@ let {
 const config = getAdminConfig();
 const capability = getCatalogProductEditorCapability(config);
 if (!capability) {
-	throw new Error("Single-print product editor is not configured for this host");
+	throw new Error("Product editor is not configured for this host");
 }
 const {
 	api: catalogApi,
 	enabledKinds,
-	graphVersion,
 	publishesToShop,
 	settings: productsConfig,
 } = capability;
@@ -50,7 +48,6 @@ const supportedKinds = catalogKinds.filter((kind) => enabledKinds.includes(kind)
 
 function queryArgs(kind: CatalogProductKind) {
 	if (!supportedKinds.includes(kind)) return "skip";
-	if (graphVersion === 1) return kind === "print" ? { siteUrl: config.siteUrl } : "skip";
 	return { siteUrl: config.siteUrl, productKind: kind };
 }
 
@@ -194,15 +191,13 @@ async function createProduct() {
 	createdProductHref = "";
 	let draft;
 	try {
-		draft = graphVersion === 2
-			? newCatalogProductGraphDraft(newProductKind, {
-					title: normalizedTitle,
-					slug,
-					...(fixedPriceCreation
-						? { retailPriceCents: parseCatalogPriceDollars(startingPrice) }
-						: {}),
-				})
-			: { ...emptyCatalogProductDraft(), title: normalizedTitle, ...(slug ? { slug } : {}) };
+		draft = newCatalogProductGraphDraft(newProductKind, {
+			title: normalizedTitle,
+			slug,
+			...(fixedPriceCreation
+				? { retailPriceCents: parseCatalogPriceDollars(startingPrice) }
+				: {}),
+		});
 	} catch (error) {
 		createState = "error";
 		createError = error instanceof Error ? error.message : "Check the product details.";

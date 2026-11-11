@@ -6,6 +6,7 @@ vi.mock("../src/lib/config", async () => {
 	const { getAdminConfig } = await import("./fixtures/connected-workflows/config");
 	return { getAdminConfig };
 });
+vi.mock("../src/lib/adminClient", () => import("./stubs/contextAdminClient"));
 let component: ReturnType<typeof mount> | undefined;
 afterEach(async () => { if (component) await unmount(component); component = undefined; document.body.replaceChildren(); vi.unstubAllGlobals(); });
 function button(label: string) { const found = [...document.querySelectorAll("button")].find((entry) => entry.textContent?.trim() === label); if (!found) throw new Error(`Missing ${label}`); return found; }

@@ -53,7 +53,7 @@ export const config: Pick<AdminConfig, "siteUrl" | "galleryWorkerUrl"> & {
 			removeImage: makeFunctionReference("images:remove"),
 			reorderImages: "",
 			getImages: "",
-			listBySite: "",
+			listBySitePaginated: "",
 		},
 	},
 };
